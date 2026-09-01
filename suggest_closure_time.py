@@ -49,7 +49,7 @@ import tempfile
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 import numpy as np
 from scipy import stats as scipy_stats
@@ -58,6 +58,7 @@ from traffic_sim.simulation import metrics as cm
 from traffic_sim.simulation import closure_teleport as ct
 import run_scenario as rs
 from traffic_sim.core.contracts import load_scenario_spec
+from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.finalist_decision import (
     FinalistPolicy,
     decide_finalists,
@@ -349,7 +350,7 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
                      seeds: int, n_intervals: int, duration_s: int,
                      begin_s: int = 0, flush_s: int = 3600,
                      home: Path, micro: bool,
-                     adj: dict[str, list[str]] | None,
+                     adj: dict[str, list[str]] | None,  # FULL, un-banned graph -- see closure_routing.py
                      freeflow: dict[str, float] | None,
                      scratch: list[Path],
                      rerouter_edges: list[str] | None = None,
@@ -358,7 +359,9 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
                      seed_start: int = 1000,
                      variant_labels: Sequence[str] | None = None,
                      replication_records: list[dict[str, Any]] | None = None,
-                     time_to_teleport_s: int | None = ct.CLOSURE_TIME_TO_TELEPORT_S,
+                     time_to_teleport_s: int | None = ct.CLOSURE_ROUTING_TELEPORT_POLICY_S,
+                     sumo_timeout_s: float | None = None,
+                     routing_identity_extra: Mapping[str, Any] | None = None,
                      ) -> tuple[cm.DisruptionMetrics, int, int, list[float]]:
     """Run `seeds` Monte Carlo replications of one candidate (or the
     baseline, when close_edges is empty) and aggregate their disruption
@@ -384,20 +387,31 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
             and flush_s >= 0):
         raise ValueError("simulate_closure flush_s must be a non-negative integer")
     run_variants = variants
-    # Per-VARIANT truncated/dropped counts — truncation is deterministic
-    # given (variant, closure), independent of a seed's random number, so
-    # it only needs computing once per variant. Keyed by run_variants'
-    # index so each seed (which picks run_variants[s % len(run_variants)])
-    # can look up the count for the SPECIFIC variant it actually ran,
-    # instead of a global sum across every variant. Found in review
-    # 2026-07-11: the earlier version summed truncated/dropped across ALL
-    # variants and reported that combined total identically for every
-    # seed, even though each seed only ever ran ONE of them — a seed
-    # running the untruncated-by-much q50 variant was reported as if it
-    # also carried q10/q90's truncation, overstating affected vehicles by
-    # roughly the variant count and making it impossible to tell whether
-    # the demand realization a seed actually used was itself truncated.
-    per_variant_trunc: list[tuple[int, int]] = [(0, 0)] * len(variants)
+    # Per-VARIANT rerouted/denied counts — deterministic given (variant,
+    # closure), independent of a seed's random number, so it only needs
+    # computing once per variant. Keyed by run_variants' index so each seed
+    # (which picks run_variants[s % len(run_variants)]) can look up the
+    # count for the SPECIFIC variant it actually ran, instead of a global
+    # sum across every variant. Found in review 2026-07-11: the earlier
+    # version summed truncated/dropped across ALL variants and reported
+    # that combined total identically for every seed, even though each seed
+    # only ever ran ONE of them.
+    #
+    # `per_variant_impact` is what feeds `build_metrics` -- always
+    # `(0, denied)`: the closure-routing policy (2026-08-29) never truncates
+    # a route any more, it rewrites it in full to the original destination
+    # or denies departure outright, so `truncated_unreachable` is always 0
+    # and only a genuine denial belongs in `dropped_unreachable`.
+    # `per_variant_rerouted` is tracked SEPARATELY and must never be fed
+    # into an access-impact/disqualification metric: a successful reroute
+    # is completed traffic, not a failure. Found in review 2026-08-29: the
+    # previous code stored the REROUTED count as "seed_truncated" and
+    # published it as `truncated_unreachable`, which made every successful
+    # closure-avoiding detour look like lost access.
+    per_variant_impact: list[tuple[int, int]] = [(0, 0)] * len(variants)
+    per_variant_rerouted: list[int] = [0] * len(variants)
+    per_variant_access_impact_sha256: list[str | None] = [None] * len(variants)
+    per_variant_transformed_route_sha256: list[str | None] = [None] * len(variants)
     closure_add: list[Path] = []
     if seed_workers < 1:
         raise ValueError("seed_workers must be >= 1")
@@ -440,12 +454,38 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
         filtered = []
         for i, vp in enumerate(variants):
             fp = base_dir / f"{vp.stem}_{SCT_PREFIX}{name}.rou.xml"
-            t, d = rs.truncate_stranded_vehicles(
+            access_impact_fp = base_dir / (
+                f"{vp.stem}_{SCT_PREFIX}{name}.access_impact.json")
+            rerouted, denied = rs.reroute_closure_affected_vehicles(
                 vp, close_edges, fp, adj, closures=closures,
-                edge_travel_s=freeflow)
-            per_variant_trunc[i] = (t, d)
+                edge_travel_s=freeflow, access_impact_path=access_impact_fp,
+                identity={
+                    "candidate_id": name,
+                    "demand_variant": labels[i],
+                    **({"seed": seed_start} if seeds == 1 else {
+                        "seed_start": seed_start,
+                        "seed_count": seeds,
+                    }),
+                    **(dict(routing_identity_extra)
+                       if routing_identity_extra is not None else {}),
+                })
+            per_variant_impact[i] = (0, denied)
+            per_variant_rerouted[i] = rerouted
+            # The access-impact report is itself scratch (deleted with
+            # everything else unless --keep-scratch), but its digest is
+            # captured here, before that deletion, and carried into
+            # replication_records below so the per-trip denial evidence it
+            # recorded stays bound to the published result even though the
+            # file itself does not outlive this run.
+            per_variant_access_impact_sha256[i] = sha256_file(access_impact_fp)
+            # The transformed route file itself, digested the moment it is
+            # written -- this IS the route SUMO subsequently runs (`fp`
+            # feeds `run_variants`/`route_path` below), so its digest is the
+            # transformed-route evidence (review finding 1).
+            per_variant_transformed_route_sha256[i] = sha256_file(fp)
             filtered.append(fp)
             scratch.append(fp)
+            scratch.append(access_impact_fp)
         run_variants = filtered
 
     jobs = []
@@ -453,7 +493,10 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
         seed = seed_start + s
         variant_idx = s % len(run_variants)
         route_path = run_variants[variant_idx]
-        seed_truncated, seed_dropped = per_variant_trunc[variant_idx]
+        seed_truncated, seed_dropped = per_variant_impact[variant_idx]
+        seed_rerouted = per_variant_rerouted[variant_idx]
+        seed_access_impact_sha256 = per_variant_access_impact_sha256[variant_idx]
+        seed_transformed_route_sha256 = per_variant_transformed_route_sha256[variant_idx]
         seed_dir = base_dir / f"seed-{seed}" if work_dir is not None else base_dir
         if work_dir is not None:
             seed_dir.mkdir(parents=True, exist_ok=False)
@@ -467,7 +510,10 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
                      "demand_variant": labels[variant_idx],
                      "ed_file": ed_file, "add_path": add_path,
                      "seed_truncated": seed_truncated,
-                     "seed_dropped": seed_dropped})
+                     "seed_dropped": seed_dropped,
+                     "seed_rerouted": seed_rerouted,
+                     "seed_access_impact_sha256": seed_access_impact_sha256,
+                     "seed_transformed_route_sha256": seed_transformed_route_sha256})
 
     # The BASELINE arm (close_edges empty) keeps SUMO's own teleport default:
     # it has no closed edge to leak onto, and its teleports are the genuine
@@ -476,17 +522,42 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
     # paired comparison keeps a live integrity check on at least one side.
     seed_teleport_policy = time_to_teleport_s if close_edges else None
 
-    def run_one(job: dict) -> tuple[int, int, str, cm.DisruptionMetrics, list[Path]]:
+    def run_one(job: dict) -> tuple[int, int, str, cm.DisruptionMetrics, list[Path], int, str | None]:
         metric_paths = rs.run_sumo(
             job["seed"], job["route_path"], [job["add_path"]] + closure_add,
             duration_s, home, micro=micro, metrics=True, begin_s=begin_s,
             flush_s=flush_s,
             time_to_teleport_s=seed_teleport_policy,
+            timeout_s=sumo_timeout_s,
             **({"work_dir": job["seed_dir"]} if work_dir is not None else {}))
         active_throughput = None
         if closures and job["ed_file"].exists():
-            seed_flows = rs.parse_edgedata(job["ed_file"], n_intervals)
-            active_throughput = cm.active_closure_throughput(seed_flows, closures)
+            # `measured_empty_edges=close_edges` mirrors run_scenario.py's own
+            # cold-path parse (run_scenario.py:2800-2802): without it, a
+            # closed edge with genuinely zero entries during the active
+            # window is absent from the edgeData XML entirely (SUMO omits
+            # empty-interval entries), so `flows.get(edge)` returns None and
+            # `active_closure_throughput` reports `measured=False` ->
+            # `active_closed_edge_throughput: null` -- indistinguishable from
+            # "never measured" when it should read a proven, numeric zero.
+            # Declaring the closed edges here forces a zero-filled series to
+            # exist even when SUMO wrote nothing, so a genuinely clean
+            # closure asserts 0, not None.
+            seed_flows = rs.parse_edgedata(
+                job["ed_file"], n_intervals,
+                measured_empty_edges=tuple(close_edges))
+            # `begin_s` is this call's own trimmed-window start (0 for a
+            # whole-day search, nonzero for an independent-daily cold
+            # window) -- see active_closure_throughput's docstring for why
+            # the flows array must be indexed relative to it, not to the
+            # closures' absolute epoch time.
+            active_throughput = cm.active_closure_throughput(
+                seed_flows, closures, window_begin_s=begin_s)
+        # `seed_truncated` is always 0 under the closure-origin-routing
+        # policy; `seed_dropped` is the real denied-departure count. The
+        # successful reroute count (`seed_rerouted`) is completed traffic
+        # and is carried separately below -- never as an access-impact
+        # metric input.
         metrics = cm.build_metrics(
             metric_paths["tripinfo"], metric_paths["statistics"],
             truncated_unreachable=job["seed_truncated"],
@@ -499,6 +570,9 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
             job["demand_variant"],
             metrics,
             list(metric_paths.values()),
+            job["seed_rerouted"],
+            job["seed_access_impact_sha256"],
+            job["seed_transformed_route_sha256"],
         )
 
     if seed_workers == 1 or len(jobs) == 1:
@@ -529,13 +603,17 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
                 "total_time_loss_s": metrics.total_time_loss_s,
                 "truncated_unreachable": metrics.truncated_unreachable,
                 "dropped_unreachable": metrics.dropped_unreachable,
+                "rerouted_around_closure": rerouted,
+                "access_impact_sha256": access_impact_sha256,
+                "transformed_route_sha256": transformed_route_sha256,
                 "teleport_total": metrics.teleport_total,
                 "unfinished_trips": metrics.unfinished_trips,
                 "unfinished_waiting_trips": metrics.unfinished_waiting_trips,
                 "running_at_end": metrics.running_at_end,
                 "waiting_at_end": metrics.waiting_at_end,
             }
-            for seed, variant_idx, demand_variant, metrics, _ in completed
+            for seed, variant_idx, demand_variant, metrics, _, rerouted,
+                access_impact_sha256, transformed_route_sha256 in completed
         )
     per_seed_time_loss = [m.total_time_loss_s for m in per_seed_metrics]
     # Candidate-level totals: sum over the DISTINCT variants actually used
@@ -545,11 +623,16 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
     # real total across the demand realizations that were actually run,
     # not an undercount (old first-seed-only) or overcount (old global sum
     # applied per seed).
+    #
+    # n_truncated is always 0 (see per_variant_impact above); n_rerouted is
+    # kept separate from n_dropped so a successful closure-avoiding detour
+    # is never mistaken for lost access.
     used_variant_idxs = {s % len(run_variants) for s in range(seeds)}
-    n_truncated = sum(per_variant_trunc[i][0] for i in used_variant_idxs)
-    n_dropped = sum(per_variant_trunc[i][1] for i in used_variant_idxs)
+    n_truncated = sum(per_variant_impact[i][0] for i in used_variant_idxs)
+    n_dropped = sum(per_variant_impact[i][1] for i in used_variant_idxs)
+    n_rerouted = sum(per_variant_rerouted[i] for i in used_variant_idxs)
     return (aggregate_seed_metrics(per_seed_metrics), n_truncated, n_dropped,
-           per_seed_time_loss)
+           per_seed_time_loss, n_rerouted)
 
 
 def recommendation_status(correlation: dict | None) -> str:
@@ -873,7 +956,7 @@ def main() -> None:
         print("  running baseline (metrics) …")
         t0 = time.time()
         baseline_pilot_records: list[dict[str, Any]] = []
-        baseline_metrics, _, _, baseline_per_seed = simulate_closure(
+        baseline_metrics, _, _, baseline_per_seed, _ = simulate_closure(
             name="baseline", closures=None, close_edges=[], variants=variants,
             seeds=PILOT_SEEDS, n_intervals=n_intervals,
             duration_s=total_duration_s,
@@ -898,7 +981,7 @@ def main() -> None:
                        for e in args.edge]
             t0 = time.time()
             pilot_records: list[dict[str, Any]] = []
-            metrics, n_trunc, n_drop, candidate_per_seed = simulate_closure(
+            metrics, n_trunc, n_drop, candidate_per_seed, n_rerouted = simulate_closure(
                 name=name, closures=closures, close_edges=args.edge,
                 variants=variants, seeds=PILOT_SEEDS, n_intervals=n_intervals,
                 duration_s=total_duration_s, home=home, micro=args.micro,
@@ -925,6 +1008,7 @@ def main() -> None:
                 "delta_time_loss_interval": interval,
                 "feasibility": feasibility,
                 "truncated_vehicles": n_trunc, "dropped_vehicles": n_drop,
+                "rerouted_vehicles": n_rerouted,
                 "pilot_replications": pilot_records,
                 "pilot_comparison": dataclasses.asdict(comparison),
                 "pilot_feasibility": feasibility,
@@ -981,6 +1065,7 @@ def main() -> None:
                 _,
                 _,
                 decision_baseline_per_seed,
+                _,
             ) = simulate_closure(
                 name="baseline-final",
                 closures=None,
@@ -1025,7 +1110,7 @@ def main() -> None:
                     f"{len(pilot_selection.selected_ids)}] "
                     f"proxy_rank={window['proxy_rank']}"
                 )
-                metrics, n_trunc, n_drop, per_seed = simulate_closure(
+                metrics, n_trunc, n_drop, per_seed, n_rerouted = simulate_closure(
                     name=f"final-{candidate_id}",
                     closures=closures,
                     close_edges=args.edge,
@@ -1066,6 +1151,7 @@ def main() -> None:
                     "feasibility": feasibility,
                     "truncated_vehicles": n_trunc,
                     "dropped_vehicles": n_drop,
+                    "rerouted_vehicles": n_rerouted,
                     "final_replications": final_records,
                     "evidence_level": "robust_finalist",
                 })

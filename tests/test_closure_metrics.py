@@ -94,6 +94,29 @@ def test_active_closure_throughput_uses_only_complete_active_quarters():
         flows, [{"edge_id": "closed", "begin_s": 850, "end_s": 2750}]) == 11
 
 
+def test_active_closure_throughput_indexes_relative_to_a_trimmed_window():
+    # Review finding 2 (2026-08-30): a trimmed independent-daily cold window
+    # starts SUMO (and therefore `flows`' own array index 0) at a nonzero
+    # absolute second, while `closures[*].begin_s`/`end_s` stay absolute
+    # (epoch-relative). Without `window_begin_s` the closure's absolute
+    # quarters index past the end of a short trimmed `flows` array, so
+    # `measured` never turns True and a genuinely clean closure reads as
+    # `None` ("never measured") instead of a proven `0` -- reproduced live
+    # replaying daily-unit-24737391111be0e137537df7 before this fix.
+    flows = {"closed": [0, 0, 0, 0]}  # a 4-quarter window starting at 26100s
+    closures = [{"edge_id": "closed", "begin_s": 26100, "end_s": 29700}]
+    assert active_closure_throughput(flows, closures) is None  # unfixed call
+    assert active_closure_throughput(
+        flows, closures, window_begin_s=26100) == 0
+
+
+def test_active_closure_throughput_window_begin_s_still_counts_real_flow():
+    flows = {"closed": [0, 3, 5, 0]}
+    closures = [{"edge_id": "closed", "begin_s": 26100, "end_s": 29700}]
+    assert active_closure_throughput(
+        flows, closures, window_begin_s=26100) == 8
+
+
 def test_active_closure_flow_is_an_integrity_disqualification():
     metrics = DisruptionMetrics(
         total_time_loss_s=1.0, trip_count=1, unfinished_trips=0,

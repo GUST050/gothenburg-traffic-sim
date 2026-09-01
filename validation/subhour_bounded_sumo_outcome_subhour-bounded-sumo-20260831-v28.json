@@ -1,0 +1,84 @@
+{
+  "case_results": [
+    {
+      "case_id": "subhour-bounded-sumo-20260831-v28-01-0304fa08b47b",
+      "error": {
+        "message": "deterministic cost disagreement for closure-fc595b543bbb0ca1d78c q10 vehicles_affected: the runner reports 61 but the cost ledger the ordering used says 0",
+        "type": "ValueError"
+      },
+      "gates_passed": false
+    },
+    {
+      "case_id": "subhour-bounded-sumo-20260831-v28-02-0314aec31aaf",
+      "error": {
+        "message": "deterministic cost disagreement for closure-3823ae0a96eb014fd503 q10 vehicles_affected: the runner reports 407 but the cost ledger the ordering used says 0",
+        "type": "ValueError"
+      },
+      "gates_passed": false
+    },
+    {
+      "case_id": "subhour-bounded-sumo-20260831-v28-03-042163a1e163",
+      "error": {
+        "message": "deterministic cost disagreement for closure-fcfefe05124c2f2fc659 q10 vehicles_affected: the runner reports 102 but the cost ledger the ordering used says 0",
+        "type": "ValueError"
+      },
+      "gates_passed": false
+    },
+    {
+      "case_id": "subhour-bounded-sumo-20260831-v28-04-0fa23b077c75",
+      "error": {
+        "message": "deterministic cost disagreement for closure-c78927c4c8aed2e93f73 q10 vehicles_affected: the runner reports 563 but the cost ledger the ordering used says 0",
+        "type": "ValueError"
+      },
+      "gates_passed": false
+    },
+    {
+      "case_id": "subhour-bounded-sumo-20260831-v28-05-122aa7a4985a",
+      "error": {
+        "message": "deterministic cost disagreement for closure-ec1d2fba53a580daff86 q10 vehicles_affected: the runner reports 810 but the cost ledger the ordering used says 0",
+        "type": "ValueError"
+      },
+      "gates_passed": false
+    },
+    {
+      "case_id": "subhour-bounded-sumo-20260831-v28-06-1dc5fd3ad560",
+      "error": {
+        "message": "deterministic cost disagreement for closure-adbc7c0353800814fa8f q10 vehicles_affected: the runner reports 612 but the cost ledger the ordering used says 0",
+        "type": "ValueError"
+      },
+      "gates_passed": false
+    },
+    {
+      "case_id": "subhour-bounded-sumo-20260831-v28-07-21e56606bbbc",
+      "error": {
+        "message": "deterministic cost disagreement for closure-ed1897a25755d680e29f q10 vehicles_affected: the runner reports 1208 but the cost ledger the ordering used says 0",
+        "type": "ValueError"
+      },
+      "gates_passed": false
+    },
+    {
+      "case_id": "subhour-bounded-sumo-20260831-v28-08-2c8d12e8864e",
+      "error": {
+        "message": "deterministic cost disagreement for closure-8e196855f7aa4385f55b q10 vehicles_affected: the runner reports 1282 but the cost ledger the ordering used says 0",
+        "type": "ValueError"
+      },
+      "gates_passed": false
+    }
+  ],
+  "claim_boundary": "diagnostic only; no product activation",
+  "content_key": "cdaa673852ffa12cf9e05593e10d58aebd9af702a8c938dfa6d8dc67fa98231b",
+  "gate_s": {
+    "population_complete": false,
+    "reason": "bounded paired gates are incomplete",
+    "variants": {}
+  },
+  "kind": "subhour_bounded_sumo_outcome",
+  "measured_at": "2026-08-31T17:46:44+0200",
+  "registration": {
+    "content_key": "7f22a60edfda2dd3d670e21a3c447ddf270e7d56ec5127c42e940fb6a95e2abf",
+    "evidence_id": "subhour-bounded-sumo-20260831-v28"
+  },
+  "release_evidence": false,
+  "schema": "subhour_cost_ordered_bounded_outcome_v1",
+  "status": "INCONCLUSIVE_BOUNDED_GATES"
+}

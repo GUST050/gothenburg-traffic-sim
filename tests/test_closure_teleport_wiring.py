@@ -116,9 +116,18 @@ class TestInvocation:
 
 
 class TestClosurePathWiring:
+    """2026-08-29: the core monthly/closure pipeline (run_scenario.py,
+    suggest_closure_time.py, monthly_sumo.py) migrated from the disabled-
+    teleport policy to `closure_teleport.CLOSURE_ROUTING_TELEPORT_POLICY_S`
+    (SUMO's own default), because `closure_routing.py` now rewrites every
+    affected route around a closure before SUMO starts -- there is nothing
+    left for a teleport to leak onto, so suppressing teleporting network-wide
+    is no longer necessary and was the root cause of indefinite-gridlock
+    wall-time timeouts. See closure_routing.py's module docstring."""
+
     def test_run_scenario_defaults_the_cli_to_the_closure_policy(self):
         source = Path(rs.__file__).read_text()
-        assert "default=ct.CLOSURE_TIME_TO_TELEPORT_S" in source, (
+        assert "default=ct.CLOSURE_ROUTING_TELEPORT_POLICY_S" in source, (
             "--time-to-teleport must default to the deployed closure policy; "
             "a flag nobody passes changes nothing")
 
@@ -133,7 +142,7 @@ class TestClosurePathWiring:
         import inspect
         signature = inspect.signature(sct.simulate_closure)
         assert (signature.parameters["time_to_teleport_s"].default
-                == ct.CLOSURE_TIME_TO_TELEPORT_S)
+                == ct.CLOSURE_ROUTING_TELEPORT_POLICY_S)
 
     def test_simulate_closure_withholds_the_policy_from_the_baseline_arm(self):
         source = Path(sct.__file__).read_text()
@@ -142,25 +151,48 @@ class TestClosurePathWiring:
 
     def test_warm_and_cold_closure_arms_share_one_policy_constant(self):
         """The warm arm is an OPTIMISATION over an equivalent cold arm. If only
-        one of them stopped teleporting they would no longer be equivalent, and
-        the paired validation would be comparing two different simulations."""
+        one of them applied a different teleport policy they would no longer
+        be equivalent, and the paired validation would be comparing two
+        different simulations."""
         warm = Path(
             rs.__file__).parent / "traffic_sim/simulation/monthly_sumo.py"
         if not warm.is_file():
             warm = Path(__file__).resolve().parents[1] / \
                 "traffic_sim/simulation/monthly_sumo.py"
         source = warm.read_text()
-        assert "closure_teleport.CLOSURE_TIME_TO_TELEPORT_S" in source
+        assert "closure_teleport.CLOSURE_ROUTING_TELEPORT_POLICY_S" in source
         assert "if closures else None" in source
+        # The retired policy must not have simply moved rather than retired.
+        assert "closure_teleport.CLOSURE_TIME_TO_TELEPORT_S" not in source
+
+    def test_production_closure_routing_no_longer_calls_the_retired_truncator(self):
+        """Root requirement: no production entry point may depend on the
+        retired truncate-and-hope-the-runtime-rerouter-fixes-it path."""
+        import inspect
+        assert "truncate_stranded_vehicles" not in inspect.getsource(
+            rs.prepare_variant_job)
+        assert "truncate_stranded_vehicles" not in inspect.getsource(
+            sct.simulate_closure)
 
 
 class TestEveryClosureSimulatorAgrees:
     """One policy, or the paths disagree about what a closure is.
 
-    Three places simulate a closure: run_scenario's scenario path, the campaign
-    path through suggest_closure_time, and the D4 signal study. If only some of
-    them stopped teleporting, `disqualification_reasons()` would be judging
-    different simulations depending on which tool produced the run.
+    KNOWN, DELIBERATE DIVERGENCE (2026-08-29): run_scenario's scenario path
+    and the monthly campaign path through suggest_closure_time now rewrite
+    every affected route around a closure before SUMO starts
+    (`closure_routing.py`) and no longer need disabled teleporting to keep
+    closed-edge throughput at zero -- see `TestClosurePathWiring`'s
+    docstring. The D4 signal study (`signal_optimize.py`) and the persistent-
+    SUMO benchmark (`tools/benchmark_persistent_sumo.py`) were NOT migrated
+    in this pass (out of the named scope: monthly road-closure simulation
+    timeouts) and still rely on the retired truncate-only preprocessor plus
+    disabled teleporting to hold their own closed-edge throughput at zero.
+    That combination is still internally self-consistent for those two
+    tools, so it is left untouched rather than partially updated (removing
+    only the disabled-teleport half without also replacing their route
+    preparation would have been a real regression). Migrating them is
+    tracked as remaining work, not silently assumed done.
     """
 
     def test_the_signal_study_applies_the_policy_to_a_real_closure(self):
@@ -194,17 +226,60 @@ class TestEveryClosureSimulatorAgrees:
 
 
 class TestFeasibilityReporting:
-    def test_feasibility_records_the_policy_beside_the_hard_failures(self):
-        """With teleporting off, the ABSENCE of a "teleports" failure is not
-        evidence. Recording the policy is what stops a vacuous check reading as
-        a passed one."""
+    @staticmethod
+    def _metrics_pair():
         from traffic_sim.simulation.metrics import DisruptionMetrics
         common = dict(total_time_loss_s=1.0, trip_count=5, unfinished_trips=0,
                       unfinished_waiting_trips=0, teleport_total=0,
                       teleport_reasons={}, loaded=5, inserted=5,
                       running_at_end=0, waiting_at_end=0,
                       max_queue_vehicles=3)
-        metrics = DisruptionMetrics(closed_edge_throughput=0, **common)
-        result = sct.closure_feasibility(metrics, DisruptionMetrics(**common))
+        return (DisruptionMetrics(closed_edge_throughput=0, **common),
+                DisruptionMetrics(**common))
+
+    def test_default_argument_still_describes_the_legacy_disabled_policy(self):
+        """`closure_feasibility`'s own bare default is unchanged
+        (`ct.CLOSURE_TIME_TO_TELEPORT_S`, historically -1/disabled) -- this
+        pins that the function's DEFAULT ARGUMENT itself did not silently
+        change. Production callers must not rely on it (see the next test):
+        every real monthly_sumo.py call site now passes the policy actually
+        supplied to SUMO explicitly (review finding 3, 2026-08-29)."""
+        metrics, baseline = self._metrics_pair()
+        result = sct.closure_feasibility(metrics, baseline)
         assert result["teleport_policy"]["teleport_count_is_informative"] is False
+        assert result["teleport_policy"]["teleporting_enabled"] is False
         assert result["eligible"] is True
+
+    def test_production_policy_reports_teleporting_enabled(self):
+        """FIXED (review finding 3, 2026-08-29): every real closure SUMO run
+        (cold via `simulate_closure`'s own default, warm via
+        `_default_warm_invoker`'s explicit argument) is launched with
+        `closure_teleport.CLOSURE_ROUTING_TELEPORT_POLICY_S` (SUMO's own
+        default, i.e. teleporting ENABLED) once closure_routing has already
+        rewritten every affected route around the closure. `monthly_sumo.py`
+        must tell `closure_feasibility` this exact value rather than let it
+        fall back to the legacy `-1` default and publish a false
+        "teleporting disabled" provenance claim. Teleport and closed-edge-
+        throughput hard-failure gates remain fully active either way --
+        this only changes whether the ABSENCE of a teleport failure counts
+        as evidence."""
+        metrics, baseline = self._metrics_pair()
+        result = sct.closure_feasibility(
+            metrics, baseline,
+            time_to_teleport_s=ct.CLOSURE_ROUTING_TELEPORT_POLICY_S)
+        assert result["teleport_policy"]["teleport_count_is_informative"] is True
+        assert result["teleport_policy"]["teleporting_enabled"] is True
+        assert result["eligible"] is True
+
+    def test_monthly_sumo_passes_the_actual_teleport_policy_to_feasibility(self):
+        """Guards against the exact regression the review found: a call
+        site that omits `time_to_teleport_s` and silently inherits the
+        legacy `-1` default. Both production call sites now pass it
+        explicitly, keyed off `self.close_edges` exactly like the real SUMO
+        invocation is."""
+        import traffic_sim.simulation.monthly_sumo as ms
+        source = Path(ms.__file__).read_text()
+        assert source.count(
+            "time_to_teleport_s=(closure_teleport.CLOSURE_ROUTING_TELEPORT_"
+            "POLICY_S\n                                     if self.close_"
+            "edges else None)") == 2

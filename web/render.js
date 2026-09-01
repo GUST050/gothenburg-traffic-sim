@@ -50,7 +50,7 @@ const Render = (() => {
   // because green means "quiet" in one and "improved" in the other.
   //
   // Endpoints reuse the validated palette (#1f9d55 green, #dc2626 red) so the
-  // colours stay legible on the light CARTO basemap. The midpoint is a neutral
+  // colours stay legible on the light basemap. The midpoint is a neutral
   // slate rather than amber: amber reads as "moderately busy" from the other
   // ramp, while no change should read as no signal at all.
   //   r = -1 → all traffic gone, 0 → unchanged, +1 → doubled or more
@@ -459,9 +459,24 @@ const Render = (() => {
       // would crawl; canvas renders and hit-tests them smoothly.
       _map = L.map(mapEl, { zoomControl: true, preferCanvas: true })
         .setView([57.697, 11.983], 14);
+      // Use OSM's documented browser tile endpoint directly.  The previous
+      // CARTO URL now returns "API KEY REQUIRED" watermark tiles.  This app
+      // requests only the currently visible viewport; the browser supplies a
+      // normal Referer and honours the tile server's HTTP cache headers.
       L.tileLayer(
-        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-        { attribution: '© OSM © CARTO', subdomains: 'abcd', maxZoom: 19 }
+        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+          // Preserve the subdued grey hierarchy of the former CARTO light
+          // basemap without depending on CARTO's now-keyed endpoint. This
+          // class affects only raster tiles, not the semantic overlays.
+          className: 'basemap-grayscale',
+          maxZoom: 19,
+          // Standard OSM repeats much of the app's own road network. Fade the
+          // raster detail so the interactive road and traffic layers remain
+          // the primary visual hierarchy, like on the former light basemap.
+          opacity: 0.52,
+        }
       ).addTo(_map);
 
       let geojson = networkPayload;

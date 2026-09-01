@@ -51,13 +51,15 @@ import pandas as pd
 
 from traffic_sim.simulation import metrics as cm
 from traffic_sim.simulation import closure_teleport as ct
+from traffic_sim.simulation import closure_routing
 from traffic_sim.simulation import disruption as disruption_analysis
 from traffic_sim.simulation.sensor_fit import (assess_output_fit,
                                                build_exact_output_fit,
                                                summarize_pairs,
                                                summarize_rows)
 from traffic_sim.simulation.runtime import sumo_home
-from traffic_sim.simulation.metadata import load_metadata
+from traffic_sim.simulation.metadata import (
+    DEFAULT_VCLASS, build_metadata, load_metadata)
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.core.contracts import ScenarioSpec, load_scenario_spec
 from traffic_sim.simulation.multiday import parse_summary
@@ -382,7 +384,7 @@ def _cheapest(adj: dict, cost: dict, src: str, dst: str,
 
 def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
                        edge_time: dict, edge_len: dict,
-                       adj: dict | None = None) -> dict | None:
+                       adj: dict | None = None, timing=None) -> dict | None:
     """How many vehicles a closure displaces, and how far it pushes them.
 
     Deliberately demand-side and congestion-independent: the detour is a
@@ -410,7 +412,7 @@ def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
         adj = build_edge_graph(set())
     return disruption_analysis.closure_disruption(
         route_path, closed_edges, closures, edge_time, edge_len,
-        adjacency=adj)
+        adjacency=adj, timing=timing)
 
 
 def reference_closure_disruption(
@@ -922,13 +924,19 @@ def parse_args() -> argparse.Namespace:
                    help="Keep this run's isolated SUMO workspace for diagnosis "
                         "instead of deleting it after successful publication.")
     p.add_argument("--time-to-teleport", type=int,
-                   default=ct.CLOSURE_TIME_TO_TELEPORT_S, metavar="SECONDS",
+                   default=ct.CLOSURE_ROUTING_TELEPORT_POLICY_S,
+                   metavar="SECONDS",
                    help="Teleport policy for CLOSURE runs only (a run without "
                         "--close/--closure never passes the option to SUMO). "
-                        f"Default {ct.CLOSURE_TIME_TO_TELEPORT_S} disables "
-                        "stuck-vehicle relocation, which is the only observed "
-                        "route to traffic on a closed edge. A positive value "
-                        "restores a finite threshold for comparison runs.")
+                        "Default: nothing is passed, i.e. SUMO's own ordinary "
+                        "default applies -- safe because every affected "
+                        "vehicle's route is already rewritten around the "
+                        "closure before SUMO starts (closure_routing.py), so "
+                        "a stuck vehicle here is ordinary unrelated "
+                        f"congestion, not a closure leak. {ct.CLOSURE_TIME_TO_TELEPORT_S} "
+                        "reproduces the retired disabled-teleport policy for "
+                        "historical diagnostic comparison only; a positive "
+                        "value restores a finite threshold.")
     args = p.parse_args()
     if args.seeds < 1:
         p.error("--seeds must be >= 1")
@@ -955,10 +963,11 @@ def parse_args() -> argparse.Namespace:
                     "scenario directory")
     if args.trajectories and args.no_trajectories:
         p.error("--trajectories and --no-trajectories are mutually exclusive")
-    try:
-        ct.normalize_time_to_teleport(args.time_to_teleport)
-    except ct.ClosureTeleportPolicyError as error:
-        p.error(f"--time-to-teleport: {error}")
+    if args.time_to_teleport is not None:
+        try:
+            ct.normalize_time_to_teleport(args.time_to_teleport)
+        except ct.ClosureTeleportPolicyError as error:
+            p.error(f"--time-to-teleport: {error}")
     return args
 
 
@@ -1605,23 +1614,28 @@ def write_closure_additional(path: Path, closures: list[dict],
 def build_edge_graph(banned: set[str]) -> dict[str, list[str]]:
     """Directed edge->edge adjacency from net.net.xml's <connection> elements,
     with `banned` edges (the closure) removed from both ends — the same
-    graph SUMO's own router uses to find a path, minus the closed edges."""
-    metadata = load_metadata(NET_PATH, SUMO_DIR / "network_metadata.json")
-    if metadata is not None:
-        adj: dict[str, list[str]] = {}
-        for frm, targets in metadata["successors"].items():
-            if frm in banned:
-                continue
-            for to in targets:
-                if to not in banned:
-                    adj.setdefault(frm, []).append(to)
-        return adj
+    graph SUMO's own router uses to find a path, minus the closed edges.
+
+    SINGLE-VEHICLE-CATEGORY CONTRACT: this graph is already filtered to
+    exactly the one vehicle class this project models (`DEFAULT_VCLASS`,
+    `traffic_sim.simulation.metadata`) — a lane, edge or connection this
+    class may not legally use never appears, whether the cache
+    (`network_metadata.json`, schema 2) or a fresh XML parse produced it.
+    There is no unfiltered variant: nothing downstream may ask for "every
+    connection regardless of legality", so a routing defect here cannot
+    silently leak an illegal edge into a published route.
+    """
+    metadata = load_metadata(NET_PATH, SUMO_DIR / "network_metadata.json",
+                              vclass=DEFAULT_VCLASS)
+    if metadata is None:
+        metadata = build_metadata(NET_PATH, vclass=DEFAULT_VCLASS)
     adj: dict[str, list[str]] = {}
-    for c in ET.parse(NET_PATH).getroot().findall("connection"):
-        frm, to = c.get("from"), c.get("to")
-        if frm in banned or to in banned:
+    for frm, targets in metadata["successors"].items():
+        if frm in banned:
             continue
-        adj.setdefault(frm, []).append(to)
+        for to in targets:
+            if to not in banned:
+                adj.setdefault(frm, []).append(to)
     return adj
 
 
@@ -1779,6 +1793,49 @@ def truncate_stranded_vehicles(route_path: Path, close_edges: list[str],
         n_truncated += 1
     tree.write(out_path, xml_declaration=True, encoding="UTF-8")
     return n_truncated, n_dropped
+
+
+#: `truncate_stranded_vehicles` above is RETIRED from the production closure
+#: path (2026-08-29, `docs/plans` closure-routing root-cause fix) — kept only
+#: as a historical-diagnostic function so an old measurement can still be
+#: reproduced by name. `tests/test_closure_routing.py::
+#: test_truncate_stranded_vehicles_is_unreachable_from_production` asserts no
+#: production entry point calls it any more. The replacement,
+#: `reroute_closure_affected_vehicles` below, rewrites every affected
+#: vehicle's FULL route from its original origin to its original
+#: destination — never just truncating short of the closure — and denies
+#: departure (never truncates) when no such route exists. See
+#: `traffic_sim.simulation.closure_routing` for the full root-cause analysis
+#: and the routing/access-impact contract.
+def reroute_closure_affected_vehicles(
+        route_path: Path, close_edges: list[str], out_path: Path,
+        adj: dict[str, list[str]], closures: list[dict] | None = None,
+        edge_travel_s: dict[str, float] | None = None,
+        access_impact_path: Path | None = None,
+        identity: dict | None = None) -> tuple[int, int]:
+    """Production closure routing entry point.
+
+    `adj` MUST be the FULL, un-banned edge graph (`build_edge_graph(set())`)
+    — unlike the retired `truncate_stranded_vehicles`, this function derives
+    its own per-vehicle banned edge set (a closure's declared window may not
+    overlap every affected vehicle's own transit), so a pre-banned graph
+    would silently misapply exclusions that do not belong to a given
+    vehicle.
+
+    Returns `(n_rerouted, n_denied)` — `n_rerouted` counts vehicles whose
+    route was rewritten to a full closure-avoiding detour ending at their
+    original destination; `n_denied` counts vehicles held outside the
+    network (never simulated) because their destination sits on a closed
+    edge or no legal detour exists at all. Denied vehicles are recorded in
+    `access_impact_path` (when given) with stable per-trip provenance; see
+    `closure_routing.write_access_impact_report`.
+    """
+    result = closure_routing.prepare_route_file(
+        route_path, close_edges, out_path, adj,
+        edge_travel_s=edge_travel_s or {}, closures=closures,
+        access_impact_path=access_impact_path, network_path=NET_PATH,
+        identity=identity)
+    return result.rerouted, result.denied
 
 
 def demand_variants(meta: dict) -> list[Path]:
@@ -2063,7 +2120,8 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
              rerouting_threads: int | None = None,
              routing_algorithm: str | None = None,
              suppress_warnings: bool = True,
-             work_dir: Path | None = None) -> dict[str, Path] | None:
+             work_dir: Path | None = None,
+             timeout_s: float | None = None) -> dict[str, Path] | None:
     # Delegates construction to the shared pure builder; this function
     # remains the only place that EXECUTES.
     cmd, metric_paths, run_cwd = build_sumo_invocation(
@@ -2084,12 +2142,22 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         suppress_warnings=suppress_warnings,
         work_dir=work_dir)
     run_cwd.mkdir(parents=True, exist_ok=True)
+    effective_timeout_s = SUMO_TIMEOUT_S if timeout_s is None else timeout_s
+    if (
+        isinstance(effective_timeout_s, bool)
+        or not isinstance(effective_timeout_s, (int, float))
+        or not math.isfinite(effective_timeout_s)
+        or effective_timeout_s <= 0
+    ):
+        raise ValueError("SUMO timeout_s must be a positive finite number")
     try:
         res = subprocess.run(cmd, capture_output=True, text=True,
                              cwd=str(run_cwd), env={"SUMO_HOME": str(home)},
-                             timeout=SUMO_TIMEOUT_S)
+                             timeout=effective_timeout_s)
     except subprocess.TimeoutExpired:
-        sys.exit(f"sumo timed out after {SUMO_TIMEOUT_S}s (seed {seed})")
+        sys.exit(
+            f"sumo timed out after {effective_timeout_s:g}s (seed {seed})"
+        )
     if res.returncode != 0:
         print(res.stderr[-2000:])
         sys.exit(f"sumo failed (seed {seed})")
@@ -2654,14 +2722,23 @@ def prepare_variant_job(job: dict) -> dict:
     serial versus 1.4596 s threaded). ``index`` is retained on the result so the
     caller keeps the deterministic variant order explicit.
     """
-    truncated, dropped = truncate_stranded_vehicles(
+    access_impact_path = job["out_path"].with_name(
+        job["out_path"].stem + ".access_impact.json")
+    rerouted, denied = reroute_closure_affected_vehicles(
         job["route_path"], job["close_edges"], job["out_path"], job["adj"],
-        closures=job["closures"], edge_travel_s=job["edge_travel_s"])
+        closures=job["closures"], edge_travel_s=job["edge_travel_s"],
+        access_impact_path=access_impact_path)
     return {"index": job["index"], "out_path": job["out_path"],
-            "truncated": truncated, "dropped": dropped}
+            "access_impact_path": access_impact_path,
+            "rerouted": rerouted, "denied": denied,
+            # Retained for callers still reading the pre-2026-08-29 field
+            # names: `truncated_unreachable` is now always 0 (no production
+            # path truncates any more) and `dropped_unreachable` is the new
+            # denied count -- see closure_routing.py's root-cause note.
+            "truncated": 0, "dropped": denied}
 
 
-def prepare_closure_variants(prep_jobs: list[dict]) -> tuple[list[Path], int, int]:
+def prepare_closure_variants(prep_jobs: list[dict]) -> tuple[list[Path], int, int, list[Path]]:
     """Filter every demand variant for a closure, in deterministic serial order.
 
     Preparation is intentionally serial regardless of ``--seed-workers``.
@@ -2679,9 +2756,10 @@ def prepare_closure_variants(prep_jobs: list[dict]) -> tuple[list[Path], int, in
     """
     results = [prepare_variant_job(job) for job in prep_jobs]
     filtered = [result["out_path"] for result in results]
-    truncated = sum(result["truncated"] for result in results)
-    dropped = sum(result["dropped"] for result in results)
-    return filtered, truncated, dropped
+    rerouted = sum(result["rerouted"] for result in results)
+    denied = sum(result["denied"] for result in results)
+    access_impact_paths = [result["access_impact_path"] for result in results]
+    return filtered, rerouted, denied, access_impact_paths
 
 
 def run_seed_job(job: SeedRunPlan | dict) -> dict:
@@ -2921,12 +2999,14 @@ def main() -> None:
         write_closure_additional(cpath, closures, rerouter_edges)
         closure_add = [cpath]
 
-        # Vehicles with no detour around the closure at all can't be fixed
-        # by the runtime rerouter above (see truncate_stranded_vehicles) —
-        # shortened/dropped here so they never get simulated past the
-        # closure, instead of relying on sumo's stuck-vehicle teleport to
-        # hide them after the fact.
-        adj = build_edge_graph(set(close_edges))
+        # Every affected vehicle's route is rewritten HERE, before any SUMO
+        # process starts, from its original origin to its original
+        # destination along the fastest legal closure-excluding path — see
+        # traffic_sim.simulation.closure_routing for the full root-cause
+        # analysis. `adj` is the FULL, un-banned graph: the routing engine
+        # derives its own per-vehicle banned set (a windowed closure may not
+        # overlap every affected vehicle's own transit).
+        adj = build_edge_graph(set())
         freeflow = edge_freeflow_times()
         # One independent filtering job per demand variant, sharing the
         # read-only graph/free-flow inputs and each writing its own staged
@@ -2946,17 +3026,19 @@ def main() -> None:
         # variant was a measured regression). A raised filter propagates before
         # `variants` is replaced or anything is published, so a partial filter
         # can never reach a scenario or the cache.
-        filtered_variants, t_total, d_total = prepare_closure_variants(prep_jobs)
-        n_truncated += t_total
+        filtered_variants, r_total, d_total, access_impact_paths = (
+            prepare_closure_variants(prep_jobs))
+        n_truncated += r_total
         n_dropped += d_total
         if n_truncated:
-            print(f"  truncated {n_truncated} vehicle(s) with no detour around "
-                  f"the closure to end just short of it (parked there instead "
-                  f"of continuing) rather than sitting stuck and getting "
-                  f"teleported through it at end of run")
+            print(f"  rerouted {n_truncated} vehicle(s) around the closure, "
+                  f"from their original origin to their original "
+                  f"destination, before simulation")
         if n_dropped:
-            print(f"  dropped {n_dropped} vehicle(s) that couldn't even "
-                  f"depart with the closure in place")
+            print(f"  denied departure to {n_dropped} vehicle(s): their "
+                  f"original destination sits on a closed edge, or no legal "
+                  f"detour exists (recorded as closure access impact, "
+                  f"never simulated, never truncated)")
         variants = filtered_variants
 
     closure_preparation.__exit__(None, None, None)

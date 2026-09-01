@@ -1,0 +1,58 @@
+{
+  "schema": "monthly_cost_ledger_profile_v1",
+  "kind": "monthly_cost_ledger_profile",
+  "release_evidence": false,
+  "cold": true,
+  "status": "INCONCLUSIVE_COLD_PROFILE_INTERRUPTED",
+  "bound_spec": {
+    "path": "/Users/gt/Documents/gs-project/validation/subhour_monthly_search_profile_spec_v1.json",
+    "search_id": "subhour-cold-ledger-profile-2027-09"
+  },
+  "population": {
+    "daily_units": 207,
+    "variants_per_daily_unit": 3,
+    "daily_variant_records": 621,
+    "parents": null,
+    "required_daily_units": 1950,
+    "required_daily_variant_records": 5850,
+    "required_parents": 1690,
+    "population_complete": false,
+    "variant_records_verified_from_cache": 621
+  },
+  "sumo_started": null,
+  "sumo_start_observation": {
+    "measured": false,
+    "status": "not_published_before_interrupt",
+    "error": "cold ledger was interrupted before the profiler record was published"
+  },
+  "phases": {
+    "xml_parse": null,
+    "route_vehicle_grouping": null,
+    "shortest_path_detour": null,
+    "window_aggregation": null,
+    "parent_aggregation_sorting": null
+  },
+  "cache": {
+    "root": "/private/tmp/gs-subhour-profile-v8-daily-cost-cache",
+    "verified_entries": 207,
+    "verified_variant_records": 621,
+    "hits": null,
+    "misses": 207,
+    "disk_growth_bytes": 1695744
+  },
+  "process_tree_rss": {
+    "peak_rss_bytes": null,
+    "complete": false,
+    "reason": "interrupted before profile publication; trusted census is unavailable in this sandbox"
+  },
+  "disk_growth_bytes": 1859584,
+  "fresh_roots": {
+    "output": "/private/tmp/gs-subhour-profile-v8",
+    "cache": "/private/tmp/gs-subhour-profile-v8-daily-cost-cache",
+    "daily_results": "/private/tmp/gs-subhour-profile-v8-daily-results",
+    "release": "/private/tmp/gs-subhour-profile-v8-releases"
+  },
+  "phase_5_window_cost_index_needed": null,
+  "phase_5_decision": null,
+  "reason": "A fresh current-source cold profile reached 207 verified daily units and 621 actual q10/q50/q90 records before safe interruption; the exact 1950/5850/1690 population and complete telemetry are not claimed."
+}

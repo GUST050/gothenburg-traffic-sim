@@ -102,6 +102,7 @@ def main() -> int:
                 is_weekend=pool == "weekend",
                 start_date="catalog",
                 seed=args.seed,
+                min_per_sensor=args.min_per_sensor,
                 home=home,
                 flows_path=demand.FLOWS_PATH)
             base_config["catalog_mode"] = True

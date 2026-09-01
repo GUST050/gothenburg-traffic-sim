@@ -60,6 +60,8 @@ from scipy.optimize import Bounds, LinearConstraint, linprog, milp
 from scipy.sparse import csr_matrix, hstack, identity, lil_matrix, vstack
 
 from . import pfe_kernel
+from .sensor_route_contract import POLICY_VERSION as SENSOR_ROUTE_POLICY_VERSION
+from .sensor_route_contract import proof_error as sensor_route_proof_error
 from .structure_caps import integer_structure_cap
 
 # Compiled IPF fast path (see pfe_kernel.py's bit-identity contract).
@@ -1903,6 +1905,40 @@ def prepare_calibration(candidates_path: Path) -> tuple[list[Candidate], np.ndar
     return shapes, path_size_weights(shapes)
 
 
+def require_sensor_route_contract(
+    shapes: Sequence[Candidate], required_sensor_edges: Iterable[str],
+) -> dict:
+    """Fail before solving if any source geometry lacks a valid strict proof."""
+    required = tuple(sorted(set(str(edge) for edge in required_sensor_edges)))
+    if not required:
+        return {"policy_version": SENSOR_ROUTE_POLICY_VERSION,
+                "checked": 0, "pass": True}
+    failures: list[tuple[str, str]] = []
+    checked = 0
+    for shape in shapes:
+        for source in shape.source_candidates or [shape]:
+            checked += 1
+            error = sensor_route_proof_error(
+                source.edges, source.intent.get("sensor_route_contract"), required)
+            if error is not None:
+                failures.append((source.source_id or "<anonymous>", error))
+    if failures:
+        unanchored = sum(reason == "no_measured_sensor"
+                         for _source_id, reason in failures)
+        if unanchored:
+            raise RuntimeError(
+                f"{unanchored} candidate route(s) cross no registered sensor; "
+                "no route file was published")
+        preview = "; ".join(
+            f"{source_id}:{reason}" for source_id, reason in failures[:8])
+        more = f" (+{len(failures) - 8} more)" if len(failures) > 8 else ""
+        raise RuntimeError(
+            "candidate sensor shortest-route contract failed before PFE: "
+            + preview + more)
+    return {"policy_version": SENSOR_ROUTE_POLICY_VERSION,
+            "checked": checked, "pass": True}
+
+
 def sensor_observability_certificate(
     shapes: Sequence[Candidate],
     active_edges: Iterable[str],
@@ -2680,6 +2716,8 @@ def write_calibration_report(
     deliberately dropped by the counts-first relaxation ladder are reported
     separately as structural-relaxation diagnostics, not mislabeled as a
     rounding failure."""
+    sensor_route_contract = require_sensor_route_contract(
+        shapes, required_anchor_edges or ())
     nq = len(targets_per_q)
     infeasible = sum(sol is None for sol in solutions)
     if enforce_integer_bounds and infeasible:
@@ -3052,6 +3090,7 @@ def write_calibration_report(
                   "unanchored_vehicles": unanchored_vehicles,
                   "pass": not unanchored_vehicles,
               },
+              "sensor_route_contract": sensor_route_contract,
               "purpose_allocation": purpose_allocation,
               "purpose_allocation_summary": {
                   "quarters_with_incompatible_routes": sum(
@@ -3110,6 +3149,7 @@ def calibrate(
     solver as backstop, in the rare case IPF's iteration budget doesn't
     converge for some edge-case constraint combination."""
     shapes, route_cost = prepare_calibration(candidates_path)
+    require_sensor_route_contract(shapes, required_anchor_edges or ())
     if purpose_mixes_per_q is not None:
         if len(purpose_mixes_per_q) != len(targets_per_q):
             raise ValueError(

@@ -1,0 +1,101 @@
+version = 1
+max_review_cycles = 3
+max_test_fix_cycles = 5
+max_blocker_repair_cycles = 4
+max_review_findings_per_repair = 50
+agent_timeout_seconds = 7200
+check_timeout_seconds = 3600
+
+[evidence]
+source_globs = [
+  "*.py",
+  "tools/**/*.py",
+  "traffic_sim/**/*.py",
+  "tests/**/*.py",
+  ".ai-flow/prompts/*.md",
+  ".ai-flow/tasks/*.md",
+  ".ai-flow/schemas/*.json",
+  ".ai-flow/config.complete-subhour.sonnet.toml",
+  "validation/monthly_search_policy_v*.json",
+  "web/**/*.js",
+  "web/**/*.html",
+  "web/**/*.css",
+  "web/**/*.json",
+  "web/**/*",
+]
+registration_globs = [
+  "validation/subhour_bounded_sumo_registration_*.json",
+  "validation/subhour_bounded_sumo_outcome_*.json",
+  "validation/monthly_cost_ledger_profile_subhour-*.json",
+  "validation/window_cost_index_subhour-*.json",
+  "validation/subhour_full_month_registration_*.json",
+  "validation/subhour_full_month_outcome_*.json",
+  "validation/subhour_gate_s_registration_*.json",
+  "validation/subhour_gate_s_evidence_*.json",
+  "validation/subhour_gate_s_outcome_*.json",
+  "validation/subhour_phase_report_*.json",
+]
+phase_checkpoint_globs = [
+  "validation/subhour_bounded_sumo_registration_*.json",
+  "validation/subhour_bounded_sumo_outcome_*.json",
+  "validation/monthly_cost_ledger_profile_subhour-*.json",
+  "validation/window_cost_index_subhour-*.json",
+]
+phase6_registration_globs = [
+  "validation/subhour_full_month_registration_*.json",
+  "validation/subhour_full_month_outcome_*.json",
+  "validation/subhour_gate_s_registration_*.json",
+  "validation/subhour_gate_s_evidence_*.json",
+  "validation/subhour_gate_s_outcome_*.json",
+]
+phase_report_globs = [
+  "validation/subhour_phase_report_*.json",
+]
+max_generations = 2
+max_new_registrations_per_glob = 2
+max_code_repair_cycles = 1
+
+[roles.planner]
+runner = "codex"
+profile = "planner"
+model = "gpt-5.6-sol"
+effort = "high"
+sandbox = "read-only"
+prompt = ".ai-flow/prompts/planner.md"
+
+[roles.worker]
+runner = "claude"
+model = "sonnet"
+effort = "high"
+permission_mode = "auto"
+max_turns = 260
+prompt = ".ai-flow/prompts/worker.md"
+
+[roles.reviewer]
+runner = "codex"
+profile = "reviewer"
+model = "gpt-5.6-sol"
+effort = "high"
+sandbox = "read-only"
+prompt = ".ai-flow/prompts/reviewer.md"
+
+[roles.fixer]
+runner = "claude"
+model = "sonnet"
+effort = "high"
+permission_mode = "auto"
+max_turns = 100
+prompt = ".ai-flow/prompts/fixer.md"
+
+[roles.fixer_fallback]
+runner = "codex"
+model = "gpt-5.6-sol"
+effort = "medium"
+sandbox = "workspace-write"
+prompt = ".ai-flow/prompts/fixer.md"
+
+[checks]
+commands = [
+  ["git", "diff", "--check"],
+  ["python3", "-m", "pytest", "-q", "tests/test_ai_flow.py", "tests/test_process_census.py", "tests/test_product_arm.py", "tests/test_profile_monthly_cost_ledger.py", "tests/test_window_cost_index.py", "tests/test_subhour_cost_ordered_contracts.py", "tests/test_cost_ordered_benchmark.py", "tests/test_cost_ordered_benchmark_discovery.py", "tests/test_cost_ordered_benchmark_provenance.py", "tests/test_cost_ordered_benchmark_run.py", "tests/test_cost_ordered_benchmark_suite.py", "tests/test_cost_ordered_search.py", "tests/test_cost_ordered_execution.py", "tests/test_cost_ordered_execution_review.py", "tests/test_closure_disruption.py", "tests/test_deterministic_disruption.py", "tests/test_build_candidates.py", "tests/test_build_sumo_demand.py", "tests/test_pfe.py", "tests/test_catalog_qualification.py", "tests/test_monthly_demand.py", "tests/test_monthly_search.py", "tests/test_monthly_sumo.py", "tests/test_monthly_progress_contract.py", "tests/test_direction_decision_sensitivity.py", "tests/test_serve.py"],
+]

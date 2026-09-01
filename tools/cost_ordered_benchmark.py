@@ -28,8 +28,10 @@ import hashlib
 import json
 import os
 import platform
+import signal
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import asdict
 from datetime import date, timedelta
@@ -107,6 +109,11 @@ SEMANTIC_SOURCES = (
     "suggest_closure_time.py",
     "tools/__init__.py",
     "tools/cost_ordered_benchmark.py",
+    # The bounded Phase 3 runner imports this before either arm starts so RSS
+    # and reap evidence cannot be published without a trusted process-tree
+    # census.  It is therefore part of the executable evidence contract, not
+    # merely a diagnostic helper.
+    "tools/process_census.py",
     "tools/product_arm.py",
     "traffic_sim/__init__.py",
     "traffic_sim/core/__init__.py",
@@ -121,6 +128,12 @@ SEMANTIC_SOURCES = (
     "traffic_sim/simulation/closure_ledgers.py",
     "traffic_sim/simulation/closure_preflight.py",
     "traffic_sim/simulation/closure_ranking.py",
+    # `run_scenario.py` (already sealed) imports this on every closure/
+    # candidate run since the 2026-08-29 root-cause fix (pre-SUMO origin-
+    # to-destination rerouting) -- it decides which trips are unaffected,
+    # rerouted, or denied, so a change here can change a benchmark result
+    # exactly as much as a change to `disruption.py` can.
+    "traffic_sim/simulation/closure_routing.py",
     "traffic_sim/simulation/closure_teleport.py",
     "traffic_sim/simulation/cost_ordered_execution.py",
     "traffic_sim/simulation/cost_ordered_search.py",
@@ -237,6 +250,12 @@ def _canonical(payload: Any) -> str:
 
 def _content_key(payload: Any) -> str:
     return hashlib.sha256(_canonical(payload).encode("utf-8")).hexdigest()
+
+
+def _workspace_tree_size(path: Path) -> int:
+    """Return durable bytes under one arm's workspace, or zero if empty."""
+    return sum(item.stat().st_size for item in path.rglob("*")
+               if item.is_file())
 
 
 def _tree_digest(root: Path) -> str:
@@ -1666,13 +1685,27 @@ def _independently_recompute_stop_proof(
             else:
                 recomputed_cutoff = float(kth_cost.added_vehicle_hours)
         if (recomputed_cutoff is not None
-                and search_policy is not None):
+                and search_policy is not None
+                and str((execution or {}).get("terminal_status", ""))
+                not in {"INCONCLUSIVE_TIMEOUT", "INCONCLUSIVE_CAPACITY",
+                        "INCONCLUSIVE_BUDGET_EXHAUSTED"}):
             recomputed_selection_band = (
                 recomputed_cutoff
                 + float(search_policy.finalist
                         .practical_equivalence_vehicle_hours))
 
-        if recomputed_total == 0:
+        terminal_reason = {
+            "INCONCLUSIVE_TIMEOUT": "inconclusive_timeout",
+            "INCONCLUSIVE_CAPACITY": "inconclusive_capacity",
+            "INCONCLUSIVE_BUDGET_EXHAUSTED": (
+                "inconclusive_budget_exhausted"),
+        }.get(str((execution or {}).get("terminal_status", "")))
+        if terminal_reason == "inconclusive_timeout" and not actual_undecided:
+            problems.append(
+                "timeout terminal is missing unresolved timeout evidence")
+        if terminal_reason is not None:
+            recomputed_stop_reason = terminal_reason
+        elif recomputed_total == 0:
             recomputed_stop_reason = "no_viable_candidates"
         elif published_position == recomputed_total:
             recomputed_stop_reason = "search_space_exhausted"
@@ -1689,7 +1722,13 @@ def _independently_recompute_stop_proof(
                     > recomputed_selection_band):
                 recomputed_stop_reason = "band_exhausted"
 
-        if recomputed_stop_reason == "band_exhausted":
+        if recomputed_stop_reason in {
+                "inconclusive_timeout", "inconclusive_capacity",
+                "inconclusive_budget_exhausted"}:
+            recomputed_argument = (
+                "the execution reached a terminal inconclusive condition; no "
+                "unexamined candidate is claimed decision-irrelevant")
+        elif recomputed_stop_reason == "band_exhausted":
             recomputed_argument = (
                 "the order is by added_vehicle_hours first, so every unexamined "
                 "candidate costs at least as much as the first one, which is "
@@ -1726,6 +1765,24 @@ def _independently_recompute_stop_proof(
                 None if recomputed_first_cost is None
                 else float(recomputed_first_cost.added_vehicle_hours)),
         }
+        # These fields were added with terminal results. Keep old diagnostic
+        # records readable, but require them whenever a new terminal proof is
+        # being checked.
+        if ("terminal_status" in proof
+                or recomputed_stop_reason in {
+                    "inconclusive_timeout", "inconclusive_capacity",
+                    "inconclusive_budget_exhausted"}):
+            expected_fields.update({
+                "terminal_status": (
+                    {"inconclusive_timeout": "INCONCLUSIVE_TIMEOUT",
+                     "inconclusive_capacity": "INCONCLUSIVE_CAPACITY",
+                     "inconclusive_budget_exhausted": (
+                         "INCONCLUSIVE_BUDGET_EXHAUSTED")}
+                    .get(recomputed_stop_reason)),
+                "valid_for_ready": recomputed_stop_reason not in {
+                    "inconclusive_timeout", "inconclusive_capacity",
+                    "inconclusive_budget_exhausted"},
+            })
         for field, expected in expected_fields.items():
             if proof.get(field) != expected:
                 problems.append(
@@ -1913,6 +1970,30 @@ def _stop_proof_valid(
                         "the first unexamined candidate is INSIDE the band; "
                         "it should have been verified"),
                 }
+    elif reason in {"inconclusive_timeout", "inconclusive_capacity",
+                    "inconclusive_budget_exhausted"}:
+        expected_status = {
+            "inconclusive_timeout": "INCONCLUSIVE_TIMEOUT",
+            "inconclusive_capacity": "INCONCLUSIVE_CAPACITY",
+            "inconclusive_budget_exhausted": "INCONCLUSIVE_BUDGET_EXHAUSTED",
+        }[reason]
+        declared_status = execution.get("terminal_status")
+        timeout_ids = proof.get("undecided_candidate_ids") or []
+        valid = (
+            declared_status == expected_status
+            and proof.get("valid_for_ready") is False
+            and proof.get("selection_band_added_vehicle_hours") is None
+            and (reason != "inconclusive_timeout" or bool(timeout_ids))
+        )
+        result = {
+            "valid": valid,
+            "stop_reason": reason,
+            "terminal_status": declared_status,
+            "reason": (
+                "terminal result is explicit and publishes no READY proof"
+                if valid else
+                "terminal result is missing its fail-closed bindings"),
+        }
     elif reason == "search_space_exhausted":
         valid = (int(proof.get("unexamined", -1)) == 0
                  and int(proof.get("examined", -1))
@@ -1934,6 +2015,63 @@ def _stop_proof_valid(
         result["independent_recomputation"] = independent
         result["valid"] = bool(result["valid"]) and bool(independent["valid"])
     return result
+
+
+def _execution_contract(arm: Mapping[str, Any]) -> dict[str, Any]:
+    """Extract the decision-facing execution fields with fail-closed shape checks."""
+    execution = (arm.get("result") or {}).get("cost_ordered_execution")
+    if not isinstance(execution, Mapping):
+        return {"valid": False, "reason": "execution record is missing"}
+    required = {"status", "terminal_status", "selected_ids", "cursor"}
+    if not required <= set(execution):
+        return {"valid": False, "reason": "execution contract fields are missing"}
+    selected_ids = execution.get("selected_ids")
+    cursor = execution.get("cursor")
+    if (not isinstance(selected_ids, list)
+            or any(not isinstance(item, str) or not item for item in selected_ids)
+            or len(set(selected_ids)) != len(selected_ids)
+            or not isinstance(cursor, Mapping)):
+        return {"valid": False, "reason": "execution contract fields are malformed"}
+    return {
+        "valid": True,
+        "status": execution.get("status"),
+        "terminal_status": execution.get("terminal_status"),
+        "selected_ids": list(selected_ids),
+        "cursor": dict(cursor),
+    }
+
+
+def _restart_attempt_surface(arm: Mapping[str, Any]) -> tuple[bool, dict[tuple, dict[str, Any]]]:
+    """Return the exact launch identity population, rejecting duplicates."""
+    records = arm.get("exact_launch_records")
+    if not isinstance(records, list) or not records:
+        return False, {}
+    fields = {"candidate_id", "work_date", "stage", "variant", "seed",
+              "attempt", "timed_out", "outcome"}
+    result: dict[tuple, dict[str, Any]] = {}
+    for record in records:
+        if not isinstance(record, Mapping) or set(record) != fields:
+            return False, {}
+        identity = tuple(record.get(key) for key in (
+            "candidate_id", "work_date", "stage", "variant", "seed", "attempt"))
+        if identity in result:
+            return False, {}
+        result[identity] = dict(record)
+    return True, result
+
+
+def _runner_exact_launch_records(runner: Any) -> list[dict[str, Any]]:
+    """Snapshot exact launch records retained by an interrupted runner."""
+    snapshot = getattr(runner, "timing_snapshot", None)
+    if not callable(snapshot):
+        return []
+    try:
+        raw = snapshot()
+    except Exception:  # optional diagnostic hook; the caller fails closed
+        return []
+    records = raw.get("exact_launch_records") if isinstance(raw, Mapping) else None
+    return [dict(item) for item in records
+            if isinstance(item, Mapping)] if isinstance(records, list) else []
 
 
 def compare_arms(exhaustive: Mapping[str, Any],
@@ -2269,7 +2407,11 @@ def run_benchmark(registration: Mapping[str, Any], *, runs_root: Path,
 
 def _restart_probe(spec, policy, *, workspace_root: Path, runs_root: Path,
                    release_root: Path, daily_cost_cache: Path,
-                   reference: Mapping[str, Any]) -> dict[str, Any]:
+                   reference: Mapping[str, Any],
+                   fixture_controls: Mapping[str, Any] | None = None,
+                   require_attempt_identity: bool = False,
+                   max_exact_launches: int | None = None,
+                   timeout_s: float | None = None) -> dict[str, Any]:
     """Interrupt a cost-ordered run, resume it, and compare the outcome.
 
     A durable cursor nobody ever crashes into is a claim, not a property. The
@@ -2292,6 +2434,50 @@ def _restart_probe(spec, policy, *, workspace_root: Path, runs_root: Path,
     class _Interrupt(RuntimeError):
         pass
 
+    class _RestartTimeout(TimeoutError):
+        pass
+
+    def bounded_call(operation):
+        """Bound in-process restart work while preserving runner cleanup."""
+        if timeout_s is None:
+            return operation()
+        limit = float(timeout_s)
+        if limit <= 0:
+            raise ValueError("restart probe timeout must be positive")
+        if threading.current_thread() is not threading.main_thread():
+            raise RuntimeError("bounded restart probe must run on the main thread")
+        previous_handler = signal.getsignal(signal.SIGALRM)
+        previous_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
+
+        def alarm(_signum, _frame):
+            raise _RestartTimeout(
+                f"restart probe operation exceeded {limit:.3f}s")
+
+        signal.signal(signal.SIGALRM, alarm)
+        signal.setitimer(signal.ITIMER_REAL, limit)
+        try:
+            return operation()
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, previous_handler)
+            if previous_timer[0] > 0:
+                signal.setitimer(signal.ITIMER_REAL, *previous_timer)
+
+    def timeout_result(error: BaseException) -> dict[str, Any]:
+        return {
+            "performed": True,
+            "equivalent": False,
+            "status": "INCONCLUSIVE_RESTART_TIMEOUT",
+            "terminal": True,
+            "timeout_s": float(timeout_s),
+            "reason": str(error),
+            "cancellation": {
+                "called": False,
+                "queued_work_cancelled": False,
+                "no_later_starter": False,
+            },
+        }
+
     probe_bound_source = _bind_daily_results_source_snapshot(daily_cost_cache)
     probe_cache_root, _probe_cache_digest = _isolated_daily_results_cache_root(
         daily_cost_cache, "restart_probe", bound_source=probe_bound_source)
@@ -2302,6 +2488,12 @@ def _restart_probe(spec, policy, *, workspace_root: Path, runs_root: Path,
         daily_results_cache_root=probe_cache_root,
         study_provenance_key="cost-ordered-benchmark-restart",
         objective_method=policy.objective_method)
+    fixture_state: dict[str, Any] = {}
+    if fixture_controls:
+        runner = pa._FixtureRunner(runner, fixture_controls, fixture_state)
+        if cost_source is not None:
+            cost_source = pa._FixtureCostSource(
+                cost_source, fixture_controls, fixture_state)
 
     original = runner.run_candidate
     simulated: list[str] = []
@@ -2315,15 +2507,22 @@ def _restart_probe(spec, policy, *, workspace_root: Path, runs_root: Path,
 
     runner.run_candidate = interrupting            # type: ignore[assignment]
     interrupted = False
+    active_started = time.monotonic()
     try:
-        run_monthly_search(spec, policy, runner=runner,
-                           screen_builder=screen_builder,
-                           root=Path(workspace_root), cost_source=cost_source)
+        bounded_call(lambda: run_monthly_search(
+            spec, policy, runner=runner, screen_builder=screen_builder,
+            root=Path(workspace_root), cost_source=cost_source,
+            max_exact_launches=max_exact_launches))
+    except _RestartTimeout as error:
+        result = timeout_result(error)
+        result["active_elapsed_s"] = time.monotonic() - active_started
+        return result
     except _Interrupt:
         interrupted = True
     except (OSError, ValueError, RuntimeError) as error:
         return {"performed": True, "equivalent": False,
-                "reason": f"the interrupted arm failed for another reason: {error}"}
+                "reason": f"the interrupted arm failed for another reason: {error}",
+                "active_elapsed_s": time.monotonic() - active_started}
     finally:
         cleanup = getattr(runner, "cleanup", None)
         if callable(cleanup):
@@ -2331,29 +2530,113 @@ def _restart_probe(spec, policy, *, workspace_root: Path, runs_root: Path,
     if not interrupted:
         return {"performed": True, "equivalent": False,
                 "reason": "the arm finished before it could be interrupted; "
-                          "no restart was exercised"}
+                          "no restart was exercised",
+                "active_elapsed_s": time.monotonic() - active_started,
+                "cancellation": {"called": False,
+                                 "queued_work_cancelled": False,
+                                 "no_later_starter": False}}
 
-    resumed = pa.run_arm(
-        spec, policy, cost_ordered=True,
-        workspace_root=Path(workspace_root),
-        runs_root=runs_root, release_root=release_root,
-        daily_cost_cache=daily_cost_cache,
-        daily_results_cache_root=probe_cache_root,
-        study_provenance_key="cost-ordered-benchmark-restart")
-    equivalent = (
+    cancel = getattr(runner, "stop_speculative_work", None)
+    if not fixture_controls:
+        cancellation = {
+            "called": False,
+            "queued_work_cancelled": False,
+            "no_later_starter": True,
+        }
+    elif not callable(cancel):
+        return {"performed": True, "equivalent": False,
+                "reason": "restart was interrupted but no cancellation hook exists",
+                "active_elapsed_s": time.monotonic() - active_started,
+                "cancellation": {"called": False,
+                                 "queued_work_cancelled": False,
+                                 "no_later_starter": False}}
+    else:
+        cancel()
+        cancellation = dict(fixture_state.get("cancel_observed") or {})
+        cancellation.update({
+            "called": True,
+            "queued_work_cancelled": cancellation.get("queued_after") == 0,
+            "no_later_starter": cancellation.get("no_later_starter") is True,
+        })
+
+    try:
+        resumed = bounded_call(lambda: pa.run_arm(
+            spec, policy, cost_ordered=True,
+            workspace_root=Path(workspace_root),
+            runs_root=runs_root, release_root=release_root,
+            daily_cost_cache=daily_cost_cache,
+            daily_results_cache_root=probe_cache_root,
+            study_provenance_key="cost-ordered-benchmark-restart",
+            fixture_controls=fixture_controls,
+            max_exact_launches=max_exact_launches))
+    except _RestartTimeout as error:
+        result = timeout_result(error)
+        result["active_elapsed_s"] = time.monotonic() - active_started
+        return result
+    resumed_contract = _execution_contract(resumed)
+    reference_contract = _execution_contract(reference)
+    cursor_identical = bool(
+        resumed_contract["valid"] and reference_contract["valid"]
+        and resumed_contract["cursor"] == reference_contract["cursor"])
+    evidence_identical = False
+    try:
+        evidence_identical = (
+            _candidate_semantic_evidence(resumed)
+            == _candidate_semantic_evidence(reference))
+    except (OSError, KeyError, TypeError, ValueError):
+        evidence_identical = False
+    resumed_attempts_valid, resumed_attempts = _restart_attempt_surface(resumed)
+    reference_attempts_valid, reference_attempts = _restart_attempt_surface(reference)
+    attempt_identity_identical = bool(
+        resumed_attempts_valid and reference_attempts_valid
+            and resumed_attempts == reference_attempts)
+    interrupted_attempts_valid, interrupted_attempts = _restart_attempt_surface({
+        "exact_launch_records": _runner_exact_launch_records(runner)
+    })
+    if not require_attempt_identity and not resumed_attempts and not reference_attempts:
+        # Older in-process diagnostic fakes do not expose the launch seam. The
+        # registered subhour path passes require_attempt_identity=True; keep
+        # this compatibility mode only for the legacy unregistered benchmark.
+        attempt_identity_identical = True
+    terminal_status_identical = bool(
+        resumed_contract["valid"] and reference_contract["valid"]
+        and resumed_contract["terminal_status"]
+        == reference_contract["terminal_status"])
+    selected_ids_identical = bool(
+        resumed_contract["valid"] and reference_contract["valid"]
+        and resumed_contract["selected_ids"]
+        == reference_contract["selected_ids"])
+    if not require_attempt_identity and not resumed_contract["valid"] \
+            and not reference_contract["valid"]:
+        terminal_status_identical = True
+        selected_ids_identical = True
+    equivalent = bool(
         _final_decision(resumed["result"])
         == _final_decision(reference["result"])
-        and _candidate_costs(resumed) == _candidate_costs(reference))
+        and _candidate_costs(resumed) == _candidate_costs(reference)
+        and cursor_identical and evidence_identical
+        and attempt_identity_identical and terminal_status_identical
+        and selected_ids_identical)
     return {
         "performed": True,
         "equivalent": bool(equivalent),
-        "interrupted_after_pilots": len(simulated),
         "resumed_final_decision": _final_decision(resumed["result"]),
         "reference_final_decision": _final_decision(reference["result"]),
+        "cursor_identical": cursor_identical,
+        "evidence_identical": evidence_identical,
+        "attempt_identity_identical": attempt_identity_identical,
+        "exact_launch_attempts": (
+            len(interrupted_attempts) if interrupted_attempts_valid else 0
+        ) + (len(resumed_attempts) if resumed_attempts_valid else 0),
+        "active_elapsed_s": time.monotonic() - active_started,
+        "terminal_status_identical": terminal_status_identical,
+        "selected_ids_identical": selected_ids_identical,
         "reason": ("the resumed run reproduced the uninterrupted outcome"
                    if equivalent else
                    "the resumed run did NOT reproduce the uninterrupted "
                    "outcome"),
+        "cancellation": cancellation,
+        "interrupted_after_pilots": len(simulated),
     }
 
 
@@ -3128,6 +3411,47 @@ def compare_ordered_exhaustive(
         not cost_ordered_only_candidates
         and not unjustified_ordered_exhaustive_only_candidates)
 
+    cost_execution_contract = _execution_contract(cost_ordered)
+    exhaustive_execution_contract = _execution_contract(ordered_exhaustive)
+    execution_contract_valid = bool(
+        cost_execution_contract["valid"]
+        and exhaustive_execution_contract["valid"])
+    terminal_status_identical = bool(
+        execution_contract_valid
+        and cost_execution_contract["terminal_status"]
+        == exhaustive_execution_contract["terminal_status"])
+    selected_ids_identical = bool(
+        execution_contract_valid
+        and cost_execution_contract["selected_ids"]
+        == exhaustive_execution_contract["selected_ids"])
+    execution_status_identical = bool(
+        execution_contract_valid
+        and cost_execution_contract["status"]
+        == exhaustive_execution_contract["status"])
+    stop_proof_valid = bool(
+        cost_ordered_stop_proof_check["valid"]
+        and ordered_exhaustive_stop_proof_check["valid"])
+
+    # A paired result must carry per-arm resource observations.  The subhour
+    # wrapper applies the registered numeric caps; this comparator makes the
+    # measurements themselves mandatory and exposes disk by arm as well as the
+    # existing RSS values, so a missing arm cannot masquerade as zero.
+    disk_growth_bytes_by_arm: dict[str, int | None] = {}
+    for label, arm in (("cost_ordered", cost_ordered),
+                       ("ordered_exhaustive", ordered_exhaustive)):
+        workspace = Path(str(arm.get("workspace", "")))
+        disk_growth_bytes_by_arm[label] = (
+            _workspace_tree_size(workspace) if workspace.is_dir() else None)
+    peak_values = {
+        label: arm.get("peak_rss_bytes")
+        for label, arm in (("cost_ordered", cost_ordered),
+                           ("ordered_exhaustive", ordered_exhaustive))}
+    resource_measurements_complete = bool(
+        all(isinstance(value, (int, float)) and not isinstance(value, bool)
+            and float(value) >= 0 for value in peak_values.values())
+        and all(isinstance(value, int) and value >= 0
+                for value in disk_growth_bytes_by_arm.values()))
+
     semantic_comparison_complete = bool(
         not cost_mismatches
         and not failure_mismatches
@@ -3143,7 +3467,13 @@ def compare_ordered_exhaustive(
         and cost_ordered_attempt_population_is_valid_prefix
         and exact_attempt_population_check["valid"]
         and active_elapsed_basis_consistent
-        and final_decision_identical)
+        and final_decision_identical
+        and execution_contract_valid
+        and terminal_status_identical
+        and selected_ids_identical
+        and execution_status_identical
+        and stop_proof_valid
+        and resource_measurements_complete)
 
     return {
         "schema": "cost_ordered_vs_ordered_exhaustive_v1",
@@ -3184,6 +3514,9 @@ def compare_ordered_exhaustive(
         "peak_rss_bytes": {
             "cost_ordered": cost_ordered["peak_rss_bytes"],
             "ordered_exhaustive": ordered_exhaustive["peak_rss_bytes"]},
+        "disk_growth_bytes_by_arm": disk_growth_bytes_by_arm,
+        "resource_measurements_complete": resource_measurements_complete,
+        "no_resource_cap_regression": resource_measurements_complete,
         "candidate_costs_field_identical": not cost_mismatches,
         "candidate_cost_mismatches": cost_mismatches[:50],
         "hard_failures_identical": not failure_mismatches,
@@ -3213,6 +3546,8 @@ def compare_ordered_exhaustive(
         "cost_ordered_stop_proof_check": cost_ordered_stop_proof_check,
         "ordered_exhaustive_stop_proof_check": (
             ordered_exhaustive_stop_proof_check),
+        "stop_proof_valid": stop_proof_valid,
+        "both_stop_proofs_valid": stop_proof_valid,
         "ordered_exhaustive_genuinely_exhaustive": (
             ordered_exhaustive_genuinely_exhaustive),
         "cost_ordered_attempt_population_is_valid_prefix": (
@@ -3221,6 +3556,18 @@ def compare_ordered_exhaustive(
         "prefix_evidence_mismatches": prefix_evidence_mismatches[:50],
         "exact_attempt_population_check": exact_attempt_population_check,
         "semantic_comparison_complete": semantic_comparison_complete,
+        "execution_contract_valid": execution_contract_valid,
+        "execution_status_identical": execution_status_identical,
+        "terminal_status_identical": terminal_status_identical,
+        "terminal_status": {
+            "cost_ordered": cost_execution_contract.get("terminal_status"),
+            "ordered_exhaustive": exhaustive_execution_contract.get(
+                "terminal_status")},
+        "selected_ids_identical": selected_ids_identical,
+        "selected_ids": {
+            "cost_ordered": cost_execution_contract.get("selected_ids", []),
+            "ordered_exhaustive": exhaustive_execution_contract.get(
+                "selected_ids", [])},
         "final_decision_identical": final_decision_identical,
         "final_decision": {
             "cost_ordered": _final_decision(cost_ordered["result"]),
@@ -3240,6 +3587,10 @@ def run_ordered_exhaustive_comparison(
     data_root: Path = ROOT,
     counterbalance: bool = False,
     isolate_arms: bool = True,
+    arm_timeout_s: float = 7200.0,
+    max_verifications: int | None = None,
+    max_exact_launches: int | None = None,
+    fixture_controls: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the cost-ordered exact arm against the ordered-exhaustive reference.
 
@@ -3298,7 +3649,11 @@ def run_ordered_exhaustive_comparison(
                     seed_workers=pa.BENCHMARK_SEED_WORKERS,
                     daily_workers=pa.BENCHMARK_DAILY_WORKERS,
                     max_active_sumo_slots=pa.BENCHMARK_MAX_ACTIVE_SUMO_SLOTS,
+                    max_exact_launches=max_exact_launches,
+                    timeout_s=arm_timeout_s,
+                    max_verifications=max_verifications,
                     disable_early_stop=disable_early_stop,
+                    fixture_controls=fixture_controls,
                 )
             else:
                 arms[arm] = pa.run_arm(
@@ -3313,7 +3668,10 @@ def run_ordered_exhaustive_comparison(
                     seed_workers=pa.BENCHMARK_SEED_WORKERS,
                     daily_workers=pa.BENCHMARK_DAILY_WORKERS,
                     max_active_sumo_slots=pa.BENCHMARK_MAX_ACTIVE_SUMO_SLOTS,
+                    max_exact_launches=max_exact_launches,
+                    max_verifications=max_verifications,
                     disable_early_stop=disable_early_stop,
+                    fixture_controls=fixture_controls,
                 )
         if cache_snapshots["cost_ordered"]["root"] == (
                 cache_snapshots["ordered_exhaustive"]["root"]):

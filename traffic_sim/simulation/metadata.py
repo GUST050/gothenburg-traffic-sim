@@ -14,7 +14,36 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+#: The one vehicle category this project models end to end (see
+#: `traffic_sim.simulation.closure_routing`'s single-category contract). SUMO's
+#: own default for an undeclared `vType`/`vClass` is exactly this class
+#: (https://sumo.dlr.de/docs/Definition_of_Vehicles,_Vehicle_Types,_and_Routes.html#vehicle_types),
+#: and neither the calibrated demand nor the candidate pool declares any
+#: `<vType>` or per-vehicle `type=`, so this is not a narrowing choice -- it
+#: is naming what the network already carries. This schema has exactly one
+#: permission graph; a future need for a second modeled vClass is a schema
+#: change (bump `SCHEMA_VERSION`), not a parameter someone can pass in.
+DEFAULT_VCLASS = "passenger"
+
+
+def _vclass_permitted(allow: str | None, disallow: str | None, vclass: str) -> bool:
+    """SUMO lane/edge/connection permission rule
+    (https://sumo.dlr.de/docs/Simulation/VehiclePermissions.html): `allow`
+    lists the ONLY classes that may use it (`"all"` included); otherwise
+    `disallow` lists classes that may NOT use it (`"all"` excludes everyone);
+    absent both, every class -- including ours -- is permitted. `allow` wins
+    when both are present, matching SUMO's own precedence."""
+    if allow:
+        tokens = allow.split()
+        return vclass in tokens or "all" in tokens
+    if disallow:
+        tokens = disallow.split()
+        if "all" in tokens:
+            return False
+        return vclass not in tokens
+    return True
 
 
 def sha256_file(path: Path) -> str:
@@ -41,9 +70,43 @@ def _shape_midpoint(shape: str | None) -> tuple[float, float] | None:
             sum(y for _, y in points) / len(points))
 
 
-def build_metadata(net_path: Path) -> dict:
+def _edge_permitted_lanes(edge: ET.Element, vclass: str) -> dict[str, bool]:
+    """Per-lane-index legality for `vclass` on this edge. A lane without its
+    own `allow`/`disallow` falls back to the edge's own attributes (SUMO
+    permits declaring restrictions at either level), then to "permitted" --
+    the same `_vclass_permitted` default used everywhere else, so an edge/lane
+    that declares nothing is never treated as restricted."""
+    edge_allow, edge_disallow = edge.get("allow"), edge.get("disallow")
+    permitted: dict[str, bool] = {}
+    for lane in edge.findall("lane"):
+        index = lane.get("index")
+        if index is None:
+            continue
+        allow = lane.get("allow") if lane.get("allow") is not None else edge_allow
+        disallow = (lane.get("disallow") if lane.get("disallow") is not None
+                    else edge_disallow)
+        permitted[index] = _vclass_permitted(allow, disallow, vclass)
+    return permitted
+
+
+def build_metadata(net_path: Path, vclass: str = DEFAULT_VCLASS) -> dict:
+    """Build the acceleration index for exactly one vehicle class (`vclass`,
+    the single category this project models -- see `DEFAULT_VCLASS`).
+
+    `successors` is ALREADY permission-filtered: a connection only appears
+    when the connection itself (if it declares `allow`/`disallow`) and both
+    lanes it joins permit `vclass`. There is deliberately no unfiltered
+    variant exposed -- every routing consumer needs the legal graph, never
+    the raw geometric one, so keeping only one avoids a caller accidentally
+    routing on connections the modeled vehicle could not legally use.
+    `restricted_edges` lists edges with zero legal lanes for `vclass`, kept
+    for diagnostics and fail-closed callers that want to reject a route
+    touching one explicitly rather than merely finding it unreachable.
+    """
     root = ET.parse(net_path).getroot()
     edges: dict[str, dict] = {}
+    lane_permits: dict[str, dict[str, bool]] = {}
+    restricted_edges: set[str] = set()
     for edge in root.findall("edge"):
         edge_id = edge.get("id")
         # plain.edg.xml (the legacy geometry oracle) contains drivable edges;
@@ -69,24 +132,50 @@ def build_metadata(net_path: Path) -> dict:
             "length_m": length_m,
             "speed_m_s": speed_m_s,
         }
+        permits = _edge_permitted_lanes(edge, vclass)
+        lane_permits[edge_id] = permits
+        # An edge with declared lanes but none of them legal is restricted.
+        # An edge with NO declared `<lane>` children (every fixture net used
+        # by the test suite, and any hand-written `<net>` with only
+        # `<connection>` elements) has no permission information at all and
+        # is therefore treated as permitted, consistent with
+        # `_vclass_permitted`'s "nothing declared -> allowed" default.
+        if permits and not any(permits.values()):
+            restricted_edges.add(edge_id)
 
     successors: dict[str, list[str]] = {}
     for connection in root.findall("connection"):
         source, target = connection.get("from"), connection.get("to")
-        if source and target:
-            successors.setdefault(source, []).append(target)
+        if not source or not target:
+            continue
+        if source in restricted_edges or target in restricted_edges:
+            continue
+        if not _vclass_permitted(
+                connection.get("allow"), connection.get("disallow"), vclass):
+            continue
+        from_lane, to_lane = connection.get("fromLane"), connection.get("toLane")
+        source_permits = lane_permits.get(source, {})
+        target_permits = lane_permits.get(target, {})
+        if from_lane is not None and source_permits.get(from_lane) is False:
+            continue
+        if to_lane is not None and target_permits.get(to_lane) is False:
+            continue
+        successors.setdefault(source, []).append(target)
     for source in successors:
         successors[source] = sorted(set(successors[source]))
     return {
         "schema_version": SCHEMA_VERSION,
         "net_sha256": sha256_file(net_path),
+        "vclass": vclass,
         "edges": edges,
         "successors": successors,
+        "restricted_edges": sorted(restricted_edges),
     }
 
 
-def write_metadata(net_path: Path, output_path: Path) -> dict:
-    payload = build_metadata(Path(net_path))
+def write_metadata(net_path: Path, output_path: Path,
+                    vclass: str = DEFAULT_VCLASS) -> dict:
+    payload = build_metadata(Path(net_path), vclass=vclass)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(dir=output_path.parent,
                                      prefix=f".{output_path.name}.", suffix=".tmp")
@@ -103,8 +192,16 @@ def write_metadata(net_path: Path, output_path: Path) -> dict:
     return payload
 
 
-def load_metadata(net_path: Path, metadata_path: Path) -> dict | None:
-    """Return a validated index, or ``None`` to select the XML oracle path."""
+def load_metadata(net_path: Path, metadata_path: Path,
+                   vclass: str = DEFAULT_VCLASS) -> dict | None:
+    """Return a validated index, or ``None`` to select the XML oracle path.
+
+    A cache built for a different `vclass` (or by the pre-permission-
+    filtering schema 1) fails validation here and falls back to the XML
+    oracle rather than silently handing a caller an unfiltered or
+    wrong-class graph -- this is the same fail-closed shape as
+    `net_sha256` staleness detection, just for the permission dimension.
+    """
     try:
         with metadata_path.open() as stream:
             payload = json.load(stream)
@@ -112,8 +209,11 @@ def load_metadata(net_path: Path, metadata_path: Path) -> dict | None:
             return None
         if payload.get("net_sha256") != sha256_file(net_path):
             return None
+        if payload.get("vclass") != vclass:
+            return None
         if not isinstance(payload.get("edges"), dict) or \
-           not isinstance(payload.get("successors"), dict):
+           not isinstance(payload.get("successors"), dict) or \
+           not isinstance(payload.get("restricted_edges"), list):
             return None
         return payload
     except (OSError, ValueError, TypeError):

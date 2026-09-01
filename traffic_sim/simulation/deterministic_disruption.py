@@ -41,6 +41,7 @@ import hashlib
 import json
 import os
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime
@@ -50,7 +51,7 @@ from typing import Any, Mapping, Protocol, Sequence
 from traffic_sim.core.contracts import ClosureSchedule, ClosureSearchSpec
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.closure_ranking import ClosureCost, worst_variant_cost
-from traffic_sim.simulation.metadata import load_metadata
+from traffic_sim.simulation.metadata import build_metadata, load_metadata
 
 #: Version of the deterministic disruption contract. Any change to how a
 #: record is computed or shaped must bump it; it is part of every cache key.
@@ -218,21 +219,20 @@ class NetworkCostModel:
         self._network_state = _file_state(self.network_path)
         self._metadata_state = _file_state(self.network_metadata_path)
         root = ET.parse(self.network_path).getroot()
+        # SINGLE-VEHICLE-CATEGORY CONTRACT (review finding 3, 2026-08-29):
+        # ranking must never disagree with routing about which edges are
+        # reachable, so this adjacency is sourced from the SAME
+        # `DEFAULT_VCLASS`-filtered graph `run_scenario.build_edge_graph`
+        # uses -- both the cache and the XML-fallback branch go through
+        # `metadata.build_metadata`, never a second hand-rolled parser.
         metadata = load_metadata(
             self.network_path, self.network_metadata_path)
-        if metadata is not None:
-            self.adjacency = {
-                str(source): [str(target) for target in targets]
-                for source, targets in metadata["successors"].items()
-            }
-        else:
-            adjacency: dict[str, list[str]] = {}
-            for connection in root.findall("connection"):
-                source = connection.get("from")
-                target = connection.get("to")
-                if source and target:
-                    adjacency.setdefault(source, []).append(target)
-            self.adjacency = adjacency
+        if metadata is None:
+            metadata = build_metadata(self.network_path)
+        self.adjacency = {
+            str(source): [str(target) for target in targets]
+            for source, targets in metadata["successors"].items()
+        }
 
         edge_time: dict[str, float] = {}
         edge_len: dict[str, float] = {}
@@ -357,6 +357,19 @@ class DailyCostCache:
         return path
 
 
+# Archive route files are immutable inputs, but an independent daily cost
+# source creates one provider per unique daily unit.  Re-hashing the same
+# three large XML files for every provider made the cold ledger profiler spend
+# its budget in input fingerprinting before it measured any pricing.  The
+# cache key includes every file stat tuple, so a replacement or in-place edit
+# cannot reuse a digest; ``verify_current`` still performs the cheap stat
+# check on every use and fails closed if bytes move after construction.
+_ARCHIVE_INPUTS_CACHE: dict[
+    tuple[str, tuple[int, int, int, int], tuple[tuple[str, tuple[int, int, int, int]], ...]],
+    "ArchiveInputs",
+] = {}
+
+
 @dataclass(frozen=True)
 class ArchiveInputs:
     """One immutable demand archive, resolved to exactly three route files."""
@@ -390,13 +403,29 @@ class ArchiveInputs:
                 raise DisruptionUnavailable(
                     f"demand archive lacks the {variant} route file: {path}")
             variant_paths[variant] = path
-            digest = sha256_file(path)
             state = _file_state(path)
-            if digest is None or state is None:
+            if state is None:
+                raise DisruptionUnavailable(
+                    f"demand archive cannot fingerprint {variant}: {path}")
+            variant_states[variant] = state
+        meta_state = _file_state(meta_path)
+        if meta_state is None:
+            raise DisruptionUnavailable(
+                f"demand archive cannot fingerprint demand_meta: {meta_path}")
+        cache_key = (
+            str(archive),
+            meta_state,
+            tuple(sorted(variant_states.items())),
+        )
+        cached = _ARCHIVE_INPUTS_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+        for variant, path in variant_paths.items():
+            digest = sha256_file(path)
+            if digest is None:
                 raise DisruptionUnavailable(
                     f"demand archive cannot fingerprint {variant}: {path}")
             variant_sha256[variant] = digest
-            variant_states[variant] = state
         try:
             epoch = datetime.fromisoformat(str(metadata["epoch_sim"]))
             intervals = int(metadata["n_intervals"])
@@ -405,11 +434,10 @@ class ArchiveInputs:
                 f"demand archive metadata lacks an epoch or interval count: "
                 f"{archive}") from error
         meta_digest = sha256_file(meta_path)
-        meta_state = _file_state(meta_path)
-        if meta_digest is None or meta_state is None:
+        if meta_digest is None:
             raise DisruptionUnavailable(
                 f"demand archive cannot fingerprint demand_meta: {meta_path}")
-        return cls(
+        result = cls(
             archive=archive,
             demand_meta_path=meta_path,
             variant_paths=variant_paths,
@@ -420,6 +448,8 @@ class ArchiveInputs:
             demand_meta_state=meta_state,
             variant_states=variant_states,
         )
+        _ARCHIVE_INPUTS_CACHE[cache_key] = result
+        return result
 
     def verify_current(self) -> None:
         """Keep parsed metadata and route content under one fixed identity."""
@@ -475,6 +505,20 @@ class ArchiveDisruptionProvider:
             dict(unit_identity) if unit_identity is not None else None)
         self._sources = costing_source_identity()
         self._memory: dict[str, tuple[Mapping[str, Any], ...]] = {}
+        self._timings: dict[str, float] = {
+            "xml_parse": 0.0,
+            "route_vehicle_grouping": 0.0,
+            "shortest_path_detour": 0.0,
+            "window_aggregation": 0.0,
+        }
+
+    def _record_timing(self, phase: str, elapsed_s: float) -> None:
+        if phase in self._timings:
+            self._timings[phase] += max(0.0, float(elapsed_s))
+
+    def timing_snapshot(self) -> Mapping[str, float]:
+        """Return exclusive deterministic-cost timings for cold profiling."""
+        return dict(self._timings)
 
     # -- identity ---------------------------------------------------------
 
@@ -529,14 +573,30 @@ class ArchiveDisruptionProvider:
         closed = set(self.spec.directed_edges)
         records: list[Mapping[str, Any]] = []
         for variant in DEMAND_VARIANTS:
-            report = rs.closure_disruption(
-                self.inputs.variant_paths[variant],
-                closed,
-                closures,
-                self.network.edge_time,
-                self.network.edge_len,
-                adj=self.network.adjacency,
-            )
+            try:
+                report = rs.closure_disruption(
+                    self.inputs.variant_paths[variant],
+                    closed,
+                    closures,
+                    self.network.edge_time,
+                    self.network.edge_len,
+                    adj=self.network.adjacency,
+                    timing=self._record_timing,
+                )
+            except TypeError as error:
+                # Keep compatibility with a deliberately tiny test double or
+                # legacy injected wrapper that predates the optional telemetry
+                # hook. Real production calls use the timed path above.
+                if "timing" not in str(error):
+                    raise
+                report = rs.closure_disruption(
+                    self.inputs.variant_paths[variant],
+                    closed,
+                    closures,
+                    self.network.edge_time,
+                    self.network.edge_len,
+                    adj=self.network.adjacency,
+                )
             if report is None:
                 raise DisruptionUnavailable(
                     f"closure disruption is unavailable for {variant}")

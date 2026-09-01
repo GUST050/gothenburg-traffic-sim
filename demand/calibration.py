@@ -396,6 +396,15 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     global _PFE_PAR_FIXED_TOTALS
     phase_started = time.perf_counter()
     shapes, route_cost = pfe.prepare_calibration(cand_path)
+    required_anchor_sets = {
+        tuple(sorted(set(str(edge) for edge in
+                         (variant_inputs[suffix].get("required_anchor_edges") or ()))))
+        for suffix, _key in variants
+    }
+    if len(required_anchor_sets) != 1:
+        raise ValueError(
+            "PFE variants disagree on the required sensor-route contract")
+    pfe.require_sensor_route_contract(shapes, next(iter(required_anchor_sets)))
     prepare_s = time.perf_counter() - phase_started
     print(f"  timing PFE prepare: {prepare_s:.1f}s")
     _PFE_PAR_DAY_QUARTERS = day_quarters

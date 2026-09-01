@@ -382,7 +382,7 @@ def test_publication_is_atomic_and_leaves_no_partial_files(tmp_path):
     assert list((tmp_path / "cache").rglob("*.tmp")) == []
     for path in (tmp_path / "cache").glob("*/*.json"):
         payload = json.loads(path.read_text(encoding="utf-8"))
-        assert payload["schema"] == "independent_daily_evidence_cache_v2"
+        assert payload["schema"] == "independent_daily_evidence_cache_v4"
 
 
 # ------------------------------------------------------------ lifecycle ---

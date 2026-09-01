@@ -9,12 +9,155 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
-- Current focus: `Make the exact five-day monthly search robust for full-day
-  comparisons, including fail-fast candidate feasibility and actionable
-  demand-build errors. Keep the adopted canonical weekday/weekend route
-  catalog stable, preserve exact scenario/trajectory/seed-health evidence and
-  keep full annual warming disabled until explicitly launched.`
-- Status: `CATALOG QUALIFIED, ADOPTED AND SOAKED. A matched-size campaign used
+- Current focus: `Five-level strict-route LOSO study complete; active demand
+  restored to the selected 50-OD floor; keep scenario/monthly execution paused.`
+- Status: `ROUTE CORRECTNESS PASSES; 50 WINS PREREGISTERED ABLATION; NO RUN ACTIVE.
+  Sensor candidates are
+  canonicalized to the deterministic global fastest route for their OD, every
+  crossed sensor must have a finite strictly slower avoiding route, and the
+  grounded fallback now searches the global shortest-path tree in both
+  home-to-activity and activity-to-home directions. The fresh make demand build
+  published 18,266 vehicles with 671/671 exact sensor constraints and a
+  post-build audit requalified 539/539 candidate routes. Same-protocol floors
+  25/50/100/200/500 yielded median daily factors
+  1.642x/1.560x/1.946x/2.293x/2.425x and mean GEH<5
+  55.8%/57.3%/49.6%/43.3%/37.0%. Floor 50 wins both frozen rules and its active
+  candidate SHA exactly matches the LOSO evidence; all held stations remain
+  underidentified.`
+- Suggested next action: `Improve route composition/regularization or add
+  independent sensors; do not increase raw route count, weaken the route
+  contract or start scenario/monthly execution automatically.`
+- Eligible actors: `Any capable implementer, tester, reviewer or monitor.`
+- Safety boundary: `Preserve all partial and historical artifacts; use fresh
+  append-only IDs/roots, one demand-workspace writer, no source edits during a
+  bound run, no shortest/positive-gap/count/provenance/gate weakening, and no
+  delete/commit/push/deploy.`
+- Updated: `2026-09-01: completed preregistered 25/50/100/200/500 six-fold
+  LOSO study, selected 50, and restored an identity-matched active demand.`
+<!-- WORKFLOW_CONTROL_END -->
+
+<!-- WORKFLOW_HISTORY_START -->
+## WORKFLOW_HISTORY
+
+- Status: `2026-08-30 REPAIR-BATCH PASS 6 (review-03 CHANGES_REQUIRED on
+  PASS 5): fixed the two remaining findings. (1) Evidence durability was
+  checked only at daily-cache reload's envelope/identity level and at
+  monthly evidence's JSON-shape level -- neither actually resolved the
+  nested canonical payload, `RoutingProvenance`, or the access-impact/
+  transformed-route artifacts it names, so a missing/tampered/swapped
+  durable artifact could be accepted as valid. Fixed with one shared
+  `monthly_sumo.validate_canonical_observation_evidence`, wired into
+  `IndependentDailyRunner._load_cached`/`_save_cached` (reload AND
+  fresh-write) and `monthly_search.evidence_from_dict`/
+  `_run_and_publish_candidate` (resume AND publish) via duck-typed
+  `cache_root` accessors that return `None` (skip, unchanged) for any
+  backend/test double exposing none. 11 new tests. (2) The verification
+  tool's healthy-control check compared nothing to a reference and could
+  apply to the former-timeout unit on a zero-denial variant. Fixed:
+  membership now comes from a frozen `HEALTHY_CONTROL_UNIT_ID` constant
+  (never an incidental zero-denial outcome), and a new `--reference-report`
+  flag compares an explicit 8-field allowlist against a prior report,
+  recording the reference path/sha256 and per-field equality.
+  RE-VERIFIED with two fresh real-SUMO replays (`runs/closure-routing-
+  verify-20260830-001/`, `-002/` with `--reference-report` pointed at the
+  first): former-timeout unit `daily-unit-24737391111be0e137537df7`
+  27.1-32.0 s first-attempt across both runs (limit 300 s), 0 denied, 0
+  teleports, `active_closed_edge_throughput: 0`, 100% unaffected vehicles
+  byte-identical (55,633-55,774 per variant), `healthy_control_
+  semantic_check: None` on every variant (correctly excluded). Healthy
+  control `daily-unit-2387bbad11130660b9de0d17` equally clean both runs
+  (24.7-28.5 s), 57,388-57,501 byte-identical vehicles per variant,
+  `all_passed: True`, and in the second run `reference_comparison.
+  all_equal: True` across all 8 fields against the first run's report
+  (sha256 `907e809c...` recorded). Focused+broader tests clean (855
+  passed, 1 skipped); frozen-manifest suites show the same 19 pre-existing
+  intentional source-digest-drift failures as PASS 3-5 (confirmed pure
+  digest mismatch). No original run/evidence artifact modified; both new
+  replay roots preserved; nothing committed, pushed, branched, or
+  campaign-launched. See ARCHITECTURE.md's SIXTH-pass paragraph and
+  AGENT_NOTES.md CURRENT_HANDOFF for the complete record.`
+- Status: `2026-08-30 REPAIR-BATCH PASS 5: a fresh review ran PASS 4's own
+  `tools/verify_closure_routing_frozen_units.py` for real (PASS 4 had built
+  it but only exercised it statically alongside its own patch) and found
+  three concrete defects. FIXED ALL THREE: (1) `active_closed_edge_
+  throughput` read `null` on every variant of both frozen units --
+  root-caused to `metrics.active_closure_throughput` indexing closure
+  quarters by ABSOLUTE epoch-relative seconds against a `flows` array that
+  is actually indexed from 0 at the run's own trimmed `--begin`; fixed with
+  a `window_begin_s` parameter threaded through both real call sites. (2)
+  `RoutingProvenance` gained `unit_id` and `transformed_route_sha256`,
+  `access_impact_sha256` became required and hex-validated (not just
+  length-64), two synthetic zero-valued provenance fallbacks in
+  `monthly_sumo.py` were replaced with fail-closed errors, and both
+  content-addressed evidence stores now validate an existing file's bytes
+  before reusing it. `POLICY_VERSION` bumped v3->v4. (3) the verification
+  tool's `byte_identical_to_source` used to give up (`null`) whenever
+  anything was rerouted; it now durably preserves the transformed route
+  file, names every rerouted vehicle id, and byte-diffs every genuinely
+  unaffected vehicle directly, plus a new selected-field healthy-control
+  semantic check. RE-VERIFIED with a fresh real-SUMO replay in a new
+  exclusive root (`/tmp/closure-routing-verify-run3`; prior roots
+  preserved): `daily-unit-24737391111be0e137537df7` (former timeout)
+  30.94/26.45/25.36 s first-attempt (limit 300 s), 0 denied, 0 teleports,
+  `active_closed_edge_throughput: 0`, 55,633-55,774 unaffected vehicles per
+  variant BYTE-IDENTICAL to source; healthy control
+  `daily-unit-2387bbad11130660b9de0d17` equally clean, 57,388-57,501
+  byte-identical vehicles per variant; both units' `healthy_control_
+  semantic_check.all_passed: True` on every variant. Focused+broader tests
+  clean (857 passed, 2 skipped); frozen-manifest suites show the same 19
+  pre-existing intentional source-digest-drift failures (v3->v4 plus the
+  other hashed-file changes), confirmed pure digest mismatch. No original
+  run/evidence artifact modified; nothing committed, pushed, branched, or
+  campaign-launched. See ARCHITECTURE.md's FIFTH-pass paragraph and
+  AGENT_NOTES.md CURRENT_HANDOFF for the complete record.`
+- Status: `2026-08-29 REPAIR-BATCH PASS 4: corrected a false BLOCKED verdict
+  (PASS 3's review-fix-03 tested `which sumo`/bare `import sumolib`
+  instead of this repo's own `traffic_sim.simulation.runtime.sumo_home()`,
+  which DOES resolve a working SUMO 1.27.1 here), fixed a real evidence-
+  durability gap (canonical monthly observations were never persisted
+  anywhere durable, only referenced by an unresolvable digest -- fixed via
+  content-addressed `_preserve_canonical_observation`/
+  `resolve_canonical_observation` in `monthly_sumo.py`, mirroring the
+  existing access-impact pattern, no frozen-schema changes), and ran BOTH
+  required frozen units through the real `MonthlyDemandResolverRunner`/
+  `IndependentDailyRunner` path for the first time. Results: the former-
+  timeout unit `daily-unit-24737391111be0e137537df7` (07:15-15:15 daytime
+  closure) completed q10/seed 1000 in 29.72 s first attempt (limit 300 s),
+  0 denied, 0 teleports, no closure leak, recovered; q50/q90 equally
+  clean. Healthy control `daily-unit-2387bbad11130660b9de0d17` (00:00-
+  08:00, same edge) also clean on all three variants, 0 invented denials.
+  Full focused+broader test bundle re-run clean (835 passed, 1 skipped
+  across two runs); frozen-manifest suites show the same 19 pre-existing
+  intentional source-digest-drift failures as PASS 3 (confirmed pure
+  digest mismatch, not behavioural). See AGENT_NOTES.md CURRENT_HANDOFF
+  for the full record, including the disclosed scope limit on the
+  byte-identical-unaffected-fragment check and one observed-but-unfixed
+  cold-arm reporting-fidelity note (`closed_edge_throughput` can read
+  `None` instead of an explicit `0` on a clean cold run; confirmed this
+  does not weaken the leak hard-failure gate). No original run/evidence
+  artifact modified; nothing committed, pushed, branched, or campaign-
+  launched.`
+- Status: `2026-08-29 TIMEOUT REPAIR IMPLEMENTED AND VERIFIED. Search
+  ui-monthly-12hg8f3 completed 1,690 candidates in 37,002 active seconds with
+  no winner because 540 of 5,180 exact SUMO launches timed out. An isolated
+  timed-out unit reproduced at the same 300 s limit with one worker and with
+  both Dijkstra and A*, while its partial summary showed rapidly growing
+  running/halting traffic during the active closure. Timeouts are now stored
+  only as structured undecided evidence, never as permanent hard traffic
+  failures. Product monthly runs now retain the 300 s first boundary but
+  automatically replay only timed-out identities with the exact same model,
+  seed and resources at a registered 1,800 s bound. A formerly timed-out real
+  unit completed in 743.837 s and produced the determinate hard failures
+  `unfinished_vehicle_share` and `recovery_congestion_not_dissipated`; no
+  timeout or model change was involved. Only a second-attempt timeout remains
+  terminal and stops remaining lookahead. The finished historical
+  workspace remains unchanged and verifies with zero integrity errors. The
+  affected regression surface passes 379/379 tests; the full suite reports
+  5,319 passed, 27 skipped and 155 fail-closed historical fingerprint/freeze
+  failures in the already drifted working tree. git diff --check passes.
+  The keyless map uses the official OpenStreetMap raster endpoint with matching
+  CSP and attribution.
+  CATALOG QUALIFIED, ADOPTED AND SOAKED. A matched-size campaign used
   the same 6,000-candidate request in both arms for 30 counterbalanced pairs.
   Median cold demand preparation fell 55.246→24.715 s (2.235x ratio of arm
   medians; 2.220x median paired speedup), every day
@@ -288,7 +431,90 @@ owners, states and approval formulas are not active workflow rules. See
   pass. The five-file benchmark suite passed 160 tests with 1 skipped;
   targeted pylint, AST parsing and `git diff --check` passed. Preserved
   evidence remains byte-identical at the digest above. No cost-ordered v6,
-  SUMO benchmark, monthly campaign, commit or push was produced.`
+  SUMO benchmark, monthly campaign, commit or push was produced.
+  ROOT-CAUSE CLOSURE-ROUTING FIX (2026-08-29): the timeout repair above
+  (registered 1,800 s replay) was a symptom fix; this pass implements the
+  root fix underneath it. New `traffic_sim/simulation/closure_routing.py`
+  (`closure_origin_routing_v1`) rewrites every affected vehicle's route,
+  before SUMO starts, from its original origin to its original destination
+  along the deterministic fastest legal path with every applicable closed
+  edge excluded (fixed-point banned-set growth, provably terminating,
+  reusing `disruption.py`'s shortest-path engine so routing and disruption
+  ranking share one source of truth). Only a destination-on-a-closed-edge or
+  genuinely-unreachable trip is denied — held outside the network, recorded
+  as a stable provenance-bound `AccessImpactRecord`, never truncated, never
+  simulated, never a generic timeout. `run_scenario.
+  reroute_closure_affected_vehicles` replaces `truncate_stranded_vehicles` at
+  all three production call sites (`run_scenario.py`'s scenario path,
+  `suggest_closure_time.simulate_closure`, `ArchivedDemandSumoRunner`'s cold
+  and warm-audit paths); the retired function is pinned unreachable from
+  each by tests. Closure runs no longer force `time-to-teleport -1`
+  (`closure_teleport.CLOSURE_ROUTING_TELEPORT_POLICY_S = None`, SUMO's own
+  default) — safe because the hazard is eliminated pre-simulation, not
+  suppressed during it; the retired `-1` constant is kept, named, for
+  historical diagnostic reproduction only. `write_closure_additional`'s
+  runtime rerouter is kept as a fail-closed structural declaration, not as
+  the correctness mechanism. Monthly backend provenance
+  (`monthly_sumo.py`'s source digest) now also hashes `closure_routing.py`
+  and `disruption.py` (19 -> 21 files), so no pre-fix cache or warm state can
+  satisfy a new lookup. NOT touched, deliberately out of the named scope
+  (monthly road-closure timeouts): `signal_optimize.py`,
+  `tools/benchmark_persistent_sumo.py`, `signal_closure_combine.py`,
+  `tools/freeze_monthly_warm_state_v2.py`,
+  `tools/measure_direction_decision_sensitivity.py` still call the retired
+  `truncate_stranded_vehicles` + disabled-teleport pair, which remains
+  internally self-consistent for them; migrating them is tracked as
+  remaining work, not silently assumed done (see
+  `tests/test_closure_teleport_wiring.py::TestEveryClosureSimulatorAgrees`'s
+  updated docstring).
+  VERIFIED: `tests/test_closure_routing.py` (20 new tests: fastest
+  closure-excluding routing, windowed fixed-point growth, destination-closed
+  and no-legal-path denial, deterministic tie-breaking, byte-identical
+  unaffected fragments, fail-closed on unsupported route shapes, access-
+  impact evidence schema, production-wiring guards). Full focused battery —
+  `test_closure_routing.py`, `test_scenario.py`, `test_suggest_closure_time.py`
+  (4 pre-existing tests updated for the new truncated->0/dropped->denied
+  count semantics), `test_closure_teleport_wiring.py` (3 pre-existing tests
+  updated for the new default constant), `test_closure_access_impact.py`,
+  `test_closure_disruption.py`, `test_monthly_sumo.py`,
+  `test_monthly_warm_state.py`, `test_independent_daily(_queue)`,
+  `test_monthly_search.py`, `test_finalist_decision.py`,
+  `test_cost_ordered_execution.py` — 606 tests passed, 0 failed (1 skipped)
+  across this battery. `git stash` confirmed the 15
+  `test_monthly_warm_state_freeze.py` fingerprint/freeze failures seen on a
+  full run are the SAME 12 pre-existing "already drifted working tree"
+  failures TASKS.md already documents, plus this session's own 3
+  now-fixed `test_closure_teleport_wiring.py` regressions (fixed, not left
+  failing). Targeted pylint (`closure_routing.py`, `disruption.py`,
+  `run_scenario.py`, `suggest_closure_time.py`, `closure_teleport.py`,
+  `monthly_sumo.py` and the three touched test files) is clean; `git diff
+  --check` passes; every changed file parses.
+  MEASURED REAL SUMO (2026-08-29, `run_scenario.py --closure` against the
+  live 2027-11-11 demand, closing the SAME edge as the timed-out unit,
+  `96527131_26842526_0`, 8 h window): a clean run completed in **10.05 s**
+  total wall time (SUMO itself 1.95 s), 1,803 rerouted, 0 denied, 0
+  teleports, closure integrity verified, scenario published — against the
+  previous 300 s timeout / 743.837 s registered-retry for this edge. The
+  timed-out unit's OWN literal window (07:15-15:15) also finished in 9.95 s
+  but was correctly refused publication by the pre-existing
+  `closure_integrity_status` fail-closed gate over one boundary-timing
+  vehicle; `git stash` proved that exact single-vehicle event reproduces
+  IDENTICALLY under the pre-fix code with normal teleport forced on, i.e. it
+  is a pre-existing, deterministic characteristic of this edge/window/demand
+  combination, not something this fix introduced. Full details and citation
+  of the SUMO documentation this root-cause analysis relies on are in
+  ARCHITECTURE.md's "Closure-integrity boundary" section.
+  NOT DONE, honestly: this was a direct `run_scenario.py --closure` CLI
+  verification exercising the exact production routing module, NOT a
+  literal replay of the frozen `daily-unit-24737391111be0e137537df7` /
+  `daily-unit-2387bbad11130660b9de0d17` monthly-search harness — wiring a
+  bounded single-unit driver through `MonthlyDemandResolverRunner` /
+  `IndependentDailyRunner` (matching `ClosureSchedule`, target repetitions
+  and the exact worker-isolation path the real search uses) was not
+  completed this session. No monthly campaign was run or resumed; no commit
+  or push was made; `ui-monthly-12hg8f3`'s own workspace/ledgers were only
+  ever read, never written. Do not claim a monthly-campaign-wide timing
+  figure from the one-closure/one-seed numbers above.`
 - Standard-pool checkpoint: `The isolated post-picker tool binds date/build,
   route, network and targets; creates three deterministic explicit
   speedFactor arms; preserves all 21,240 vehicles/routes; and reached raw
@@ -332,7 +558,14 @@ owners, states and approval formulas are not active workflow rules. See
   for low observability, or activate policy/UI/global-best claims without the
   applicable frozen evidence. Do not hardcode 107's annual 0.5231 as 96
   measured quarters or present q10/q90 as calibrated probabilities.`
-- Updated: `2026-08-28, sixth narrow review-batch pass: strict timeout-v3
+- Updated: `2026-08-29: implemented the root-cause closure-routing fix
+  underneath the 2026-08-29 timeout-repair retry mechanism (see the
+  ROOT-CAUSE CLOSURE-ROUTING FIX paragraph above for the full record: new
+  closure_routing.py, retired truncate_stranded_vehicles from all three
+  production call sites, teleport policy default flipped, 606 focused tests
+  passed, real-SUMO verification measured 10.05 s against the prior 300 s
+  timeout / 743.837 s retry on the same closed edge). Previously updated
+  2026-08-28, sixth narrow review-batch pass: strict timeout-v3
   deserialization and complete independent stop-proof field derivation are
   repaired and verified process-free; preserved evidence is byte-identical,
   and no excluded operational action was taken. Previously, a third pass the
@@ -414,14 +647,264 @@ owners, states and approval formulas are not active workflow rules. See
   current end-to-end UI time. The product UI now hides the
   internal representative seed/variant and distinguishes modelled trip purpose
   from geographic flow categories and measured sensor counts.`
-<!-- WORKFLOW_CONTROL_END -->
+<!-- WORKFLOW_HISTORY_END -->
 
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
+### SUBHOUR-CLOSURE-2026-08-30 — Exact cost-ordered monthly search
+
+- Status: `DONE — FASTEST SENSOR-ROUTE GENERATION REPAIRED AND VERIFIED;
+  broader Phase 0-7 execution remains paused.`
+- Objective and scope: `Reduce exact SUMO work structurally while preserving
+  the 30-date/65-window/five-consecutive-day scope and robust q10/q50/q90
+  routing, health, recovery, provenance and tie semantics. Sensor-attributed
+  emitted vehicles must use globally fastest routes, and removing their sensor
+  edge must make the fastest legal reroute strictly slower.`
+- Completion outcome: `Every READY monthly result has a machine-verifiable
+  cost boundary and exact evidence; normal cold execution is <60 minutes, while
+  pathological timeout/tie/budget cases terminate explicitly inconclusive.`
+- Context or checkpoints: `The existing cost-ordered core has an exact ledger,
+  durable cursor, stop proof and same-path ordered-exhaustive switch. Earlier
+  v31–v36 Phase 3 attempts are partial, source-stale or pre-execution terminals
+  and cannot be promoted. Phase 4 v12 measured 1,950/5,850/1,690 but lacks the
+  now-required complete producer binding and is historical only. The repaired
+  WindowCostIndex precomputes crossing events and unique-OD detours and still
+  requires a fresh measured cold-benefit and field-identical oracle. q10/q90
+  remain uncalibrated stress cases, not probability bounds. The registered zero
+  diagnostic instead exposed incompatible upstream demand: bounded-detour
+  sensor routes and equal-cost avoiding paths violate the user's route contract.
+  The repaired generator chooses grounded ODs from the unrestricted global
+  shortest-path tree, supports both tour directions, fills the exclusive floor,
+  and persists strict route proofs checked again by PFE and route catalogs. A
+  preregistered 25/50/100/200/500 ablation selected 50 on both median daily
+  factor and mean GEH<5. Larger pools remained route-correct but added
+  underidentified exclusive variables and worsened held-out accuracy.`
+- Primary files: `.ai-flow/tasks/complete-subhour-plan.md`,
+  `.ai-flow/tasks/fix-closure-pricing-then-continue.md`,
+  `.ai-flow/config.complete-subhour.sonnet.toml`, `tools/ai_flow.py`,
+  `run_monthly_closure_search.py`, `build_candidates.py`,
+  `build_sumo_demand.py`, `traffic_sim/demand/pfe.py`,
+  `docs/plans/Q10_Q90_AND_SUB_HOUR_MONTHLY_SEARCH_PLAN_2026-08-30.md`,
+  `traffic_sim/simulation/cost_ordered_search.py`,
+  `traffic_sim/simulation/cost_ordered_execution.py`, benchmark tooling and
+  focused tests.`
+- Constraints and safety: `Do not restart exhaustive monthly execution, weaken
+  any evidence gate, mix backend provenances, delete preserved evidence,
+  overlap Phase 3/4 writers, edit bound sources, commit, push or deploy.
+  q50-only requires a separate complete sensitivity gate.`
+- Acceptance criteria: `Same-path ordered-exhaustive equivalence; exact ledger
+  equality; emitted-route equality to global shortest; strict positive
+  banned-sensor gap for every affected vehicle; exact measured counts; a frozen
+  support audit or truthful INCONCLUSIVE_SENSOR_SHORTEST_SUPPORT; identical
+  decision in preregistered decidable cases; valid stop proof; >=30% fewer exact
+  verifications and active time in bounded real tests; one cold READY month <60
+  min before any single-run claim.`
+- Useful checks: `502 focused candidate/build/PFE/catalog/LOSO/route-support
+  tests pass after the final build. make demand exited 0, installed 166 missing
+  exclusive basis routes, reached at least 50 distinct routes for all seven
+  sensor edges, solved 96/96 PFE intervals and published 18,266 vehicles with
+  671/671 exact integer sensor constraints. A post-build copied audit kept
+  539/539 with zero drops/canonicalizations, zero nonpositive gaps and minimum
+  gap 0.219582433405 s. Fresh loso_pfe_meso_v11_observability_gate completed
+  six folds with all active PFE fits at 100% and every anchor proof passing;
+  53 LOSO/route-support regressions pass. Station ratios old->new are 107
+  1.443->0.506, 1074 0.884->0.602, 1076 0.685->0.270, 133 0.769->0.685,
+  134 2.613->1.135 and 2276 2.499->1.104. Scenario and monthly execution
+  remain paused. Same-v11 floors 25/50/100/200/500 all completed with valid
+  routes and exact active fits; their median daily factors were
+  1.642x/1.560x/1.946x/2.293x/2.425x. The final rebuilt 50 candidate SHA equals
+  the selected report's bound SHA exactly.`
+<!-- ACTIVE_TASK_END -->
+
+<!-- ACTIVE_TASK_HISTORY_START -->
+## ACTIVE_TASK_HISTORY
+
 ### PERF-CLOSURE-2026-08-21 — Faster exact closures and monthly simulation
 
-- Status: `IN_PROGRESS — the canonical route catalog is provenance-bound,
+- Status: `IN_PROGRESS — 2026-08-29 REPAIR-BATCH PASS 4 (continuation of
+  PASS 3, not a re-plan). PASS 3's BLOCKED verdict was itself wrong: it
+  tested `which sumo`/a bare `import sumolib` instead of this repo's
+  `runtime.sumo_home()`, which resolves a real, working SUMO 1.27.1
+  install here. Re-verified findings 1-3 (windowed timing, single-vClass
+  routing, teleport-policy provenance) against the current code with no
+  defect found -- re-ran the same focused tests fresh, all pass. Finding 4
+  turned out worse than PASS 3's own "NOT DONE" framing: canonical
+  monthly observations were never durably persisted at all (an in-memory
+  list reset every call), so `CandidateEvidence`'s digest was
+  unresolvable in practice, not merely un-threaded through a dataclass.
+  Fixed with a content-addressed persist/resolve pair in `monthly_sumo.py`
+  (`_preserve_canonical_observation`/`resolve_canonical_observation`,
+  fail-closed on tamper/absence) mirroring the existing access-impact
+  pattern -- deliberately still NOT widening `PairedObservation`/
+  `CandidateEvidence`/`CanonicalObservationDigest`'s own frozen field
+  sets, same scope boundary PASS 2 and PASS 3 both reaffirmed. Built
+  `tools/verify_closure_routing_frozen_units.py` (reconstructs each named
+  unit's own schedule from the `ui-monthly-12hg8f3` ledger, re-derives its
+  unit_id via `decompose_schedules` and asserts the match, then drives the
+  REAL `MonthlyDemandResolverRunner`/`IndependentDailyRunner` with
+  `build_missing=False`/`queue_workers=1` and fresh exclusive roots — no
+  path reaches `run_monthly_search`) and RAN IT for real against both
+  named units, q10 then q50 then q90 incrementally. MEASURED:
+  `daily-unit-24737391111be0e137537df7` q10/seed 1000 — 29.72 s first-
+  attempt wall time (limit 300 s), 1 attempt/0 timeouts, 0 denied, 0
+  teleports, no closure leak, `recovered: True`; q50/q90 equally clean
+  (26.11 s/25.20 s). `daily-unit-2387bbad11130660b9de0d17` (healthy
+  control, same edge, different window) clean on all three variants, 0
+  invented denials. Every `routing_provenance` record resolved end to end
+  through the new finding-4 persistence path on real data. Source
+  workspace verified untouched. Disclosed limit: neither run had
+  zero-rerouted vehicles, so the tool's byte-identical fast path did not
+  fire; it says so explicitly and defers to
+  `TestUnaffectedRoutesArePreservedExactly` for that guarantee. Observed
+  (not fixed, out of the four-finding scope): the cold arm's
+  `closed_edge_throughput` can read `None` instead of an explicit `0` on a
+  clean run (`suggest_closure_time.py::run_one` omits
+  `measured_empty_edges`, unlike the warm arm's own prior fix for the same
+  class of gap) — confirmed this is a reporting-fidelity gap only and does
+  not weaken the leak hard-failure gate. Full focused+broader test bundle
+  (506 + 329 = 835 passed, 1 skipped) and frozen-manifest suites (same 19
+  pre-existing intentional-drift failures, confirmed pure digest mismatch)
+  all re-run fresh. See AGENT_NOTES.md CURRENT_HANDOFF for the complete
+  record. No original run/evidence artifact modified; nothing committed,
+  pushed, branched, or campaign-launched.`
+- Status: `IN_PROGRESS — 2026-08-29 REPAIR-BATCH PASS 3 (5 of 5 findings in
+  this batch, severity-ordered): a THIRD review found the two real gaps
+  PASS 2 left open (vClass/permission routing, provenance threading) plus
+  one more real defect (suggest_closure_time.py's `closure_feasibility`
+  publishing the WRONG teleport policy — its own legacy `-1` default,
+  while production actually ran with SUMO's default/teleporting enabled).
+  ALL THREE FIXED: (3) `metadata.build_metadata` (schema 1->2) now builds
+  a `DEFAULT_VCLASS`-filtered successors graph + `restricted_edges` list;
+  `run_scenario.build_edge_graph` (the one seam every production caller
+  uses) sources from it on both cached and XML-fallback paths; a vehicle
+  declaring an unrecognised `type=` now fails closed
+  (`_check_vehicle_class`) instead of routing on an unproven assumption.
+  Changes NOTHING on the real network today (zero `allow`/`disallow`
+  anywhere in `net.net.xml`, verified) — makes an already-true claim
+  provable. (4) the free-form `routing_provenance` dict is now a
+  validated `closure_routing.RoutingProvenance` dataclass (fail-closed,
+  strict `from_dict`), wired at both monthly_sumo.py call sites;
+  `PairedObservation`/`CandidateEvidence`/`CanonicalObservationDigest`
+  schema threading remains explicitly out of scope (16 frozen manifests),
+  same call as PASS 2. (extra) both `closure_feasibility` call sites now
+  pass `closure_teleport.CLOSURE_ROUTING_TELEPORT_POLICY_S if
+  self.close_edges else None` explicitly instead of silently inheriting
+  the function's legacy `-1` default. POLICY_VERSION bumped v2 -> v3.
+  FINDING 5 STILL BLOCKED, now confirmed as a genuine ENVIRONMENT gap, not
+  a scope choice: this sandboxed session has no sumo/netconvert/duarouter
+  binary and no sumolib (verified directly), so neither frozen unit
+  (`daily-unit-24737391111be0e137537df7`/`...2387bbad11130660b9de0d17`)
+  could be run through the real monthly worker path — no SUMO subprocess
+  can execute here at all. VERIFIED this pass: 44/44
+  test_closure_routing.py; 274/274 (+1 skipped) across
+  test_closure_routing/test_scenario/test_suggest_closure_time/
+  test_closure_teleport_wiring/test_closure_access_impact/
+  test_closure_disruption/test_sumo_network_metadata; 186/186 across
+  test_monthly_sumo/test_independent_daily/test_finalist_decision. Full
+  `tests/` run also executed; 3 pre-existing `test_ai_flow.py` failures
+  are unrelated (different files, reproduce against the pre-existing
+  dirty `.ai-flow/config.toml`, not touched by this pass). See
+  AGENT_NOTES.md CURRENT_HANDOFF for the full record. No original run/
+  evidence artifact modified; nothing committed, pushed, or launched.`
+- Status: `IN_PROGRESS — 2026-08-29 REPAIR-BATCH PASS 2 (5 of 5 findings in
+  this batch, severity-ordered): a SECOND review of the root-cause
+  closure-routing fix found 5 new defects in the v1 policy this file's
+  PREVIOUS entry shipped. TWO REAL CORRECTNESS FIXES, both in
+  closure_routing.py, POLICY_VERSION bumped v1 -> v2:
+  (1) CRITICAL — the v1 fix's own `CLOSURE_TIMING_SAFETY_MARGIN_S = 900`
+  additive margin was itself unproven: congestion delay has no demonstrated
+  upper bound, so no finite margin can PROVE a vehicle clears an edge
+  before a still-open closure ends. Replaced with the one interval fact
+  that IS provable without bounding congestion: real transit is never
+  faster than free flow, so a free-flow lower bound that has already
+  reached/passed a window's end IS proof of safety; every other case
+  (including a window still far in the future) is now classified
+  applicable/affected. This can only widen who is treated as affected,
+  never narrow it — see `_edge_occupancy_lower_bound`'s docstring.
+  (2) HIGH — `destination_closed` fired on bare membership of the
+  destination edge in the closed-edge set, denying trips whose destination
+  closure window does not even apply to them (already over, or not yet
+  reachable within the window). Now evaluated with the same applicability
+  predicate as routing, so a destination is only denied when ITS OWN
+  window is applicable to that trip.
+  PARTIAL PROGRESS on provenance (finding 4/5, high): monthly backend
+  provenance now carries a `routing_provenance` block (routing policy
+  version, access-impact-report sha256, rerouted count) on BOTH the cold
+  and warm execution arms — previously the access-impact digest was
+  computed and discarded at both call sites. `write_access_impact_report`/
+  `prepare_route_file`/`reroute_closure_affected_vehicles` gained an
+  optional `identity` parameter (candidate/schedule id, demand variant,
+  seed, work date, execution arm) bound verbatim into the evidence file.
+  closure_routing.py's own source hash was ALREADY part of
+  `simulation_source_digest` (monthly_sumo.py), so the v1->v2 semantic
+  change already invalidates every pre-fix monthly cache/backend identity
+  without any extra wiring — confirmed by the pre-existing frozen-manifest
+  tests failing on source drift after this change (expected; NOT
+  "repaired" — re-freezing them would hide the exact invalidation this
+  finding asked for). NOT DONE this pass, both real gaps:
+  (3) HIGH, NOT ADDRESSED — vClass/lane/connection-permission-aware
+  routing. `build_edge_graph`/`shortest_path_edges`/`closure_routing` still
+  route on an unqualified successor graph with no vehicle type or SUMO
+  permission awareness; an advertised "fastest legal path" is not proven
+  legal for a restricted vClass. Needs its own scoped pass (parse vType per
+  vehicle fragment, filter the adjacency by lane/connection `allow`/
+  `disallow` per SUMO's network format, fail closed on an unrecognised
+  vClass) — not attempted here for scope reasons, same as prior passes.
+  (5) HIGH, NOT ADDRESSED — the literal frozen-unit harness replay
+  (`daily-unit-24737391111be0e137537df7`/`...2387bbad11130660b9de0d17`
+  through the real monthly worker path) is STILL not built, exactly as the
+  two prior passes below already recorded; this pass did not attempt it
+  either — see AGENT_NOTES.md CURRENT_HANDOFF for the honest record.
+  VERIFIED this pass: 30/30 test_closure_routing.py (10 new/rewritten
+  tests replacing the v1 margin tests plus new destination-window and
+  identity/tamper tests); 221/221 (+1 skipped) across
+  test_closure_routing/test_scenario/test_suggest_closure_time/
+  test_closure_teleport_wiring; 186/186 across
+  test_monthly_sumo/test_independent_daily/test_finalist_decision; 256/256
+  across test_monthly_search/test_cost_ordered_execution/test_serve/
+  test_independent_daily_queue. The pre-existing frozen-manifest suites
+  (test_monthly_warm_state_freeze.py, test_monthly_warm_state_v16_freeze.py)
+  now fail on source drift, as expected and intended — not touched. No
+  original run/evidence artifact modified; nothing committed, pushed, or
+  campaign-launched.`
+- Status: `IN_PROGRESS — 2026-08-29 REPAIR-BATCH PASS 1: a review of the
+  root-cause closure-routing fix (see below) found 3 defects. 2 of the 3
+  (compatible-cache backend-digest invalidation in independent_daily.py;
+  rerouted-vs-truncated/access-impact-preservation in
+  suggest_closure_time.py + monthly_sumo.py) were checked line-by-line
+  against the review's own citations and found ALREADY FIXED in the current
+  tree (each carries a dated comment and a passing pinning test) — no code
+  changed for those two. The third (closure_routing._closures_overlapping
+  using a free-flow point-in-time check instead of an occupancy interval,
+  which missed a real boundary-timing vehicle that was then jam-teleported
+  onto the closed edge) was real and is fixed: occupancy-interval check +
+  900 s safety margin + a post-detour residual-overlap assertion. 5 new
+  tests, full targeted batch (24 + 215 + 376 tests) passes; broader `tests/`
+  run in progress at last check. Literal frozen-unit harness replay
+  (`daily-unit-24737391111be0e137537df7`/`...2387bbad11130660b9de0d17`
+  through the real monthly worker path) still not built — see AGENT_NOTES.md
+  CURRENT_HANDOFF for the full record and honest remaining gaps. No original
+  run/evidence artifact touched; nothing committed, pushed, or launched.`
+- Status: `IN_PROGRESS — 2026-08-29 SAME DAY, ROOT-CAUSE FIX ADDED beneath
+  the timeout-recovery retry described below: closure_routing.py now
+  rewrites every affected route around a closure before SUMO starts, so the
+  1,800 s registered replay this paragraph describes should rarely be
+  needed going forward (not yet re-measured on a full campaign — see the
+  WORKFLOW_CONTROL Status field's ROOT-CAUSE CLOSURE-ROUTING FIX paragraph
+  for the complete record, tests and real-SUMO measurements). The retry
+  mechanism itself is unchanged and still exists as a symptom-level safety
+  net. 2026-08-29 timeout recovery is implemented and
+  verified. A first 300 s timeout triggers one registered 1,800 s exact replay;
+  simulation inputs, resources and scientific gates stay unchanged, and both
+  launches are recorded. A real ui-monthly-12hg8f3 timeout identity completed
+  in 743.837 s under that allowance and was genuinely disqualified for
+  unfinished traffic and failed recovery. Only exhaustion of attempt two is
+  stored as undecided evidence. The historical workspace remains immutable;
+  future searches use the new protocol, while resolving every old timeout into
+  a replacement result still requires a new evidence-producing recovery run.
+  The canonical
+  route catalog is provenance-bound,
   adopted and soaked; production demand preparation now defaults to catalog
   with an explicit tested legacy rollback. Full annual warming remains
   inactive after one successful bounded q50 pilot. Repository and primary-source research is complete;
@@ -641,7 +1124,7 @@ owners, states and approval formulas are not active workflow rules. See
   cancel, corrupt-cache and process-reaping tests; 6/25/50-station PFE and
   21k/32k/43k/50k/60k calibrated-vehicle load matrix; qualified minimal-edgeData
   production-default/rollback checks; git diff --check.`
-<!-- ACTIVE_TASK_END -->
+<!-- ACTIVE_TASK_HISTORY_END -->
 
 ## History
 

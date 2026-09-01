@@ -420,10 +420,14 @@ class TestSimulateClosureVariantAttribution:
             '</edges>')
 
         # variant i gets n_vehicles[i] vehicles routed straight through the
-        # closed edge with no detour -> truncate_stranded_vehicles finds
-        # exactly n_vehicles[i] truncated for that variant. Distinct counts
-        # per variant are the point: it's how the tests below can tell
-        # "this seed's own variant's count" apart from "the sum across
+        # closed edge with no detour at all -> reroute_closure_affected_vehicles
+        # finds no legal path and DENIES exactly n_vehicles[i] for that
+        # variant (2026-08-29: previously truncate_stranded_vehicles counted
+        # these as "truncated"; the closure-routing rewrite denies departure
+        # instead of truncating, since there is nowhere for a partial trip
+        # to go on a single-path network -- see closure_routing.py). Distinct
+        # counts per variant are the point: it's how the tests below can
+        # tell "this seed's own variant's count" apart from "the sum across
         # every variant" (the old bug).
         paths = []
         names = ["calibrated.rou.xml", "calibrated_v1.rou.xml", "calibrated_v2.rou.xml"]
@@ -453,17 +457,19 @@ class TestSimulateClosureVariantAttribution:
         monkeypatch.setattr(sct.rs, "run_sumo", fake_run_sumo)
 
         scratch = []
-        metrics, n_trunc, n_drop, _ = sct.simulate_closure(
+        metrics, n_trunc, n_drop, _, _ = sct.simulate_closure(
             name="w0", closures=[{"edge_id": "closed", "begin_s": 0, "end_s": 400}],
             close_edges=["closed"], variants=[vp0, vp1], seeds=2, n_intervals=4,
             duration_s=900, home=tmp_path, micro=True, adj=adj,
             freeflow={"lead": 10.0}, scratch=scratch)
 
         # max(2, 1) = 2, NOT 3 (the old sum-across-all-variants bug would
-        # have broadcast 3 to every seed's aggregate).
-        assert metrics.truncated_unreachable == 2
-        assert n_trunc == 3   # candidate-level total: both variants WERE used
-        assert n_drop == 0
+        # have broadcast 3 to every seed's aggregate). These vehicles are
+        # DENIED (no legal path around the closure), not truncated.
+        assert metrics.dropped_unreachable == 2
+        assert metrics.truncated_unreachable == 0
+        assert n_trunc == 0
+        assert n_drop == 3   # candidate-level total: both variants WERE used
         assert seen_seeds == [1000, 1001]
 
     def test_candidate_level_total_excludes_unused_variants(self, tmp_path, monkeypatch):
@@ -481,13 +487,14 @@ class TestSimulateClosureVariantAttribution:
         monkeypatch.setattr(sct.rs, "run_sumo", fake_run_sumo)
 
         scratch = []
-        _, n_trunc, n_drop, _ = sct.simulate_closure(
+        _, n_trunc, n_drop, _, _ = sct.simulate_closure(
             name="w0", closures=[{"edge_id": "closed", "begin_s": 0, "end_s": 400}],
             close_edges=["closed"], variants=[vp0, vp1, vp2], seeds=2, n_intervals=4,
             duration_s=900, home=tmp_path, micro=True, adj=adj,
             freeflow={"lead": 10.0}, scratch=scratch)
 
-        assert n_trunc == 3   # 2 + 1 (variant 2's 5 excluded -- never sampled)
+        assert n_trunc == 0
+        assert n_drop == 3   # 2 + 1 (variant 2's 5 excluded -- never sampled)
 
     def test_repeated_variant_is_not_double_counted_at_candidate_level(self, tmp_path, monkeypatch):
         # 3 seeds cycling over 2 variants (seed 2 repeats variant 0) must
@@ -502,13 +509,14 @@ class TestSimulateClosureVariantAttribution:
         monkeypatch.setattr(sct.rs, "run_sumo", fake_run_sumo)
 
         scratch = []
-        _, n_trunc, n_drop, _ = sct.simulate_closure(
+        _, n_trunc, n_drop, _, _ = sct.simulate_closure(
             name="w0", closures=[{"edge_id": "closed", "begin_s": 0, "end_s": 400}],
             close_edges=["closed"], variants=[vp0, vp1], seeds=3, n_intervals=4,
             duration_s=900, home=tmp_path, micro=True, adj=adj,
             freeflow={"lead": 10.0}, scratch=scratch)
 
-        assert n_trunc == 3   # 2 + 1, NOT 2 + 2 + 1 (variant 0 sampled twice)
+        assert n_trunc == 0
+        assert n_drop == 3   # 2 + 1, NOT 2 + 2 + 1 (variant 0 sampled twice)
 
     def test_replication_records_preserve_variant_and_seed_identity(
             self, tmp_path, monkeypatch):
@@ -551,6 +559,9 @@ class TestSimulateClosureVariantAttribution:
             (2003, "q50"),
         ]
         assert [record["truncated_unreachable"] for record in records] == [
+            0, 0, 0, 0
+        ]
+        assert [record["dropped_unreachable"] for record in records] == [
             2, 1, 5, 2
         ]
 

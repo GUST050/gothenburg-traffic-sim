@@ -1,0 +1,69 @@
+{
+  "bound_spec": {
+    "path": "/Users/gt/Documents/gs-project/validation/subhour_monthly_search_profile_spec_v1.json",
+    "search_content_key": "383c9130a45370c2f296",
+    "search_id": "subhour-cold-ledger-profile-2027-09"
+  },
+  "cache": {
+    "accounting": "not started before resource terminal",
+    "hits": 0,
+    "lookups": 0,
+    "misses": 0,
+    "root": "/private/tmp/gs-subhour-profile-v9-daily-cost-cache",
+    "unique_unit_misses": 0
+  },
+  "cold": true,
+  "content_key": "39ca2a8d716f837bc0a570347efccd3eb77292007229eb089e6a6369cda990ef",
+  "disk_growth_bytes": 0,
+  "evidence_id": "subhour-cold-ledger-profile-20260831-v8",
+  "fresh_roots": {
+    "cache": "/private/tmp/gs-subhour-profile-v9-daily-cost-cache",
+    "daily_results": "/private/tmp/gs-subhour-profile-v9-daily-results",
+    "output": "/private/tmp/gs-subhour-profile-v9",
+    "release": "/private/tmp/gs-subhour-profile-v9-releases"
+  },
+  "kind": "monthly_cost_ledger_profile",
+  "ledger_content_key": null,
+  "peak_rss_bytes": null,
+  "phase_5_decision": null,
+  "phase_5_window_cost_index_needed": null,
+  "phase_timing_complete": false,
+  "phases": {
+    "parent_aggregation_sorting": null,
+    "route_vehicle_grouping": null,
+    "shortest_path_detour": null,
+    "window_aggregation": null,
+    "xml_parse": null
+  },
+  "population": {
+    "daily_units": 0,
+    "daily_variant_records": 0,
+    "parents": 1690,
+    "required_daily_units": 1950,
+    "required_daily_variant_records": 5850,
+    "required_parents": 1690,
+    "variants_per_daily_unit": 3
+  },
+  "population_complete": false,
+  "process_tree_rss_complete": false,
+  "process_tree_rss_error": "could not run `ps` to census process groups: [Errno 1] Operation not permitted: 'ps'",
+  "progress_events": [],
+  "reason": "trusted process-tree RSS census is required before cold profiling",
+  "release_evidence": false,
+  "schema": "monthly_cost_ledger_profile_v1",
+  "status": "INCONCLUSIVE_PROCESS_CENSUS_UNAVAILABLE",
+  "sumo_start_observation": {
+    "after": null,
+    "before": null,
+    "delta": null,
+    "error": "preflight census unavailable",
+    "measured": false
+  },
+  "sumo_started": false,
+  "terminal": {
+    "execution_started": false,
+    "phase": "preflight",
+    "reason": "could not run `ps` to census process groups: [Errno 1] Operation not permitted: 'ps'"
+  },
+  "variant_population_complete": false
+}

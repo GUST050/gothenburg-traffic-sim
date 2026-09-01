@@ -118,7 +118,16 @@ from shapely.geometry import Point, shape
 from shapely.strtree import STRtree
 
 from build_data import INNER_CITY_BBOX
+from traffic_sim.demand.sensor_route_contract import (
+    ABS_TOLERANCE_S as SENSOR_ROUTE_ABS_TOLERANCE_S,
+    POLICY_VERSION as SENSOR_ROUTE_POLICY_VERSION,
+    REL_TOLERANCE as SENSOR_ROUTE_REL_TOLERANCE,
+    load_network_contract,
+    qualify_route,
+    route_digest as sensor_route_digest,
+)
 from traffic_sim.intake.sensors import load_registry
+from traffic_sim.simulation.disruption import grouped_path_costs, shortest_path_edges
 from traffic_sim.simulation.runtime import sumo_home
 from dirsplit.geo import bearing_deg, is_ahead
 from demand.locations import (EndpointField, build_activity_fields,
@@ -150,6 +159,14 @@ VIA_DETOUR_FRAC = 0.20
 # Keep the conditioned-destination acceleration bounded: cache pressure must
 # not become OS swapping on a smaller computer or as sensors are added.
 CONDITIONED_MASK_CACHE_MAX_BYTES = 96 * 1024 * 1024
+
+# Empirical strict-choice-set floor (2026-09-01). There is no universal route
+# count in the choice-set literature; size and composition must be validated
+# on the concrete network. A same-protocol LOSO ablation rejected 500 against
+# 50 (median daily factor 2.425x vs 1.560x; mean GEH<5 37.0% vs 57.3%). Keep
+# the better tested value as a provisional floor, not a claim that 50 is
+# optimal. Future changes require a frozen multi-point LOSO ablation.
+STRICT_SENSOR_OD_TARGET = 50
 
 
 def registered_sensor_edges(
@@ -2082,6 +2099,165 @@ def unanchored_candidate_ids(
     return unanchored
 
 
+def qualify_sensor_candidate_routes(
+    routed_path: Path,
+    metadata_path: Path,
+    measured: set[str] | list[str] | tuple[str, ...],
+    net_path: Path = NET_PATH,
+) -> dict[str, object]:
+    """Keep only globally-shortest routes with a strict sensor-removal cost.
+
+    This is the publication boundary between the permissive/stochastic route
+    proposal machinery and PFE.  The latter may repeat a qualified geometry
+    but may never see an unqualified one.  Costs and legal turns come from the
+    same passenger graph and first-lane free-flow convention as deterministic
+    closure scoring.
+    """
+    measured_set = {str(edge) for edge in measured}
+    if not measured_set:
+        raise ValueError("sensor shortest-route qualification has no sensors")
+    adjacency, costs, network_sha256 = load_network_contract(net_path)
+    document = json.loads(Path(metadata_path).read_text())
+    candidates = document.get("candidates")
+    if not isinstance(candidates, dict):
+        raise ValueError("candidate metadata lacks candidates")
+
+    tree = ET.parse(routed_path)
+    root = tree.getroot()
+    route_by_id: dict[str, tuple[str, ...]] = {}
+    precheck_reason: dict[str, str] = {}
+    pairs: set[tuple[str, str]] = set()
+    for vehicle in root.findall("vehicle"):
+        vehicle_id = str(vehicle.get("id", ""))
+        route = vehicle.find("route")
+        edges = tuple((route.get("edges") if route is not None else "").split())
+        route_by_id[vehicle_id] = edges
+        if not vehicle_id or vehicle_id not in candidates:
+            precheck_reason[vehicle_id] = "missing_metadata"
+            continue
+        if not edges:
+            precheck_reason[vehicle_id] = "missing_route"
+            continue
+        if edges[0] in measured_set or edges[-1] in measured_set:
+            precheck_reason[vehicle_id] = "sensor_endpoint"
+            continue
+        record = candidates.get(vehicle_id)
+        if not isinstance(record, dict):
+            precheck_reason[vehicle_id] = "invalid_metadata"
+            continue
+        if edges[0] not in costs or edges[-1] not in costs:
+            precheck_reason[vehicle_id] = "unknown_or_unpriced_endpoint"
+            continue
+        pair = (edges[0], edges[-1])
+        pairs.add(pair)
+
+    free_costs = grouped_path_costs(
+        pairs, adjacency, costs, frozenset())
+    canonical_by_pair = {
+        pair: tuple(shortest_path_edges(
+            adjacency, costs, pair[0], pair[1], frozenset()) or ())
+        for pair in sorted(pairs)
+    }
+    canonical_by_id: dict[str, tuple[str, ...]] = {}
+    pairs_by_sensor: dict[str, set[tuple[str, str]]] = {
+        sensor: set() for sensor in measured_set
+    }
+    for vehicle_id, original_edges in route_by_id.items():
+        if vehicle_id in precheck_reason:
+            continue
+        pair = (original_edges[0], original_edges[-1])
+        canonical = canonical_by_pair.get(pair, ())
+        if not canonical:
+            precheck_reason[vehicle_id] = "no_legal_free_route"
+            continue
+        record = candidates[vehicle_id]
+        requested_vias = via_edges(record.get("via_edge"))
+        if requested_vias and not route_visits_vias_in_order(
+                list(canonical), requested_vias):
+            precheck_reason[vehicle_id] = "declared_via_not_on_shortest"
+            continue
+        hits = measured_set.intersection(canonical)
+        if not hits:
+            precheck_reason[vehicle_id] = "no_measured_sensor_on_shortest"
+            continue
+        canonical_by_id[vehicle_id] = canonical
+        for sensor in hits:
+            pairs_by_sensor[sensor].add(pair)
+    banned_costs = {
+        sensor: grouped_path_costs(
+            sensor_pairs, adjacency, costs, frozenset({sensor}))
+        for sensor, sensor_pairs in sorted(pairs_by_sensor.items())
+        if sensor_pairs
+    }
+
+    reasons: Counter = Counter()
+    kept = 0
+    canonicalized = 0
+    per_sensor_kept: Counter = Counter()
+    for vehicle in list(root.findall("vehicle")):
+        vehicle_id = str(vehicle.get("id", ""))
+        original_edges = route_by_id.get(vehicle_id, ())
+        edges = canonical_by_id.get(vehicle_id, original_edges)
+        reason = precheck_reason.get(vehicle_id)
+        proof = None
+        if reason is None:
+            pair = (edges[0], edges[-1])
+            hits = sorted(measured_set.intersection(edges))
+            proof, reason = qualify_route(
+                edges, measured_set, costs, free_costs.get(pair),
+                {sensor: banned_costs[sensor].get(pair) for sensor in hits},
+                network_sha256)
+        if reason is not None or proof is None:
+            root.remove(vehicle)
+            candidates.pop(vehicle_id, None)
+            reasons[str(reason or "missing_proof")] += 1
+            continue
+        record = candidates[vehicle_id]
+        if not isinstance(record, dict):
+            root.remove(vehicle)
+            candidates.pop(vehicle_id, None)
+            reasons["invalid_metadata"] += 1
+            continue
+        route = vehicle.find("route")
+        if route is None:
+            root.remove(vehicle)
+            candidates.pop(vehicle_id, None)
+            reasons["missing_route"] += 1
+            continue
+        if edges != original_edges:
+            record["prequalification_route_sha256"] = sensor_route_digest(
+                original_edges)
+            record["route_canonicalized_to_shortest"] = True
+            route.set("edges", " ".join(edges))
+            canonicalized += 1
+        else:
+            record.setdefault("route_canonicalized_to_shortest", False)
+        record["sensor_route_contract"] = proof
+        kept += 1
+        per_sensor_kept.update(proof["sensor_edges"])
+
+    document["schema_version"] = max(int(document.get("schema_version", 0)), 3)
+    document["sensor_route_contract"] = {
+        "policy_version": SENSOR_ROUTE_POLICY_VERSION,
+        "network_sha256": network_sha256,
+        "absolute_tolerance_s": SENSOR_ROUTE_ABS_TOLERANCE_S,
+        "relative_tolerance": SENSOR_ROUTE_REL_TOLERANCE,
+        "qualified_candidates": kept,
+    }
+    tree.write(routed_path)
+    Path(metadata_path).write_text(json.dumps(document, separators=(",", ":")))
+    return {
+        "policy_version": SENSOR_ROUTE_POLICY_VERSION,
+        "checked": len(route_by_id),
+        "kept": kept,
+        "dropped": sum(reasons.values()),
+        "canonicalized": canonicalized,
+        "reasons": dict(sorted(reasons.items())),
+        "per_sensor_kept": dict(sorted(per_sensor_kept.items())),
+        "network_sha256": network_sha256,
+    }
+
+
 def sensor_pool_support_failures(
     report: dict[str, dict[str, int]], min_per_sensor: int
 ) -> dict[str, int]:
@@ -2144,6 +2320,196 @@ def _grounded_pool_edges(
     return sorted(set(choices))
 
 
+def _shortest_path_tree(
+    adjacency: dict[str, tuple[str, ...]],
+    costs: dict[str, float],
+    source: str,
+    banned: frozenset[str],
+) -> tuple[dict[str, float], dict[str, str]]:
+    """Return the exact deterministic closure-router tree from ``source``.
+
+    This deliberately mirrors ``shortest_path_edges``: successor costs are
+    charged on entry, strict improvements alone replace predecessors, and the
+    heap breaks equal-cost ties by edge id.  Building the tree once lets the
+    support search inspect every grounded activity destination without running
+    one Dijkstra per OD pair.
+    """
+    import heapq
+
+    if source in banned or source not in costs:
+        return {}, {}
+    spent_by_edge = {source: 0.0}
+    predecessor: dict[str, str] = {}
+    queue = [(0.0, source)]
+    while queue:
+        spent, edge = heapq.heappop(queue)
+        if spent > spent_by_edge.get(edge, float("inf")):
+            continue
+        for successor in adjacency.get(edge, ()):
+            if successor in banned or successor not in costs:
+                continue
+            through = spent + costs[successor]
+            if through < spent_by_edge.get(successor, float("inf")):
+                spent_by_edge[successor] = through
+                predecessor[successor] = edge
+                heapq.heappush(queue, (through, successor))
+    return spent_by_edge, predecessor
+
+
+def _tree_path(
+    predecessor: dict[str, str], source: str, destination: str,
+) -> list[str] | None:
+    """Reconstruct one path from a deterministic shortest-path tree."""
+    path = [destination]
+    while path[-1] != source:
+        parent = predecessor.get(path[-1])
+        if parent is None:
+            return None
+        path.append(parent)
+    path.reverse()
+    return path
+
+
+def grounded_sensor_basis_routes(
+    target: str,
+    measured: set[str] | list[str] | tuple[str, ...],
+    location_pools: dict[str, list[dict]],
+    net_path: Path = NET_PATH,
+    max_stretch: float = DEFAULT_MAX_STRETCH,
+    *,
+    limit: int = 1,
+    excluded_route_digests: set[str] | None = None,
+) -> list[dict]:
+    """Find globally-fastest grounded routes exclusive to ``target``.
+
+    Each OD connects an existing anonymous-home pool and an existing
+    activity/POI pool, in either outbound or return direction. OD pairs are
+    selected *from the unrestricted global shortest-path tree* when its
+    canonical route already crosses the target and no other measured sensor.
+    This order matters: constructing a forced-via path in a sensor-pruned graph
+    and comparing it with the global optimum can incorrectly report that no
+    valid route exists.
+
+    A second tree with ``target`` removed proves that every returned OD still
+    has a finite legal reroute and that the reroute is strictly slower.  The
+    obsolete ``max_stretch`` argument is retained for call compatibility; the
+    strict shortest-route contract supersedes bounded detours.
+    """
+    measured_set = {str(edge) for edge in measured}
+    if target not in measured_set:
+        raise ValueError(f"basis target is not measured: {target}")
+    requested = max(0, int(limit))
+    if requested == 0:
+        return []
+    _ = max_stretch
+    adjacency, costs, network_sha256 = load_network_contract(net_path)
+    if target not in costs:
+        return []
+    home_choices = [choice for choice in _grounded_pool_edges(
+        location_pools, home=True) if choice[0] in costs and choice[0] != target]
+    activity_choices = [choice for choice in _grounded_pool_edges(
+        location_pools, home=False) if choice[0] in costs and choice[0] != target]
+    if not home_choices or not activity_choices:
+        return []
+
+    excluded = set(excluded_route_digests or ())
+    found: list[dict] = []
+    # Limit one origin from dominating the support basis.  This preserves
+    # grounded spatial diversity while remaining deterministic and continues
+    # through every grounded endpoint pool if a difficult sensor needs a
+    # broader search.
+    # For the normal 500-route floor, admit up to 32 destinations from one
+    # grounded origin while still requiring at least about sixteen useful
+    # origins when support is available. Small unit-test requests retain the
+    # former cap. Eligibility is never relaxed to meet the target.
+    per_origin_limit = min(32, max(4, math.ceil(requested / 16)))
+    # Both legs are grounded: outbound home->activity and the corresponding
+    # return direction activity->home.  Restricting fallback support to only
+    # outbound legs can falsely make a directional sensor appear unsupported.
+    od_directions = (
+        (home_choices, activity_choices),
+        (activity_choices, home_choices),
+    )
+    for origins, destinations in od_directions:
+        for origin, origin_pool in origins:
+            free_costs, predecessor = _shortest_path_tree(
+                adjacency, costs, origin, frozenset())
+            if target not in free_costs:
+                continue
+
+            # In the canonical predecessor tree, precisely the descendants of
+            # target have a globally shortest route that crosses the target.
+            children: dict[str, list[str]] = {}
+            for child, parent in predecessor.items():
+                children.setdefault(parent, []).append(child)
+            descendants: set[str] = set()
+            stack = [target]
+            while stack:
+                edge = stack.pop()
+                if edge in descendants:
+                    continue
+                descendants.add(edge)
+                stack.extend(children.get(edge, ()))
+            possible_destinations = [
+                (edge, pool) for edge, pool in destinations
+                if edge in descendants and edge != origin
+            ]
+            if not possible_destinations:
+                continue
+
+            banned_costs, _ = _shortest_path_tree(
+                adjacency, costs, origin, frozenset({target}))
+            ranked_for_origin: list[
+                tuple[float, str, str, list[str], dict]
+            ] = []
+            for destination, destination_pool in possible_destinations:
+                route_edges = _tree_path(predecessor, origin, destination)
+                if not route_edges or len(route_edges) < 2:
+                    continue
+                if measured_set.intersection(route_edges) != {target}:
+                    continue
+                digest = sensor_route_digest(route_edges)
+                if digest in excluded:
+                    continue
+                proof, reason = qualify_route(
+                    route_edges, measured_set, costs,
+                    free_costs.get(destination),
+                    {target: banned_costs.get(destination)}, network_sha256)
+                if reason is not None or proof is None:
+                    continue
+                # Prefer representative five-minute paths within each origin,
+                # but never use this ranking as an eligibility condition.
+                score = abs(float(proof["route_cost_s"]) - 300.0)
+                ranked_for_origin.append((
+                    score, destination, destination_pool, route_edges, proof))
+
+            for (_score, destination, destination_pool, route_edges,
+                 proof) in sorted(ranked_for_origin)[:per_origin_limit]:
+                digest = sensor_route_digest(route_edges)
+                if digest in excluded:
+                    continue
+                excluded.add(digest)
+                purpose_pool = (
+                    destination_pool
+                    if not destination_pool.startswith("home:") else origin_pool
+                )
+                purpose = purpose_pool.split(":", 1)[0]
+                found.append({
+                    "route_edges": route_edges,
+                    "origin_edge": origin,
+                    "destination_edge": destination,
+                    "origin_location_pool": origin_pool,
+                    "destination_location_pool": destination_pool,
+                    "purpose": purpose,
+                    "route_cost_s": proof["route_cost_s"],
+                    "direct_cost_s": proof["shortest_free_cost_s"],
+                    "sensor_route_contract": proof,
+                })
+                if len(found) >= requested:
+                    return found
+    return found
+
+
 def grounded_sensor_basis_route(
     target: str,
     measured: set[str] | list[str] | tuple[str, ...],
@@ -2151,91 +2517,10 @@ def grounded_sensor_basis_route(
     net_path: Path = NET_PATH,
     max_stretch: float = DEFAULT_MAX_STRETCH,
 ) -> dict | None:
-    """Find one legal, simple and fully grounded route exclusive to ``target``.
-
-    The origin must be an existing anonymous-home pool and the destination an
-    existing activity/POI pool.  Routing uses SUMO's connection table, with
-    every other measured edge removed.  The result therefore accounts for
-    observed traffic at ``target`` without reviving the retired synthetic
-    unmeasured-background population.
-    """
-    measured_set = {str(edge) for edge in measured}
-    if target not in measured_set:
-        raise ValueError(f"basis target is not measured: {target}")
-    edge_ids, costs = load_sumo_routing_data(net_path)
-    full_graph = load_sumo_connection_graph(net_path, edge_ids, costs)
-    if target not in full_graph:
-        return None
-
-    allowed = set(full_graph) - (measured_set - {target})
-    graph = full_graph.subgraph(allowed).copy()
-    if target not in graph:
-        return None
-    home_choices = [choice for choice in _grounded_pool_edges(
-        location_pools, home=True) if choice[0] in graph and choice[0] != target]
-    activity_choices = [choice for choice in _grounded_pool_edges(
-        location_pools, home=False) if choice[0] in graph and choice[0] != target]
-    if not home_choices or not activity_choices:
-        return None
-
-    prefix_cost = nx.single_source_dijkstra_path_length(
-        graph.reverse(copy=False), target, weight="weight")
-    suffix_cost = nx.single_source_dijkstra_path_length(
-        graph, target, weight="weight")
-    origins = [(edge, pool, prefix_cost[edge] + costs[edge])
-               for edge, pool in home_choices if edge in prefix_cost]
-    destinations = [(edge, pool, suffix_cost[edge])
-                    for edge, pool in activity_choices if edge in suffix_cost]
-    if not origins or not destinations:
-        return None
-
-    # Retain a bounded set closest to a representative five-minute trip,
-    # then apply the more expensive simplicity and direct-stretch checks.
-    # This is deterministic and bounded even for a city-wide endpoint pool.
-    import heapq
-    shortlist: list[tuple[float, str, str, str, str]] = []
-    shortlist_limit = 4096
-    for origin, origin_pool, pre_cost in origins:
-        for destination, destination_pool, post_cost in destinations:
-            score = abs((pre_cost + post_cost) - 300.0)
-            item = (-score, origin, destination, origin_pool, destination_pool)
-            if len(shortlist) < shortlist_limit:
-                heapq.heappush(shortlist, item)
-            elif item > shortlist[0]:
-                heapq.heapreplace(shortlist, item)
-
-    ranked = sorted(
-        [(-neg_score, origin, destination, origin_pool, destination_pool)
-         for neg_score, origin, destination, origin_pool, destination_pool
-         in shortlist])
-    for _score, origin, destination, origin_pool, destination_pool in ranked:
-        prefix = nx.shortest_path(graph, origin, target, weight="weight")
-        suffix = nx.shortest_path(graph, target, destination, weight="weight")
-        route_edges = prefix + suffix[1:]
-        if len(route_edges) < 2 or route_visits_a_node_twice(route_edges):
-            continue
-        if measured_set.intersection(route_edges) != {target}:
-            continue
-        try:
-            direct_cost = costs[origin] + nx.shortest_path_length(
-                full_graph, origin, destination, weight="weight")
-        except nx.NetworkXNoPath:
-            continue
-        route_cost = sum(costs[edge] for edge in route_edges)
-        if route_cost > float(max_stretch) * direct_cost + 1e-9:
-            continue
-        purpose = destination_pool.split(":", 1)[0]
-        return {
-            "route_edges": route_edges,
-            "origin_edge": origin,
-            "destination_edge": destination,
-            "origin_location_pool": origin_pool,
-            "destination_location_pool": destination_pool,
-            "purpose": purpose,
-            "route_cost_s": route_cost,
-            "direct_cost_s": direct_cost,
-        }
-    return None
+    """Backward-compatible one-route wrapper around the strict OD search."""
+    routes = grounded_sensor_basis_routes(
+        target, measured, location_pools, net_path, max_stretch, limit=1)
+    return routes[0] if routes else None
 
 
 def install_grounded_sensor_basis_routes(
@@ -2244,11 +2529,12 @@ def install_grounded_sensor_basis_routes(
     measured: set[str] | list[str] | tuple[str, ...],
     net_path: Path = NET_PATH,
     max_stretch: float = DEFAULT_MAX_STRETCH,
+    *,
+    min_per_sensor: int = 1,
 ) -> dict[str, object]:
-    """Install missing single-sensor basis columns or fail before PFE runs."""
-    missing = measured_incidence_basis_failures(routed_path, measured)
-    if not missing:
-        return {"missing_before": [], "installed": [], "missing_after": []}
+    """Fill the strict, exclusive grounded-route floor before PFE runs."""
+    measured_set = {str(edge) for edge in measured}
+    floor = max(1, int(min_per_sensor))
     document = json.loads(metadata_path.read_text())
     candidates = document.get("candidates")
     location_pools = document.get("location_pools")
@@ -2257,47 +2543,82 @@ def install_grounded_sensor_basis_routes(
 
     tree = ET.parse(routed_path)
     root = tree.getroot()
+    existing_route_digests: set[str] = set()
+    exclusive_routes: dict[str, set[str]] = {
+        edge: set() for edge in measured_set
+    }
+    for vehicle in root.findall("vehicle"):
+        route = vehicle.find("route")
+        edges = tuple((route.get("edges") if route is not None else "").split())
+        if not edges:
+            continue
+        digest = sensor_route_digest(edges)
+        existing_route_digests.add(digest)
+        hits = measured_set.intersection(edges)
+        if len(hits) == 1:
+            exclusive_routes[next(iter(hits))].add(digest)
+    support_before = {
+        edge: len(exclusive_routes[edge]) for edge in sorted(measured_set)
+    }
+    missing = [edge for edge, count in support_before.items() if count < floor]
+    if not missing:
+        return {"missing_before": [], "installed": [], "missing_after": [],
+                "exclusive_before": support_before,
+                "exclusive_after": support_before}
+
     installed: list[str] = []
     unresolved: list[str] = []
     departure_by_purpose = {"arbete": 8 * 3600.0,
                             "service": 12 * 3600.0,
                             "fritid": 18 * 3600.0}
     for edge in missing:
-        basis = grounded_sensor_basis_route(
-            edge, measured, location_pools, net_path, max_stretch)
-        if basis is None:
+        needed = floor - len(exclusive_routes[edge])
+        basis_routes = grounded_sensor_basis_routes(
+            edge, measured_set, location_pools, net_path, max_stretch,
+            limit=needed, excluded_route_digests=existing_route_digests)
+        if len(basis_routes) < needed:
             unresolved.append(edge)
             continue
-        digest = hashlib.sha256(
-            (edge + "|" + " ".join(basis["route_edges"])).encode()).hexdigest()[:16]
-        vehicle_id = f"sensor_basis_{digest}"
-        if vehicle_id in candidates:
-            raise ValueError(f"duplicate grounded basis id: {vehicle_id}")
-        depart = departure_by_purpose.get(str(basis["purpose"]), 12 * 3600.0)
-        vehicle = ET.Element("vehicle", id=vehicle_id, depart=f"{depart:.1f}")
-        ET.SubElement(vehicle, "route", edges=" ".join(basis["route_edges"]))
-        root.append(vehicle)
-        candidates[vehicle_id] = {
-            "purpose": basis["purpose"],
-            "tour_id": f"sensor-basis-{digest}",
-            "leg": "outbound",
-            "origin_edge": basis["origin_edge"],
-            "destination_edge": basis["destination_edge"],
-            "via_edge": edge,
-            "candidate_depart_s": depart,
-            "origin_location_pool": basis["origin_location_pool"],
-            "destination_location_pool": basis["destination_location_pool"],
-            "coverage_edge": edge,
-            "support_only": True,
-            "support_kind": "grounded_sensor_incidence_basis_v1",
-            "synthetic_endpoint": False,
-            "unavoidable_loop": False,
-        }
-        installed.append(vehicle_id)
+        for basis in basis_routes:
+            route_digest = sensor_route_digest(basis["route_edges"])
+            digest = hashlib.sha256(
+                (edge + "|" + route_digest).encode()).hexdigest()[:16]
+            vehicle_id = f"sensor_basis_{digest}"
+            if vehicle_id in candidates:
+                raise ValueError(f"duplicate grounded basis id: {vehicle_id}")
+            depart = departure_by_purpose.get(
+                str(basis["purpose"]), 12 * 3600.0)
+            vehicle = ET.Element(
+                "vehicle", id=vehicle_id, depart=f"{depart:.1f}")
+            ET.SubElement(
+                vehicle, "route", edges=" ".join(basis["route_edges"]))
+            root.append(vehicle)
+            candidates[vehicle_id] = {
+                "purpose": basis["purpose"],
+                "tour_id": f"sensor-basis-{digest}",
+                "leg": "outbound",
+                "origin_edge": basis["origin_edge"],
+                "destination_edge": basis["destination_edge"],
+                "via_edge": edge,
+                "candidate_depart_s": depart,
+                "origin_location_pool": basis["origin_location_pool"],
+                "destination_location_pool": basis["destination_location_pool"],
+                "coverage_edge": edge,
+                "support_only": True,
+                "support_kind": "grounded_sensor_shortest_basis_v3",
+                "sensor_route_contract": basis["sensor_route_contract"],
+                "synthetic_endpoint": False,
+                "unavoidable_loop": False,
+            }
+            existing_route_digests.add(route_digest)
+            exclusive_routes[edge].add(route_digest)
+            installed.append(vehicle_id)
 
     if unresolved:
         raise ValueError(
-            "no legal grounded single-sensor route exists for: "
+            "no legal grounded support floor: "
+            f"fewer than {floor} globally-shortest single-sensor routes "
+            "exist for: "
             + ", ".join(unresolved))
     vehicles = list(root.findall("vehicle"))
     for vehicle in vehicles:
@@ -2312,8 +2633,13 @@ def install_grounded_sensor_basis_routes(
         raise ValueError(
             "grounded basis installation did not satisfy: "
             + ", ".join(missing_after))
+    support_after = {
+        edge: len(exclusive_routes[edge]) for edge in sorted(measured_set)
+    }
     return {"missing_before": missing, "installed": installed,
-            "missing_after": missing_after}
+            "missing_after": missing_after,
+            "exclusive_before": support_before,
+            "exclusive_after": support_after}
 
 
 def upstream_downstream_gates(
@@ -4021,8 +4347,9 @@ def main() -> None:
              "structural load weights the gate draws so candidate density "
              "follows expected approach flow (road-class fallback when "
              "absent)")
-    ap.add_argument("--min-per-sensor", type=int, default=50,
-                    help="safety-net floor, not a target — every trip is "
+    ap.add_argument("--min-per-sensor", type=int,
+                    default=STRICT_SENSOR_OD_TARGET,
+                    help="strict distinct-OD floor — every trip is "
                         "now sensor-anchored (generate_sensor_anchored_trips), "
                         "so n_total is split into an equal starting quota "
                         "per sensor; structurally poor-fit sensors correctly "
@@ -4031,7 +4358,9 @@ def main() -> None:
                         "real graph varies 1.3%%-100%% by sensor). The final "
                         "post-filter gate counts DISTINCT routed geometries, "
                         "not repeated day-template vehicles; raw copies "
-                        "cannot make a thin new sensor pass.")
+                        "cannot make a thin new sensor pass. The default 500 "
+                        "matches the former robust pool's per-sensor order "
+                        "of magnitude and remains subject to LOSO ablation.")
     ap.add_argument("--route-diversity", type=float,
                     default=DEFAULT_ROUTE_DIVERSITY,
                     help="duarouter --weights.random-factor: per-trip edge-"
@@ -4603,6 +4932,17 @@ def main() -> None:
             # retaining this multi-megabyte file per build would leak disk
             # throughout warming even though no later stage consumes it.
             fallback_out.with_suffix(".alt.xml").unlink(missing_ok=True)
+    try:
+        strict_report = qualify_sensor_candidate_routes(
+            out, meta_out, measured, NET_PATH)
+    except (ET.ParseError, OSError, ValueError) as exc:
+        sys.exit(f"candidate sensor shortest-route qualification failed: {exc}")
+    print(f"  strict sensor routes: kept {strict_report['kept']}/"
+          f"{strict_report['checked']}, dropped {strict_report['dropped']} "
+          f"{strict_report['reasons']}")
+    if strict_report["kept"] == 0:
+        sys.exit("candidate sensor shortest-route qualification removed the "
+                 "entire route pool")
     # LAST of the route filters, deliberately: it reconciles the pairing the
     # three above break, so it has to see their combined survivors.
     if args.atomic_tours:
@@ -4614,26 +4954,34 @@ def main() -> None:
     try:
         basis_report = install_grounded_sensor_basis_routes(
             out, meta_out, measured, NET_PATH,
-            max_stretch=args.max_stretch)
+            max_stretch=args.max_stretch,
+            min_per_sensor=args.min_per_sensor)
     except (ET.ParseError, OSError, ValueError, nx.NetworkXException) as exc:
         sys.exit(f"candidate sensor-incidence basis failed: {exc}")
     if basis_report["installed"]:
         print("  installed "
               f"{len(basis_report['installed'])} grounded single-sensor "
               "basis candidate(s)")
+    try:
+        final_strict_report = qualify_sensor_candidate_routes(
+            out, meta_out, measured, NET_PATH)
+    except (ET.ParseError, OSError, ValueError) as exc:
+        sys.exit(f"final sensor shortest-route qualification failed: {exc}")
+    if final_strict_report["dropped"]:
+        sys.exit("final sensor shortest-route qualification found an "
+                 "unqualified post-repair candidate")
     final_count = sum(1 for _ in ET.parse(out).getroot().iter("vehicle"))
     if target_candidate_count:
-        final_metadata = json.loads(meta_out.read_text()).get("candidates", {})
-        support_survivors = sum(
-            1 for record in final_metadata.values()
-            if isinstance(record, dict) and record.get("support_only") is True
-        )
-        final_pool_fraction = (final_count - support_survivors) / target_candidate_count
-        if final_pool_fraction < MIN_ROUTED_CANDIDATE_FRACTION:
-            sys.exit(
-                f"final candidate supply {final_pool_fraction:.1%} is below the "
-                f"{MIN_ROUTED_CANDIDATE_FRACTION:.0%} safety floor relative to "
-                "the requested pool")
+        # The earlier retention gates still prove that duarouter and the
+        # physical-integrity filters did not collapse the requested proposal
+        # pool.  The strict semantic boundary intentionally rejects OD pairs
+        # whose declared sensor is not on their global fastest path, so the old
+        # 75%-of-proposals gate is not meaningful after qualification.  Final
+        # viability is instead enforced below by distinct strict routes for
+        # every sensor plus PFE's exact measured-count feasibility gate.
+        print("  strict eligible supply: "
+              f"{final_count}/{target_candidate_count} requested proposal(s), "
+              "with grounded per-sensor support filled separately")
     routed_edge_support: set[str] = set()
     for vehicle in ET.parse(out).getroot().iter("vehicle"):
         route = vehicle.find("route")

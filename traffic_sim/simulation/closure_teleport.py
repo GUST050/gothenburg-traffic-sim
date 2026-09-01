@@ -57,14 +57,39 @@ POLICY_VERSION = "closure_teleport_v1"
 #: byte-identical command line.
 SUMO_DEFAULT_TIME_TO_TELEPORT_S = 300
 
-#: The deployed closure policy: -1 disables SUMO teleporting entirely.
+#: RETIRED 2026-08-29 as the production closure policy (superseded by
+#: `traffic_sim.simulation.closure_routing`, `POLICY_VERSION
+#: "closure_origin_routing_v1"`). Kept only so an old measurement can still
+#: be reproduced by name from a historical-diagnostic call site; no
+#: production closure entry point passes this any more (see
+#: `CLOSURE_ROUTING_TELEPORT_POLICY_S` below for what production uses).
 #:
-#: The plan proposed defaulting to "a value chosen from Stage 1's waiting-time
-#: distribution". Stage 1's measurement then revised the mechanism, and that
-#: revision rules a finite default out: ANY finite threshold still teleports,
-#: and a teleport is the necessary condition for the leak. Only -1 can satisfy
-#: Stage 3's own gate that closed-edge throughput falls to zero.
+#: WHY IT WAS RETIRED, not merely superseded in spirit: this value achieved
+#: "closed-edge throughput falls to zero" by disabling SUMO's stuck-vehicle
+#: relief NETWORK-WIDE, for the whole run's duration, not just on the closed
+#: edge. Root-cause analysis (`closure_routing.py`'s module docstring) found
+#: that under the old preprocessor+runtime-rerouter design this let a busy
+#: closure's queue grow WITHOUT BOUND instead of ever being relieved,
+#: producing exactly the indefinite-gridlock wall-time timeouts this fix
+#: exists to remove. The value itself was never wrong given its own premise
+#: (a teleport IS the only observed path onto a closed edge under that
+#: design) — the premise is what changed: `closure_routing` now makes it
+#: structurally impossible for any route to contain a closed edge before
+#: SUMO ever starts, so there is nothing left for a teleport to leak onto,
+#: and ordinary finite teleporting can be restored as the same genuine
+#: health signal a baseline run already treats it as.
 CLOSURE_TIME_TO_TELEPORT_S = -1
+
+#: The deployed closure policy since 2026-08-29 (`closure_routing.py`):
+#: `None` means "pass nothing", i.e. SUMO's own ordinary default applies,
+#: exactly like a baseline (non-closure) run. This is deliberately NOT a
+#: raised or otherwise-tuned finite threshold — it is not a timeout change
+#: at all. It is safe specifically BECAUSE `closure_routing` has already
+#: rewritten every affected vehicle's route around the closure before SUMO
+#: starts, so a stuck vehicle occurring under this policy is the same kind
+#: of ordinary, unrelated congestion event a baseline run already relies on
+#: teleporting to relieve — not a sign the closure logic failed.
+CLOSURE_ROUTING_TELEPORT_POLICY_S = None
 
 #: Waiting time beyond which a driver is modelled as giving up on a closure
 #: rather than queueing it out. Previously an unnamed literal `300` inside

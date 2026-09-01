@@ -5,6 +5,40 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from traffic_sim.demand import route_catalog
+from traffic_sim.demand.sensor_route_contract import (
+    ABS_TOLERANCE_S, POLICY_VERSION, REL_TOLERANCE, route_digest)
+
+
+def _strict_metadata(vehicle_id, edges, sensors, **record):
+    route = list(edges)
+    proof = {
+        "policy_version": POLICY_VERSION,
+        "pass": True,
+        "network_sha256": "a" * 64,
+        "route_sha256": route_digest(route),
+        "origin_edge": route[0],
+        "destination_edge": route[-1],
+        "route_cost_s": 0.0,
+        "shortest_free_cost_s": 0.0,
+        "sensor_penalty_s": {sensor: 1.0 for sensor in sorted(sensors)},
+        "sensor_edges": sorted(sensors),
+        "absolute_tolerance_s": ABS_TOLERANCE_S,
+        "relative_tolerance": REL_TOLERANCE,
+    }
+    return {
+        "schema_version": 3,
+        "location_pools": {},
+        "sensor_route_contract": {
+            "policy_version": POLICY_VERSION,
+            "network_sha256": "a" * 64,
+            "absolute_tolerance_s": ABS_TOLERANCE_S,
+            "relative_tolerance": REL_TOLERANCE,
+            "qualified_candidates": 1,
+        },
+        "candidates": {
+            vehicle_id: {**record, "sensor_route_contract": proof},
+        },
+    }
 
 
 def _identity_inputs(tmp_path):
@@ -158,10 +192,10 @@ def test_ensure_catalog_is_single_complete_manifest(tmp_path):
     def builder(work):
         calls.append(1)
         (work / "catalog.rou.xml").write_text(
-            '<routes><vehicle id="t0" depart="0"><route edges="a"/></vehicle></routes>')
+            '<routes><vehicle id="t0" depart="0"><route edges="sensor"/></vehicle></routes>')
         (work / "catalog.meta.json").write_text(
-            json.dumps({"schema_version": 2, "location_pools": {},
-                        "candidates": {"t0": {"purpose": "through"}}}))
+            json.dumps(_strict_metadata(
+                "t0", ["sensor"], {"sensor"}, purpose="through")))
         (work / "catalog.validation.json").write_text(json.dumps({
             "sensor": {"total": 1, "unique_routes": 1,
                        "unique_od_pairs": 1, "cross_1": 0,
@@ -212,10 +246,9 @@ def test_sized_catalog_retries_only_sensor_support(tmp_path, monkeypatch):
         output_dir.mkdir(exist_ok=True)
         (output_dir / "candidates.rou.xml").write_text(
             '<routes><vehicle id="t0" depart="0"><route edges="sensor"/></vehicle></routes>')
-        (output_dir / "candidates.meta.json").write_text(json.dumps({
-            "schema_version": 2, "location_pools": {},
-            "candidates": {"t0": {"purpose": "through"}},
-        }))
+        (output_dir / "candidates.meta.json").write_text(json.dumps(
+            _strict_metadata(
+                "t0", ["sensor"], {"sensor"}, purpose="through")))
         unique = 1 if n_total == 100 else 2
         (output_dir / "sensor_coverage_report.json").write_text(json.dumps({
             "sensor": {"unique_routes": unique, "total": unique}
@@ -264,11 +297,10 @@ def test_combine_catalogs_prefixes_ids_and_preserves_metadata(tmp_path):
         meta = tmp_path / f"{pool}.meta.json"
         rou.write_text(
             '<routes><vehicle id="t0" depart="0"><route edges="a"/></vehicle></routes>')
-        meta.write_text(json.dumps({
-            "schema_version": 2,
-            "location_pools": {"home:a": [{"id": "a"}]},
-            "candidates": {"t0": {"purpose": pool, "tour_id": "tour-0"}},
-        }))
+        document = _strict_metadata(
+            "t0", ["a"], {"a"}, purpose=pool, tour_id="tour-0")
+        document["location_pools"] = {"home:a": [{"id": "a"}]}
+        meta.write_text(json.dumps(document))
         sources[pool] = (rou, meta)
     out_rou, out_meta = tmp_path / "combined.rou.xml", tmp_path / "combined.meta.json"
     report = route_catalog.combine_catalogs(sources, out_rou, out_meta)
@@ -349,6 +381,7 @@ class TestCatalogSourceContract:
                 n_total=6000, through_fraction=0.5, gravity_km=1.8,
                 gravity_alpha=1.5, cross_fraction=0.3, is_weekend=False,
                 start_date="2027-09-01", seed=42,
+                min_per_sensor=50,
                 home=build_sumo_demand.sumo_home(),
                 flows_path=build_sumo_demand.FLOWS_PATH)[2].items():
             assert label in route_catalog.CATALOG_SOURCE_LABELS
@@ -371,6 +404,7 @@ class TestCatalogSourceContract:
             "dirsplit/geo.py",
             "traffic_sim/core/__init__.py",
             "traffic_sim/core/fingerprint.py",
+            "traffic_sim/demand/__init__.py",
         }
         escaped = imported - bound - known_unbound
         assert not escaped, (

@@ -784,12 +784,28 @@ class TestSumoTimeout:
     Found in review 2026-07-07."""
 
     def test_run_sumo_timeout_exits_cleanly(self, monkeypatch, tmp_path):
+        seen = []
+
         def fake_run(*a, **kw):
+            seen.append(kw.get("timeout"))
             raise subprocess.TimeoutExpired(cmd="sumo", timeout=kw.get("timeout"))
         monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit, match="after 725s"):
             run_scenario.run_sumo(1000, tmp_path / "r.rou.xml", [],
-                                  duration_s=900, home=tmp_path)
+                                  duration_s=900, home=tmp_path, timeout_s=725)
+        assert seen == [725]
+
+    @pytest.mark.parametrize("timeout_s", [0, -1, float("inf"), True])
+    def test_run_sumo_rejects_invalid_timeout(self, tmp_path, timeout_s):
+        with pytest.raises(ValueError, match="timeout_s"):
+            run_scenario.run_sumo(
+                1000,
+                tmp_path / "r.rou.xml",
+                [],
+                duration_s=900,
+                home=tmp_path,
+                timeout_s=timeout_s,
+            )
 
     def test_export_trajectories_timeout_returns_none_not_raises(self, monkeypatch, tmp_path):
         def fake_run(*a, **kw):
@@ -1624,14 +1640,15 @@ class TestTimeWindowedClosures:
         assert routes["short_wait"] == "lead closed destination"  # 50 s waits safely
         assert routes["after_open"] == "lead closed destination"
 
-    def test_reachability_ignores_permissions_known_limitation(self, monkeypatch, tmp_path):
-        """Known limitation: build_edge_graph follows every <connection>.
-
-        The bicycle-only detour is topologically reachable, so the current
-        prefilter leaves this passenger route intact even though SUMO would
-        reject the detour. This test makes the documented vClass/permission
-        blind spot explicit; C2 deliberately does not attempt to fix it.
-        """
+    def test_reachability_respects_single_category_permissions(self, monkeypatch, tmp_path):
+        """FIXED (finding 3, 2026-08-29 repair batch): `build_edge_graph`
+        used to follow every `<connection>` regardless of vClass, so a
+        bicycle-only detour looked like a legal passenger route. It is now
+        filtered to `DEFAULT_VCLASS` (`traffic_sim.simulation.metadata`),
+        so a `allow="bicycle"` connection is correctly excluded and the
+        bicycle-only "detour" is not treated as a legal passenger path —
+        this was the exact documented blind spot; it is no longer a known
+        limitation."""
         net_path = tmp_path / "net.net.xml"
         net_path.write_text("""<net>
   <connection from="lead" to="closed"/>
@@ -1649,11 +1666,14 @@ class TestTimeWindowedClosures:
         adj = run_scenario.build_edge_graph({"closed"})
         closures = [{"edge_id": "closed", "begin_s": 0, "end_s": 1000}]
 
-        assert run_scenario.reachable(adj, "lead", "destination", {"closed"})
+        # No legal (passenger) path survives closing "closed" -- the
+        # bicycle-only connections are excluded, so the vehicle has nowhere
+        # to detour and the legacy truncation path shortens it rather than
+        # (incorrectly) trusting the live rerouter to find the bike detour.
+        assert not run_scenario.reachable(adj, "lead", "destination", {"closed"})
         assert run_scenario.truncate_stranded_vehicles(
-            route_path, ["closed"], out_path, adj, closures=closures) == (0, 0)
-        assert ET.parse(out_path).getroot().find("vehicle/route").get("edges") == \
-               "lead closed destination"
+            route_path, ["closed"], out_path, adj, closures=closures) == (1, 0)
+        assert ET.parse(out_path).getroot().find("vehicle/route").get("edges") == "lead"
 
 
 class TestParseVehrouteFile:

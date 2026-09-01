@@ -1,0 +1,57 @@
+{
+  "bound_identity": {
+    "ledger_content_key": "a157ad48606408f67f43c2ec21fa5bcdee5bc1118180d210303f944b1df4f7c8",
+    "provider_identity": {
+      "closure_type": "full",
+      "costing_sources": {
+        "run_scenario.py": "2591fde00d49c9dbbec685b0515873cffb0cd66a4644796f30e3d5983ad42e20",
+        "traffic_sim/simulation/closure_ranking.py": "f47b4193bd62a6bfc8c2d15a0532af0314e25d481186dc2af17feed933ee389d",
+        "traffic_sim/simulation/deterministic_disruption.py": "8c1ca2220c798f98ed634da6b434f9268f04d35db14a3c614b05536fcfdc9741",
+        "traffic_sim/simulation/disruption.py": "518beac7735602e4efbf5a51659c152a7dc6a99ee32a157d7b20167b407e87ec"
+      },
+      "directed_edges": [
+        "26355153_26842525_0"
+      ],
+      "dst_policy": "exclude_transition_dates",
+      "interday_policy": "independent_daily_reset_v1",
+      "network": {
+        "metadata": {
+          "path": "/Users/gt/Documents/gs-project/sumo/network_metadata.json",
+          "sha256": "dc3493454abc0ea44760abc10ee2996a1beef01d6b537617aa6141374f2ae6ad"
+        },
+        "path": "/Users/gt/Documents/gs-project/sumo/net.net.xml",
+        "sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+      },
+      "schema": "deterministic_closure_disruption_v2",
+      "source": "forecast",
+      "timezone": "Europe/Stockholm"
+    },
+    "schema": "subhour-phase5-window-cost-index-bound-v1",
+    "search_content_key": "383c9130a45370c2f296",
+    "source_profile_content_key": "4c44f554d252a67d994b2478242eb9230161e60e4819da93d89a4eefba5a2e47"
+  },
+  "content_key": "bbfdfd78a761947c0728d21e73b5ed183734ac34af5951cd658b6b480857c19e",
+  "evidence_id": "subhour-window-cost-index-20260831-v1",
+  "fresh_index_root": "/private/tmp/gs-subhour-phase5-v1-index",
+  "index_content_key": "8f934ec2b7a9020e281f19ebd0879e3751b90a6e2c60b3edc85908ea0d16b843",
+  "kind": "subhour_phase5_window_cost_index",
+  "oracle": {
+    "field_identical": true,
+    "indexed_daily_units": 1950,
+    "indexed_variant_records": 5850,
+    "mismatch_count": 0,
+    "mismatches": [],
+    "oracle_complete": true
+  },
+  "phase": 5,
+  "population": {
+    "daily_units": 1950,
+    "daily_variant_records": 5850
+  },
+  "preparation_time_s": 0.30645970899999997,
+  "release_evidence": false,
+  "schema": "subhour_phase5_window_cost_index_evidence_v1",
+  "source_profile": "/private/tmp/gs-subhour-profile-v10/profile.json",
+  "source_profile_content_key": "4c44f554d252a67d994b2478242eb9230161e60e4819da93d89a4eefba5a2e47",
+  "status": "PASS"
+}

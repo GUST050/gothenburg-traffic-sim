@@ -1,0 +1,84 @@
+{
+  "case_results": [],
+  "claim_boundary": "diagnostic only; no 30-percent, restart, or product-activation claim",
+  "content_key": "4b3d2fd865e7a6f764a358de7fb906390eaacc784f16d1fface7a34d1302ecf8",
+  "correctness_gates": {
+    "active_time_reduction_meets_30_percent": null,
+    "exact_attempt_reduction_meets_30_percent": null,
+    "ledger_identical": null,
+    "selected_ids_identical": null,
+    "status": "NOT_EVALUATED_PRE_EXECUTION",
+    "stop_proof_valid": null,
+    "terminal_semantics_identical": null
+  },
+  "evidence_id": "subhour-bounded-sumo-20260831-v25",
+  "gate_s": {
+    "population_complete": false,
+    "reason": "bounded execution did not start",
+    "variants": {}
+  },
+  "kind": "subhour_bounded_sumo_outcome",
+  "paired_attempts": {
+    "active_elapsed_s": null,
+    "cost_ordered": null,
+    "exact_attempts_reduction": null,
+    "ordered_exhaustive": null
+  },
+  "preflight": {
+    "census_command": [
+      "ps",
+      "-eo",
+      "pid=,pgid=,rss="
+    ],
+    "error": "could not run `ps` to census process groups: [Errno 1] Operation not permitted: 'ps'",
+    "execution_started": false,
+    "required_before_execution": "trusted process-tree census for RSS and reap gates",
+    "selection_read_before_outcome": true,
+    "status": "unavailable"
+  },
+  "registration": {
+    "content_key": "640c4f7fc942b4dd9152d50543b4d58de589b137fe1d39e369f7e8642acfe997",
+    "evidence_id": "subhour-bounded-sumo-20260831-v25",
+    "path": "/Users/gt/Documents/gs-project/validation/subhour_bounded_sumo_registration_20260831-v25.json"
+  },
+  "release_evidence": false,
+  "remaining_registered_cases": 8,
+  "resources": {
+    "caps": {
+      "active_seconds": 3300,
+      "attempts_per_case": 10000,
+      "daily_workers": 1,
+      "disk_growth_bytes": 21474836480,
+      "max_active_sumo_slots": 1,
+      "peak_rss_bytes": 8589934592,
+      "seed_workers": 1
+    },
+    "disk_growth_bytes": null,
+    "disk_status": "not_run",
+    "peak_rss_bytes": null,
+    "rss_status": "unavailable"
+  },
+  "restart_cancellation": {
+    "no_later_starter": null,
+    "paired": null,
+    "status": "NOT_RUN_PRE_EXECUTION"
+  },
+  "schema": "subhour_cost_ordered_bounded_outcome_v1",
+  "selection": {
+    "distinct_demand_periods": 2,
+    "distinct_edges": 4,
+    "eligible_count": 648,
+    "selected_case_count": 8,
+    "selected_ids": [
+      "89542ecc89d9b4df7106",
+      "22b87e26579cb9e4ea32",
+      "95922837ea5cc4755f20",
+      "96a090a3088ff35b6ce0",
+      "0f9eef6ec98c89f6f15d",
+      "4af5f499ec0287de33dd",
+      "cbc0f4626d4336535926",
+      "683027ca6eed0147991f"
+    ]
+  },
+  "status": "INCONCLUSIVE_PROCESS_CENSUS_UNAVAILABLE"
+}

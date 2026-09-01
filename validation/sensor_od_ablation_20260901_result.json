@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "study": "strict_sensor_od_floor_loso_ablation",
+  "plan": "validation/sensor_od_ablation_20260901_plan.json",
+  "status": "complete",
+  "selected_floor_unique_od_per_directed_sensor": 50,
+  "selection_reason": "lowest preregistered median multiplicative held-out station error; also highest mean GEH<5",
+  "levels": {
+    "25": {
+      "candidate_routes": 431,
+      "actual_unique_od_range": [38, 125],
+      "route_variables": 390,
+      "median_multiplicative_daily_error": 1.641831118271,
+      "mean_geh_below_5_pct": 55.816666666667,
+      "worst_multiplicative_daily_error": 2.702702702703,
+      "station_ratios": {"107": 0.467, "1074": 0.573, "1076": 0.37, "133": 0.65, "134": 1.19, "2276": 1.122},
+      "underidentified_stations": 6,
+      "candidate_pool_sha256": "879f5d6fae25225044171da92aa68710792096a9f892276340b9f5c8d93b7b17",
+      "report": "validation/loso_fastest_routes_25od_20260901.json",
+      "report_sha256": "7e8c4c17349fc6ccd85c2e2d8a41622d269da1f082c99ec048064603dfb9836f"
+    },
+    "50": {
+      "candidate_routes": 539,
+      "actual_unique_od_range": [50, 133],
+      "route_variables": 498,
+      "median_multiplicative_daily_error": 1.560491791352,
+      "mean_geh_below_5_pct": 57.25,
+      "worst_multiplicative_daily_error": 3.703703703704,
+      "station_ratios": {"107": 0.506, "1074": 0.602, "1076": 0.27, "133": 0.685, "134": 1.135, "2276": 1.104},
+      "underidentified_stations": 6,
+      "candidate_pool_sha256": "cfe69e3c12d56ac46cd990159edee67aeabf39ae22e90b8585176f2fd5019c30",
+      "report": "validation/loso_fastest_routes_20260901.json",
+      "report_sha256": "2d692758979f512a39cac1625cf79e4e3c6c03bc6ee53fb6adfcf2ec79071a3f"
+    },
+    "100": {
+      "candidate_routes": 875,
+      "actual_unique_od_range": [100, 183],
+      "route_variables": 834,
+      "median_multiplicative_daily_error": 1.945603631305,
+      "mean_geh_below_5_pct": 49.55,
+      "worst_multiplicative_daily_error": 5.586592178771,
+      "station_ratios": {"107": 0.416, "1074": 0.435, "1076": 0.179, "133": 0.628, "134": 1.086, "2276": 1.168},
+      "underidentified_stations": 6,
+      "candidate_pool_sha256": "93bf4d4b18aa1e006811e4ee01ae65d8e8f89abfab597e26fc481fb2216afa09",
+      "report": "validation/loso_fastest_routes_100od_20260901.json",
+      "report_sha256": "1b2e7ead5cd559f1455a02fca778379290724bfee168c6a689d3bbcf05725455"
+    },
+    "200": {
+      "candidate_routes": 1575,
+      "actual_unique_od_range": [200, 283],
+      "route_variables": 1534,
+      "median_multiplicative_daily_error": 2.292633871581,
+      "mean_geh_below_5_pct": 43.25,
+      "worst_multiplicative_daily_error": 9.52380952381,
+      "station_ratios": {"107": 0.399, "1074": 0.327, "1076": 0.105, "133": 0.481, "134": 1.28, "2276": 1.255},
+      "underidentified_stations": 6,
+      "candidate_pool_sha256": "5f5b5a3b8602828e19da2695677e90061ab3b03be74d3db27c141255bf9a7ccb",
+      "report": "validation/loso_fastest_routes_200od_20260901.json",
+      "report_sha256": "2c565e1b078352a82f3af657848fe086ce5250ab2595533d6c8a0cd0a07d6441"
+    },
+    "500": {
+      "candidate_routes": 3675,
+      "actual_unique_od_range": [500, 583],
+      "route_variables": 3634,
+      "median_multiplicative_daily_error": 2.425395380096,
+      "mean_geh_below_5_pct": 36.983333333333,
+      "worst_multiplicative_daily_error": 25.0,
+      "station_ratios": {"107": 0.573, "1074": 0.17, "1076": 0.04, "133": 0.322, "134": 1.47, "2276": 1.334},
+      "underidentified_stations": 6,
+      "candidate_pool_sha256": "2b0e467efd414ebfd7015e792720e19e1e2be649e9e5b742a069efb83a74403b",
+      "report": "validation/loso_fastest_routes_500od_20260901.json",
+      "report_sha256": "fd426476e4e9ba0e7fd38ec60f5c753200d69e5e483d781a30d3ae98a5da6590"
+    }
+  },
+  "interpretation": {
+    "claim": "50 is the best tested floor on this date, network, seed, and LOSO protocol",
+    "not_claimed": "50 is universally optimal or resolves held-station observability",
+    "mechanism_supported_by_diagnostics": "larger floors add many sensor-exclusive route variables without adding independent sensor observations, increasing underidentification and degrading held-out prediction"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "activation": {
+    "q50_only": false,
+    "ui_api_change": false
+  },
+  "bound_evidence": {
+    "content_key": "b060f89ad2780d1aafd6a7c2c832f5c54b9db48e562090f8691861ef48befeff",
+    "evidence_id": "subhour-gate-s-evidence-20260831-v10",
+    "path": "/Users/gt/Documents/gs-project/validation/subhour_gate_s_evidence_20260831-v10.json",
+    "schema": "subhour_gate_s_evidence_v1",
+    "sha256": "2a16dfa4cead071218f6e91169f6fd50bc1127137c1a4879affdc03124825e15",
+    "source_lineage": {
+      "content_key": "d0114bcd9a7ec201b3753b7821fd92d2a8761f248c0f614db849a3822cb9edf3",
+      "evidence_id": "subhour-bounded-sumo-20260831-v33",
+      "path": "/Users/gt/Documents/gs-project/validation/subhour_bounded_sumo_outcome_subhour-bounded-sumo-20260831-v33.json",
+      "schema": "subhour_cost_ordered_bounded_outcome_v1",
+      "sha256": "bf2d1be325b3f240421377d9a73d398dd7bf6806328a5deef07decb540c05d8e"
+    }
+  },
+  "claim_boundary": "q50_only_inactive_without_strict_gate_and_review",
+  "content_key": "17d805fcbb49e363ed04888df33419f1c3f35db3642346b3cf6c0f74dc5e2279",
+  "decision_fields": [
+    "hard_failures",
+    "viable_set",
+    "finalists",
+    "winner"
+  ],
+  "evidence_id": "subhour-gate-s-20260831-v10",
+  "kind": "subhour_gate_s_registration",
+  "policy": {
+    "FINALIST_STRESS": "Q50_PLUS_STRESS comparison changes finalists or regret",
+    "INCONCLUSIVE": "missing, unhealthy, or non-comparable bound evidence",
+    "Q50_ONLY": {
+      "comparison": "q50 cost and q50 SUMO arm",
+      "identical_finalists": true,
+      "variant_unique_failure_recall": 1.0,
+      "zero_decision_regret": true
+    },
+    "Q50_PLUS_STRESS": {
+      "comparison": "q50 normal arm with q10/q90 before finalist approval",
+      "requires_stress_qualification": true
+    },
+    "ROBUST_FINALIST": {
+      "comparison": "robust q10/q50/q90 cost and all three stress arms",
+      "requires_stress_qualification": true
+    },
+    "ROBUST_THREE_VARIANT": "ROBUST_FINALIST comparison changes qualification"
+  },
+  "release_evidence": false,
+  "schema": "subhour_gate_s_registration_v2",
+  "stress_cases": [
+    "q10",
+    "q50",
+    "q90"
+  ]
+}

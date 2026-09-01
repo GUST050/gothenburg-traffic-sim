@@ -1,0 +1,30 @@
+{
+ "schema_version": "direction_decision_sensitivity_v1",
+ "release_evidence": false,
+ "records": [
+  {
+   "study_id": "direction_decision_sensitivity_v1",
+   "schema_version": "direction_decision_sensitivity_v1",
+   "release_evidence": false,
+   "registration_digest": "5ef53fc2707a6617",
+   "environment": {
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python": "3.9.6",
+    "measured_at": "2026-08-30T23:51:52+00:00",
+    "sumo_version": "Eclipse SUMO sumo 1.27.1\n Build features: Darwin-23.6.0 arm64 AppleClang 15.0.0.15000309 Release FMI Proj GUI FMT Intl SWIG Parquet Eigen GDAL GL2PS JuPedSim\n Copyright (C) 2001-2026 German Aerospace Center (DLR) and others; https://sumo.dlr.de\n\nEclipse SUMO sumo 1.27.1 is part of SUMO.\nThis program and the accompanying materials\nare made available under the terms of the Eclipse Public License v2.0\nwhich accompanies this distribution, and is available at\nhttp://www.eclipse.org/legal/epl-v20.html\nThis program may also be made available under the following Secondary\nLicenses when the conditions for such availability set forth in the Eclipse\nPublic License 2.0 are satisfied: GNU General Public License, version 2\nor later which is available at\nhttps://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html\nSPDX-License-Identifier: EPL-2.0 OR GPL-2.0-or-later"
+   },
+   "decisions": {},
+   "gate_s": {
+    "verdict": "INCONCLUSIVE",
+    "changed_fields": [],
+    "reasons": [
+     "environment unavailable: loaded demand is None/forecast, the study is frozen on 2025-09-16/historical"
+    ],
+    "health": {
+     "status": "environment_unavailable",
+     "detail": "loaded demand is None/forecast, the study is frozen on 2025-09-16/historical"
+    }
+   }
+  }
+ ]
+}

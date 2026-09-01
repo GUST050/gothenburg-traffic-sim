@@ -63,6 +63,60 @@ _REQUIRED_ARCHIVE_FILES = (
     "calibrated_v2.rou.xml",
     "calibrated_v2.agents.json",
 )
+
+# Archive validation hashes several immutable route files.  A monthly
+# preparation resolves many daily units against the same archive set, so
+# repeating those hashes for every required build key can dominate the cold
+# profile before the ledger starts.  Cache only successful validations and
+# key them by the stat state of every input that validation binds; a replaced
+# or edited archive therefore cannot reuse an old validated record.
+_VALIDATED_ARCHIVE_CACHE: dict[tuple[str, str, str, tuple[tuple[str, int, int], ...]], dict[str, Any]] = {}
+_ARCHIVE_METADATA_INDEX: dict[
+    str, tuple[tuple[tuple[str, int, int], ...], dict[str, tuple[Path, ...]]]
+] = {}
+
+
+def _archive_validation_state(archive: Path) -> tuple[tuple[str, int, int], ...] | None:
+    paths = (
+        archive / "manifest.json",
+        archive / "demand_build_spec.json",
+        archive / "demand_meta.json",
+        *(archive / name for name in _REQUIRED_ARCHIVE_FILES),
+    )
+    state = []
+    try:
+        for path in paths:
+            stat = path.stat()
+            state.append((str(path.name), int(stat.st_mtime_ns), int(stat.st_size)))
+    except OSError:
+        return None
+    return tuple(state)
+
+
+def _archives_for_build_key(runs_root: Path) -> dict[str, tuple[Path, ...]]:
+    """Index archive candidates from metadata before expensive validation."""
+    root = Path(runs_root).resolve()
+    archives = tuple(sorted(path for path in root.glob("demand-*")
+                            if path.is_dir()))
+    signature = tuple(
+        (path.name, int(path.stat().st_mtime_ns), int(path.stat().st_size))
+        for path in archives
+    )
+    cached = _ARCHIVE_METADATA_INDEX.get(str(root))
+    if cached is not None and cached[0] == signature:
+        return cached[1]
+    by_key: dict[str, list[Path]] = {}
+    for archive in archives:
+        try:
+            metadata = _read(archive / "demand_meta.json")
+            build_key = metadata.get("demand_build_key")
+        except (OSError, json.JSONDecodeError, TypeError):
+            continue
+        if isinstance(build_key, str) and build_key:
+            by_key.setdefault(build_key, []).append(archive)
+    result = {key: tuple(value) for key, value in by_key.items()}
+    _ARCHIVE_METADATA_INDEX[str(root)] = (signature, result)
+    return result
 # The tracked demand builder writes THROUGH the live release paths (sumo/
 # demand products, web/data OD export) even when it is only materializing a
 # closure-envelope archive.  A monthly search must never change what the
@@ -434,9 +488,18 @@ def find_demand_archives(
 ) -> tuple[dict[str, Any], ...]:
     """Return all valid succeeded archives for ``required``, newest first."""
     matches: list[dict[str, Any]] = []
-    for archive in sorted(Path(runs_root).glob("demand-*")):
-        if not archive.is_dir():
-            continue
+    candidates = _archives_for_build_key(Path(runs_root)).get(
+        required.build_key, ())
+    for archive in candidates:
+        state = _archive_validation_state(archive)
+        cache_key = None
+        if state is not None:
+            cache_key = (str(Path(runs_root).resolve()), str(archive.resolve()),
+                         required.build_key, state)
+            cached = _VALIDATED_ARCHIVE_CACHE.get(cache_key)
+            if cached is not None:
+                matches.append(cached)
+                continue
         try:
             record = validate_demand_archive(archive, required)
         except (
@@ -447,6 +510,8 @@ def find_demand_archives(
             ValueError,
         ):
             continue
+        if cache_key is not None:
+            _VALIDATED_ARCHIVE_CACHE[cache_key] = record
         matches.append(record)
     matches.sort(
         key=lambda item: (str(item["finished_at"]), str(item["run_id"])),

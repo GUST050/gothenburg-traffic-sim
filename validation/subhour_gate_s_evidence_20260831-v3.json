@@ -1,0 +1,21 @@
+{
+  "schema": "subhour_gate_s_evidence_v1",
+  "kind": "subhour_gate_s_evidence",
+  "release_evidence": false,
+  "evidence_id": "subhour-gate-s-evidence-20260831-v3",
+  "content_key": "71865be1e8b347c2c06b1f77320ea0cd89f9bf6a98963401aff133f02cbb6be7",
+  "health": {"status": "INCONCLUSIVE_PROCESS_CENSUS_UNAVAILABLE", "detail": "The matching current bounded evidence has no executable paired cases because trusted process-tree census is unavailable."},
+  "source_lineage": {
+    "schema": "subhour_cost_ordered_bounded_outcome_v1",
+    "evidence_id": "subhour-bounded-sumo-20260831-v20",
+    "content_key": "3f2e7155ee327f700fd81d625fbaf475f591b0bd5ebc38ea99202c8ccb88acac",
+    "path": "/Users/gt/Documents/gs-project/validation/subhour_bounded_sumo_outcome_subhour-bounded-sumo-20260831-v20.json",
+    "sha256": "fe2e19340f23324db043f9f095ef70470eaf54468bb7e279a5bedca1894173e5"
+  },
+  "population": {"registered_cases": 8, "observed_cases": 0, "registered_variants": ["q10", "q50", "q90"], "decision_population_complete": false, "case_population_complete": false},
+  "variants": {
+    "q10": {"decision": {"hard_failures": [], "viable_set": [], "finalists": [], "winner": null}, "decision_relevant_failures": [], "winner_cost": 0.0, "reference_winner_cost": 0.0},
+    "q50": {"decision": {"hard_failures": [], "viable_set": [], "finalists": [], "winner": null}, "decision_relevant_failures": [], "winner_cost": 0.0, "reference_winner_cost": 0.0},
+    "q90": {"decision": {"hard_failures": [], "viable_set": [], "finalists": [], "winner": null}, "decision_relevant_failures": [], "winner_cost": 0.0, "reference_winner_cost": 0.0}
+  }
+}

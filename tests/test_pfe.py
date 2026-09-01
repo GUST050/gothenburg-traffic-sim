@@ -20,10 +20,32 @@ from pfe import (Candidate, EPS_PARSIMONY, RUNG_CLEAN, RUNG_INFEASIBLE,
                  solve_interval_entropy, solve_interval_with_relaxation,
                  solve_interval_with_structure_guard, write_calibration_report)
 from traffic_sim.demand.structure_caps import integer_structure_cap
+from traffic_sim.demand.sensor_route_contract import (
+    ABS_TOLERANCE_S, POLICY_VERSION, REL_TOLERANCE, route_digest)
 
 
 def cand(*edges):
     return Candidate(depart=0.0, edges=list(edges))
+
+
+def strict_sensor_cand(edges, sensors):
+    route = list(edges)
+    shape = Candidate(depart=0.0, edges=route, source_id="qualified")
+    shape.intent["sensor_route_contract"] = {
+        "policy_version": POLICY_VERSION,
+        "pass": True,
+        "network_sha256": "a" * 64,
+        "route_sha256": route_digest(route),
+        "origin_edge": route[0],
+        "destination_edge": route[-1],
+        "route_cost_s": 2.0,
+        "shortest_free_cost_s": 2.0,
+        "sensor_penalty_s": {sensor: 1.0 for sensor in sorted(sensors)},
+        "sensor_edges": sorted(sensors),
+        "absolute_tolerance_s": ABS_TOLERANCE_S,
+        "relative_tolerance": REL_TOLERANCE,
+    }
+    return shape
 
 
 def purpose_cand(purpose, *edges):
@@ -1138,7 +1160,8 @@ class TestJointIntegerPublicationScaling:
 
     def test_final_publication_reports_sensor_anchor_proof(self, tmp_path):
         report = pfe.write_calibration_report(
-            [cand("SENSOR")], tmp_path / "calibrated.rou.xml",
+            [strict_sensor_cand(["A", "SENSOR", "B"], {"SENSOR"})],
+            tmp_path / "calibrated.rou.xml",
             [{"SENSOR": 2.0}], [np.asarray([2.0])], bounds_per_q=[{}],
             rungs=[RUNG_CLEAN], enforce_integer_bounds=True,
             required_anchor_edges=["SENSOR"],
@@ -1146,6 +1169,21 @@ class TestJointIntegerPublicationScaling:
 
         assert report["sensor_anchor_contract"]["pass"] is True
         assert report["sensor_anchor_contract"]["unanchored_vehicles"] == 0
+        assert report["sensor_route_contract"]["pass"] is True
+
+    def test_final_publication_rejects_sensor_route_without_strict_proof(
+            self, tmp_path):
+        output = tmp_path / "calibrated.rou.xml"
+
+        with pytest.raises(RuntimeError, match="missing_proof"):
+            pfe.write_calibration_report(
+                [cand("A", "SENSOR", "B")], output,
+                [{"SENSOR": 1.0}], [np.asarray([1.0])], bounds_per_q=[{}],
+                rungs=[RUNG_CLEAN], enforce_integer_bounds=True,
+                required_anchor_edges=["SENSOR"],
+            )
+
+        assert not output.exists()
 
     def test_anchor_rejection_preserves_previous_route(self, tmp_path):
         output = tmp_path / "calibrated.rou.xml"

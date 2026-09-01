@@ -1,0 +1,31 @@
+{
+  "content_key": "db0b37bce3f1a5b017b3727821c8e84b63669e7560b8f423aad3280851a8860e",
+  "evidence_id": "subhour-gate-s-evidence-20260831-v7",
+  "health": {
+    "detail": "bound Phase 3/full-month outcome lacks complete q10/q50/q90 source-derived decisions",
+    "status": "INCONCLUSIVE_PROCESS_CENSUS_UNAVAILABLE"
+  },
+  "kind": "subhour_gate_s_evidence",
+  "population": {
+    "case_population_complete": false,
+    "decision_population_complete": false,
+    "observed_case_ids": [],
+    "observed_cases": 0,
+    "registered_cases": 8,
+    "registered_variants": [
+      "q10",
+      "q50",
+      "q90"
+    ]
+  },
+  "release_evidence": false,
+  "schema": "subhour_gate_s_evidence_v1",
+  "source_lineage": {
+    "content_key": "4b3d2fd865e7a6f764a358de7fb906390eaacc784f16d1fface7a34d1302ecf8",
+    "evidence_id": "subhour-bounded-sumo-20260831-v25",
+    "path": "/Users/gt/Documents/gs-project/validation/subhour_bounded_sumo_outcome_subhour-bounded-sumo-20260831-v25.json",
+    "schema": "subhour_cost_ordered_bounded_outcome_v1",
+    "sha256": "cadca991b210b7964a1c3eda22f7c3653ee3534a25d5bbcb5eede0ab90471a5a"
+  },
+  "variants": {}
+}

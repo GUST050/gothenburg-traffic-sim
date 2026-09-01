@@ -255,10 +255,18 @@ class TestNetworkCostModelIdentity:
                             speed=12, target="xml-target")
         metadata_path = net_path.with_name("network_metadata.json")
         metadata_path.write_text(json.dumps({
-            "schema_version": 1,
+            # Schema 2 (2026-08-29, review finding 3): single-vClass
+            # permission filtering. A schema-1 payload here is correctly
+            # REJECTED now (see test_sumo_network_metadata.py's own
+            # schema-1-rejection test) -- this test is about metadata BYTES
+            # being bound to the identity, not about schema compatibility,
+            # so it must write a currently-valid payload to exercise that.
+            "schema_version": 2,
             "net_sha256": dd.sha256_file(net_path),
+            "vclass": "passenger",
             "edges": {},
             "successors": {"bound-edge": ["metadata-target"]},
+            "restricted_edges": [],
         }), encoding="utf-8")
 
         model = dd.NetworkCostModel(net_path)

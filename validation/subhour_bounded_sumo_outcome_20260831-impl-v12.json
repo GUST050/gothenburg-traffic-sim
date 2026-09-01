@@ -1,0 +1,53 @@
+{
+  "schema": "subhour_cost_ordered_bounded_outcome_v1",
+  "kind": "subhour_bounded_sumo_outcome",
+  "release_evidence": false,
+  "evidence_id": "subhour-bounded-sumo-20260831-impl-v12",
+  "status": "INCONCLUSIVE_PROCESS_CENSUS_UNAVAILABLE",
+  "registration": {
+    "path": "validation/subhour_bounded_sumo_registration_20260831-impl-v12.json",
+    "content_key": "e39a2bf74d5e9e7545a11d116f4362f313cd9a61a9a04577eb8c78c79ab92b8d"
+  },
+  "selection": {
+    "selected_case_count": 8,
+    "eligible_count": 1080,
+    "distinct_edges": 4,
+    "distinct_demand_periods": 2
+  },
+  "completed_registered_arms": [
+    {
+      "case_index": 1,
+      "arm": "cost_ordered",
+      "exact_attempts": 24,
+      "active_elapsed_s": 452.346595,
+      "worker_peak_rss_bytes": 976945152
+    },
+    {
+      "case_index": 2,
+      "arm": "ordered_exhaustive",
+      "exact_attempts": 45,
+      "active_elapsed_s": 941.606299,
+      "worker_peak_rss_bytes": 1145569280
+    },
+    {
+      "case_index": 3,
+      "arm": "cost_ordered",
+      "exact_attempts": 24,
+      "active_elapsed_s": 651.204369,
+      "worker_peak_rss_bytes": 1223000064
+    },
+    {
+      "case_index": 4,
+      "arm": "ordered_exhaustive",
+      "exact_attempts": 108,
+      "active_elapsed_s": 831.340113,
+      "worker_peak_rss_bytes": 1166278656
+    }
+  ],
+  "process_tree_rss": {
+    "status": "unavailable",
+    "reason": "sandbox denies ps; worker-only RSS is not a substitute for the registered process-tree gate"
+  },
+  "remaining_registered_cases": 4,
+  "claim_boundary": "diagnostic only; no 30-percent, restart, or product-activation claim"
+}

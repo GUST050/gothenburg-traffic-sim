@@ -1,0 +1,106 @@
+{
+  "activation": {
+    "activates_policy_v3": false,
+    "opens_global_best": false,
+    "permits_ui_claim": false,
+    "release_evidence": false
+  },
+  "arms": {
+    "cost_ordered": {
+      "disable_early_stop": false
+    },
+    "only_allowed_difference": "disable_early_stop",
+    "ordered_exhaustive": {
+      "disable_early_stop": true
+    },
+    "shared_kernel": "run_cost_ordered_execution"
+  },
+  "budget": {
+    "active_seconds": 3300,
+    "daily_workers": 1,
+    "max_active_sumo_slots": 1,
+    "publication_reserve_seconds": 300,
+    "seed_workers": 1
+  },
+  "claim_boundary": "preregistration_only_no_outcome_claim",
+  "comparison_gates": {
+    "full_ledger_field_identical": true,
+    "minimum_active_time_reduction": 0.3,
+    "minimum_exact_verification_reduction": 0.3,
+    "resource_regression_allowed": false,
+    "restart_cancel_equivalent": true,
+    "status_selected_ids_final_decision_identical": true,
+    "verified_prefix_failures_health_identical": true
+  },
+  "content_key": "4b5c187f42fc0d7a15b427ac5927b41d22a19e3d5cc2ea1a7d4a285ab1abb697",
+  "kind": "subhour_monthly_search_preregistration",
+  "reads_outcomes": false,
+  "registered_at": "2026-08-31",
+  "schema": "subhour_monthly_search_preregistration_v1",
+  "search_contract": {
+    "aggregation": "robust_worst_variant_exact_v1",
+    "consecutive_days": 5,
+    "dates": 30,
+    "evidence": [
+      "matched_baseline",
+      "closure_integrity",
+      "health",
+      "recovery",
+      "provenance"
+    ],
+    "objective": "closure_cost_v1",
+    "routing": "original_origin_to_destination_fastest_legal_path_without_closed_edges",
+    "same_window_for_all_days": true,
+    "tie_band_vehicle_hours": "policy_bound",
+    "variants": [
+      "q10",
+      "q50",
+      "q90"
+    ],
+    "windows_per_date": 65
+  },
+  "selection_reads_outcomes": false,
+  "sources": {
+    "tools/cost_ordered_benchmark.py": "abebd7c1453db3be15626acf14328b34f4872d15e01b8acd573267ab00a43ad6",
+    "tools/cost_ordered_benchmark_suite.py": "29ca99b37ce3782ab8d02497ddc0cc28dd64cb8af7eca5512c512d35e901ba75",
+    "tools/freeze_subhour_preregistration.py": "aabec10a5f58074e827cb000a447f685fc397cf3e48fa87c423fce4951de4654",
+    "tools/product_arm.py": "abd3e9c6ba130d26f9b590cddba87096a9360040b2963768e713a4347ad266ff",
+    "tools/profile_monthly_cost_ledger.py": "94e5b538f29f08427036e1853a5aed825767229f3b7837b753320a9f1b8102c6",
+    "traffic_sim/simulation/cost_ordered_execution.py": "26de731d87f8ae4b48abf106d739d0dd67f447cc55fb4f8ba061e28989524f80",
+    "traffic_sim/simulation/cost_ordered_search.py": "440c179f50acd829946070de52986be18a9ba5aae449ec38281d562007311991",
+    "traffic_sim/simulation/deterministic_disruption.py": "bb12eaf55ff7d89d37df11209130500d5442fc2f7e24ef669fbfd4832b899256",
+    "traffic_sim/simulation/finalist_decision.py": "8593d284bdaa9c559bdbbe3575991a34ea60091fae8366db605521d7a21f8bcc",
+    "traffic_sim/simulation/independent_daily.py": "3c788ccf793bfcfc07cc65a0d0c64d77b3ad3d83a002bfdbdc7a1ff6d315843f",
+    "traffic_sim/simulation/monthly_search.py": "00792a6d18c058f7eb633d99e26f40ea2d2fb89789630c496d0ec46dcb305ad2",
+    "traffic_sim/simulation/monthly_sumo.py": "cdb42473d98852b7e11181a3f0a644d3a92a7f2a9dd8e2fbd481ed665de88d5d",
+    "traffic_sim/simulation/pilot_selection.py": "0a52fb86f4141e2b82197b6c946debacd180d2b5bdda20cfe3f62360179bc6d2"
+  },
+  "synthetic_matrix": [
+    "clean_band_stop",
+    "hard_failure_backfill",
+    "pre_sumo_no_detour",
+    "exact_boundary_tie",
+    "over_capacity_tie",
+    "secondary_tertiary_ordering",
+    "timeout_before_viable",
+    "timeout_after_viable",
+    "cancel_resume_each_cursor",
+    "terminal_restart",
+    "corrupt_or_swapped_evidence",
+    "corrupt_or_swapped_ledger",
+    "corrupt_baseline_or_route_provenance",
+    "no_viable"
+  ],
+  "terminal_results": [
+    "READY",
+    "INCONCLUSIVE_TIMEOUT",
+    "INCONCLUSIVE_CAPACITY",
+    "INCONCLUSIVE_BUDGET_EXHAUSTED"
+  ],
+  "timeout_protocol": {
+    "fallback_to_exhaustive": false,
+    "publish_winner": false,
+    "start_no_later_candidate": true,
+    "unresolved_timeout_is_terminal": true
+  }
+}

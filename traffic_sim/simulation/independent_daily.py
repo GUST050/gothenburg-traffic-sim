@@ -88,6 +88,91 @@ QUEUE_SCREENING_ENV = "TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_SCREENING"
 # work the proof says was avoided, making the recorded saving false.  The
 # queue is therefore permitted for one declared screening mode only.
 QUEUE_SUPPORTED_SCREENING = "independent-exhaustive"
+COMPATIBLE_CACHE_ROOT_ENV = "TRAFFIC_SIM_COMPATIBLE_DAILY_CACHE_ROOT"
+COMPATIBLE_CACHE_WORKSPACE_ENV = "TRAFFIC_SIM_COMPATIBLE_DAILY_WORKSPACE"
+
+
+@dataclass(frozen=True)
+class CompatibleDailyCacheImport:
+    """One integrity-verified historical cache admitted for result recovery."""
+
+    source_root: Path
+    source_search_id: str
+    source_search_content_key: str
+    source_backend_artifact_sha256: str
+    source_unit_backend_digests: Mapping[str, str]
+
+
+def resolve_compatible_cache_import(
+    spec: ClosureSearchSpec,
+) -> CompatibleDailyCacheImport | None:
+    """Resolve the explicit recovery seam from an immutable old workspace.
+
+    Both environment variables are required together. The workspace verifier
+    authenticates its manifest and backend artifact before any cache byte is
+    considered. This deliberately imports completed evidence only; timed-out
+    entries are omitted and therefore become normal cache misses in the new
+    run.
+    """
+    root_raw = os.environ.get(COMPATIBLE_CACHE_ROOT_ENV)
+    workspace_raw = os.environ.get(COMPATIBLE_CACHE_WORKSPACE_ENV)
+    if root_raw is None and workspace_raw is None:
+        return None
+    if not root_raw or not workspace_raw:
+        raise ValueError(
+            f"{COMPATIBLE_CACHE_ROOT_ENV} and "
+            f"{COMPATIBLE_CACHE_WORKSPACE_ENV} must be set together"
+        )
+    from traffic_sim.simulation.search_workspace import (  # noqa: PLC0415
+        load_search_workspace,
+    )
+    from traffic_sim.core.contracts import (  # noqa: PLC0415
+        load_closure_search_spec,
+    )
+
+    workspace = load_search_workspace(Path(workspace_raw), verify=True)
+    if workspace.status != "succeeded":
+        raise ValueError("compatible-cache source workspace is not succeeded")
+    stored_spec = load_closure_search_spec(workspace.spec_path)
+    if stored_spec.search_id == spec.search_id:
+        raise ValueError(
+            "compatible-cache recovery requires a new search_id"
+        )
+    if stored_spec.content_key != spec.content_key:
+        raise ValueError(
+            "compatible-cache source belongs to another closure search"
+        )
+    records = [
+        record for record in workspace.manifest.get("artifacts", ())
+        if record.get("kind") == "monthly_simulation_backend_provenance"
+    ]
+    if len(records) != 1:
+        raise ValueError(
+            "compatible-cache source needs one simulation backend artifact"
+        )
+    record = records[0]
+    artifact = workspace.directory / str(record["path"])
+    payload = json.loads(artifact.read_text(encoding="utf-8"))
+    digests = payload.get("unit_backend_digests")
+    if (
+        payload.get("kind") != BACKEND_KIND
+        or not isinstance(digests, Mapping)
+        or not digests
+        or any(
+            not isinstance(key, str)
+            or not isinstance(value, str)
+            or len(value) != 64
+            for key, value in digests.items()
+        )
+    ):
+        raise ValueError("compatible-cache backend artifact is malformed")
+    return CompatibleDailyCacheImport(
+        source_root=Path(root_raw).resolve(),
+        source_search_id=stored_spec.search_id,
+        source_search_content_key=stored_spec.content_key,
+        source_backend_artifact_sha256=str(record["sha256"]),
+        source_unit_backend_digests=dict(digests),
+    )
 # The ONLY stage whose lookahead may range over the whole prepared shortlist.
 # `monthly_search.py` runs exactly two: "pilot", which under exhaustive
 # screening verifies every prepared unit, and "finalist", which promotes a
@@ -597,11 +682,11 @@ def aggregate_daily_evidence(
     # Disruption is a deterministic, process-free function of the schedule
     # (see monthly_sumo.py's _closure_disruption): every daily unit carries
     # it whether or not that unit's SUMO run succeeded. Compute the combined
-    # record BEFORE the failure branch below, so a failed (including a timed
-    # out, undecided) parent still publishes the same deterministic
+    # record BEFORE the terminal branch below, so a failed or timed-out,
+    # undecided parent still publishes the same deterministic
     # disruption a viable one would — this is the fix for the defect found
     # in cost-order v5, where the exhaustive path silently dropped
-    # disruption on any hard failure while the cost-ordered ledger did not,
+    # disruption on any terminal outcome while the cost-ordered ledger did not,
     # making the two arms judge a timed-out candidate on different fields.
     disruption_by_unit: list[dict[str, Mapping[str, Any]]] = []
     disruption_presence: set[bool] = set()
@@ -654,18 +739,19 @@ def aggregate_daily_evidence(
                 "reduction": "sum across independent daily reset units",
             })
 
-    # A hard failure is already a terminal, fail-closed result for the
-    # parent's OBSERVATIONS: do not require the failed daily unit to
+    # A hard failure or timeout unresolved after its registered retry is terminal,
+    # fail-closed result for the parent's OBSERVATIONS: do not require the
+    # affected daily unit to
     # fabricate a complete replication matrix merely so the additive path
     # can continue.  Namespacing the reason by work date keeps one cached
-    # daily failure useful (and diagnosable) across every parent schedule
+    # daily outcome useful (and diagnosable) across every parent schedule
     # that includes that unit.  Disruption is unaffected by this branch —
     # it was computed above from every unit unconditionally, so a failed
     # parent still reports the same deterministic numbers a viable one
     # would, instead of forcing a reader (or an equivalence gate comparing
     # this path against cost_ordered_execution.reconcile_disruption's
     # ledger fallback) to treat a failure as "no evidence at all".
-    if failures:
+    if failures or timeouts:
         return CandidateEvidence(
             candidate_id=parent.schedule_id,
             observations=(),
@@ -1376,6 +1462,7 @@ class IndependentDailyRunner:
         daily_runner: Any,
         cache_root: Path,
         queue_workers: int | None = None,
+        compatible_cache_import: CompatibleDailyCacheImport | None = None,
     ) -> None:
         if spec.interday_policy != "independent_daily_reset_v1":
             raise ValueError("independent daily runner requires its policy")
@@ -1398,6 +1485,18 @@ class IndependentDailyRunner:
         self.spec = ClosureSearchSpec.from_dict(spec.to_dict())
         self.daily_runner = daily_runner
         self.cache_root = Path(cache_root)
+        self.compatible_cache_import = (
+            compatible_cache_import
+            if compatible_cache_import is not None
+            else resolve_compatible_cache_import(spec)
+        )
+        if (
+            self.compatible_cache_import is not None
+            and self.compatible_cache_import.source_root == self.cache_root.resolve()
+        ):
+            raise ValueError(
+                "compatible-cache recovery requires a new destination root"
+            )
         # ``1`` keeps the historical parent-local batch path untouched, so the
         # global queue is opt-in and directly comparable against it.
         self.queue_workers = queue_workers
@@ -1520,6 +1619,27 @@ class IndependentDailyRunner:
         if count:
             self._record_cache_event(unit_id, "miss")
 
+    def stop_speculative_work(self) -> None:
+        """Retire global lookahead without cleaning up the daily backend.
+
+        Once the registered retry protocol has produced an unresolved timeout,
+        the exhaustive pilot is necessarily inconclusive.  Pending lookahead
+        cannot repair that verdict, so it is cancelled here while completed
+        atomic cache publications remain available.  Backend cleanup is left
+        to the normal outer ``finally`` path and therefore still runs once.
+        """
+        with self._queue_build_lock:
+            with self._state_lock:
+                queue, self._queue = self._queue, None
+                self._queue_targets = None
+                self._queue_stage = None
+                if queue is not None:
+                    self._queue_final_stats = queue.stats()
+            if queue is not None:
+                queue.stop()
+                with self._state_lock:
+                    self._queue_final_stats = queue.stats()
+
     def cleanup(self) -> None:
         # Same lock order as `_ensure_queue`, so cleanup cannot race a
         # retarget into leaving a live queue behind after shutdown, and
@@ -1603,6 +1723,7 @@ class IndependentDailyRunner:
         self._units = {item.unit_id: item for item in units}
         self._parents = parents
         self._prepared_parent_ids = parent_ids
+        self._import_compatible_completed_cache()
 
     def prepare_from_ledgers(
         self,
@@ -1686,6 +1807,7 @@ class IndependentDailyRunner:
         self._units = {item.unit_id: item for item in ordered}
         self._parents = parents
         self._prepared_parent_ids = parent_ids
+        self._import_compatible_completed_cache()
 
     def daily_units_for(
         self, parent: ClosureSchedule
@@ -1704,6 +1826,212 @@ class IndependentDailyRunner:
             raise ValueError("candidate was not part of the prepared shortlist")
         return tuple(
             (unit_id, self._units[unit_id].schedule) for unit_id in unit_ids)
+
+    def _import_compatible_completed_cache(self) -> None:
+        """Re-key verified evidence and omit each timed-out attempt or any
+        unit whose source backend digest is not identical to this run's own.
+
+        A unit's backend digest already carries the routing policy, the
+        simulation source digest (`closure_routing.py`/`disruption.py`
+        included) and every other byte that can change a SUMO result — see
+        `_candidate_backend_identity`/`_stable_backend_identity`. Importing
+        an old unit under a NEW key only when the two digests are byte-
+        identical is what keeps this recovery seam a same-code resume (a
+        crashed or interrupted run continued from another workspace root),
+        never a translation across an incompatible policy version: a source
+        digest computed under a retired routing policy can never satisfy a
+        lookup keyed under this run's policy, regardless of how similar the
+        unit identity otherwise looks.
+        """
+        recovery = self.compatible_cache_import
+        if recovery is None:
+            return
+        if self._backend_digest is None:
+            raise RuntimeError("compatible-cache import requires preparation")
+        expected_units = set(self._units)
+        source_units = set(recovery.source_unit_backend_digests)
+        if source_units != expected_units:
+            raise ValueError(
+                "compatible-cache unit population differs from the new run: "
+                f"missing={len(expected_units - source_units)}, "
+                f"extra={len(source_units - expected_units)}"
+            )
+
+        imported = imported_partial = skipped_empty_timeouts = retained = 0
+        recovery_pending = 0
+        skipped_incompatible_backend = 0
+        provenance_keys: set[str] = set()
+        for unit_id in sorted(self._units):
+            unit = self._units[unit_id]
+            source_backend_digest = recovery.source_unit_backend_digests[unit_id]
+            destination_backend_digest = self._unit_backend_digests[unit_id]
+            if source_backend_digest != destination_backend_digest:
+                # Not a structural mismatch (population already matched
+                # above) -- a genuine backend/policy difference, e.g. a
+                # routing-policy version bump. This unit's old evidence may
+                # not even be classifiable as compatible without re-deriving
+                # it, so it is left as a normal cache miss rather than
+                # partially trusted.
+                skipped_incompatible_backend += 1
+                continue
+            source_key = _canonical_digest({
+                "unit": unit.identity,
+                "unit_backend_digest": source_backend_digest,
+            })
+            source_path = (
+                recovery.source_root / source_key[:2] / f"{source_key}.json"
+            )
+            try:
+                payload = json.loads(
+                    source_path.read_text(encoding="utf-8"),
+                    object_pairs_hook=_reject_duplicate_keys,
+                )
+            except (OSError, ValueError, json.JSONDecodeError) as error:
+                raise ValueError(
+                    f"compatible-cache entry is unreadable: {source_path}"
+                ) from error
+            body = {
+                key: value for key, value in payload.items()
+                if key != "content_key"
+            }
+            if (
+                set(payload) != {
+                    "schema", "unit", "unit_backend_digest", "evidence",
+                    "content_key",
+                }
+                or payload.get("schema") != CACHE_SCHEMA
+                or payload.get("unit") != {
+                    "unit_id": unit.unit_id,
+                    "identity": dict(unit.identity),
+                }
+                or payload.get("unit_backend_digest") != source_backend_digest
+                or payload.get("content_key") != _canonical_digest(body)
+            ):
+                raise ValueError(
+                    "compatible-cache entry failed identity/digest checks: "
+                    f"{source_path}"
+                )
+            evidence = _evidence_from_dict(payload["evidence"])
+            if (
+                evidence.candidate_id != unit.unit_id
+                or any(
+                    observation.candidate_id != unit.unit_id
+                    for observation in evidence.observations
+                )
+                or any(
+                    timeout.candidate_id != unit.schedule.schedule_id
+                    or timeout.search_content_key
+                    != unit.schedule.search_content_key
+                    for timeout in evidence.timeout_undecided
+                )
+                or any(
+                    digest.candidate_id != unit.schedule.schedule_id
+                    for digest in evidence.canonical_observation_digests
+                )
+            ):
+                raise ValueError(
+                    "compatible-cache evidence belongs to another daily unit"
+                )
+            provenance_keys.update(
+                observation.provenance_key
+                for observation in evidence.observations
+            )
+            if evidence.timeout_undecided:
+                if (
+                    len(evidence.timeout_undecided) != 1
+                    or any(
+                        "sumo timed out" not in failure
+                        for failure in evidence.hard_failures
+                    )
+                ):
+                    raise ValueError(
+                        "compatible-cache timeout entry mixes completed or "
+                        "non-timeout evidence"
+                    )
+                # Successful variants produced before the timeout remain
+                # exact evidence for the same unit and search content.  Keep
+                # that verified prefix, but remove the old terminal timeout
+                # and its synthetic hard failure.  The new runner will then
+                # resume at the first missing variant under its own retry
+                # protocol.  An entry that timed out before any observation
+                # stays a real cache miss and is rerun from the beginning.
+                recovery_pending += 1
+                if not evidence.observations:
+                    skipped_empty_timeouts += 1
+                    continue
+                evidence = CandidateEvidence(
+                    candidate_id=evidence.candidate_id,
+                    observations=evidence.observations,
+                    disruption=evidence.disruption,
+                    canonical_observation_digests=(
+                        evidence.canonical_observation_digests
+                    ),
+                )
+                is_partial_recovery = True
+            else:
+                is_partial_recovery = False
+            if any(
+                "sumo timed out" in failure
+                for failure in evidence.hard_failures
+            ):
+                raise ValueError(
+                    "compatible-cache contains an unstructured timeout failure"
+                )
+
+            destination = self._cache_path(unit)
+            if destination.is_file():
+                retained += 1
+                continue
+            destination_payload = {
+                "schema": CACHE_SCHEMA,
+                "unit": {
+                    "unit_id": unit.unit_id,
+                    "identity": dict(unit.identity),
+                },
+                "unit_backend_digest": self._unit_backend_digests[unit.unit_id],
+                "evidence": _evidence_to_dict(evidence),
+            }
+            destination_payload["content_key"] = _canonical_digest(
+                destination_payload
+            )
+            _atomic_json(destination, destination_payload)
+            if is_partial_recovery:
+                imported_partial += 1
+            else:
+                imported += 1
+
+        if len(provenance_keys) > 1:
+            raise ValueError(
+                "compatible-cache completed observations mix provenance keys"
+            )
+        manifest = {
+            "schema": "compatible_daily_cache_import_v1",
+            "source_search_id": recovery.source_search_id,
+            "source_search_content_key": recovery.source_search_content_key,
+            "source_backend_artifact_sha256": (
+                recovery.source_backend_artifact_sha256
+            ),
+            "source_cache_root": str(recovery.source_root),
+            "destination_backend_digest": self._backend_digest,
+            "unit_count": len(self._units),
+            "imported_completed_units": imported,
+            "imported_partial_units": imported_partial,
+            "retained_destination_units": retained,
+            "available_completed_units": imported + retained,
+            "recovery_pending_units": recovery_pending,
+            "skipped_empty_timeout_units": skipped_empty_timeouts,
+            "skipped_incompatible_backend_units": skipped_incompatible_backend,
+            "timeout_recovery_policy": (
+                "retain_completed_observations_omit_timeout_attempt_v1"
+            ),
+            "completed_observation_provenance_keys": sorted(provenance_keys),
+        }
+        manifest["content_key"] = _canonical_digest(manifest)
+        _atomic_json(
+            self.cache_root
+            / f"compatible-import-{recovery.source_search_id}.json",
+            manifest,
+        )
 
     def provenance(self) -> Mapping[str, Any]:
         if self._backend_digest is None:
@@ -1732,6 +2060,41 @@ class IndependentDailyRunner:
             "unit_backend_digest": backend_digest,
         })
         return self.cache_root / key[:2] / f"{key}.json"
+
+    def _canonical_evidence_cache_root(self) -> Path | None:
+        """The SUMO backend's own cache root, where routing-evidence
+        durable artifacts (canonical observations, access-impact reports,
+        transformed routes) actually live -- distinct from `self.cache_root`,
+        which is this runner's own daily-evidence cache. Returns ``None``
+        when the configured backend (e.g. a test double) does not expose
+        one, in which case no durable-artifact validation can run; every
+        production construction path (`ArchivedDemandSumoRunner` and its
+        `IsolatedDailySumoRunner` process-isolation wrapper) has one.
+        """
+        root = getattr(self.daily_runner, "cache_root", None)
+        if root is None:
+            root = getattr(
+                getattr(self.daily_runner, "delegate", None), "cache_root", None)
+        return Path(root) if root is not None else None
+
+    def _canonical_evidence_expected_units(
+        self, candidate_id: str,
+    ) -> Mapping[str, str]:
+        """Map each daily schedule id to the ledger unit it must name.
+
+        Parent evidence deliberately contains one canonical digest per daily
+        unit for every aggregated observation.  Exposing this mapping lets the
+        monthly artifact reader prove that no day was omitted, duplicated or
+        swapped merely because the remaining digests still hash correctly.
+        """
+        unit_ids = self._parents.get(candidate_id)
+        if unit_ids is None:
+            raise ValueError(
+                f"candidate {candidate_id!r} has no prepared daily-unit mapping")
+        return {
+            self._units[unit_id].schedule.schedule_id: unit_id
+            for unit_id in unit_ids
+        }
 
     def _load_cached(
         self, unit: DailyClosureUnit, *, count: bool = True
@@ -1821,6 +2184,25 @@ class IndependentDailyRunner:
                 canonical_observation_digests=(
                     stored.canonical_observation_digests),
             )
+            # Review finding 1 (2026-08-30, review-03): the checks above only
+            # verify the daily-cache envelope and the CanonicalObservationDigest
+            # identity fields. A cache hit must not be trusted as valid evidence
+            # until every digest it retains is actually resolved end to end --
+            # the canonical payload, its RoutingProvenance, and the
+            # access-impact/transformed-route artifacts that provenance names
+            # -- so a missing or tampered durable artifact behind an otherwise
+            # well-formed cache entry is treated exactly like corrupt cache and
+            # forces a fresh SUMO run rather than silently being accepted.
+            evidence_cache_root = self._canonical_evidence_cache_root()
+            if evidence_cache_root is not None:
+                from traffic_sim.simulation.monthly_sumo import (
+                    validate_canonical_observation_evidence,
+                )
+                validate_canonical_observation_evidence(
+                    evidence_cache_root,
+                    rebound,
+                    expected_units={unit.schedule.schedule_id: unit.unit_id},
+                )
             with self._state_lock:
                 self._memory_evidence[unit.unit_id] = rebound
                 if count:
@@ -1876,6 +2258,21 @@ class IndependentDailyRunner:
             canonical_observation_digests=(
                 evidence.canonical_observation_digests),
         )
+        # Symmetric with `_load_cached`: evidence a fresh SUMO run just
+        # produced is validated end to end (canonical payload, RoutingProvenance,
+        # access-impact report, transformed route) before it is durably
+        # cached, so a backend defect can never poison the cache with an
+        # entry that would later fail this same check on reload.
+        evidence_cache_root = self._canonical_evidence_cache_root()
+        if evidence_cache_root is not None:
+            from traffic_sim.simulation.monthly_sumo import (
+                validate_canonical_observation_evidence,
+            )
+            validate_canonical_observation_evidence(
+                evidence_cache_root,
+                normalized,
+                expected_units={unit.schedule.schedule_id: unit.unit_id},
+            )
         payload = {
             "schema": CACHE_SCHEMA,
             # Parent schedule membership is intentionally excluded. The same
@@ -1902,11 +2299,18 @@ class IndependentDailyRunner:
         evidence: CandidateEvidence | None,
         targets: Mapping[str, int],
     ) -> bool:
-        """A unit is done when it hard-failed or already meets every target."""
+        """A unit is terminal for this frozen run or meets every target.
+
+        The SUMO runner exhausts its registered exact retry before publishing
+        an undecided timeout. Such a terminal timeout is not retried implicitly
+        for this campaign even though it is not a hard traffic-health failure;
+        a separately authorized recovery protocol may consume that evidence
+        later without mislabelling it as a disqualification.
+        """
         if evidence is None:
             return False
-        if evidence.hard_failures:
-            # A valid hard failure is a real, cacheable outcome, not an error.
+        if evidence.hard_failures or evidence.timeout_undecided:
+            # Both are real, cacheable outcomes for this frozen protocol.
             return True
         coverage = self._coverage(evidence)
         return all(
@@ -2105,6 +2509,7 @@ class IndependentDailyRunner:
             raise ValueError("candidate was not part of the prepared shortlist")
         if existing is not None and (
             existing.hard_failures
+            or existing.timeout_undecided
             or all(
                 self._coverage(existing)[variant]
                 >= target_repetitions[variant]
@@ -2156,6 +2561,7 @@ class IndependentDailyRunner:
             coverage = self._coverage(cached)
             if cached is not None and (
                 cached.hard_failures
+                or cached.timeout_undecided
                 or all(
                     coverage[variant] >= target_repetitions[variant]
                     for variant in DEMAND_VARIANTS
@@ -2199,7 +2605,7 @@ class IndependentDailyRunner:
                 self._save_cached(unit, updated)
             evidence_by_unit[unit.unit_id] = (
                 updated
-                if updated.hard_failures
+                if updated.hard_failures or updated.timeout_undecided
                 else self._trim_to_targets(updated, target_repetitions)
             )
         if self._backend_digest is None:

@@ -1621,7 +1621,7 @@ class Handler(SimpleHTTPRequestHandler):
         # J (IMPROVEMENT_PLAN.md; audit P0-3/P1-12): Content-Security-Policy. script-src
         # 'self' works because the app's JS lives in files (the 1300-line
         # inline block moved to app.js for exactly this); unpkg.com serves
-        # Leaflet; CARTO serves the basemap tiles; style-src needs
+        # Leaflet; OpenStreetMap serves the basemap tiles; style-src needs
         # unsafe-inline because Leaflet positions panes via inline styles.
         # DevTools also fetches Leaflet's declared source map from the same
         # pinned CDN origin. Allowing that already-trusted origin in
@@ -1632,7 +1632,7 @@ class Handler(SimpleHTTPRequestHandler):
             "default-src 'self'; "
             "script-src 'self' https://unpkg.com; "
             "style-src 'self' 'unsafe-inline' https://unpkg.com; "
-            "img-src 'self' data: https://*.basemaps.cartocdn.com; "
+            "img-src 'self' data: https://tile.openstreetmap.org; "
             "connect-src 'self' https://unpkg.com; "
             "object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
         self.send_header("X-Content-Type-Options", "nosniff")

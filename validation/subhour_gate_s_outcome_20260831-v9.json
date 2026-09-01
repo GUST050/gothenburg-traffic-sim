@@ -1,0 +1,19 @@
+{
+  "bound_evidence_sha256": "1488a05f9278c3388d42e66ace1308c05c4565ba42755e390ff4154186cc20f2",
+  "content_key": "1b9d108b19ca03a8b4a306c784461b619e057527e386c6650da86db465ec5648",
+  "gate": {
+    "q50_only_active": false,
+    "reasons": [
+      "bound Phase 3/full-month outcome lacks complete q10/q50/q90 source-derived decisions"
+    ],
+    "status": "INCONCLUSIVE"
+  },
+  "kind": "subhour_gate_s_outcome",
+  "registration": {
+    "content_key": "e4918391e6777e1ede7c5db42b5bba03c4850f516bab4cd97b85aa86a9a6cec8",
+    "evidence_id": "subhour-gate-s-20260831-v9"
+  },
+  "release_evidence": false,
+  "schema": "subhour_gate_s_outcome_v2",
+  "status": "INCONCLUSIVE"
+}

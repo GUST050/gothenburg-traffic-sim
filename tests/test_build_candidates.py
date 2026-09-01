@@ -64,12 +64,13 @@ class TestMeasuredIncidenceBasis:
             routed, {"1_2_0", "2_3_0"}) == ["1_2_0"]
 
     def test_installs_a_legal_grounded_single_sensor_route(self, tmp_path):
-        home, target, activity, other = (
-            "0_1_0", "1_2_0", "2_3_0", "8_9_0")
+        home, target, activity, other, bypass_a, bypass_b = (
+            "0_1_0", "1_2_0", "2_3_0", "8_9_0", "4_5_0", "5_6_0")
         net = tmp_path / "net.net.xml"
         write_sumo_net(
-            net, [home, target, activity, other],
-            [(home, target), (target, activity)])
+            net, [home, target, activity, other, bypass_a, bypass_b],
+            [(home, target), (target, activity),
+             (home, bypass_a), (bypass_a, bypass_b), (bypass_b, activity)])
         routed = tmp_path / "candidates.rou.xml"
         write_routes(routed, [("other-only", [other])])
         metadata = tmp_path / "candidates.meta.json"
@@ -100,6 +101,120 @@ class TestMeasuredIncidenceBasis:
         assert record["coverage_edge"] == target
         assert record["support_only"] is True
         assert record["synthetic_endpoint"] is False
+        assert record["sensor_route_contract"]["pass"] is True
+        assert record["sensor_route_contract"]["sensor_penalty_s"][target] > 0
+
+    def test_rejects_grounded_route_with_equal_sensor_avoiding_path(self, tmp_path):
+        home, target, activity, bypass = (
+            "0_1_0", "1_2_0", "2_3_0", "4_5_0")
+        net = tmp_path / "net.net.xml"
+        write_sumo_net(
+            net, [home, target, activity, bypass],
+            [(home, target), (target, activity),
+             (home, bypass), (bypass, activity)])
+        pools = {
+            f"home:{home}": [{"id": "home-1"}],
+            f"service:{activity}": [{"id": "poi-1"}],
+        }
+
+        assert bc.grounded_sensor_basis_route(
+            target, {target}, pools, net, max_stretch=1.5) is None
+
+    def test_searches_the_global_tree_not_a_sensor_pruned_forced_path(
+            self, tmp_path):
+        home, target, other = "home", "target", "other"
+        bad, good = "bad", "good"
+        target_tail, alt_1, alt_2 = "target_tail", "alt_1", "alt_2"
+        net = tmp_path / "net.net.xml"
+        write_sumo_net(
+            net,
+            [home, target, other, bad, good, target_tail, alt_1, alt_2],
+            [
+                # A target-forced path to ``bad`` exists, but the true global
+                # shortest route uses the other measured sensor.
+                (home, target), (target, target_tail), (target_tail, bad),
+                (home, other), (other, bad),
+                # ``good`` genuinely has target on its global shortest route
+                # and a finite, strictly slower target-avoiding alternative.
+                (target, good), (home, alt_1), (alt_1, alt_2), (alt_2, good),
+            ])
+        pools = {
+            f"home:{home}": [{"id": "home-1"}],
+            f"service:{bad}": [{"id": "poi-bad"}],
+            f"service:{good}": [{"id": "poi-good"}],
+        }
+
+        basis = bc.grounded_sensor_basis_route(
+            target, {target, other}, pools, net, max_stretch=1.5)
+
+        assert basis is not None
+        assert basis["destination_edge"] == good
+        assert basis["route_edges"] == [home, target, good]
+        assert set(basis["sensor_route_contract"]["sensor_edges"]) == {target}
+
+    def test_fills_a_distinct_exclusive_route_floor(self, tmp_path):
+        home, target, alt_1, alt_2 = "home", "target", "alt_1", "alt_2"
+        destinations = ["d1", "d2", "d3"]
+        net = tmp_path / "net.net.xml"
+        write_sumo_net(
+            net, [home, target, alt_1, alt_2, *destinations],
+            [(home, target), (home, alt_1), (alt_1, alt_2),
+             *[(target, destination) for destination in destinations],
+             *[(alt_2, destination) for destination in destinations]])
+        routed = tmp_path / "candidates.rou.xml"
+        write_routes(routed, [])
+        metadata = tmp_path / "candidates.meta.json"
+        metadata.write_text(json.dumps({
+            "schema_version": 2,
+            "location_pools": {
+                f"home:{home}": [{"id": "home-1"}],
+                **{
+                    f"service:{destination}": [{"id": f"poi-{destination}"}]
+                    for destination in destinations
+                },
+            },
+            "candidates": {},
+        }))
+
+        report = bc.install_grounded_sensor_basis_routes(
+            routed, metadata, {target}, net, min_per_sensor=3)
+
+        assert len(report["installed"]) == 3
+        assert report["exclusive_before"] == {target: 0}
+        assert report["exclusive_after"] == {target: 3}
+        routes = {
+            tuple(vehicle.find("route").get("edges").split())
+            for vehicle in ET.parse(routed).getroot().findall("vehicle")
+        }
+        assert len(routes) == 3
+        assert all(route[:2] == (home, target) for route in routes)
+        records = json.loads(metadata.read_text())["candidates"].values()
+        assert all(record["support_kind"] ==
+                   "grounded_sensor_shortest_basis_v3" for record in records)
+        assert all(record["sensor_route_contract"]["sensor_penalty_s"][target]
+                   > 0 for record in records)
+
+    def test_return_leg_can_supply_a_directional_sensor(self, tmp_path):
+        activity, target, home = "activity", "target", "home"
+        alt_1, alt_2 = "alt_1", "alt_2"
+        net = tmp_path / "net.net.xml"
+        write_sumo_net(
+            net, [activity, target, home, alt_1, alt_2],
+            [(activity, target), (target, home),
+             (activity, alt_1), (alt_1, alt_2), (alt_2, home)])
+        pools = {
+            f"home:{home}": [{"id": "home-1"}],
+            f"arbete:{activity}": [{"id": "work-1"}],
+        }
+
+        basis = bc.grounded_sensor_basis_route(
+            target, {target}, pools, net)
+
+        assert basis is not None
+        assert basis["route_edges"] == [activity, target, home]
+        assert basis["origin_location_pool"] == f"arbete:{activity}"
+        assert basis["destination_location_pool"] == f"home:{home}"
+        assert basis["purpose"] == "arbete"
 
     def test_fails_early_when_no_grounded_basis_route_exists(self, tmp_path):
         home, target, activity = "0_1_0", "1_2_0", "2_3_0"
@@ -120,6 +235,115 @@ class TestMeasuredIncidenceBasis:
         with pytest.raises(ValueError, match="no legal grounded.*1_2_0"):
             bc.install_grounded_sensor_basis_routes(
                 routed, metadata, {target}, net, max_stretch=1.5)
+
+
+class TestStrictSensorRouteQualification:
+    def test_keeps_only_shortest_routes_with_a_strict_finite_detour(
+            self, tmp_path):
+        valid = ["h_v", "sensor_v", "d_v"]
+        equal = ["h_e", "sensor_e", "d_e"]
+        nonshort = ["h_n", "sensor_n", "n_tail", "d_n"]
+        canonicalized = ["h_c", "sensor_c", "c_tail", "d_c"]
+        edges = set(valid + equal + nonshort + canonicalized + [
+            "v_alt_1", "v_alt_2", "e_alt", "n_alt",
+            "c_alt_1", "c_alt_2"])
+        connections = [
+            ("h_v", "sensor_v"), ("sensor_v", "d_v"),
+            ("h_v", "v_alt_1"), ("v_alt_1", "v_alt_2"),
+            ("v_alt_2", "d_v"),
+            ("h_e", "sensor_e"), ("sensor_e", "d_e"),
+            ("h_e", "e_alt"), ("e_alt", "d_e"),
+            ("h_n", "sensor_n"), ("sensor_n", "n_tail"),
+            ("n_tail", "d_n"), ("h_n", "n_alt"), ("n_alt", "d_n"),
+            ("h_c", "sensor_c"), ("sensor_c", "d_c"),
+            ("sensor_c", "c_tail"), ("c_tail", "d_c"),
+            ("h_c", "c_alt_1"), ("c_alt_1", "c_alt_2"),
+            ("c_alt_2", "d_c"),
+        ]
+        net = tmp_path / "net.net.xml"
+        write_sumo_net(net, sorted(edges), connections)
+        routed = tmp_path / "candidates.rou.xml"
+        write_routes(routed, [
+            ("valid", valid), ("equal", equal), ("nonshort", nonshort),
+            ("canonicalized", canonicalized)])
+        metadata = tmp_path / "candidates.meta.json"
+        metadata.write_text(json.dumps({
+            "schema_version": 2,
+            "candidates": {
+                vehicle_id: {
+                    "purpose": "service",
+                    "via_edge": route[1],
+                }
+                for vehicle_id, route in (
+                    ("valid", valid), ("equal", equal),
+                    ("nonshort", nonshort), ("canonicalized", canonicalized))
+            },
+        }))
+
+        report = bc.qualify_sensor_candidate_routes(
+            routed, metadata,
+            {"sensor_v", "sensor_e", "sensor_n", "sensor_c"}, net)
+
+        assert report["kept"] == 2
+        assert report["canonicalized"] == 1
+        assert report["reasons"] == {"declared_via_not_on_shortest": 2}
+        assert read_vehicle_ids(routed) == ["valid", "canonicalized"]
+        routes = {
+            vehicle.get("id"): vehicle.find("route").get("edges").split()
+            for vehicle in ET.parse(routed).getroot().findall("vehicle")
+        }
+        assert routes["canonicalized"] == ["h_c", "sensor_c", "d_c"]
+        document = json.loads(metadata.read_text())
+        assert document["schema_version"] == 3
+        proof = document["candidates"]["valid"]["sensor_route_contract"]
+        assert proof["sensor_edges"] == ["sensor_v"]
+        assert proof["sensor_penalty_s"]["sensor_v"] == pytest.approx(10.0)
+        assert document["candidates"]["canonicalized"][
+            "route_canonicalized_to_shortest"] is True
+        assert document["sensor_route_contract"]["qualified_candidates"] == 2
+
+    def test_rejects_a_shortest_sensor_route_without_any_legal_detour(
+            self, tmp_path):
+        net = tmp_path / "net.net.xml"
+        write_sumo_net(net, ["home", "sensor", "destination"], [
+            ("home", "sensor"), ("sensor", "destination")])
+        routed = tmp_path / "candidates.rou.xml"
+        write_routes(routed, [("only", ["home", "sensor", "destination"])])
+        metadata = tmp_path / "candidates.meta.json"
+        metadata.write_text(json.dumps({
+            "schema_version": 2,
+            "candidates": {"only": {"purpose": "service"}},
+        }))
+
+        report = bc.qualify_sensor_candidate_routes(
+            routed, metadata, {"sensor"}, net)
+
+        assert report["kept"] == 0
+        assert report["reasons"] == {"no_legal_sensor_detour": 1}
+
+    def test_rejects_zero_gap_even_when_tie_breaking_uses_the_sensor(
+            self, tmp_path):
+        net = tmp_path / "net.net.xml"
+        write_sumo_net(net, ["home", "a_sensor", "z_equal", "destination"], [
+            ("home", "a_sensor"), ("a_sensor", "destination"),
+            ("home", "z_equal"), ("z_equal", "destination")])
+        routed = tmp_path / "candidates.rou.xml"
+        write_routes(
+            routed, [("tied", ["home", "a_sensor", "destination"])])
+        metadata = tmp_path / "candidates.meta.json"
+        metadata.write_text(json.dumps({
+            "schema_version": 2,
+            "candidates": {
+                "tied": {"purpose": "service", "via_edge": "a_sensor"},
+            },
+        }))
+
+        report = bc.qualify_sensor_candidate_routes(
+            routed, metadata, {"a_sensor"}, net)
+
+        assert report["kept"] == 0
+        assert report["reasons"] == {"no_strict_sensor_penalty": 1}
+        assert read_vehicle_ids(routed) == []
 
 
 class TestSensorEdgeContract:

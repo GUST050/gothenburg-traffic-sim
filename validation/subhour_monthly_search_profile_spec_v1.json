@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "kind": "closure_search",
+  "search_id": "subhour-cold-ledger-profile-2027-09",
+  "directed_edges": [
+    "26355153_26842525_0"
+  ],
+  "demand_build_id": "forecast-2027",
+  "source": "forecast",
+  "permitted_date_start": "2027-09-01",
+  "permitted_date_end": "2027-09-30",
+  "timezone": "Europe/Stockholm",
+  "dst_policy": "exclude_transition_dates",
+  "required_work_minutes": 2400,
+  "min_consecutive_start_days": 5,
+  "max_consecutive_start_days": 5,
+  "permitted_daily_band": {
+    "earliest_start": "00:00",
+    "latest_end": "24:00"
+  },
+  "allowed_weekdays": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "blackout_dates": [],
+  "same_daily_window": true,
+  "resolution_minutes": 15,
+  "closure_type": "full",
+  "duration_basis": "required_work_time",
+  "work_to_closure_assumption": "one_to_one",
+  "work_allocation_policy": "exact_equal_daily_v1",
+  "interday_policy": "independent_daily_reset_v1",
+  "objective_profile": "displaced_vehicles_and_detour_v1",
+  "policy_status": "user_supplied_unverified"
+}

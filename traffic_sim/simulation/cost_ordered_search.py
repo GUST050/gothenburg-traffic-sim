@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from traffic_sim.simulation.closure_ranking import ClosureCost, rank_closures
@@ -74,7 +74,16 @@ _STOP_REASONS = frozenset({
     "band_exhausted",
     "search_space_exhausted",
     "no_viable_candidates",
+    "inconclusive_timeout",
+    "inconclusive_capacity",
+    "inconclusive_budget_exhausted",
 })
+
+_TERMINAL_STATUS_BY_STOP_REASON = {
+    "inconclusive_timeout": "INCONCLUSIVE_TIMEOUT",
+    "inconclusive_capacity": "INCONCLUSIVE_CAPACITY",
+    "inconclusive_budget_exhausted": "INCONCLUSIVE_BUDGET_EXHAUSTED",
+}
 
 
 def _canonical(payload: Any) -> str:
@@ -211,6 +220,7 @@ class CostOrderedResult:
     verified_count: int
     cache_hits: int
     stop_proof: Mapping[str, Any]
+    terminal_status: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -233,7 +243,38 @@ class CostOrderedResult:
             "cutoff": self.state.cutoff,
             "cursor": int(self.state.cursor),
             "stop_proof": dict(self.stop_proof),
+            "terminal_status": self.terminal_status,
+            "candidate_statuses": dict(self.candidate_statuses),
         }
+
+    @property
+    def candidate_statuses(self) -> Mapping[str, str]:
+        """Status for every ordered candidate, including work not started.
+
+        The distinction between ``not_run_decision_irrelevant`` and a
+        terminal stop is material evidence.  A candidate after a timeout or
+        budget terminal has not been shown irrelevant and must not be labelled
+        healthy or skipped by proof.
+        """
+        statuses = {
+            candidate_id: "not_run_decision_irrelevant"
+            for candidate_id in self.state.order[self.state.cursor:]
+        }
+        statuses.update({
+            candidate_id: "verified"
+            for candidate_id in self.state.verified
+        })
+        statuses.update({
+            cost.candidate_id: "not_run_no_detour"
+            for cost in self.disqualified
+        })
+        if self.terminal_status:
+            reason = self.terminal_status.lower()
+            statuses.update({
+                candidate_id: f"not_run_terminal_{reason}"
+                for candidate_id in self.state.order[self.state.cursor:]
+            })
+        return statuses
 
 
 def plan_order(
@@ -311,6 +352,8 @@ def run_cost_ordered_search(
     verified_evidence: Mapping[str, CandidateEvidence] | None = None,
     progress: Callable[[Mapping[str, Any]], None] | None = None,
     disable_early_stop: bool = False,
+    max_verifications: int | None = None,
+    max_exact_launches: int | None = None,
 ) -> CostOrderedResult:
     """Verify in cost order, stop when nothing unexamined can be retained.
 
@@ -330,17 +373,10 @@ def run_cost_ordered_search(
     difference in attempts or wall time is attributable to early stopping
     and nothing else.
 
-    Independently of that flag, an unresolved SUMO timeout (`evidence.
-    has_undecided_timeout`) ALSO disables band-based early stopping for the
-    remainder of THIS scan, permanently, once it is seen: the recorded
-    cutoff and band are only trustworthy if every candidate that shaped them
-    was actually decided, and a timed-out candidate is neither known-viable
-    nor known-disqualified. Continuing to full exhaustion is the fail-closed
-    response — `select_pilot_finalists` already forces `status=inconclusive`
-    whenever any verified candidate carries `timeout_undecided`, so nothing
-    here can turn an undecided candidate into a false selection; this only
-    prevents the STOP ITSELF from being justified by evidence that was never
-    actually resolved.
+    Independently of that flag, an unresolved SUMO timeout is a terminal
+    result.  It is checkpointed at the exact candidate and no later candidate
+    or exhaustive fallback is started.  ``disable_early_stop`` is deliberately
+    unable to override this safety terminal.
     """
     if not candidates:
         raise ValueError("cost-ordered search requires candidates")
@@ -350,6 +386,12 @@ def run_cost_ordered_search(
     ):
         raise ValueError(
             "practical_equivalence_vehicle_hours must be non-negative")
+    if (max_verifications is not None and (
+            isinstance(max_verifications, bool) or max_verifications < 1)):
+        raise ValueError("max_verifications must be a positive integer")
+    if (max_exact_launches is not None and (
+            isinstance(max_exact_launches, bool) or max_exact_launches < 1)):
+        raise ValueError("max_exact_launches must be a positive integer")
 
     ordered, disqualified = plan_order(candidates)
     key = identity_key(
@@ -406,19 +448,12 @@ def run_cost_ordered_search(
             "cost-ordered resume viable set does not match its evidence")
 
     cache_hits = 0
-    stop_reason = "search_space_exhausted"
+    stop_reason = (state.stop_reason if state is not None
+                   and state.stop_reason in _TERMINAL_STATUS_BY_STOP_REASON
+                   else "search_space_exhausted")
     cutoff: float | None = None
-    # Once true, band-based early stopping is off for the REST of this scan,
-    # permanently — a cutoff computed while some evidence is still undecided
-    # cannot be trusted to justify skipping anything, and one resolved
-    # candidate later cannot retroactively make an earlier gap safe again.
-    any_undecided = any(
-        evidence_by_id[candidate_id].has_undecided_timeout
-        for candidate_id in verified
-    )
-
     def band() -> float | None:
-        if disable_early_stop or any_undecided:
+        if disable_early_stop or stop_reason in _TERMINAL_STATUS_BY_STOP_REASON:
             return None
         if len(viable) < policy.minimum_finalists:
             return None
@@ -435,7 +470,10 @@ def run_cost_ordered_search(
     if not order:
         stop_reason = "no_viable_candidates"
 
-    while cursor < len(order):
+    while cursor < len(order) and stop_reason not in _TERMINAL_STATUS_BY_STOP_REASON:
+        if max_verifications is not None and len(verified) >= max_verifications:
+            stop_reason = "inconclusive_budget_exhausted"
+            break
         candidate_id = order[cursor]
         limit = band()
         if limit is not None and float(
@@ -451,8 +489,6 @@ def run_cost_ordered_search(
             cache_hits += 1
         evidence_by_id[candidate_id] = result
         verified.append(candidate_id)
-        if result.has_undecided_timeout:
-            any_undecided = True
         if result.eligible:
             viable.append(candidate_id)
             if (cutoff is None
@@ -462,6 +498,11 @@ def run_cost_ordered_search(
                         viable[policy.minimum_finalists - 1]
                     ].added_vehicle_hours)
         cursor += 1
+        if result.has_undecided_timeout:
+            # This branch is intentionally after cursor advancement and before
+            # the next loop iteration: the timeout attempt is durable, while
+            # no later candidate can be launched by either comparison arm.
+            stop_reason = "inconclusive_timeout"
         if progress is not None:
             progress({
                 "verified": len(verified),
@@ -475,16 +516,6 @@ def run_cost_ordered_search(
         candidate_id for candidate_id in verified
         if evidence_by_id[candidate_id].has_undecided_timeout
     ))
-    if stop_reason == "band_exhausted" and undecided_candidate_ids:
-        # Defensive: `band()` already refuses to return a limit once
-        # `any_undecided` is set, so the loop itself cannot reach this
-        # combination. Kept as a hard invariant rather than trusted silently,
-        # because this is exactly the claim a stop proof exists to make
-        # checkable.
-        raise ValueError(
-            "cost-ordered search stopped at the band with unresolved timeout "
-            "evidence still present; the stop cannot be justified")
-
     final_state = CostOrderedState(
         identity_key=key,
         order=order,
@@ -519,6 +550,18 @@ def run_cost_ordered_search(
         practical_equivalence_vehicle_hours=(
             practical_equivalence_vehicle_hours),
     )
+    terminal_status = _TERMINAL_STATUS_BY_STOP_REASON.get(stop_reason)
+    if terminal_status is not None:
+        # A prefix can happen to contain enough viable candidates before a
+        # terminal condition.  That is not a decision: no winner, finalist or
+        # band may escape a missing proof.
+        selection = replace(
+            selection,
+            status="inconclusive",
+            selected_ids=(),
+            reason=(f"execution terminated as {terminal_status}; "
+                    "no decision proof was published"),
+        )
 
     return CostOrderedResult(
         selection=selection,
@@ -538,6 +581,7 @@ def run_cost_ordered_search(
             undecided_candidate_ids=undecided_candidate_ids,
             evidence_by_id=evidence_by_id,
         ),
+        terminal_status=terminal_status,
     )
 
 
@@ -561,8 +605,9 @@ def stop_proof(
     cost_by_id = {cost.candidate_id: cost for cost in ordered}
     remaining = list(state.order[state.cursor:])
     first_unexamined = remaining[0] if remaining else None
+    terminal_status = _TERMINAL_STATUS_BY_STOP_REASON.get(state.stop_reason)
     band = (
-        None if state.cutoff is None
+        None if state.cutoff is None or terminal_status is not None
         else float(state.cutoff) + float(practical_equivalence_vehicle_hours)
     )
     undecided_ids = tuple(sorted(set(undecided_candidate_ids)))
@@ -590,6 +635,8 @@ def stop_proof(
         "identity_key": state.identity_key,
         "disable_early_stop": bool(disable_early_stop),
         "undecided_candidate_ids": list(undecided_ids),
+        "terminal_status": terminal_status,
+        "valid_for_ready": terminal_status is None,
         "verified_prefix_digest": _digest(list(state.verified)),
         # Full decision evidence for every verified candidate. This binds
         # observations, disruption, failures, timeout identities and
@@ -599,7 +646,11 @@ def stop_proof(
             for candidate_id in state.verified
         ]),
     }
-    if state.stop_reason == "band_exhausted":
+    if terminal_status is not None:
+        proof["argument"] = (
+            "the execution reached a terminal inconclusive condition; no "
+            "unexamined candidate is claimed decision-irrelevant")
+    elif state.stop_reason == "band_exhausted":
         proof["argument"] = (
             "the order is by added_vehicle_hours first, so every unexamined "
             "candidate costs at least as much as the first one, which is "

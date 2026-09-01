@@ -1,0 +1,45 @@
+{
+  "schema": "monthly_cost_ledger_profile_v1",
+  "kind": "monthly_cost_ledger_profile_outcome",
+  "evidence_id": "subhour-cold-ledger-profile-20260831-v6",
+  "release_evidence": false,
+  "status": "INCONCLUSIVE_COLD_PROFILE_INTERRUPTED",
+  "bound_spec": {
+    "path": "validation/subhour_monthly_search_profile_spec_v1.json",
+    "search_id": "subhour-cold-ledger-profile-2027-09",
+    "search_content_key": "383c9130a45370c2f296"
+  },
+  "population": {
+    "expected_daily_units": 1950,
+    "expected_daily_variant_records": 5850,
+    "expected_parents": 1690,
+    "completed_unique_daily_units": 336,
+    "completed_daily_variant_records": 1008,
+    "completed_parents": null
+  },
+  "cold": true,
+  "sumo_started": false,
+  "partial_active_time_s": 1024.0,
+  "cache": {
+    "completed_records": 336,
+    "cache_root": "/private/tmp/subhour-cold-ledger-profile-20260831-v6-daily-cost-cache",
+    "bytes_written": 1516475,
+    "disk_growth_bytes": 2785280
+  },
+  "peak_rss_bytes": null,
+  "peak_rss_status": "not_published_after_interruption",
+  "phases_completed": [],
+  "phase_5_window_cost_index_needed": null,
+  "source_digests": {
+    "tools/profile_monthly_cost_ledger.py": "20cb3ac88214886b552b6294a50a175ee963a100050b1cc2995dce9e8f1a8b6e",
+    "traffic_sim/simulation/cost_ordered_execution.py": "51f568f5df1c3d3d2cdccd0cf3bf9f1da7cfaad51f812120860e02c07baf7c4c",
+    "traffic_sim/simulation/deterministic_disruption.py": "f8e76ff8f2ba83f129c464f839f906c01c9d83bfbeeb2573cd39d5edf3948927",
+    "traffic_sim/simulation/disruption.py": "bbb17d4ea58a26aab551191c9dc9e15fe1b8c67bc177f2b43b196d9020c21478",
+    "run_scenario.py": "6ba95c2bc11f9fcd0eb59991f841e0d0d456741e3f7c274fda5a1865b92346ec",
+    "sumo/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "sumo/network_metadata.json": "dc3493454abc0ea44760abc10ee2996a1beef01d6b537617aa6141374f2ae6ad",
+    "validation/subhour_monthly_search_profile_spec_v1.json": "10f3939a69b6f0bb6e74eb2b1e08a2b513cf54fa5610dd4a25d4d8366c1261aa"
+  },
+  "reason": "The exact cold run was safely interrupted during deterministic shortest-path pricing before the full registered population completed. This is not a complete profile and does not trigger Phase 5.",
+  "claim_boundary": "diagnostic only; no WindowCostIndex adoption and no product activation"
+}

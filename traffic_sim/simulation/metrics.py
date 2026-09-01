@@ -154,7 +154,8 @@ def read_closed_edge_throughput(path: Path, closed_edges: set[str]) -> int:
 
 def active_closure_throughput(flows: Mapping[str, Sequence[float]],
                               closures: Sequence[Mapping[str, object]],
-                              interval_s: int = 900) -> int | None:
+                              interval_s: int = 900,
+                              window_begin_s: int = 0) -> int | None:
     """Return entries on closed edges during fully-contained flow buckets.
 
     SUMO edgeData is aggregated by interval, so a bucket crossing a closure
@@ -162,6 +163,25 @@ def active_closure_throughput(flows: Mapping[str, Sequence[float]],
     complete buckets inside ``[begin_s, end_s)``. This avoids falsely failing
     vehicles that entered before closure start while making measured active
     closure flow a hard integrity signal.
+
+    ``closures[*].begin_s``/``end_s`` are absolute seconds from the run's
+    shared epoch (see ``monthly_sumo._closure_seconds``), but ``flows``
+    (from ``parse_edgedata``) is indexed from 0 at whatever wall-clock second
+    the SUMO run itself was started with ``--begin`` — array index 0 is the
+    first *measured* interval, not necessarily second 0 of the epoch. A
+    trimmed observation window (independent-daily cold windows start at the
+    work day's own midnight, not the archive epoch) therefore starts SUMO at
+    a nonzero ``begin_s``, and the array must be indexed relative to THAT,
+    not to the closure's absolute time. Without ``window_begin_s`` a trimmed
+    window's closure quarters index past the end of ``series`` (or land on
+    the wrong quarter entirely), so ``measured`` never turns True and a
+    genuinely clean closure is indistinguishable from "never measured" —
+    found 2026-08-30 replaying real frozen units through the actual
+    independent-daily cold window (`active_closed_edge_throughput` reported
+    null on every variant despite `measured_empty_edges` forcing a zero-
+    filled series to exist).  Pass the same ``begin_s`` the run itself used
+    to align them; the default of 0 preserves every existing caller that
+    runs from epoch zero (e.g. run_scenario.py's whole-day scenarios).
     """
     total = 0.0
     measured = False
@@ -173,8 +193,11 @@ def active_closure_throughput(flows: Mapping[str, Sequence[float]],
         if not isinstance(edge, str) or not isinstance(begin, (int, float)) or \
            not isinstance(end, (int, float)) or end <= begin:
             raise ValueError("closures require edge_id and increasing begin_s/end_s")
-        first_full = int((begin + interval_s - 1) // interval_s)
-        end_full = int(end // interval_s)
+        rel_begin = begin - window_begin_s
+        rel_end = end - window_begin_s
+        first_full = int((rel_begin + interval_s - 1) // interval_s)
+        end_full = int(rel_end // interval_s)
+        first_full = max(first_full, 0)
         series = flows.get(edge)
         if series is None:
             continue

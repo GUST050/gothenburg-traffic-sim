@@ -1,3 +1,4 @@
+import gzip
 import json
 import threading
 import time
@@ -15,6 +16,7 @@ from traffic_sim.core.contracts import (
 from traffic_sim.simulation.finalist_decision import (
     CanonicalObservationDigest,
     RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+    RETRY_PROTOCOL_TWO_TIER_EXACT,
     CandidateEvidence,
     PairedObservation,
     TimeoutIdentity,
@@ -177,7 +179,7 @@ def test_identical_concurrent_baselines_are_single_flight(
         # Make the unprotected implementation's duplicate work deterministic
         # without constraining the future lock implementation.
         time.sleep(0.1)
-        return metrics, None, None, None
+        return metrics, None, None, None, None
 
     monkeypatch.setattr(
         monthly_sumo.legacy, "simulate_closure", simulate_closure
@@ -437,7 +439,7 @@ def test_hard_failure_stops_additional_work(
     assert result.hard_failures == ("teleports",)
 
 
-def test_sumo_timeout_is_recorded_as_candidate_failure(
+def test_sumo_timeout_is_recorded_only_as_undecided_evidence(
         tmp_path, patched_runtime, monkeypatch):
     runner = ArchivedDemandSumoRunner(
         _spec(),
@@ -459,9 +461,9 @@ def test_sumo_timeout_is_recorded_as_candidate_failure(
         stage="pilot",
     )
     assert result.observations == ()
-    assert result.hard_failures == (
-        "sumo_execution_failure:q10:1000:sumo timed out after 300s (seed 1000)",
-    )
+    # A process timeout says nothing about traffic-health eligibility.  It
+    # must not poison the persistent cache as a hard disqualification.
+    assert result.hard_failures == ()
     # Regression for cost-order v5: a timeout must be visible as an explicit
     # undecided outcome, distinct from an ordinary hard failure, so a reader
     # cannot silently treat it as if the run had simply been disqualified.
@@ -475,20 +477,155 @@ def test_sumo_timeout_is_recorded_as_candidate_failure(
             search_content_key=schedule.search_content_key,
             variant="q10",
             seed=1000,
-            attempt=1,
-            threshold_s=300.0,
-            retry_protocol=RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+            attempt=2,
+            threshold_s=monthly_sumo.MONTHLY_SUMO_RECOVERY_TIMEOUT_S,
+            retry_protocol=RETRY_PROTOCOL_TWO_TIER_EXACT,
             search_provenance_key="study",
         ),
     )
     assert result.timeout_undecided[0].schema == monthly_sumo.TIMEOUT_IDENTITY_SCHEMA
     assert result.has_undecided_timeout
-    # Exact-launch telemetry: one pilot-stage attempt, counted as a timeout —
-    # the scan stops at the first failure, so only q10 was ever launched.
+    # The registered recovery is a real second exact launch. Both attempts
+    # time out, after which the scan stops before q50/q90.
     assert runner.launch_telemetry["pilot"] == {
-        "attempts": 1, "timeouts": 1, "other_outcomes": 0}
+        "attempts": 2, "timeouts": 2, "other_outcomes": 0}
     assert runner.launch_telemetry["finalist"] == {
         "attempts": 0, "timeouts": 0, "other_outcomes": 0}
+
+
+def test_first_timeout_is_recovered_by_exact_second_attempt(
+        tmp_path, patched_runtime, monkeypatch):
+    runner = ArchivedDemandSumoRunner(
+        _spec(),
+        archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        cache_root=tmp_path / "cache",
+    )
+    schedule = generate_closure_schedules(_spec())[0]
+    calls = []
+
+    def recover(selected, *, variant, seed, timeout_s=None):
+        calls.append(timeout_s)
+        if timeout_s is None:
+            raise SystemExit("sumo timed out after 300s (seed 1000)")
+        assert timeout_s == monthly_sumo.MONTHLY_SUMO_RECOVERY_TIMEOUT_S
+        return (
+            PairedObservation(
+                candidate_id=selected.schedule_id,
+                demand_variant=variant,
+                seed=seed,
+                baseline_time_loss_s=100.0,
+                candidate_time_loss_s=110.0,
+                matched_baseline_id=runner.matched_baseline_id,
+                provenance_key="study",
+            ),
+            (),
+            None,
+        )
+
+    monkeypatch.setattr(runner, "_run_observation", recover)
+    result = runner.run_candidate(
+        schedule,
+        target_repetitions={"q10": 1, "q50": 0, "q90": 0},
+        existing=None,
+        stage="pilot",
+    )
+
+    assert calls == [None, monthly_sumo.MONTHLY_SUMO_RECOVERY_TIMEOUT_S]
+    assert len(result.observations) == 1
+    assert result.hard_failures == ()
+    assert result.timeout_undecided == ()
+    assert runner.launch_telemetry["pilot"] == {
+        "attempts": 2, "timeouts": 1, "other_outcomes": 1}
+
+
+def test_recovery_timeout_override_is_validated_and_recorded(
+        tmp_path, patched_runtime, monkeypatch):
+    monkeypatch.setenv(
+        monthly_sumo.MONTHLY_SUMO_RECOVERY_TIMEOUT_ENV, "7200")
+    runner = ArchivedDemandSumoRunner(
+        _spec(),
+        archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        cache_root=tmp_path / "cache",
+    )
+
+    assert runner.recovery_timeout_s == 7200.0
+    assert runner.provenance()["timeout_recovery"] == {
+        "protocol": RETRY_PROTOCOL_TWO_TIER_EXACT,
+        "initial_threshold_s": 300.0,
+        "recovery_threshold_s": 7200.0,
+        "simulation_inputs_changed": False,
+        "worker_resources_changed": False,
+    }
+
+    monkeypatch.setenv(
+        monthly_sumo.MONTHLY_SUMO_RECOVERY_TIMEOUT_ENV, "1200")
+    with pytest.raises(ValueError, match="must be at least 1800"):
+        ArchivedDemandSumoRunner(
+            _spec(),
+            archive=runner.archive,
+            baseline_trip_duration_p99_s=1800,
+            study_provenance_key="study",
+            cache_root=tmp_path / "invalid-cache",
+        )
+
+
+def test_successful_recovery_clears_the_matching_undecided_timeout(
+        tmp_path, patched_runtime, monkeypatch):
+    runner = ArchivedDemandSumoRunner(
+        _spec(),
+        archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        cache_root=tmp_path / "cache",
+    )
+    schedule = generate_closure_schedules(_spec())[0]
+    timeout = TimeoutIdentity(
+        schema=monthly_sumo.TIMEOUT_IDENTITY_SCHEMA,
+        candidate_id=schedule.schedule_id,
+        work_date=schedule.first_work_date,
+        search_content_key=schedule.search_content_key,
+        variant="q10",
+        seed=1000,
+        attempt=1,
+        threshold_s=300.0,
+        retry_protocol=RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+        search_provenance_key="study",
+    )
+    existing = CandidateEvidence(
+        candidate_id=schedule.schedule_id,
+        timeout_undecided=(timeout,),
+    )
+
+    def observation(selected, *, variant, seed):
+        return (
+            PairedObservation(
+                candidate_id=selected.schedule_id,
+                demand_variant=variant,
+                seed=seed,
+                baseline_time_loss_s=100.0,
+                candidate_time_loss_s=110.0,
+                matched_baseline_id=runner.matched_baseline_id,
+                provenance_key="study",
+            ),
+            (),
+            None,
+        )
+
+    monkeypatch.setattr(runner, "_run_observation", observation)
+    result = runner.run_candidate(
+        schedule,
+        target_repetitions={"q10": 1, "q50": 0, "q90": 0},
+        existing=existing,
+        stage="pilot",
+    )
+
+    assert len(result.observations) == 1
+    assert result.hard_failures == ()
+    assert result.timeout_undecided == ()
 
 
 def test_a_non_timeout_sumo_failure_is_not_an_undecided_timeout(
@@ -563,6 +700,485 @@ def test_complete_canonical_observation_digest_survives_cumulative_run(
         schedule, target_repetitions={"q10": 1, "q50": 0, "q90": 0},
         existing=first, stage="pilot")
     assert resumed.canonical_observation_digests == (expected,)
+
+    # Review finding 4 (2026-08-29): the digest alone must be resolvable
+    # back to the full canonical payload, durably, from a fresh reader that
+    # never held the in-process observation.
+    resolved = monthly_sumo.resolve_canonical_observation(
+        runner.cache_root, expected.sha256)
+    assert resolved == canonical
+
+
+def test_persisting_the_identical_canonical_observation_twice_writes_once(
+        tmp_path, patched_runtime, monkeypatch):
+    """Content-addressed storage: the same payload recorded across two
+    candidates (or a resumed run re-observing the same result) must not
+    duplicate the file, matching `_preserve_access_impact_evidence`."""
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    canonical = {"baseline": {"time_loss_s": 100.0}, "feasible": True}
+
+    digest = runner._preserve_canonical_observation(canonical)
+    path = (runner.cache_root / "canonical-observations" / digest[:2]
+            / f"{digest}.json")
+    assert path.is_file()
+    first_mtime = path.stat().st_mtime_ns
+
+    digest_again = runner._preserve_canonical_observation(canonical)
+    assert digest_again == digest
+    assert path.stat().st_mtime_ns == first_mtime
+
+
+@pytest.mark.parametrize(("method_name", "filename", "contents"), [
+    ("_preserve_transformed_route", "route.rou.xml", b"<routes/>\n"),
+    ("_preserve_access_impact_evidence", "access.json", b'{"ok": true}\n'),
+])
+def test_concurrent_identical_content_addressed_publication_is_atomic(
+        tmp_path, patched_runtime, monkeypatch, method_name, filename, contents):
+    """Supported multi-worker execution may publish identical bytes.
+
+    Force all eight writers past their copy before any rename. A shared
+    deterministic `.tmp` path then fails for seven writers; unique staging
+    files let every writer atomically converge on the same final digest.
+    """
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    source = tmp_path / filename
+    source.write_bytes(contents)
+    barrier = threading.Barrier(8)
+    if method_name == "_preserve_transformed_route":
+        original_copyfileobj = monthly_sumo.shutil.copyfileobj
+
+        def synchronized_copy(source_handle, destination_handle, length=0):
+            result = original_copyfileobj(
+                source_handle, destination_handle, length)
+            barrier.wait(timeout=10)
+            return result
+
+        monkeypatch.setattr(
+            monthly_sumo.shutil, "copyfileobj", synchronized_copy)
+    else:
+        original_copyfile = monthly_sumo.shutil.copyfile
+
+        def synchronized_copy(source_path, destination_path):
+            result = original_copyfile(source_path, destination_path)
+            barrier.wait(timeout=10)
+            return result
+
+        monkeypatch.setattr(
+            monthly_sumo.shutil, "copyfile", synchronized_copy)
+    publisher = getattr(runner, method_name)
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        digests = list(executor.map(lambda _index: publisher(source), range(8)))
+
+    assert len(set(digests)) == 1
+    assert not list(runner.cache_root.rglob("*.tmp"))
+
+
+def test_transformed_route_is_stored_losslessly_compressed(
+        tmp_path, patched_runtime):
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    source = tmp_path / "route.rou.xml"
+    contents = (b'<vehicle id="v"><route edges="a b c"/></vehicle>\n'
+                * 1000)
+    source.write_bytes(contents)
+
+    digest = runner._preserve_transformed_route(source)
+    resolved = monthly_sumo.resolve_transformed_route(runner.cache_root, digest)
+
+    assert resolved.name == f"{digest}.rou.xml.gz"
+    assert not resolved.with_suffix("").is_file()
+    with gzip.open(resolved, "rb") as handle:
+        assert handle.read() == contents
+    assert resolved.stat().st_size < len(contents)
+
+
+def test_resolve_transformed_route_accepts_legacy_plain_artifact(tmp_path):
+    contents = b"<routes/>\n"
+    digest = monthly_sumo.hashlib.sha256(contents).hexdigest()
+    path = (tmp_path / "transformed-routes" / digest[:2]
+            / f"{digest}.rou.xml")
+    path.parent.mkdir(parents=True)
+    path.write_bytes(contents)
+
+    assert monthly_sumo.resolve_transformed_route(tmp_path, digest) == path
+
+
+def test_resolve_canonical_observation_fails_closed_when_missing(tmp_path):
+    with pytest.raises(monthly_sumo.CanonicalObservationNotFound):
+        monthly_sumo.resolve_canonical_observation(
+            tmp_path / "cache", "0" * 64)
+
+
+def test_resolve_canonical_observation_fails_closed_when_tampered(
+        tmp_path, patched_runtime):
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    canonical = {"baseline": {"time_loss_s": 100.0}, "feasible": True}
+    digest = runner._preserve_canonical_observation(canonical)
+    path = (runner.cache_root / "canonical-observations" / digest[:2]
+            / f"{digest}.json")
+    path.write_text(json.dumps({"tampered": True}), encoding="utf-8")
+
+    with pytest.raises(monthly_sumo.CanonicalObservationTampered):
+        monthly_sumo.resolve_canonical_observation(runner.cache_root, digest)
+
+
+def _durable_chain(runner, *, candidate_id="candidate-a", work_date="2027-01-01",
+                    variant="q10", seed=1000, unit_id="unit-a",
+                    execution_arm="cold"):
+    """Build one complete, real durable-evidence chain (transformed route,
+    access-impact report, canonical observation with a validated
+    RoutingProvenance) under `runner.cache_root`, exactly the way
+    `ArchivedDemandSumoRunner.run_candidate` does, and return the resulting
+    `CanonicalObservationDigest`."""
+    from traffic_sim.simulation import closure_routing
+
+    route_path = runner.cache_root.parent / "scratch-route.rou.xml"
+    route_path.parent.mkdir(parents=True, exist_ok=True)
+    route_path.write_text("<routes/>\n", encoding="utf-8")
+    transformed_route_sha256 = runner._preserve_transformed_route(route_path)
+
+    access_impact_path = runner.cache_root.parent / "scratch-access-impact.json"
+    closure_routing.write_access_impact_report(
+        access_impact_path,
+        result=closure_routing.ClosureRoutingResult(
+            unaffected=0, rerouted=0, denied=0, access_impact=()),
+        close_edges=[], closures=None, source_route_path=route_path,
+        out_route_path=route_path,
+        identity={
+            "unit_id": unit_id,
+            "candidate_id": candidate_id,
+            "work_date": work_date,
+            "demand_variant": variant,
+            "seed": seed,
+            "execution_arm": execution_arm,
+            "vehicle_class": closure_routing.DEFAULT_VCLASS,
+        })
+    access_impact_sha256 = runner._preserve_access_impact_evidence(
+        access_impact_path)
+
+    routing_provenance = closure_routing.RoutingProvenance(
+        routing_policy_version=closure_routing.POLICY_VERSION,
+        vehicle_class=closure_routing.DEFAULT_VCLASS,
+        unit_id=unit_id,
+        candidate_id=candidate_id,
+        work_date=work_date,
+        demand_variant=variant,
+        seed=seed,
+        execution_arm=execution_arm,
+        access_impact_sha256=access_impact_sha256,
+        transformed_route_sha256=transformed_route_sha256,
+        rerouted_around_closure=0,
+        denied_count=0,
+    ).to_dict()
+    canonical = {
+        "schedule_id": candidate_id,
+        "demand_variant": variant,
+        "seed": seed,
+        "execution_arm": execution_arm,
+        "baseline_time_loss_s": 100.0,
+        "candidate_time_loss_s": 100.0,
+        "feasibility": {"vehicles_denied_departure": 0},
+        "candidate_metrics": {"dropped_unreachable": 0},
+        "truncation": {"candidate": {"dropped_unreachable": 0}},
+        "provenance": {"routing_provenance": routing_provenance},
+    }
+    sha256 = runner._preserve_canonical_observation(canonical)
+    return CanonicalObservationDigest(
+        candidate_id=candidate_id, work_date=work_date, variant=variant,
+        seed=seed, sha256=sha256)
+
+
+def _mutate_durable_access_report(runner, digest, mutate):
+    """Reseal a semantically edited report and its canonical envelope.
+
+    The resulting chain is hash-valid.  Validation must therefore reject it
+    for the semantic contract violation, not merely for byte tampering.
+    """
+    canonical = monthly_sumo.resolve_canonical_observation(
+        runner.cache_root, digest.sha256)
+    routing = canonical["provenance"]["routing_provenance"]
+    report = monthly_sumo.resolve_access_impact_report(
+        runner.cache_root, routing["access_impact_sha256"])
+    mutate(report)
+    scratch = runner.cache_root.parent / "mutated-access-impact.json"
+    scratch.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    routing["access_impact_sha256"] = runner._preserve_access_impact_evidence(
+        scratch)
+    canonical_sha256 = runner._preserve_canonical_observation(canonical)
+    return CanonicalObservationDigest(
+        candidate_id=digest.candidate_id, work_date=digest.work_date,
+        variant=digest.variant, seed=digest.seed, sha256=canonical_sha256)
+
+
+def _inject_unknown_denial_reason(report):
+    report["summary"]["denied"] = 1
+    report["access_impact"] = [{
+        "vehicle_id": "denied-1",
+        "reason": "invented_reason",
+        "original_origin": "a",
+        "original_destination": "b",
+        "original_depart_s": 0.0,
+        "applicable_closed_edges": [],
+    }]
+
+
+def test_validate_canonical_observation_evidence_accepts_a_complete_chain(
+        tmp_path, patched_runtime):
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    digest = _durable_chain(runner)
+    evidence = CandidateEvidence(
+        candidate_id="candidate-a", canonical_observation_digests=(digest,))
+    # Must not raise.
+    monthly_sumo.validate_canonical_observation_evidence(
+        runner.cache_root, evidence)
+
+
+def test_validate_canonical_observation_evidence_rejects_missing_digest_coverage(
+        tmp_path):
+    observation = PairedObservation(
+        candidate_id="candidate-a", demand_variant="q10", seed=1000,
+        baseline_time_loss_s=10.0, candidate_time_loss_s=11.0,
+        matched_baseline_id="baseline-a", provenance_key="study")
+    with pytest.raises(monthly_sumo.CanonicalObservationTampered,
+                       match="coverage"):
+        monthly_sumo.validate_canonical_observation_evidence(
+            tmp_path / "cache",
+            CandidateEvidence(
+                candidate_id="candidate-a", observations=(observation,)))
+
+
+def test_validate_canonical_observation_evidence_rejects_missing_daily_unit(
+        tmp_path, patched_runtime):
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    digest = _durable_chain(runner)
+    observation = PairedObservation(
+        candidate_id="parent-a", demand_variant="q10", seed=1000,
+        baseline_time_loss_s=10.0, candidate_time_loss_s=11.0,
+        matched_baseline_id="baseline-a", provenance_key="study")
+    with pytest.raises(monthly_sumo.CanonicalObservationTampered,
+                       match="daily-unit launch matrix"):
+        monthly_sumo.validate_canonical_observation_evidence(
+            runner.cache_root,
+            CandidateEvidence(
+                candidate_id="parent-a", observations=(observation,),
+                canonical_observation_digests=(digest,)),
+            expected_units={"candidate-a": "unit-a", "candidate-b": "unit-b"},
+        )
+
+
+@pytest.mark.parametrize(("field", "value", "message"), [
+    ("execution_arm", "warm", "launch identity"),
+    ("schedule_id", "candidate-b", "launch identity"),
+    ("denied_count", 1, "denial counts"),
+])
+def test_validate_canonical_observation_rejects_resealed_payload_mismatch(
+        tmp_path, patched_runtime, field, value, message):
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    digest = _durable_chain(runner)
+    canonical = monthly_sumo.resolve_canonical_observation(
+        runner.cache_root, digest.sha256)
+    if field == "denied_count":
+        canonical["candidate_metrics"]["dropped_unreachable"] = value
+    else:
+        canonical[field] = value
+    mutated = CanonicalObservationDigest(
+        candidate_id=digest.candidate_id, work_date=digest.work_date,
+        variant=digest.variant, seed=digest.seed,
+        sha256=runner._preserve_canonical_observation(canonical))
+    with pytest.raises(monthly_sumo.CanonicalObservationTampered, match=message):
+        monthly_sumo.validate_canonical_observation_evidence(
+            runner.cache_root,
+            CandidateEvidence(
+                candidate_id="candidate-a",
+                canonical_observation_digests=(mutated,)))
+
+
+def test_validate_canonical_observation_evidence_fails_closed_on_missing_canonical(
+        tmp_path):
+    digest = CanonicalObservationDigest(
+        candidate_id="candidate-a", work_date="2027-01-01", variant="q10",
+        seed=1000, sha256="a" * 64)
+    evidence = CandidateEvidence(
+        candidate_id="candidate-a", canonical_observation_digests=(digest,))
+    with pytest.raises(monthly_sumo.CanonicalObservationNotFound):
+        monthly_sumo.validate_canonical_observation_evidence(
+            tmp_path / "cache", evidence)
+
+
+def test_validate_canonical_observation_evidence_fails_closed_on_missing_routing_provenance(
+        tmp_path, patched_runtime):
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    sha256 = runner._preserve_canonical_observation({"feasible": True})
+    digest = CanonicalObservationDigest(
+        candidate_id="candidate-a", work_date="2027-01-01", variant="q10",
+        seed=1000, sha256=sha256)
+    evidence = CandidateEvidence(
+        candidate_id="candidate-a", canonical_observation_digests=(digest,))
+    with pytest.raises(monthly_sumo.CanonicalObservationTampered,
+                        match="routing_provenance"):
+        monthly_sumo.validate_canonical_observation_evidence(
+            runner.cache_root, evidence)
+
+
+def test_validate_canonical_observation_evidence_fails_closed_on_tampered_access_impact(
+        tmp_path, patched_runtime):
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    digest = _durable_chain(runner)
+    canonical = monthly_sumo.resolve_canonical_observation(
+        runner.cache_root, digest.sha256)
+    access_sha256 = canonical["provenance"]["routing_provenance"][
+        "access_impact_sha256"]
+    path = (runner.cache_root / "access-impact" / access_sha256[:2]
+            / f"{access_sha256}.json")
+    path.write_text(json.dumps({"tampered": True}), encoding="utf-8")
+    evidence = CandidateEvidence(
+        candidate_id="candidate-a", canonical_observation_digests=(digest,))
+    with pytest.raises(monthly_sumo.CanonicalObservationTampered):
+        monthly_sumo.validate_canonical_observation_evidence(
+            runner.cache_root, evidence)
+
+
+def test_validate_canonical_observation_evidence_fails_closed_on_missing_transformed_route(
+        tmp_path, patched_runtime):
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    digest = _durable_chain(runner)
+    canonical = monthly_sumo.resolve_canonical_observation(
+        runner.cache_root, digest.sha256)
+    route_sha256 = canonical["provenance"]["routing_provenance"][
+        "transformed_route_sha256"]
+    path = (runner.cache_root / "transformed-routes" / route_sha256[:2]
+            / f"{route_sha256}.rou.xml.gz")
+    path.unlink()
+    evidence = CandidateEvidence(
+        candidate_id="candidate-a", canonical_observation_digests=(digest,))
+    with pytest.raises(monthly_sumo.CanonicalObservationNotFound):
+        monthly_sumo.validate_canonical_observation_evidence(
+            runner.cache_root, evidence)
+
+
+def test_validate_canonical_observation_evidence_fails_closed_on_identity_mismatch(
+        tmp_path, patched_runtime):
+    """A digest naming one (candidate/date/variant/seed) whose resolved
+    RoutingProvenance actually names another must never be accepted -- that
+    is exactly a swapped/aliased-evidence attack, not ordinary drift."""
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    digest = _durable_chain(runner, candidate_id="candidate-a", seed=1000)
+    swapped = CanonicalObservationDigest(
+        candidate_id="candidate-a", work_date="2027-01-01", variant="q10",
+        seed=1001, sha256=digest.sha256)
+    evidence = CandidateEvidence(
+        candidate_id="candidate-a", canonical_observation_digests=(swapped,))
+    with pytest.raises(monthly_sumo.CanonicalObservationTampered,
+                        match="does not match"):
+        monthly_sumo.validate_canonical_observation_evidence(
+            runner.cache_root, evidence)
+
+
+def test_validate_canonical_observation_evidence_rejects_swapped_valid_report(
+        tmp_path, patched_runtime):
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    digest_a = _durable_chain(runner, candidate_id="candidate-a", unit_id="unit-a")
+    digest_b = _durable_chain(runner, candidate_id="candidate-b", unit_id="unit-b")
+    canonical_a = monthly_sumo.resolve_canonical_observation(
+        runner.cache_root, digest_a.sha256)
+    canonical_b = monthly_sumo.resolve_canonical_observation(
+        runner.cache_root, digest_b.sha256)
+    canonical_a["provenance"]["routing_provenance"]["access_impact_sha256"] = (
+        canonical_b["provenance"]["routing_provenance"]["access_impact_sha256"])
+    swapped = CanonicalObservationDigest(
+        candidate_id=digest_a.candidate_id, work_date=digest_a.work_date,
+        variant=digest_a.variant, seed=digest_a.seed,
+        sha256=runner._preserve_canonical_observation(canonical_a))
+    with pytest.raises(monthly_sumo.CanonicalObservationTampered,
+                       match="identity"):
+        monthly_sumo.validate_canonical_observation_evidence(
+            runner.cache_root,
+            CandidateEvidence(candidate_id="candidate-a",
+                              canonical_observation_digests=(swapped,)))
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("unit_id", "unit-b"),
+    ("execution_arm", "warm"),
+])
+def test_validate_canonical_observation_evidence_rejects_wrong_report_identity(
+        tmp_path, patched_runtime, field, value):
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    digest = _durable_chain(runner)
+    mutated = _mutate_durable_access_report(
+        runner, digest,
+        lambda report: report["identity"].__setitem__(field, value))
+    with pytest.raises(monthly_sumo.CanonicalObservationTampered,
+                       match="identity"):
+        monthly_sumo.validate_canonical_observation_evidence(
+            runner.cache_root,
+            CandidateEvidence(candidate_id="candidate-a",
+                              canonical_observation_digests=(mutated,)))
+
+
+@pytest.mark.parametrize(("mutation", "message"), [
+    (lambda report: report["summary"].__setitem__("rerouted", 1),
+     "rerouted counts"),
+    (lambda report: report["summary"].__setitem__("unaffected", 1),
+     "transformed route population"),
+    (lambda report: report.__setitem__("output_route_sha256", "f" * 64),
+     "output route"),
+    (lambda report: report.__setitem__("schema_version", 2),
+     "schema_version"),
+    (_inject_unknown_denial_reason, "record is invalid"),
+])
+def test_validate_canonical_observation_evidence_rejects_semantically_invalid_report(
+        tmp_path, patched_runtime, mutation, message):
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    digest = _durable_chain(runner)
+    mutated = _mutate_durable_access_report(runner, digest, mutation)
+    with pytest.raises(monthly_sumo.CanonicalObservationTampered, match=message):
+        monthly_sumo.validate_canonical_observation_evidence(
+            runner.cache_root,
+            CandidateEvidence(candidate_id="candidate-a",
+                              canonical_observation_digests=(mutated,)))
 
 
 def _observation_stub(runner, calls, *, failing=(), raising=(), lock=None):

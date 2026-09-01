@@ -23,6 +23,10 @@ from typing import Callable, Mapping
 import xml.etree.ElementTree as ET
 
 from traffic_sim.core.fingerprint import fingerprint_files, sha256_file
+from traffic_sim.demand.sensor_route_contract import (
+    POLICY_VERSION as SENSOR_ROUTE_POLICY_VERSION,
+    proof_error as sensor_route_proof_error,
+)
 from traffic_sim.storage.singleflight import content_key_lock
 
 
@@ -74,6 +78,9 @@ CATALOG_SOURCE_LABELS = frozenset({
     "sensor_registry_loader",
     "direction_anchor",
     "pipeline_fingerprint",
+    "sensor_route_contract",
+    "closure_disruption",
+    "network_metadata",
 })
 
 
@@ -385,6 +392,10 @@ def validate_catalog_artifacts(outputs: Mapping[str, Path],
         raise ValueError("route catalog location_pools must be an object")
     if not isinstance(coverage, dict) or not coverage:
         raise ValueError("route catalog sensor coverage must be a non-empty object")
+    contract = meta.get("sensor_route_contract")
+    if (not isinstance(contract, dict)
+            or contract.get("policy_version") != SENSOR_ROUTE_POLICY_VERSION):
+        raise ValueError("route catalog lacks the strict sensor-route contract")
     if (not isinstance(template, dict)
             or template.get("schema_version") != 1
             or not isinstance(template.get("templates"), int)
@@ -393,6 +404,7 @@ def validate_catalog_artifacts(outputs: Mapping[str, Path],
             or len(template["semantic_sha256"]) != 64):
         raise ValueError("route catalog canonical-template report is invalid")
     vehicle_ids = []
+    route_by_id: dict[str, list[str]] = {}
     for vehicle in route_root.findall("vehicle"):
         vehicle_id = vehicle.get("id")
         route = vehicle.find("route")
@@ -400,11 +412,27 @@ def validate_catalog_artifacts(outputs: Mapping[str, Path],
                 or not (route.get("edges") or "").split()):
             raise ValueError("route catalog contains a malformed vehicle")
         vehicle_ids.append(vehicle_id)
+        route_by_id[vehicle_id] = (route.get("edges") or "").split()
     if not vehicle_ids or len(vehicle_ids) != len(set(vehicle_ids)):
         raise ValueError("route catalog vehicle ids are empty or duplicated")
     missing_meta = sorted(set(vehicle_ids) - set(meta["candidates"]))
     if missing_meta:
         raise ValueError(f"route catalog metadata is missing {len(missing_meta)} vehicles")
+    sensor_edges = set(str(edge) for edge in coverage)
+    invalid_contracts = []
+    for vehicle_id in vehicle_ids:
+        record = meta["candidates"].get(vehicle_id)
+        error = sensor_route_proof_error(
+            route_by_id[vehicle_id],
+            record.get("sensor_route_contract") if isinstance(record, dict) else None,
+            sensor_edges)
+        if error is not None:
+            invalid_contracts.append((vehicle_id, error))
+    if invalid_contracts:
+        vehicle_id, error = invalid_contracts[0]
+        raise ValueError(
+            "route catalog candidate violates the strict sensor-route "
+            f"contract: {vehicle_id}:{error}")
     floor = max(1, int(min_per_sensor))
     weak = {}
     for edge, record in sorted(coverage.items()):
@@ -647,7 +675,9 @@ def combine_catalogs(
         "xsi:noNamespaceSchemaLocation":
             "http://sumo.dlr.de/xsd/routes_file.xsd",
     })
-    merged = {"schema_version": 2, "location_pools": {}, "candidates": {}}
+    merged = {"schema_version": 3, "location_pools": {}, "candidates": {}}
+    merged_contract = None
+    qualified = 0
     count = 0
     for pool in pool_order:
         if pool not in sources:
@@ -657,6 +687,23 @@ def combine_catalogs(
         meta = json.loads(Path(meta_path).read_text())
         if not isinstance(meta, dict):
             raise ValueError(f"catalog metadata for {pool} is not an object")
+        contract = meta.get("sensor_route_contract")
+        if (not isinstance(contract, dict)
+                or contract.get("policy_version") != SENSOR_ROUTE_POLICY_VERSION):
+            raise ValueError(
+                f"catalog metadata for {pool} lacks strict sensor routes")
+        # `qualified_candidates` counts what THIS pool qualified; it is a
+        # per-pool statistic, not a term of the contract. Comparing it would
+        # refuse every merge whose pools happen to qualify different totals,
+        # which is the normal case (measured: 434 weekday vs 435 weekend).
+        # Only the policy terms have to agree.
+        policy = {key: value for key, value in contract.items()
+                  if key != "qualified_candidates"}
+        qualified += int(contract.get("qualified_candidates") or 0)
+        if merged_contract is None:
+            merged_contract = policy
+        elif policy != merged_contract:
+            raise ValueError("catalog sensor-route contracts disagree")
         prefix = f"{pool}__"
         for vehicle in tree.getroot().findall("vehicle"):
             old_id = vehicle.get("id")
@@ -687,6 +734,10 @@ def combine_catalogs(
             merged["location_pools"][key] = value
     if count == 0:
         raise ValueError("cannot combine an empty route catalog")
+    if merged_contract is not None:
+        merged_contract = dict(merged_contract)
+        merged_contract["qualified_candidates"] = qualified
+    merged["sensor_route_contract"] = merged_contract
     out_rou = Path(out_rou)
     out_meta = Path(out_meta)
     out_rou.parent.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,1273 @@
+{
+ "schema_version": 3,
+ "comparison_contract": {
+  "protocol": "loso_pfe_meso_v11_observability_gate",
+  "source": "historical",
+  "window_start": "2025-09-16T00:00:00",
+  "window_end": "2025-09-17T00:00:00",
+  "reference_window_start": "2025-09-16T00:00:00",
+  "reference_window_end": "2025-09-17T00:00:00",
+  "evaluation_mode": "same_window_loso",
+  "n_intervals": 96,
+  "simulation_mode": "meso",
+  "candidate_pool_sha256": "93bf4d4b18aa1e006811e4ee01ae65d8e8f89abfab597e26fc481fb2216afa09",
+  "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+  "assignment_prior_enabled": true,
+  "assignment_field_config": {
+   "gravity_km": 1.8,
+   "through_fraction": 0.5,
+   "cross_fraction": 0.3,
+   "gravity_alpha": 1.5,
+   "seed": 42
+  },
+  "assignment_field_fold_rule": "held_sensor_removed_before_structural_loading; all edges covered by held-sensor measurements or derived priors receive the normal unmeasured-edge ceiling",
+  "activity_purpose_margin": "calendar_hour_day_type",
+  "through_share_target": 0.25,
+  "minimum_temporal_coverage": null,
+  "diagnostic_station_subset": [
+   "107",
+   "1074",
+   "1076",
+   "133",
+   "134",
+   "2276"
+  ],
+  "picker_diagnostics_enabled": false,
+  "controlled_integer_rounding": true,
+  "integer_projection": "production_joint_integer_v2_shadow_margins",
+  "inactive_sensor_shadow_margins": "rounded continuous fold prediction; observed held counts absent; soft below active sensors and hard bounds",
+  "sensor_observability_gate": "candidate incidence rank of held station total against active measurement margins plus interval total; held observations absent",
+  "joint_integer_diagnostics_enabled": false
+ },
+ "window": "2025-09-16 \u2192 2025-09-17 (exclusive)",
+ "note": "leave-one-station-out \u2014 simulated vs measured at the held-out station; the assignment field is rebuilt with the held station treated as genuinely unmeasured, while measurement-derived bounds and priors are excluded without using its count",
+ "observed_quarters": {
+  "1455801464_18241874_0": 96,
+  "26355153_91615277_0": 96,
+  "26355153_96523321_0": 96,
+  "26842525_26355153_0": 95,
+  "30420757_30421744_0": 96,
+  "60786979_3575001205_0": 96,
+  "60790252_60790253_0": 96
+ },
+ "stations": {
+  "107": {
+   "edges": {
+    "station_total": {
+     "measurement_semantics": "two_way_total",
+     "component_edges": [
+      "60786979_3575001205_0",
+      "1455801464_18241874_0"
+     ],
+     "measured_total": 6407,
+     "simulated_total": 2663,
+     "ratio": 0.416,
+     "geh_ok_pct": 37.5,
+     "observed_quarters": 96,
+     "hourly_cases": [
+      {
+       "hour_index": 0,
+       "measured": 38.0,
+       "simulated": 30.0
+      },
+      {
+       "hour_index": 1,
+       "measured": 20.0,
+       "simulated": 20.0
+      },
+      {
+       "hour_index": 2,
+       "measured": 22.0,
+       "simulated": 8.0
+      },
+      {
+       "hour_index": 3,
+       "measured": 22.0,
+       "simulated": 17.0
+      },
+      {
+       "hour_index": 4,
+       "measured": 16.0,
+       "simulated": 15.0
+      },
+      {
+       "hour_index": 5,
+       "measured": 63.0,
+       "simulated": 44.0
+      },
+      {
+       "hour_index": 6,
+       "measured": 168.0,
+       "simulated": 116.0
+      },
+      {
+       "hour_index": 7,
+       "measured": 431.0,
+       "simulated": 168.0
+      },
+      {
+       "hour_index": 8,
+       "measured": 566.0,
+       "simulated": 176.0
+      },
+      {
+       "hour_index": 9,
+       "measured": 417.0,
+       "simulated": 152.0
+      },
+      {
+       "hour_index": 10,
+       "measured": 397.0,
+       "simulated": 157.0
+      },
+      {
+       "hour_index": 11,
+       "measured": 381.0,
+       "simulated": 155.0
+      },
+      {
+       "hour_index": 12,
+       "measured": 407.0,
+       "simulated": 161.0
+      },
+      {
+       "hour_index": 13,
+       "measured": 396.0,
+       "simulated": 159.0
+      },
+      {
+       "hour_index": 14,
+       "measured": 426.0,
+       "simulated": 160.0
+      },
+      {
+       "hour_index": 15,
+       "measured": 466.0,
+       "simulated": 151.0
+      },
+      {
+       "hour_index": 16,
+       "measured": 488.0,
+       "simulated": 168.0
+      },
+      {
+       "hour_index": 17,
+       "measured": 452.0,
+       "simulated": 177.0
+      },
+      {
+       "hour_index": 18,
+       "measured": 367.0,
+       "simulated": 154.0
+      },
+      {
+       "hour_index": 19,
+       "measured": 298.0,
+       "simulated": 121.0
+      },
+      {
+       "hour_index": 20,
+       "measured": 206.0,
+       "simulated": 111.0
+      },
+      {
+       "hour_index": 21,
+       "measured": 153.0,
+       "simulated": 105.0
+      },
+      {
+       "hour_index": 22,
+       "measured": 141.0,
+       "simulated": 84.0
+      },
+      {
+       "hour_index": 23,
+       "measured": 66.0,
+       "simulated": 54.0
+      }
+     ],
+     "excluded_incomplete_hours": []
+    }
+   },
+   "pfe_geh_pct": 100.0,
+   "sensor_anchor_contract": {
+    "required": true,
+    "registered_edges": [
+     "1455801464_18241874_0",
+     "26355153_91615277_0",
+     "26355153_96523321_0",
+     "26842525_26355153_0",
+     "30420757_30421744_0",
+     "60786979_3575001205_0",
+     "60790252_60790253_0"
+    ],
+    "unanchored_vehicles": 0,
+    "pass": true
+   },
+   "held_edge_assignment_ceiling": {
+    "required_edges": [
+     "1455801464_18241874_0",
+     "18241874_9439210780_0",
+     "60786979_3575001205_0",
+     "9037093028_30420757_0",
+     "9439210780_9037093028_0"
+    ],
+    "eligible_edges": [
+     "1455801464_18241874_0",
+     "18241874_9439210780_0",
+     "60786979_3575001205_0",
+     "9037093028_30420757_0",
+     "9439210780_9037093028_0"
+    ],
+    "missing_edges": [],
+    "scale_veh_per_day": 6.5101185091887555,
+    "integer_publication_enforced": true
+   },
+   "inactive_sensor_integer_stability": {
+    "60786979_3575001205_0": {
+     "quarters": 96,
+     "continuous_total": 1549.614764,
+     "published_total": 1550,
+     "total_delta": 0.385236,
+     "max_abs_quarter_residual": 0,
+     "sum_abs_quarter_residual": 0
+    },
+    "1455801464_18241874_0": {
+     "quarters": 96,
+     "continuous_total": 1111.520153,
+     "published_total": 1114,
+     "total_delta": 2.479847,
+     "max_abs_quarter_residual": 0,
+     "sum_abs_quarter_residual": 0
+    }
+   },
+   "observability_certificate": {
+    "status": "underidentified",
+    "onboarding_ready": false,
+    "component_edges": [
+     "1455801464_18241874_0",
+     "60786979_3575001205_0"
+    ],
+    "route_variables": 834,
+    "support_variables": 244,
+    "support_shared_with_active_sensor": 44,
+    "support_exclusive_of_active_sensors": 200,
+    "active_measurement_edges": [
+     "26355153_91615277_0",
+     "26355153_96523321_0",
+     "26842525_26355153_0",
+     "30420757_30421744_0",
+     "60790252_60790253_0"
+    ],
+    "base_rank": 6,
+    "rank_with_sensor": 7,
+    "rank_gain": 1,
+    "normalized_row_span_residual": 0.591952395139,
+    "reason": "active margins permit route reallocations that change the held station total"
+   }
+  },
+  "1074": {
+   "edges": {
+    "60790252_60790253_0": {
+     "measurement_semantics": "directional",
+     "component_edges": [
+      "60790252_60790253_0"
+     ],
+     "measured_total": 2875,
+     "simulated_total": 1251,
+     "ratio": 0.435,
+     "geh_ok_pct": 29.2,
+     "observed_quarters": 96,
+     "hourly_cases": [
+      {
+       "hour_index": 0,
+       "measured": 15.0,
+       "simulated": 9.0
+      },
+      {
+       "hour_index": 1,
+       "measured": 8.0,
+       "simulated": 6.0
+      },
+      {
+       "hour_index": 2,
+       "measured": 6.0,
+       "simulated": 4.0
+      },
+      {
+       "hour_index": 3,
+       "measured": 3.0,
+       "simulated": 6.0
+      },
+      {
+       "hour_index": 4,
+       "measured": 2.0,
+       "simulated": 3.0
+      },
+      {
+       "hour_index": 5,
+       "measured": 23.0,
+       "simulated": 14.0
+      },
+      {
+       "hour_index": 6,
+       "measured": 97.0,
+       "simulated": 38.0
+      },
+      {
+       "hour_index": 7,
+       "measured": 199.0,
+       "simulated": 73.0
+      },
+      {
+       "hour_index": 8,
+       "measured": 264.0,
+       "simulated": 80.0
+      },
+      {
+       "hour_index": 9,
+       "measured": 204.0,
+       "simulated": 71.0
+      },
+      {
+       "hour_index": 10,
+       "measured": 170.0,
+       "simulated": 79.0
+      },
+      {
+       "hour_index": 11,
+       "measured": 186.0,
+       "simulated": 78.0
+      },
+      {
+       "hour_index": 12,
+       "measured": 206.0,
+       "simulated": 90.0
+      },
+      {
+       "hour_index": 13,
+       "measured": 210.0,
+       "simulated": 79.0
+      },
+      {
+       "hour_index": 14,
+       "measured": 181.0,
+       "simulated": 80.0
+      },
+      {
+       "hour_index": 15,
+       "measured": 132.0,
+       "simulated": 76.0
+      },
+      {
+       "hour_index": 16,
+       "measured": 146.0,
+       "simulated": 85.0
+      },
+      {
+       "hour_index": 17,
+       "measured": 196.0,
+       "simulated": 89.0
+      },
+      {
+       "hour_index": 18,
+       "measured": 182.0,
+       "simulated": 80.0
+      },
+      {
+       "hour_index": 19,
+       "measured": 132.0,
+       "simulated": 71.0
+      },
+      {
+       "hour_index": 20,
+       "measured": 134.0,
+       "simulated": 58.0
+      },
+      {
+       "hour_index": 21,
+       "measured": 94.0,
+       "simulated": 39.0
+      },
+      {
+       "hour_index": 22,
+       "measured": 62.0,
+       "simulated": 26.0
+      },
+      {
+       "hour_index": 23,
+       "measured": 23.0,
+       "simulated": 17.0
+      }
+     ],
+     "excluded_incomplete_hours": []
+    }
+   },
+   "pfe_geh_pct": 100.0,
+   "sensor_anchor_contract": {
+    "required": true,
+    "registered_edges": [
+     "1455801464_18241874_0",
+     "26355153_91615277_0",
+     "26355153_96523321_0",
+     "26842525_26355153_0",
+     "30420757_30421744_0",
+     "60786979_3575001205_0",
+     "60790252_60790253_0"
+    ],
+    "unanchored_vehicles": 0,
+    "pass": true
+   },
+   "held_edge_assignment_ceiling": {
+    "required_edges": [
+     "60790252_60790253_0",
+     "60790253_60790252_0"
+    ],
+    "eligible_edges": [
+     "60790252_60790253_0",
+     "60790253_60790252_0"
+    ],
+    "missing_edges": [],
+    "scale_veh_per_day": 8.075240610148679,
+    "integer_publication_enforced": true
+   },
+   "inactive_sensor_integer_stability": {
+    "60790252_60790253_0": {
+     "quarters": 96,
+     "continuous_total": 1251.982115,
+     "published_total": 1252,
+     "total_delta": 0.017885,
+     "max_abs_quarter_residual": 0,
+     "sum_abs_quarter_residual": 0
+    }
+   },
+   "observability_certificate": {
+    "status": "underidentified",
+    "onboarding_ready": false,
+    "component_edges": [
+     "60790252_60790253_0"
+    ],
+    "route_variables": 834,
+    "support_variables": 122,
+    "support_shared_with_active_sensor": 22,
+    "support_exclusive_of_active_sensors": 100,
+    "active_measurement_edges": [
+     "1455801464_18241874_0",
+     "26355153_91615277_0",
+     "26355153_96523321_0",
+     "26842525_26355153_0",
+     "30420757_30421744_0",
+     "60786979_3575001205_0"
+    ],
+    "base_rank": 7,
+    "rank_with_sensor": 8,
+    "rank_gain": 1,
+    "normalized_row_span_residual": 0.711025363862,
+    "reason": "active margins permit route reallocations that change the held station total"
+   }
+  },
+  "1076": {
+   "edges": {
+    "30420757_30421744_0": {
+     "measurement_semantics": "directional",
+     "component_edges": [
+      "30420757_30421744_0"
+     ],
+     "measured_total": 4820,
+     "simulated_total": 865,
+     "ratio": 0.179,
+     "geh_ok_pct": 12.5,
+     "observed_quarters": 96,
+     "hourly_cases": [
+      {
+       "hour_index": 0,
+       "measured": 38.0,
+       "simulated": 5.0
+      },
+      {
+       "hour_index": 1,
+       "measured": 29.0,
+       "simulated": 2.0
+      },
+      {
+       "hour_index": 2,
+       "measured": 9.0,
+       "simulated": 3.0
+      },
+      {
+       "hour_index": 3,
+       "measured": 16.0,
+       "simulated": 4.0
+      },
+      {
+       "hour_index": 4,
+       "measured": 12.0,
+       "simulated": 2.0
+      },
+      {
+       "hour_index": 5,
+       "measured": 68.0,
+       "simulated": 8.0
+      },
+      {
+       "hour_index": 6,
+       "measured": 182.0,
+       "simulated": 24.0
+      },
+      {
+       "hour_index": 7,
+       "measured": 334.0,
+       "simulated": 57.0
+      },
+      {
+       "hour_index": 8,
+       "measured": 366.0,
+       "simulated": 72.0
+      },
+      {
+       "hour_index": 9,
+       "measured": 291.0,
+       "simulated": 59.0
+      },
+      {
+       "hour_index": 10,
+       "measured": 307.0,
+       "simulated": 54.0
+      },
+      {
+       "hour_index": 11,
+       "measured": 297.0,
+       "simulated": 53.0
+      },
+      {
+       "hour_index": 12,
+       "measured": 312.0,
+       "simulated": 53.0
+      },
+      {
+       "hour_index": 13,
+       "measured": 301.0,
+       "simulated": 60.0
+      },
+      {
+       "hour_index": 14,
+       "measured": 316.0,
+       "simulated": 59.0
+      },
+      {
+       "hour_index": 15,
+       "measured": 283.0,
+       "simulated": 52.0
+      },
+      {
+       "hour_index": 16,
+       "measured": 356.0,
+       "simulated": 53.0
+      },
+      {
+       "hour_index": 17,
+       "measured": 339.0,
+       "simulated": 61.0
+      },
+      {
+       "hour_index": 18,
+       "measured": 277.0,
+       "simulated": 48.0
+      },
+      {
+       "hour_index": 19,
+       "measured": 211.0,
+       "simulated": 44.0
+      },
+      {
+       "hour_index": 20,
+       "measured": 185.0,
+       "simulated": 32.0
+      },
+      {
+       "hour_index": 21,
+       "measured": 138.0,
+       "simulated": 27.0
+      },
+      {
+       "hour_index": 22,
+       "measured": 100.0,
+       "simulated": 24.0
+      },
+      {
+       "hour_index": 23,
+       "measured": 53.0,
+       "simulated": 9.0
+      }
+     ],
+     "excluded_incomplete_hours": []
+    }
+   },
+   "pfe_geh_pct": 100.0,
+   "sensor_anchor_contract": {
+    "required": true,
+    "registered_edges": [
+     "1455801464_18241874_0",
+     "26355153_91615277_0",
+     "26355153_96523321_0",
+     "26842525_26355153_0",
+     "30420757_30421744_0",
+     "60786979_3575001205_0",
+     "60790252_60790253_0"
+    ],
+    "unanchored_vehicles": 0,
+    "pass": true
+   },
+   "held_edge_assignment_ceiling": {
+    "required_edges": [
+     "18241874_9439210780_0",
+     "30420757_30421744_0",
+     "559960490_1305379743_0",
+     "9037093028_30420757_0",
+     "9439210780_9037093028_0"
+    ],
+    "eligible_edges": [
+     "18241874_9439210780_0",
+     "30420757_30421744_0",
+     "559960490_1305379743_0",
+     "9037093028_30420757_0",
+     "9439210780_9037093028_0"
+    ],
+    "missing_edges": [],
+    "scale_veh_per_day": 7.606785130827945,
+    "integer_publication_enforced": true
+   },
+   "inactive_sensor_integer_stability": {
+    "30420757_30421744_0": {
+     "quarters": 96,
+     "continuous_total": 862.863787,
+     "published_total": 866,
+     "total_delta": 3.136213,
+     "max_abs_quarter_residual": 0,
+     "sum_abs_quarter_residual": 0
+    }
+   },
+   "observability_certificate": {
+    "status": "underidentified",
+    "onboarding_ready": false,
+    "component_edges": [
+     "30420757_30421744_0"
+    ],
+    "route_variables": 834,
+    "support_variables": 149,
+    "support_shared_with_active_sensor": 44,
+    "support_exclusive_of_active_sensors": 105,
+    "active_measurement_edges": [
+     "1455801464_18241874_0",
+     "26355153_91615277_0",
+     "26355153_96523321_0",
+     "26842525_26355153_0",
+     "60786979_3575001205_0",
+     "60790252_60790253_0"
+    ],
+    "base_rank": 7,
+    "rank_with_sensor": 8,
+    "rank_gain": 1,
+    "normalized_row_span_residual": 0.691721765366,
+    "reason": "active margins permit route reallocations that change the held station total"
+   }
+  },
+  "133": {
+   "edges": {
+    "26842525_26355153_0": {
+     "measurement_semantics": "directional",
+     "component_edges": [
+      "26842525_26355153_0"
+     ],
+     "measured_total": 3569,
+     "simulated_total": 2242,
+     "ratio": 0.628,
+     "geh_ok_pct": 34.8,
+     "observed_quarters": 95,
+     "hourly_cases": [
+      {
+       "hour_index": 1,
+       "measured": 11.0,
+       "simulated": 10.0
+      },
+      {
+       "hour_index": 2,
+       "measured": 7.0,
+       "simulated": 2.0
+      },
+      {
+       "hour_index": 3,
+       "measured": 9.0,
+       "simulated": 7.0
+      },
+      {
+       "hour_index": 4,
+       "measured": 6.0,
+       "simulated": 8.0
+      },
+      {
+       "hour_index": 5,
+       "measured": 23.0,
+       "simulated": 23.0
+      },
+      {
+       "hour_index": 6,
+       "measured": 73.0,
+       "simulated": 44.0
+      },
+      {
+       "hour_index": 7,
+       "measured": 185.0,
+       "simulated": 138.0
+      },
+      {
+       "hour_index": 8,
+       "measured": 261.0,
+       "simulated": 177.0
+      },
+      {
+       "hour_index": 9,
+       "measured": 227.0,
+       "simulated": 118.0
+      },
+      {
+       "hour_index": 10,
+       "measured": 267.0,
+       "simulated": 151.0
+      },
+      {
+       "hour_index": 11,
+       "measured": 246.0,
+       "simulated": 117.0
+      },
+      {
+       "hour_index": 12,
+       "measured": 259.0,
+       "simulated": 138.0
+      },
+      {
+       "hour_index": 13,
+       "measured": 213.0,
+       "simulated": 142.0
+      },
+      {
+       "hour_index": 14,
+       "measured": 241.0,
+       "simulated": 154.0
+      },
+      {
+       "hour_index": 15,
+       "measured": 326.0,
+       "simulated": 202.0
+      },
+      {
+       "hour_index": 16,
+       "measured": 294.0,
+       "simulated": 163.0
+      },
+      {
+       "hour_index": 17,
+       "measured": 267.0,
+       "simulated": 167.0
+      },
+      {
+       "hour_index": 18,
+       "measured": 262.0,
+       "simulated": 168.0
+      },
+      {
+       "hour_index": 19,
+       "measured": 179.0,
+       "simulated": 85.0
+      },
+      {
+       "hour_index": 20,
+       "measured": 169.0,
+       "simulated": 97.0
+      },
+      {
+       "hour_index": 21,
+       "measured": 37.0,
+       "simulated": 73.0
+      },
+      {
+       "hour_index": 22,
+       "measured": 0.0,
+       "simulated": 28.0
+      },
+      {
+       "hour_index": 23,
+       "measured": 0.0,
+       "simulated": 18.0
+      }
+     ],
+     "excluded_incomplete_hours": [
+      0
+     ]
+    }
+   },
+   "pfe_geh_pct": 100.0,
+   "sensor_anchor_contract": {
+    "required": true,
+    "registered_edges": [
+     "1455801464_18241874_0",
+     "26355153_91615277_0",
+     "26355153_96523321_0",
+     "26842525_26355153_0",
+     "30420757_30421744_0",
+     "60786979_3575001205_0",
+     "60790252_60790253_0"
+    ],
+    "unanchored_vehicles": 0,
+    "pass": true
+   },
+   "held_edge_assignment_ceiling": {
+    "required_edges": [
+     "26355153_26842525_0",
+     "26842525_26355153_0"
+    ],
+    "eligible_edges": [
+     "26355153_26842525_0",
+     "26842525_26355153_0"
+    ],
+    "missing_edges": [],
+    "scale_veh_per_day": 7.689197837657623,
+    "integer_publication_enforced": true
+   },
+   "inactive_sensor_integer_stability": {
+    "26842525_26355153_0": {
+     "quarters": 96,
+     "continuous_total": 2241.269796,
+     "published_total": 2243,
+     "total_delta": 1.730204,
+     "max_abs_quarter_residual": 1,
+     "sum_abs_quarter_residual": 1
+    }
+   },
+   "observability_certificate": {
+    "status": "underidentified",
+    "onboarding_ready": false,
+    "component_edges": [
+     "26842525_26355153_0"
+    ],
+    "route_variables": 834,
+    "support_variables": 185,
+    "support_shared_with_active_sensor": 85,
+    "support_exclusive_of_active_sensors": 100,
+    "active_measurement_edges": [
+     "1455801464_18241874_0",
+     "26355153_91615277_0",
+     "26355153_96523321_0",
+     "30420757_30421744_0",
+     "60786979_3575001205_0",
+     "60790252_60790253_0"
+    ],
+    "base_rank": 7,
+    "rank_with_sensor": 8,
+    "rank_gain": 1,
+    "normalized_row_span_residual": 0.714082014314,
+    "reason": "active margins permit route reallocations that change the held station total"
+   }
+  },
+  "134": {
+   "edges": {
+    "26355153_96523321_0": {
+     "measurement_semantics": "directional",
+     "component_edges": [
+      "26355153_96523321_0"
+     ],
+     "measured_total": 3141,
+     "simulated_total": 3410,
+     "ratio": 1.086,
+     "geh_ok_pct": 87.5,
+     "observed_quarters": 96,
+     "hourly_cases": [
+      {
+       "hour_index": 0,
+       "measured": 11.0,
+       "simulated": 14.0
+      },
+      {
+       "hour_index": 1,
+       "measured": 10.0,
+       "simulated": 11.0
+      },
+      {
+       "hour_index": 2,
+       "measured": 3.0,
+       "simulated": 5.0
+      },
+      {
+       "hour_index": 3,
+       "measured": 4.0,
+       "simulated": 8.0
+      },
+      {
+       "hour_index": 4,
+       "measured": 5.0,
+       "simulated": 10.0
+      },
+      {
+       "hour_index": 5,
+       "measured": 22.0,
+       "simulated": 38.0
+      },
+      {
+       "hour_index": 6,
+       "measured": 96.0,
+       "simulated": 92.0
+      },
+      {
+       "hour_index": 7,
+       "measured": 250.0,
+       "simulated": 166.0
+      },
+      {
+       "hour_index": 8,
+       "measured": 281.0,
+       "simulated": 202.0
+      },
+      {
+       "hour_index": 9,
+       "measured": 183.0,
+       "simulated": 212.0
+      },
+      {
+       "hour_index": 10,
+       "measured": 164.0,
+       "simulated": 235.0
+      },
+      {
+       "hour_index": 11,
+       "measured": 192.0,
+       "simulated": 232.0
+      },
+      {
+       "hour_index": 12,
+       "measured": 184.0,
+       "simulated": 253.0
+      },
+      {
+       "hour_index": 13,
+       "measured": 207.0,
+       "simulated": 220.0
+      },
+      {
+       "hour_index": 14,
+       "measured": 195.0,
+       "simulated": 208.0
+      },
+      {
+       "hour_index": 15,
+       "measured": 202.0,
+       "simulated": 227.0
+      },
+      {
+       "hour_index": 16,
+       "measured": 229.0,
+       "simulated": 239.0
+      },
+      {
+       "hour_index": 17,
+       "measured": 268.0,
+       "simulated": 238.0
+      },
+      {
+       "hour_index": 18,
+       "measured": 180.0,
+       "simulated": 242.0
+      },
+      {
+       "hour_index": 19,
+       "measured": 170.0,
+       "simulated": 175.0
+      },
+      {
+       "hour_index": 20,
+       "measured": 119.0,
+       "simulated": 169.0
+      },
+      {
+       "hour_index": 21,
+       "measured": 92.0,
+       "simulated": 119.0
+      },
+      {
+       "hour_index": 22,
+       "measured": 49.0,
+       "simulated": 61.0
+      },
+      {
+       "hour_index": 23,
+       "measured": 25.0,
+       "simulated": 34.0
+      }
+     ],
+     "excluded_incomplete_hours": []
+    }
+   },
+   "pfe_geh_pct": 100.0,
+   "sensor_anchor_contract": {
+    "required": true,
+    "registered_edges": [
+     "1455801464_18241874_0",
+     "26355153_91615277_0",
+     "26355153_96523321_0",
+     "26842525_26355153_0",
+     "30420757_30421744_0",
+     "60786979_3575001205_0",
+     "60790252_60790253_0"
+    ],
+    "unanchored_vehicles": 0,
+    "pass": true
+   },
+   "held_edge_assignment_ceiling": {
+    "required_edges": [
+     "26355153_96523321_0",
+     "96523321_26355153_0"
+    ],
+    "eligible_edges": [
+     "26355153_96523321_0",
+     "96523321_26355153_0"
+    ],
+    "missing_edges": [],
+    "scale_veh_per_day": 8.12620790117075,
+    "integer_publication_enforced": true
+   },
+   "inactive_sensor_integer_stability": {
+    "26355153_96523321_0": {
+     "quarters": 96,
+     "continuous_total": 3412.307586,
+     "published_total": 3410,
+     "total_delta": -2.307586,
+     "max_abs_quarter_residual": 0,
+     "sum_abs_quarter_residual": 0
+    }
+   },
+   "observability_certificate": {
+    "status": "underidentified",
+    "onboarding_ready": false,
+    "component_edges": [
+     "26355153_96523321_0"
+    ],
+    "route_variables": 834,
+    "support_variables": 110,
+    "support_shared_with_active_sensor": 10,
+    "support_exclusive_of_active_sensors": 100,
+    "active_measurement_edges": [
+     "1455801464_18241874_0",
+     "26355153_91615277_0",
+     "26842525_26355153_0",
+     "30420757_30421744_0",
+     "60786979_3575001205_0",
+     "60790252_60790253_0"
+    ],
+    "base_rank": 7,
+    "rank_with_sensor": 8,
+    "rank_gain": 1,
+    "normalized_row_span_residual": 0.694854749542,
+    "reason": "active margins permit route reallocations that change the held station total"
+   }
+  },
+  "2276": {
+   "edges": {
+    "26355153_91615277_0": {
+     "measurement_semantics": "directional",
+     "component_edges": [
+      "26355153_91615277_0"
+     ],
+     "measured_total": 4473,
+     "simulated_total": 5225,
+     "ratio": 1.168,
+     "geh_ok_pct": 95.8,
+     "observed_quarters": 96,
+     "hourly_cases": [
+      {
+       "hour_index": 0,
+       "measured": 14.0,
+       "simulated": 15.0
+      },
+      {
+       "hour_index": 1,
+       "measured": 11.0,
+       "simulated": 14.0
+      },
+      {
+       "hour_index": 2,
+       "measured": 6.0,
+       "simulated": 16.0
+      },
+      {
+       "hour_index": 3,
+       "measured": 10.0,
+       "simulated": 19.0
+      },
+      {
+       "hour_index": 4,
+       "measured": 7.0,
+       "simulated": 17.0
+      },
+      {
+       "hour_index": 5,
+       "measured": 35.0,
+       "simulated": 35.0
+      },
+      {
+       "hour_index": 6,
+       "measured": 99.0,
+       "simulated": 128.0
+      },
+      {
+       "hour_index": 7,
+       "measured": 259.0,
+       "simulated": 275.0
+      },
+      {
+       "hour_index": 8,
+       "measured": 343.0,
+       "simulated": 381.0
+      },
+      {
+       "hour_index": 9,
+       "measured": 255.0,
+       "simulated": 329.0
+      },
+      {
+       "hour_index": 10,
+       "measured": 289.0,
+       "simulated": 355.0
+      },
+      {
+       "hour_index": 11,
+       "measured": 269.0,
+       "simulated": 348.0
+      },
+      {
+       "hour_index": 12,
+       "measured": 288.0,
+       "simulated": 362.0
+      },
+      {
+       "hour_index": 13,
+       "measured": 298.0,
+       "simulated": 317.0
+      },
+      {
+       "hour_index": 14,
+       "measured": 291.0,
+       "simulated": 336.0
+      },
+      {
+       "hour_index": 15,
+       "measured": 365.0,
+       "simulated": 397.0
+      },
+      {
+       "hour_index": 16,
+       "measured": 320.0,
+       "simulated": 405.0
+      },
+      {
+       "hour_index": 17,
+       "measured": 356.0,
+       "simulated": 407.0
+      },
+      {
+       "hour_index": 18,
+       "measured": 318.0,
+       "simulated": 360.0
+      },
+      {
+       "hour_index": 19,
+       "measured": 202.0,
+       "simulated": 286.0
+      },
+      {
+       "hour_index": 20,
+       "measured": 198.0,
+       "simulated": 237.0
+      },
+      {
+       "hour_index": 21,
+       "measured": 141.0,
+       "simulated": 114.0
+      },
+      {
+       "hour_index": 22,
+       "measured": 64.0,
+       "simulated": 49.0
+      },
+      {
+       "hour_index": 23,
+       "measured": 35.0,
+       "simulated": 23.0
+      }
+     ],
+     "excluded_incomplete_hours": []
+    }
+   },
+   "pfe_geh_pct": 100.0,
+   "sensor_anchor_contract": {
+    "required": true,
+    "registered_edges": [
+     "1455801464_18241874_0",
+     "26355153_91615277_0",
+     "26355153_96523321_0",
+     "26842525_26355153_0",
+     "30420757_30421744_0",
+     "60786979_3575001205_0",
+     "60790252_60790253_0"
+    ],
+    "unanchored_vehicles": 0,
+    "pass": true
+   },
+   "held_edge_assignment_ceiling": {
+    "required_edges": [
+     "26355153_91615277_0",
+     "91615277_26355153_0"
+    ],
+    "eligible_edges": [
+     "26355153_91615277_0",
+     "91615277_26355153_0"
+    ],
+    "missing_edges": [],
+    "scale_veh_per_day": 8.143337475635589,
+    "integer_publication_enforced": true
+   },
+   "inactive_sensor_integer_stability": {
+    "26355153_91615277_0": {
+     "quarters": 96,
+     "continuous_total": 5229.494709,
+     "published_total": 5225,
+     "total_delta": -4.494709,
+     "max_abs_quarter_residual": 0,
+     "sum_abs_quarter_residual": 0
+    }
+   },
+   "observability_certificate": {
+    "status": "underidentified",
+    "onboarding_ready": false,
+    "component_edges": [
+     "26355153_91615277_0"
+    ],
+    "route_variables": 834,
+    "support_variables": 175,
+    "support_shared_with_active_sensor": 75,
+    "support_exclusive_of_active_sensors": 100,
+    "active_measurement_edges": [
+     "1455801464_18241874_0",
+     "26355153_96523321_0",
+     "26842525_26355153_0",
+     "30420757_30421744_0",
+     "60786979_3575001205_0",
+     "60790252_60790253_0"
+    ],
+    "base_rank": 7,
+    "rank_with_sensor": 8,
+    "rank_gain": 1,
+    "normalized_row_span_residual": 0.687683701139,
+    "reason": "active margins permit route reallocations that change the held station total"
+   }
+  }
+ }
+}

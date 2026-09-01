@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "study": "strict_sensor_od_floor_loso_ablation",
+  "status": "preregistered_before_25_100_200_runs",
+  "date": "2025-09-16",
+  "levels_unique_od_per_directed_sensor": [25, 50, 100, 200, 500],
+  "fixed_inputs": {
+    "source": "historical",
+    "window": "00:00-24:00",
+    "seed": 42,
+    "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "route_policy": "sensor_shortest_positive_gap_v1",
+    "loso_protocol": "loso_pfe_meso_v11_observability_gate"
+  },
+  "eligibility": [
+    "every candidate proof passes",
+    "each directed sensor has at least the requested number of unique OD routes",
+    "all active PFE sensor margins publish exactly",
+    "all six LOSO folds complete with sensor-anchor proofs"
+  ],
+  "selection_rule": {
+    "primary_minimize": "median(max(station_daily_ratio, 1/station_daily_ratio))",
+    "secondary_maximize": "mean_station_hourly_geh_below_5_pct",
+    "tertiary_minimize": "max(max(station_daily_ratio, 1/station_daily_ratio))",
+    "interpretation": "select only among eligible levels; lower route count wins an exact tie"
+  },
+  "existing_same_protocol_levels": {
+    "50": "validation/loso_fastest_routes_20260901.json",
+    "500": "validation/loso_fastest_routes_500od_20260901.json"
+  }
+}

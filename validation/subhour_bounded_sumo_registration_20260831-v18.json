@@ -1,0 +1,724 @@
+{
+  "archives": {
+    "2a9d5ee7e9eb1a48": {
+      "archive": "/Users/gt/Documents/gs-project/runs/demand-20260830-231548-e661c5a5-ca42",
+      "demand_build_spec": {
+        "begin": "00:00",
+        "build_key": "2a9d5ee7e9eb1a48",
+        "days": 3,
+        "end": "24:00",
+        "kind": "demand_build",
+        "purpose": "closure_envelope",
+        "schema_version": 1,
+        "source": "forecast",
+        "start_date": "2027-07-20",
+        "structural_reference_date": "2025-09-16"
+      },
+      "demand_meta_sha256": "2687a6979572f4ce93278bfa200c4062e3047474063936227dcccb7333679e68",
+      "epoch_sim": "2027-07-20T00:00:00",
+      "n_intervals": 288,
+      "routes": {
+        "q10": {
+          "path": "/Users/gt/Documents/gs-project/runs/demand-20260830-231548-e661c5a5-ca42/calibrated_v1.rou.xml",
+          "sha256": "62f48d2726b54546053e0b8b40646e73da93be1b3b6377167cc603874f147423"
+        },
+        "q50": {
+          "path": "/Users/gt/Documents/gs-project/runs/demand-20260830-231548-e661c5a5-ca42/calibrated.rou.xml",
+          "sha256": "96fec8f24206d376f849df8ec7000b1a5a70312fdfda625cb26c97bfc082c0f0"
+        },
+        "q90": {
+          "path": "/Users/gt/Documents/gs-project/runs/demand-20260830-231548-e661c5a5-ca42/calibrated_v2.rou.xml",
+          "sha256": "aa2e6fbc1a046e17dbca424f5e4445fdcdfb3dfca3f922c66e28660e50530cb3"
+        }
+      }
+    },
+    "5ac74750843384b3": {
+      "archive": "/Users/gt/Documents/gs-project/runs/demand-20260830-231746-c677eda8-e94d",
+      "demand_build_spec": {
+        "begin": "00:00",
+        "build_key": "5ac74750843384b3",
+        "days": 3,
+        "end": "24:00",
+        "kind": "demand_build",
+        "purpose": "closure_envelope",
+        "schema_version": 1,
+        "source": "forecast",
+        "start_date": "2027-03-21",
+        "structural_reference_date": "2025-09-16"
+      },
+      "demand_meta_sha256": "9a1b1569cbc881002340d1b2205fda2e63809fffd4dbca301ee1f764df819532",
+      "epoch_sim": "2027-03-21T00:00:00",
+      "n_intervals": 288,
+      "routes": {
+        "q10": {
+          "path": "/Users/gt/Documents/gs-project/runs/demand-20260830-231746-c677eda8-e94d/calibrated_v1.rou.xml",
+          "sha256": "e9b1e5b0b9f0e5ab02f3d5f14e82e13b53f2097a99af4b1d1dd7b3dbfb40a4d0"
+        },
+        "q50": {
+          "path": "/Users/gt/Documents/gs-project/runs/demand-20260830-231746-c677eda8-e94d/calibrated.rou.xml",
+          "sha256": "2f01008ecf857c0be4aef296d861538053f0f4374e8ede938226f8ce0ee765ff"
+        },
+        "q90": {
+          "path": "/Users/gt/Documents/gs-project/runs/demand-20260830-231746-c677eda8-e94d/calibrated_v2.rou.xml",
+          "sha256": "798685a6321f2476cb812b5ebe9e713bf87bf7ce71e704e33597837dede72a4e"
+        }
+      }
+    },
+    "96269d0654122378": {
+      "archive": "/Users/gt/Documents/gs-project/runs/demand-20260830-232157-2d365b2f-c44d",
+      "demand_build_spec": {
+        "begin": "00:00",
+        "build_key": "96269d0654122378",
+        "days": 3,
+        "end": "24:00",
+        "kind": "demand_build",
+        "purpose": "closure_envelope",
+        "schema_version": 1,
+        "source": "forecast",
+        "start_date": "2027-07-15",
+        "structural_reference_date": "2025-09-16"
+      },
+      "demand_meta_sha256": "8c920349adb4aaa91cd334b03788a86f54ddeb57306a6354470d7cf48be7d932",
+      "epoch_sim": "2027-07-15T00:00:00",
+      "n_intervals": 288,
+      "routes": {
+        "q10": {
+          "path": "/Users/gt/Documents/gs-project/runs/demand-20260830-232157-2d365b2f-c44d/calibrated_v1.rou.xml",
+          "sha256": "d5479fd5fa9a1e59af503d7149444bda91fbb7d31548addcb4004fbeb26464a4"
+        },
+        "q50": {
+          "path": "/Users/gt/Documents/gs-project/runs/demand-20260830-232157-2d365b2f-c44d/calibrated.rou.xml",
+          "sha256": "d184f9d171325403b20b09b7389739b019415a07283a929703bcfc527eeb7c28"
+        },
+        "q90": {
+          "path": "/Users/gt/Documents/gs-project/runs/demand-20260830-232157-2d365b2f-c44d/calibrated_v2.rou.xml",
+          "sha256": "ebe5b9e750f045473fff929417cc3e4dd9fe6a3c04cfac757b042a9c69781819"
+        }
+      }
+    },
+    "e5c134e0f59dd446": {
+      "archive": "/Users/gt/Documents/gs-project/runs/demand-20260830-232504-ef4d1050-34f6",
+      "demand_build_spec": {
+        "begin": "00:00",
+        "build_key": "e5c134e0f59dd446",
+        "days": 3,
+        "end": "24:00",
+        "kind": "demand_build",
+        "purpose": "closure_envelope",
+        "schema_version": 1,
+        "source": "forecast",
+        "start_date": "2027-07-25",
+        "structural_reference_date": "2025-09-16"
+      },
+      "demand_meta_sha256": "91c11530a50af0ca4e2dbf7bfd8dc39ad718fd6d8c15a40ca243cf8b3c0219cf",
+      "epoch_sim": "2027-07-25T00:00:00",
+      "n_intervals": 288,
+      "routes": {
+        "q10": {
+          "path": "/Users/gt/Documents/gs-project/runs/demand-20260830-232504-ef4d1050-34f6/calibrated_v1.rou.xml",
+          "sha256": "f504f6c558b38f5f6946c76247403be7ced60d05f9b6e18f30b6df7b28dbbb1d"
+        },
+        "q50": {
+          "path": "/Users/gt/Documents/gs-project/runs/demand-20260830-232504-ef4d1050-34f6/calibrated.rou.xml",
+          "sha256": "4fd87452a017a9331ba96a3a54340b554354f411b3f8ebba684b356d23679a68"
+        },
+        "q90": {
+          "path": "/Users/gt/Documents/gs-project/runs/demand-20260830-232504-ef4d1050-34f6/calibrated_v2.rou.xml",
+          "sha256": "71d9326eaebf28d21a3484a3acad994957ec809edab0e8ce122149599994ef7d"
+        }
+      }
+    }
+  },
+  "arms": {
+    "cost_ordered": {
+      "disable_early_stop": false
+    },
+    "only_allowed_difference": "disable_early_stop",
+    "ordered_exhaustive": {
+      "disable_early_stop": true
+    },
+    "shared_kernel": "run_cost_ordered_execution"
+  },
+  "caps": {
+    "active_seconds": 3300,
+    "attempts_per_case": 10000,
+    "daily_workers": 1,
+    "disk_growth_bytes": 21474836480,
+    "max_active_sumo_slots": 1,
+    "peak_rss_bytes": 8589934592,
+    "seed_workers": 1
+  },
+  "claim_boundary": "bounded diagnostic evidence; no product activation",
+  "content_key": "c834c772565584bec33b2dd4d9d3011d4c24c5ca2a9a1df6065d80c8ae90acbd",
+  "data_root": "/Users/gt/Documents/gs-project",
+  "evidence_id": "subhour-bounded-sumo-20260831-v18",
+  "fixtures": {
+    "backfill": {
+      "application": "synthetic hard-failure before next starter",
+      "basis": "fixed registered case prefix",
+      "declared": true,
+      "symmetric": true
+    },
+    "dense_boundary": {
+      "application": "identical adjacent-band prefix",
+      "basis": "fixed cost-order tuple",
+      "declared": true,
+      "symmetric": true
+    },
+    "no_detour": {
+      "application": "identical ledger disqualification",
+      "basis": "deterministic pre-SUMO gate",
+      "declared": true,
+      "symmetric": true
+    },
+    "restart_cancel": {
+      "application": "interrupt after first pilot and cancel queued work",
+      "declared": true,
+      "symmetric": true
+    }
+  },
+  "fresh_roots": {
+    "daily_cost_cache": "runs/subhour-bounded-sumo-20260831-v18/daily-cost-cache",
+    "output_namespace": "runs/subhour-bounded-sumo-20260831-v18/outputs",
+    "workspace_namespace": "runs/subhour-bounded-sumo-20260831-v18/workspaces"
+  },
+  "gates": {
+    "minimum_active_time_reduction": 0.3,
+    "minimum_cases": 8,
+    "minimum_edges": 4,
+    "minimum_exact_attempt_reduction": 0.3,
+    "minimum_periods": 2,
+    "resource_regression_allowed": false
+  },
+  "kind": "subhour_bounded_sumo_registration",
+  "network": {
+    "path": "/Users/gt/Documents/gs-project/sumo/net.net.xml",
+    "sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+  },
+  "network_metadata": {
+    "path": "/Users/gt/Documents/gs-project/sumo/network_metadata.json",
+    "sha256": "dc3493454abc0ea44760abc10ee2996a1beef01d6b537617aa6141374f2ae6ad"
+  },
+  "outcome_record": "validation/subhour_bounded_sumo_outcome_subhour-bounded-sumo-20260831-v18.json",
+  "policy": {
+    "path": "validation/monthly_search_policy_v3.json",
+    "sha256": "1d3f3e1ea35f90ecec7e06941391a8a8728f0e7d8603df917dbbdb361ee242b0"
+  },
+  "reads_outcomes": false,
+  "registered_at": "2026-08-31T03:48:21+0200",
+  "release_evidence": false,
+  "runs_root": "/Users/gt/Documents/gs-project/runs",
+  "runtime": {
+    "executable": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo/bin/sumo",
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "resolved_by": "sumo_home",
+    "sha256": "adf7bb8425eca761980ea2a2b43e9761c5b464b046ce3b5ed038ff16e300489a",
+    "version": "Eclipse SUMO sumo 1.27.1"
+  },
+  "schema": "subhour_cost_ordered_bounded_registration_v1",
+  "selected_cases": [
+    {
+      "candidate_count": 13,
+      "case_id": "subhour-bounded-sumo-20260831-v18-01-0304fa08b47b",
+      "demand_period": "forecast:2027-03",
+      "search_content_key": "89542ecc89d9b4df7106",
+      "search_id": "cob2-fore-20270322-20270322-38ce6ef5e6-0700",
+      "selection_sha256": "0304fa08b47b389b3a09fd038797cee7144e22a1c2fa9dd52fa8cde3accdd177",
+      "selection_tuple": [
+        "forecast:2027-03",
+        "8710974792_1759741980_0",
+        "2027-03-22",
+        "07:00-15:00",
+        "89542ecc89d9b4df7106"
+      ],
+      "spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "blackout_dates": [],
+        "closure_type": "full",
+        "content_key": "89542ecc89d9b4df7106",
+        "demand_build_id": "forecast-2027",
+        "directed_edges": [
+          "8710974792_1759741980_0"
+        ],
+        "dst_policy": "exclude_transition_dates",
+        "duration_basis": "required_work_time",
+        "interday_policy": "independent_daily_reset_v1",
+        "kind": "closure_search",
+        "max_consecutive_start_days": 1,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "period_comparison_policy": "rolling_period_v1",
+        "permitted_daily_band": {
+          "earliest_start": "07:00",
+          "latest_end": "15:00"
+        },
+        "permitted_date_end": "2027-03-22",
+        "permitted_date_start": "2027-03-22",
+        "policy_status": "user_supplied_unverified",
+        "required_work_minutes": 300,
+        "resolution_minutes": 15,
+        "same_daily_window": true,
+        "schema_version": 1,
+        "search_id": "cob2-fore-20270322-20270322-38ce6ef5e6-0700",
+        "source": "forecast",
+        "timezone": "Europe/Stockholm",
+        "work_allocation_policy": "exact_equal_daily_v1",
+        "work_to_closure_assumption": "one_to_one"
+      },
+      "unique_daily_unit_count": 13,
+      "work_dates": [
+        "2027-03-22"
+      ]
+    },
+    {
+      "candidate_count": 9,
+      "case_id": "subhour-bounded-sumo-20260831-v18-02-0314aec31aaf",
+      "demand_period": "forecast:2027-03",
+      "search_content_key": "22b87e26579cb9e4ea32",
+      "search_id": "cob2-fore-20270322-20270322-b3705acf01-0600",
+      "selection_sha256": "0314aec31aafd4bbc4a087bfaf02fcffc02027b93db08e629022c61ad7840e78",
+      "selection_tuple": [
+        "forecast:2027-03",
+        "26355153_26842525_0",
+        "2027-03-22",
+        "06:00-12:00",
+        "22b87e26579cb9e4ea32"
+      ],
+      "spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "blackout_dates": [],
+        "closure_type": "full",
+        "content_key": "22b87e26579cb9e4ea32",
+        "demand_build_id": "forecast-2027",
+        "directed_edges": [
+          "26355153_26842525_0"
+        ],
+        "dst_policy": "exclude_transition_dates",
+        "duration_basis": "required_work_time",
+        "interday_policy": "independent_daily_reset_v1",
+        "kind": "closure_search",
+        "max_consecutive_start_days": 1,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "period_comparison_policy": "rolling_period_v1",
+        "permitted_daily_band": {
+          "earliest_start": "06:00",
+          "latest_end": "12:00"
+        },
+        "permitted_date_end": "2027-03-22",
+        "permitted_date_start": "2027-03-22",
+        "policy_status": "user_supplied_unverified",
+        "required_work_minutes": 240,
+        "resolution_minutes": 15,
+        "same_daily_window": true,
+        "schema_version": 1,
+        "search_id": "cob2-fore-20270322-20270322-b3705acf01-0600",
+        "source": "forecast",
+        "timezone": "Europe/Stockholm",
+        "work_allocation_policy": "exact_equal_daily_v1",
+        "work_to_closure_assumption": "one_to_one"
+      },
+      "unique_daily_unit_count": 9,
+      "work_dates": [
+        "2027-03-22"
+      ]
+    },
+    {
+      "candidate_count": 9,
+      "case_id": "subhour-bounded-sumo-20260831-v18-03-042163a1e163",
+      "demand_period": "forecast:2027-07",
+      "search_content_key": "95922837ea5cc4755f20",
+      "search_id": "cob2-fore-20270721-20270721-38ce6ef5e6-1000",
+      "selection_sha256": "042163a1e1635fff0bf138b35cddca9d7f1db0f1561294270a2df9a79fce44eb",
+      "selection_tuple": [
+        "forecast:2027-07",
+        "8710974792_1759741980_0",
+        "2027-07-21",
+        "10:00-18:00",
+        "95922837ea5cc4755f20"
+      ],
+      "spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "blackout_dates": [],
+        "closure_type": "full",
+        "content_key": "95922837ea5cc4755f20",
+        "demand_build_id": "forecast-2027",
+        "directed_edges": [
+          "8710974792_1759741980_0"
+        ],
+        "dst_policy": "exclude_transition_dates",
+        "duration_basis": "required_work_time",
+        "interday_policy": "independent_daily_reset_v1",
+        "kind": "closure_search",
+        "max_consecutive_start_days": 1,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "period_comparison_policy": "rolling_period_v1",
+        "permitted_daily_band": {
+          "earliest_start": "10:00",
+          "latest_end": "18:00"
+        },
+        "permitted_date_end": "2027-07-21",
+        "permitted_date_start": "2027-07-21",
+        "policy_status": "user_supplied_unverified",
+        "required_work_minutes": 360,
+        "resolution_minutes": 15,
+        "same_daily_window": true,
+        "schema_version": 1,
+        "search_id": "cob2-fore-20270721-20270721-38ce6ef5e6-1000",
+        "source": "forecast",
+        "timezone": "Europe/Stockholm",
+        "work_allocation_policy": "exact_equal_daily_v1",
+        "work_to_closure_assumption": "one_to_one"
+      },
+      "unique_daily_unit_count": 9,
+      "work_dates": [
+        "2027-07-21"
+      ]
+    },
+    {
+      "candidate_count": 13,
+      "case_id": "subhour-bounded-sumo-20260831-v18-04-0fa23b077c75",
+      "demand_period": "forecast:2027-07",
+      "search_content_key": "96a090a3088ff35b6ce0",
+      "search_id": "cob2-fore-20270726-20270726-b3705acf01-0700",
+      "selection_sha256": "0fa23b077c751d050544652e5e4ce1010d96544099a0b5f37fe583d0e0cb21a5",
+      "selection_tuple": [
+        "forecast:2027-07",
+        "26355153_26842525_0",
+        "2027-07-26",
+        "07:00-15:00",
+        "96a090a3088ff35b6ce0"
+      ],
+      "spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "blackout_dates": [],
+        "closure_type": "full",
+        "content_key": "96a090a3088ff35b6ce0",
+        "demand_build_id": "forecast-2027",
+        "directed_edges": [
+          "26355153_26842525_0"
+        ],
+        "dst_policy": "exclude_transition_dates",
+        "duration_basis": "required_work_time",
+        "interday_policy": "independent_daily_reset_v1",
+        "kind": "closure_search",
+        "max_consecutive_start_days": 1,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "period_comparison_policy": "rolling_period_v1",
+        "permitted_daily_band": {
+          "earliest_start": "07:00",
+          "latest_end": "15:00"
+        },
+        "permitted_date_end": "2027-07-26",
+        "permitted_date_start": "2027-07-26",
+        "policy_status": "user_supplied_unverified",
+        "required_work_minutes": 300,
+        "resolution_minutes": 15,
+        "same_daily_window": true,
+        "schema_version": 1,
+        "search_id": "cob2-fore-20270726-20270726-b3705acf01-0700",
+        "source": "forecast",
+        "timezone": "Europe/Stockholm",
+        "work_allocation_policy": "exact_equal_daily_v1",
+        "work_to_closure_assumption": "one_to_one"
+      },
+      "unique_daily_unit_count": 13,
+      "work_dates": [
+        "2027-07-26"
+      ]
+    },
+    {
+      "candidate_count": 9,
+      "case_id": "subhour-bounded-sumo-20260831-v18-05-122aa7a4985a",
+      "demand_period": "forecast:2027-03",
+      "search_content_key": "0f9eef6ec98c89f6f15d",
+      "search_id": "cob2-fore-20270322-20270322-a9a5f9d78a-0900",
+      "selection_sha256": "122aa7a4985a7d72114e4b579f7ff0d022a427d298e3a20eb98a15728d3d626f",
+      "selection_tuple": [
+        "forecast:2027-03",
+        "26355153_96523321_0",
+        "2027-03-22",
+        "09:00-16:00",
+        "0f9eef6ec98c89f6f15d"
+      ],
+      "spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "blackout_dates": [],
+        "closure_type": "full",
+        "content_key": "0f9eef6ec98c89f6f15d",
+        "demand_build_id": "forecast-2027",
+        "directed_edges": [
+          "26355153_96523321_0"
+        ],
+        "dst_policy": "exclude_transition_dates",
+        "duration_basis": "required_work_time",
+        "interday_policy": "independent_daily_reset_v1",
+        "kind": "closure_search",
+        "max_consecutive_start_days": 1,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "period_comparison_policy": "rolling_period_v1",
+        "permitted_daily_band": {
+          "earliest_start": "09:00",
+          "latest_end": "16:00"
+        },
+        "permitted_date_end": "2027-03-22",
+        "permitted_date_start": "2027-03-22",
+        "policy_status": "user_supplied_unverified",
+        "required_work_minutes": 300,
+        "resolution_minutes": 15,
+        "same_daily_window": true,
+        "schema_version": 1,
+        "search_id": "cob2-fore-20270322-20270322-a9a5f9d78a-0900",
+        "source": "forecast",
+        "timezone": "Europe/Stockholm",
+        "work_allocation_policy": "exact_equal_daily_v1",
+        "work_to_closure_assumption": "one_to_one"
+      },
+      "unique_daily_unit_count": 9,
+      "work_dates": [
+        "2027-03-22"
+      ]
+    },
+    {
+      "candidate_count": 13,
+      "case_id": "subhour-bounded-sumo-20260831-v18-06-1dc5fd3ad560",
+      "demand_period": "forecast:2027-07",
+      "search_content_key": "4af5f499ec0287de33dd",
+      "search_id": "cob2-fore-20270726-20270726-a9a5f9d78a-0700",
+      "selection_sha256": "1dc5fd3ad56036d6704fb583c3951d0a7620d985a798ea9cc2f845858c935c7b",
+      "selection_tuple": [
+        "forecast:2027-07",
+        "26355153_96523321_0",
+        "2027-07-26",
+        "07:00-15:00",
+        "4af5f499ec0287de33dd"
+      ],
+      "spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "blackout_dates": [],
+        "closure_type": "full",
+        "content_key": "4af5f499ec0287de33dd",
+        "demand_build_id": "forecast-2027",
+        "directed_edges": [
+          "26355153_96523321_0"
+        ],
+        "dst_policy": "exclude_transition_dates",
+        "duration_basis": "required_work_time",
+        "interday_policy": "independent_daily_reset_v1",
+        "kind": "closure_search",
+        "max_consecutive_start_days": 1,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "period_comparison_policy": "rolling_period_v1",
+        "permitted_daily_band": {
+          "earliest_start": "07:00",
+          "latest_end": "15:00"
+        },
+        "permitted_date_end": "2027-07-26",
+        "permitted_date_start": "2027-07-26",
+        "policy_status": "user_supplied_unverified",
+        "required_work_minutes": 300,
+        "resolution_minutes": 15,
+        "same_daily_window": true,
+        "schema_version": 1,
+        "search_id": "cob2-fore-20270726-20270726-a9a5f9d78a-0700",
+        "source": "forecast",
+        "timezone": "Europe/Stockholm",
+        "work_allocation_policy": "exact_equal_daily_v1",
+        "work_to_closure_assumption": "one_to_one"
+      },
+      "unique_daily_unit_count": 13,
+      "work_dates": [
+        "2027-07-26"
+      ]
+    },
+    {
+      "candidate_count": 13,
+      "case_id": "subhour-bounded-sumo-20260831-v18-07-21e56606bbbc",
+      "demand_period": "forecast:2027-03",
+      "search_content_key": "cbc0f4626d4336535926",
+      "search_id": "cob2-fore-20270322-20270322-fdc134ec4e-0700",
+      "selection_sha256": "21e56606bbbc50bd55c59d846943c3fb4f72865d6f7dd602306520e48f8b22cc",
+      "selection_tuple": [
+        "forecast:2027-03",
+        "26842525_26355153_0",
+        "2027-03-22",
+        "07:00-15:00",
+        "cbc0f4626d4336535926"
+      ],
+      "spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "blackout_dates": [],
+        "closure_type": "full",
+        "content_key": "cbc0f4626d4336535926",
+        "demand_build_id": "forecast-2027",
+        "directed_edges": [
+          "26842525_26355153_0"
+        ],
+        "dst_policy": "exclude_transition_dates",
+        "duration_basis": "required_work_time",
+        "interday_policy": "independent_daily_reset_v1",
+        "kind": "closure_search",
+        "max_consecutive_start_days": 1,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "period_comparison_policy": "rolling_period_v1",
+        "permitted_daily_band": {
+          "earliest_start": "07:00",
+          "latest_end": "15:00"
+        },
+        "permitted_date_end": "2027-03-22",
+        "permitted_date_start": "2027-03-22",
+        "policy_status": "user_supplied_unverified",
+        "required_work_minutes": 300,
+        "resolution_minutes": 15,
+        "same_daily_window": true,
+        "schema_version": 1,
+        "search_id": "cob2-fore-20270322-20270322-fdc134ec4e-0700",
+        "source": "forecast",
+        "timezone": "Europe/Stockholm",
+        "work_allocation_policy": "exact_equal_daily_v1",
+        "work_to_closure_assumption": "one_to_one"
+      },
+      "unique_daily_unit_count": 13,
+      "work_dates": [
+        "2027-03-22"
+      ]
+    },
+    {
+      "candidate_count": 9,
+      "case_id": "subhour-bounded-sumo-20260831-v18-08-2c8d12e8864e",
+      "demand_period": "forecast:2027-07",
+      "search_content_key": "683027ca6eed0147991f",
+      "search_id": "cob2-fore-20270716-20270716-fdc134ec4e-1000",
+      "selection_sha256": "2c8d12e8864e57c30a7324e5b3e9203996457608a4b31b4bc9f204d720361acd",
+      "selection_tuple": [
+        "forecast:2027-07",
+        "26842525_26355153_0",
+        "2027-07-16",
+        "10:00-18:00",
+        "683027ca6eed0147991f"
+      ],
+      "spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "blackout_dates": [],
+        "closure_type": "full",
+        "content_key": "683027ca6eed0147991f",
+        "demand_build_id": "forecast-2027",
+        "directed_edges": [
+          "26842525_26355153_0"
+        ],
+        "dst_policy": "exclude_transition_dates",
+        "duration_basis": "required_work_time",
+        "interday_policy": "independent_daily_reset_v1",
+        "kind": "closure_search",
+        "max_consecutive_start_days": 1,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "period_comparison_policy": "rolling_period_v1",
+        "permitted_daily_band": {
+          "earliest_start": "10:00",
+          "latest_end": "18:00"
+        },
+        "permitted_date_end": "2027-07-16",
+        "permitted_date_start": "2027-07-16",
+        "policy_status": "user_supplied_unverified",
+        "required_work_minutes": 360,
+        "resolution_minutes": 15,
+        "same_daily_window": true,
+        "schema_version": 1,
+        "search_id": "cob2-fore-20270716-20270716-fdc134ec4e-1000",
+        "source": "forecast",
+        "timezone": "Europe/Stockholm",
+        "work_allocation_policy": "exact_equal_daily_v1",
+        "work_to_closure_assumption": "one_to_one"
+      },
+      "unique_daily_unit_count": 9,
+      "work_dates": [
+        "2027-07-16"
+      ]
+    }
+  ],
+  "selection": {
+    "distinct_edges": [
+      "26355153_26842525_0",
+      "26355153_96523321_0",
+      "26842525_26355153_0",
+      "8710974792_1759741980_0"
+    ],
+    "distinct_periods": [
+      "forecast:2027-03",
+      "forecast:2027-07"
+    ],
+    "eligible_count": 648,
+    "eligible_list_digest": "257d710f13718c18e0606298d4b52313fc7cdbf6779d6592d9caa0b650889f53",
+    "rule": "eligible metadata only; sort by sha256(canonical((demand_period, directed_edge, date, window, search_content_key))) and take the first member of each lexicographically smallest four-edge x two-period stratum, then fill in that same order",
+    "selected_case_count": 8,
+    "selected_ids": [
+      "89542ecc89d9b4df7106",
+      "22b87e26579cb9e4ea32",
+      "95922837ea5cc4755f20",
+      "96a090a3088ff35b6ce0",
+      "0f9eef6ec98c89f6f15d",
+      "4af5f499ec0287de33dd",
+      "cbc0f4626d4336535926",
+      "683027ca6eed0147991f"
+    ]
+  },
+  "sources": {
+    "tools/cost_ordered_benchmark.py": "fcdac1d6d6869047704417c41082d19dffed423a4b489a4ad761b1f1cf6dda77",
+    "tools/product_arm.py": "efeea363300bfe2e63ded0b8abde559268ea93cb7478a493a46aa52c35935875",
+    "tools/subhour_cost_ordered_benchmark.py": "152fceccc0cff84f3f62c0f1d9e7e3ce5fa39af66c58892b307b810391cc8f8d",
+    "traffic_sim/simulation/cost_ordered_execution.py": "9976bceeb4f9727feaacf70092a0e406f010df17ed64865ae4429ccd4f461fb8",
+    "traffic_sim/simulation/cost_ordered_search.py": "440c179f50acd829946070de52986be18a9ba5aae449ec38281d562007311991",
+    "traffic_sim/simulation/deterministic_disruption.py": "8c1ca2220c798f98ed634da6b434f9268f04d35db14a3c614b05536fcfdc9741",
+    "traffic_sim/simulation/finalist_decision.py": "8593d284bdaa9c559bdbbe3575991a34ea60091fae8366db605521d7a21f8bcc",
+    "traffic_sim/simulation/monthly_search.py": "e24c2e6f2dfae9d8703ae074dbf041197b7e2a9e61456f921908467ea6f49188",
+    "traffic_sim/simulation/monthly_sumo.py": "cdb42473d98852b7e11181a3f0a644d3a92a7f2a9dd8e2fbd481ed665de88d5d",
+    "traffic_sim/simulation/pilot_selection.py": "0a52fb86f4141e2b82197b6c946debacd180d2b5bdda20cfe3f62360179bc6d2"
+  }
+}

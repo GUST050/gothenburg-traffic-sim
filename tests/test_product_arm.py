@@ -298,48 +298,41 @@ class TestProcessTreeRSSSampling:
 
 
 class TestProcessCensusFailureIsNeverReadAsEmpty:
-    """A failed `ps` invocation must surface as UNKNOWN, never as zero RSS
+    """An unavailable census must surface as UNKNOWN, never as zero RSS
     or zero survivors — see `pa.ProcessCensusUnavailable`.
+
+    The census itself moved to `tools.process_census` when `ps` turned out to
+    be unusable inside the sandbox these arms run in; what these tests pin is
+    that `product_arm` still fails closed on top of it.
     """
 
-    def test_a_nonzero_ps_exit_raises_rather_than_returning_empty(
+    def test_an_unavailable_census_raises_rather_than_returning_empty(
             self, monkeypatch):
-        class FakeCompleted:
-            returncode = 1
-            stdout = ""
-            stderr = "ps: permission denied"
+        def boom():
+            raise pa.ProcessCensusUnavailable("no mechanism available")
 
-        monkeypatch.setattr(
-            pa.subprocess, "run", lambda *a, **k: FakeCompleted())
-        with pytest.raises(pa.ProcessCensusUnavailable, match="exited 1"):
-            pa._process_group_snapshot()
-
-    def test_an_unrunnable_ps_raises_rather_than_returning_empty(
-            self, monkeypatch):
-        def boom(*a, **k):
-            raise OSError("ps not found")
-
-        monkeypatch.setattr(pa.subprocess, "run", boom)
-        with pytest.raises(pa.ProcessCensusUnavailable):
+        monkeypatch.setattr(pa, "process_group_snapshot", boom)
+        with pytest.raises(pa.ProcessCensusUnavailable,
+                           match="no mechanism available"):
             pa._process_group_snapshot()
 
     def test_sampler_refuses_to_report_a_peak_after_a_lost_census(
             self, monkeypatch):
-        real_run = pa.subprocess.run
+        real_snapshot = pa.process_group_snapshot
         calls = {"n": 0}
 
-        def flaky_run(*args, **kwargs):
+        def flaky_snapshot():
             calls["n"] += 1
             if calls["n"] == 2:
-                raise OSError("simulated ps failure")
-            return real_run(*args, **kwargs)
+                raise pa.ProcessCensusUnavailable("simulated census loss")
+            return real_snapshot()
 
         process = subprocess.Popen(
             [sys.executable, "-c", "import time; time.sleep(2)"],
             start_new_session=True,
         )
         try:
-            monkeypatch.setattr(pa.subprocess, "run", flaky_run)
+            monkeypatch.setattr(pa, "process_group_snapshot", flaky_snapshot)
             sampler = pa.ProcessTreeRSSSampler(
                 process.pid, interval_s=0.05).start()
             time.sleep(0.3)
@@ -351,10 +344,10 @@ class TestProcessCensusFailureIsNeverReadAsEmpty:
 
     def test_reaping_fails_closed_when_the_census_is_unavailable(
             self, monkeypatch):
-        def boom(*a, **k):
-            raise OSError("ps not found")
+        def boom():
+            raise pa.ProcessCensusUnavailable("no mechanism available")
 
-        monkeypatch.setattr(pa.subprocess, "run", boom)
+        monkeypatch.setattr(pa, "process_group_snapshot", boom)
         with pytest.raises(pa.ProcessCensusUnavailable):
             pa._ensure_process_group_reaped(123456, 0.1)
 

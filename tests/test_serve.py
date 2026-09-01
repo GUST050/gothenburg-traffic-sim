@@ -447,6 +447,18 @@ class TestStaticServingNeedsNoScientificStack:
              "osmnx", "geopandas", "shapely", "pyproj", "matplotlib",
              "sumolib", "traci", "libsumo")
 
+    def test_map_uses_grey_keyless_official_osm_tiles_with_attribution(self):
+        render_js = (Path(__file__).parent.parent / "web" / "render.js").read_text()
+        index_html = (Path(__file__).parent.parent / "web" / "index.html").read_text()
+        assert "https://tile.openstreetmap.org/{z}/{x}/{y}.png" in render_js
+        assert "OpenStreetMap contributors" in render_js
+        assert "className: 'basemap-grayscale'" in render_js
+        assert "opacity: 0.52" in render_js
+        assert ".leaflet-layer.basemap-grayscale" in index_html
+        assert ("filter: grayscale(100%) saturate(0%) brightness(112%) "
+                "contrast(68%)") in index_html
+        assert "basemaps.cartocdn.com" not in render_js
+
     def test_importing_serve_pulls_in_no_third_party_package(self):
         # A subprocess with a real import blocker, because serve (and every
         # heavy module) is already imported in this interpreter.
@@ -2906,6 +2918,8 @@ class TestSecurityHardening:
                 csp = r.headers.get("Content-Security-Policy", "")
             assert "script-src 'self' https://unpkg.com" in csp, path
             assert "connect-src 'self' https://unpkg.com" in csp, path
+            assert "img-src 'self' data: https://tile.openstreetmap.org" in csp, path
+            assert "basemaps.cartocdn.com" not in csp, path
             assert "frame-ancestors 'none'" in csp, path
 
     def test_status_endpoints_stay_get(self, base_url):

@@ -1,0 +1,10 @@
+{
+  "schema": "subhour_gate_s_outcome_v2",
+  "kind": "subhour_gate_s_outcome",
+  "release_evidence": false,
+  "registration": {"evidence_id": "subhour-gate-s-20260831-v3", "content_key": "7c1f16c91fdd007c79e224c2dc3c180e37c5f49d8a7120db50c2fce9b65a43e3"},
+  "bound_evidence_sha256": "1324d266901030ef2c770b704abdcd350cbebc193fe7eddabbfc08eb598e48b2",
+  "status": "INCONCLUSIVE",
+  "gate": {"status": "INCONCLUSIVE", "reasons": ["The matching current bounded evidence has no executable paired cases because trusted process-tree census is unavailable."], "q50_only_active": false},
+  "content_key": "208d27963f5cf71c72c4dc5ada5c22f4eb0fb35f2a4dbe21863e2aa0fde481c1"
+}

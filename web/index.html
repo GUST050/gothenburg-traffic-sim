@@ -458,6 +458,13 @@
     .legend-note { font-size: 0.66rem; color: var(--ink-3); line-height: 1.5; }
     .legend-note b { color: var(--ink-2); }
 
+    /* Keep the keyless OSM basemap visually equivalent to the former CARTO
+       light surface. This is scoped to the tile container so traffic,
+       closures and sensor overlays retain their semantic colours. */
+    .leaflet-layer.basemap-grayscale {
+      filter: grayscale(100%) saturate(0%) brightness(112%) contrast(68%);
+    }
+
     /* ── Tooltip (light, matches the basemap) ───────────────────────────── */
     .leaflet-tooltip {
       background: rgba(255, 255, 255, 0.97) !important;

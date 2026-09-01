@@ -322,10 +322,6 @@ class TestReconcileDisruption:
         )
         evidence = CandidateEvidence(
             candidate_id="closure-a",
-            hard_failures=(
-                "sumo_execution_failure:q50:1000:sumo timed out after 300s "
-                "(seed 1000)",
-            ),
             timeout_undecided=(identity,),
         )
         reconciled = coe.reconcile_disruption(evidence, priced)

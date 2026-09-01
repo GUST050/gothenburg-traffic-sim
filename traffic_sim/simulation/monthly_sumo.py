@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import replace
+import gzip
 import hashlib
 import inspect
 import json
@@ -28,6 +29,7 @@ from traffic_sim.core.contracts import (
     DemandBuildSpec,
 )
 from traffic_sim.core.fingerprint import sha256_file, sumo_version
+from traffic_sim.simulation import closure_routing
 from traffic_sim.simulation import closure_teleport
 from traffic_sim.simulation import metrics as closure_metrics
 # Re-exported so every existing importer of these two names is unchanged.
@@ -57,6 +59,7 @@ from traffic_sim.simulation.finalist_decision import (
     DEMAND_VARIANTS,
     PairedObservation,
     RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+    RETRY_PROTOCOL_TWO_TIER_EXACT,
     TIMEOUT_IDENTITY_SCHEMA,
     TimeoutIdentity,
 )
@@ -84,6 +87,39 @@ from traffic_sim.storage.singleflight import content_key_lock
 SCHEMA_VERSION = 1
 DEFAULT_BASELINE_CACHE = Path("runs") / "closure-search-baselines"
 WARM_POST_FLUSH_S = 3600
+# The first attempt retains run_scenario.SUMO_TIMEOUT_S (300 s), which keeps
+# ordinary fast candidates bounded exactly as before.  Only an actual timeout
+# receives this larger allowance, with otherwise identical inputs/resources.
+MONTHLY_SUMO_RECOVERY_TIMEOUT_S = 1800.0
+MONTHLY_SUMO_RECOVERY_TIMEOUT_ENV = (
+    "TRAFFIC_SIM_MONTHLY_SUMO_RECOVERY_TIMEOUT_S"
+)
+
+
+def _configured_recovery_timeout_s() -> float:
+    """Return the recorded second-attempt bound for this process.
+
+    Ordinary runs keep the frozen 1,800 s default. Operational recovery may
+    raise the bound after observed CPU contention, but may never shorten it
+    below either the default or the first-attempt timeout. The resolved value
+    is part of backend provenance, so changing it creates a new cache identity
+    rather than silently reusing results from another retry contract.
+    """
+    raw = os.environ.get(MONTHLY_SUMO_RECOVERY_TIMEOUT_ENV)
+    if raw is None:
+        return MONTHLY_SUMO_RECOVERY_TIMEOUT_S
+    try:
+        value = float(raw)
+    except ValueError as error:
+        raise ValueError(
+            f"{MONTHLY_SUMO_RECOVERY_TIMEOUT_ENV} must be numeric"
+        ) from error
+    minimum = max(float(rs.SUMO_TIMEOUT_S), MONTHLY_SUMO_RECOVERY_TIMEOUT_S)
+    if not math.isfinite(value) or value < minimum:
+        raise ValueError(
+            f"{MONTHLY_SUMO_RECOVERY_TIMEOUT_ENV} must be at least {minimum:g}"
+        )
+    return value
 
 
 def _read(path: Path) -> dict[str, Any]:
@@ -117,6 +153,82 @@ def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _atomic_content_addressed_copy(
+    source: Path, destination: Path, *, expected_sha256: str,
+) -> None:
+    """Publish immutable bytes without sharing a temporary pathname.
+
+    Several supported daily workers may produce identical evidence bytes at
+    the same time.  Their final content-addressed destination is intentionally
+    shared, but their staging files must not be: one deterministic `.tmp`
+    path lets the first atomic rename remove a file another writer still owns.
+    A unique same-directory file keeps each write independent while preserving
+    atomic visibility of the final path.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, raw_temporary = tempfile.mkstemp(
+        prefix=destination.name + ".", suffix=".tmp", dir=destination.parent)
+    temporary = Path(raw_temporary)
+    os.close(descriptor)
+    try:
+        shutil.copyfile(source, temporary)
+        if sha256_file(temporary) != expected_sha256:
+            raise CanonicalObservationTampered(
+                f"staged content-addressed artifact for {destination} does "
+                "not match its expected digest")
+        with temporary.open("rb") as handle:
+            os.fsync(handle.fileno())
+        os.replace(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _sha256_gzip_payload(path: Path) -> str:
+    """Hash the uncompressed bytes stored in one gzip artifact."""
+    digest = hashlib.sha256()
+    try:
+        with gzip.open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except (OSError, EOFError) as error:
+        raise CanonicalObservationTampered(
+            f"compressed content-addressed artifact at {path} is invalid"
+        ) from error
+    return digest.hexdigest()
+
+
+def _atomic_gzip_content_addressed_copy(
+    source: Path, destination: Path, *, expected_sha256: str,
+) -> None:
+    """Atomically preserve ``source`` as deterministic, lossless gzip.
+
+    The destination remains addressed by the SHA-256 of the *uncompressed*
+    route bytes.  This preserves the existing provenance identity while
+    avoiding one roughly 80--90 MB XML copy for every monthly observation.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, raw_temporary = tempfile.mkstemp(
+        prefix=destination.name + ".", suffix=".tmp", dir=destination.parent)
+    temporary = Path(raw_temporary)
+    try:
+        with os.fdopen(descriptor, "wb") as raw_output:
+            with source.open("rb") as raw_input:
+                with gzip.GzipFile(
+                    filename="", mode="wb", compresslevel=1,
+                    fileobj=raw_output, mtime=0,
+                ) as compressed:
+                    shutil.copyfileobj(raw_input, compressed, 1024 * 1024)
+            raw_output.flush()
+            os.fsync(raw_output.fileno())
+        if _sha256_gzip_payload(temporary) != expected_sha256:
+            raise CanonicalObservationTampered(
+                f"staged compressed artifact for {destination} does not "
+                "match its expected digest")
+        os.replace(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def _canonical_digest(payload: Any) -> str:
     canonical = json.dumps(
         payload,
@@ -127,20 +239,250 @@ def _canonical_digest(payload: Any) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+class CanonicalObservationNotFound(FileNotFoundError):
+    """A `CanonicalObservationDigest` names a payload not present in `cache_root`."""
+
+
+class CanonicalObservationTampered(ValueError):
+    """A resolved canonical-observation file's content does not hash to its
+    own filename -- the file was edited, truncated, or corrupted after
+    `ArchivedDemandSumoRunner._preserve_canonical_observation` wrote it."""
+
+
+def resolve_canonical_observation(cache_root: Path, sha256: str) -> dict[str, Any]:
+    """Read back one canonical observation `run_candidate` previously
+    persisted, verifying its content still hashes to `sha256`.
+
+    This is the read side of `ArchivedDemandSumoRunner._preserve_canonical_observation`
+    -- the only way a reader holding just a `CanonicalObservationDigest` (the
+    sole form `CandidateEvidence` retains) can recover the full payload:
+    routing provenance (including the resolvable access-impact digest),
+    feasibility, recovery, and baseline/candidate metrics. Fails closed
+    (never returns a payload whose bytes were tampered with or whose file is
+    simply missing) rather than let a caller silently treat absent/altered
+    evidence as if it were the real observation.
+    """
+    path = cache_root / "canonical-observations" / sha256[:2] / f"{sha256}.json"
+    if not path.is_file():
+        raise CanonicalObservationNotFound(
+            f"canonical observation {sha256} is not present under {cache_root}")
+    raw = path.read_text(encoding="utf-8")
+    payload = json.loads(raw)
+    if _canonical_digest(payload) != sha256:
+        raise CanonicalObservationTampered(
+            f"canonical observation at {path} does not hash to {sha256}")
+    return payload
+
+
+def _resolve_content_addressed_file(
+    cache_root: Path, *, subdir: str, sha256: str, suffix: str,
+) -> Path:
+    """Locate and hash-verify one file preserved under ``cache_root/subdir``
+    by `ArchivedDemandSumoRunner._preserve_access_impact_evidence` /
+    `_preserve_transformed_route`, failing closed exactly like
+    `resolve_canonical_observation` on a missing or tampered file.
+    """
+    path = cache_root / subdir / sha256[:2] / f"{sha256}{suffix}"
+    if not path.is_file():
+        raise CanonicalObservationNotFound(
+            f"{subdir} artifact {sha256} is not present under {cache_root}")
+    if sha256_file(path) != sha256:
+        raise CanonicalObservationTampered(
+            f"{subdir} artifact at {path} does not hash to {sha256}")
+    return path
+
+
+def resolve_access_impact_report(cache_root: Path, sha256: str) -> dict[str, Any]:
+    """Read back one access-impact report, verifying it still hashes to
+    ``sha256`` -- the read side of `_preserve_access_impact_evidence`."""
+    path = _resolve_content_addressed_file(
+        cache_root, subdir="access-impact", sha256=sha256, suffix=".json")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, Mapping):
+        raise CanonicalObservationTampered(
+            f"access-impact report at {path} is not an object")
+    return payload
+
+
+def resolve_transformed_route(cache_root: Path, sha256: str) -> Path:
+    """Locate and hash-verify one transformed route artifact.
+
+    New artifacts are stored as lossless gzip but remain addressed by the
+    digest of their uncompressed XML bytes.  The legacy plain-XML fallback
+    keeps already-published evidence readable during a resumable migration.
+    """
+    directory = cache_root / "transformed-routes" / sha256[:2]
+    compressed = directory / f"{sha256}.rou.xml.gz"
+    if compressed.is_file():
+        if _sha256_gzip_payload(compressed) != sha256:
+            raise CanonicalObservationTampered(
+                f"transformed-routes artifact at {compressed} does not hash "
+                f"to {sha256} after decompression")
+        return compressed
+    return _resolve_content_addressed_file(
+        cache_root, subdir="transformed-routes", sha256=sha256,
+        suffix=".rou.xml")
+
+
+def validate_canonical_observation_evidence(
+    cache_root: Path,
+    evidence: CandidateEvidence,
+    *,
+    expected_units: Mapping[str, str] | None = None,
+) -> None:
+    """Fail closed unless every canonical-observation digest retained by
+    ``evidence`` resolves, end to end, to real, untampered durable artifacts:
+    the canonical payload itself, its nested `RoutingProvenance` (a strict
+    parse, not a bare dict read), and the access-impact report and
+    transformed-route file that provenance names.
+
+    Review finding 1 (2026-08-30, review-03): `IndependentDailyRunner.
+    _load_cached` and `monthly_search.evidence_from_dict`/publication
+    previously verified only the daily-cache envelope and the
+    `CanonicalObservationDigest` identity fields -- a digest naming a
+    missing or tampered canonical payload, routing-provenance, access-impact
+    report, or transformed route was never actually resolved, so corrupted
+    or absent evidence could be accepted as valid on cache reload or
+    published into monthly evidence. This is the single check both call
+    sites now share, so cache reload and monthly publication can never
+    disagree about what "valid evidence" means.
+    """
+    observation_keys = {
+        (item.demand_variant, item.seed) for item in evidence.observations
+    }
+    digest_keys = {
+        (item.variant, item.seed)
+        for item in evidence.canonical_observation_digests
+    }
+    if observation_keys and digest_keys != observation_keys:
+        raise CanonicalObservationTampered(
+            "canonical observation digest coverage does not exactly match "
+            "successful observation coverage")
+
+    normalized_units: dict[str, str] | None = None
+    if expected_units is not None:
+        normalized_units = dict(expected_units)
+        if (
+            not normalized_units
+            or any(
+                not isinstance(candidate_id, str) or not candidate_id
+                or not isinstance(unit_id, str) or not unit_id
+                for candidate_id, unit_id in normalized_units.items()
+            )
+        ):
+            raise ValueError("expected canonical daily units are invalid")
+        actual_launches = {
+            (item.candidate_id, item.variant, item.seed)
+            for item in evidence.canonical_observation_digests
+        }
+        if observation_keys:
+            expected_launches = {
+                (candidate_id, variant, seed)
+                for candidate_id in normalized_units
+                for variant, seed in observation_keys
+            }
+            if actual_launches != expected_launches:
+                raise CanonicalObservationTampered(
+                    "canonical observation digest coverage does not exactly "
+                    "match the expected daily-unit launch matrix")
+        elif any(
+            item.candidate_id not in normalized_units
+            for item in evidence.canonical_observation_digests
+        ):
+            raise CanonicalObservationTampered(
+                "canonical observation digest belongs to an unexpected daily unit")
+
+    for digest in evidence.canonical_observation_digests:
+        payload = resolve_canonical_observation(cache_root, digest.sha256)
+        outer_provenance = payload.get("provenance")
+        routing_raw = (
+            outer_provenance.get("routing_provenance")
+            if isinstance(outer_provenance, Mapping) else None)
+        if not isinstance(routing_raw, Mapping):
+            raise CanonicalObservationTampered(
+                f"canonical observation {digest.sha256} is missing "
+                "routing_provenance")
+        try:
+            provenance = closure_routing.RoutingProvenance.from_dict(routing_raw)
+        except closure_routing.ClosureRoutingError as error:
+            raise CanonicalObservationTampered(
+                f"canonical observation {digest.sha256} has invalid "
+                "routing_provenance") from error
+        if (
+            provenance.candidate_id != digest.candidate_id
+            or provenance.work_date != digest.work_date
+            or provenance.demand_variant != digest.variant
+            or provenance.seed != digest.seed
+        ):
+            raise CanonicalObservationTampered(
+                f"canonical observation {digest.sha256} routing provenance "
+                "identity does not match its own digest record")
+        if normalized_units is not None and (
+            normalized_units.get(provenance.candidate_id) != provenance.unit_id
+        ):
+            raise CanonicalObservationTampered(
+                f"canonical observation {digest.sha256} routing provenance "
+                "does not match the expected daily-unit identity")
+        if (
+            payload.get("schedule_id") != provenance.candidate_id
+            or payload.get("demand_variant") != provenance.demand_variant
+            or payload.get("seed") != provenance.seed
+            or payload.get("execution_arm") != provenance.execution_arm
+        ):
+            raise CanonicalObservationTampered(
+                f"canonical observation {digest.sha256} duplicated launch "
+                "identity does not match routing provenance")
+
+        feasibility = payload.get("feasibility")
+        candidate_metrics = payload.get("candidate_metrics")
+        truncation = payload.get("truncation")
+        candidate_truncation = (
+            truncation.get("candidate")
+            if isinstance(truncation, Mapping) else None)
+        denial_counts = (
+            feasibility.get("vehicles_denied_departure")
+            if isinstance(feasibility, Mapping) else None,
+            candidate_metrics.get("dropped_unreachable")
+            if isinstance(candidate_metrics, Mapping) else None,
+            candidate_truncation.get("dropped_unreachable")
+            if isinstance(candidate_truncation, Mapping) else None,
+        )
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in denial_counts
+        ) or any(value != provenance.denied_count for value in denial_counts):
+            raise CanonicalObservationTampered(
+                f"canonical observation {digest.sha256} denial counts do not "
+                "match routing provenance")
+        access_report = resolve_access_impact_report(
+            cache_root, provenance.access_impact_sha256)
+        transformed_route = resolve_transformed_route(
+            cache_root, provenance.transformed_route_sha256)
+        try:
+            closure_routing.validate_access_impact_report(
+                access_report, provenance,
+                transformed_route_path=transformed_route)
+        except closure_routing.ClosureRoutingError as error:
+            raise CanonicalObservationTampered(
+                f"canonical observation {digest.sha256} has invalid "
+                f"access-impact evidence: {error}") from error
+
+
 def _timeout_identity(
     variant: str, seed: int, message: str,
     *, candidate_id: str, work_date: str, search_content_key: str,
-    provenance_key: str,
+    provenance_key: str, attempt: int = 1,
+    threshold_s: float | None = None,
+    retry_protocol: str = RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
 ) -> tuple[TimeoutIdentity, ...]:
-    """Structured identity for a SUMO run that hit the frozen timeout.
+    """Structured identity for a SUMO run that exhausted its retry protocol.
 
-    Frozen retry/resource protocol (do not change without a new benchmark
-    registration): a run gets exactly one attempt at the fixed
-    ``run_scenario.SUMO_TIMEOUT_S`` (300s) wall-clock threshold; there is no
-    automatic retry, and nothing here may silently raise the threshold or
-    give a candidate more CPU because of which arm or search happened to run
-    it. A non-timeout SUMO failure ("sumo failed" in message) is a genuine
-    hard failure, not an undecided outcome, and returns no identity here.
+    The producer supplies the registered attempt, wall threshold and protocol.
+    Product monthly runs use a 300 s first attempt followed only on timeout by
+    an exact 1,800 s replay. Legacy evidence retains the supported one-attempt
+    protocol. Nothing here may infer a traffic failure from elapsed wall time.
+    A non-timeout SUMO failure ("sumo failed" in message) is a genuine hard
+    failure, not an undecided outcome, and returns no identity here.
 
     Returns a validated `TimeoutIdentity` (see `finalist_decision`), not a
     string. Every caller passes the SCHEDULE's own `first_work_date` and
@@ -164,9 +506,10 @@ def _timeout_identity(
             search_content_key=search_content_key,
             variant=variant,
             seed=seed,
-            attempt=1,
-            threshold_s=float(rs.SUMO_TIMEOUT_S),
-            retry_protocol=RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+            attempt=attempt,
+            threshold_s=(float(rs.SUMO_TIMEOUT_S)
+                         if threshold_s is None else float(threshold_s)),
+            retry_protocol=retry_protocol,
             search_provenance_key=provenance_key,
         ),
     )
@@ -604,6 +947,7 @@ class ArchivedDemandSumoRunner:
         if include_disruption is not False and include_disruption is not True:
             raise ValueError("include_disruption must be a bool")
         self.include_disruption = bool(include_disruption)
+        self.recovery_timeout_s = _configured_recovery_timeout_s()
         # DEFAULT-OFF. Revision 1 exposes this only to the paired validation
         # harness; product, API and monthly-search paths never set it, so the
         # warm branch is unreachable in ordinary operation even if a cache
@@ -687,7 +1031,10 @@ class ArchivedDemandSumoRunner:
         self.end = self.epoch + timedelta(seconds=self.duration_s)
         self.home = rs.sumo_home()
         self.close_edges = list(self.spec.directed_edges)
-        self.adjacency = rs.build_edge_graph(set(self.close_edges))
+        # FULL, un-banned graph -- traffic_sim.simulation.closure_routing
+        # derives its own per-vehicle banned edge set (closure_routing.py),
+        # so a pre-banned graph here would silently misapply exclusions.
+        self.adjacency = rs.build_edge_graph(set())
         self.freeflow = rs.edge_freeflow_times()
         self._disruption_cache: dict[str, tuple[Mapping[str, Any], ...]] = {}
         self._deterministic_provider = None
@@ -753,6 +1100,14 @@ class ArchivedDemandSumoRunner:
                 Path("traffic_sim/simulation/closure_teleport.py"),
             ),
             (
+                "traffic_sim/simulation/closure_routing.py",
+                Path("traffic_sim/simulation/closure_routing.py"),
+            ),
+            (
+                "traffic_sim/simulation/disruption.py",
+                Path("traffic_sim/simulation/disruption.py"),
+            ),
+            (
                 "traffic_sim/simulation/monthly_demand.py",
                 Path("traffic_sim/simulation/monthly_demand.py"),
             ),
@@ -808,6 +1163,8 @@ class ArchivedDemandSumoRunner:
         simulation_source_labels = {
             "traffic_sim/simulation/monthly_sumo.py",
             "traffic_sim/simulation/closure_teleport.py",
+            "traffic_sim/simulation/closure_routing.py",
+            "traffic_sim/simulation/disruption.py",
             "traffic_sim/simulation/monthly_demand.py",
             "suggest_closure_time.py",
             "run_scenario.py",
@@ -858,6 +1215,13 @@ class ArchivedDemandSumoRunner:
                 if self.include_disruption
                 else "legacy_time_loss_v1"
             ),
+            "timeout_recovery": {
+                "protocol": RETRY_PROTOCOL_TWO_TIER_EXACT,
+                "initial_threshold_s": float(rs.SUMO_TIMEOUT_S),
+                "recovery_threshold_s": self.recovery_timeout_s,
+                "simulation_inputs_changed": False,
+                "worker_resources_changed": False,
+            },
             "envelope_policy": dataclasses.asdict(self.envelope_policy),
             **self.runtime_identity,
         }
@@ -1016,7 +1380,7 @@ class ArchivedDemandSumoRunner:
         ))
         scratch: list[Path] = []
         try:
-            metrics, _, _, _ = legacy.simulate_closure(
+            metrics, _, _, _, _ = legacy.simulate_closure(
                 name="baseline",
                 closures=None,
                 close_edges=[],
@@ -1070,6 +1434,34 @@ class ArchivedDemandSumoRunner:
             return metrics, buckets
         finally:
             shutil.rmtree(temporary_root, ignore_errors=True)
+
+    def _unit_identity(self, schedule: ClosureSchedule) -> str:
+        """The daily-unit identity this schedule belongs to, or the
+        schedule's own identity when no daily-unit decomposition applies.
+
+        Review finding (2026-08-30): `RoutingProvenance` bound only
+        `candidate_id` (== `schedule.schedule_id`), never the `daily-unit-*`
+        id a monthly search's own ledger and finalist-decision tooling key
+        evidence by. For an `independent_daily_reset_v1` one-day schedule
+        the two are DERIVABLE from each other -- `independent_daily.
+        decompose_schedules` is the same pure function the ledger itself
+        used to mint the unit id, so recomputing it here (rather than
+        threading a new parameter through every runner layer) cannot drift
+        from the ledger's own value; a mismatch is a hard error, not a
+        silent divergence. Any other schedule (multi-day, or a spec not
+        configured for independent-daily reset -- e.g. a plain
+        `run_scenario.py`/`suggest_closure_time.py` interactive closure) has
+        no daily-unit concept at all, so its own schedule identity IS the
+        unit identity.
+        """
+        if (self.spec.interday_policy == "independent_daily_reset_v1"
+                and schedule.day_count == 1):
+            from traffic_sim.simulation import independent_daily  # noqa: PLC0415
+            units, _parents = independent_daily.decompose_schedules(
+                self.spec, [schedule])
+            if len(units) == 1:
+                return units[0].unit_id
+        return schedule.schedule_id
 
     def _closure_seconds(
         self,
@@ -1563,6 +1955,112 @@ class ArchivedDemandSumoRunner:
                 return None
             raise
 
+    def _preserve_access_impact_evidence(self, access_impact_path: Path) -> str:
+        """Copy one per-trip denial report out of a scratch workspace and
+        into content-addressed, permanent storage before that workspace is
+        deleted.
+
+        `closure_routing.write_access_impact_report` already gives each
+        report stable per-trip provenance (reason, vehicle id, original
+        endpoints, closed-edge set, policy version, source/output route
+        digests). Without this call that report only ever lived in a
+        `tempfile.mkdtemp` workspace this runner deletes as soon as the
+        candidate finishes (`shutil.rmtree(temporary_root, ...)` /
+        `shutil.rmtree(workspace, ...)`), so a denial that genuinely happened
+        left no trace a monthly evidence reader could ever recover. Storage
+        is keyed by the report's own sha256 so the same closure/demand/
+        policy combination (the common case: every seed of one variant
+        shares one access-impact report) is written once.
+        """
+        digest = sha256_file(access_impact_path)
+        destination = (
+            self.cache_root / "access-impact" / digest[:2] / f"{digest}.json"
+        )
+        if destination.is_file():
+            # Review finding 1 (2026-08-30): a content-addressed path being
+            # PRESENT was previously treated as proof it was valid. A
+            # destination whose own bytes no longer hash to the name it is
+            # stored under (partial write, external corruption, a name
+            # collision) must never be silently reused as if it were the
+            # report this observation actually produced.
+            if sha256_file(destination) != digest:
+                raise closure_routing.ClosureRoutingError(
+                    f"cached access-impact report at {destination} does not "
+                    "hash to its own filename; refusing to reuse it")
+        else:
+            _atomic_content_addressed_copy(
+                access_impact_path, destination, expected_sha256=digest)
+        return digest
+
+    def _preserve_transformed_route(self, route_path: Path) -> str:
+        """Copy the route file actually handed to SUMO into content-
+        addressed, permanent storage, mirroring
+        `_preserve_access_impact_evidence`'s pattern exactly.
+
+        `RoutingProvenance.transformed_route_sha256` previously bound only a
+        DIGEST -- the file itself lived in a scratch workspace this runner
+        deletes as soon as the candidate finishes, so nothing durable ever
+        let a reader recover the actual rewritten route bytes (review
+        finding 3: the verification tool had no way to byte-diff individual
+        unaffected vehicles against source, because the transformed file no
+        longer existed by the time anyone could look at it). Storage is
+        keyed by the file's own sha256, matching `transformed_route_sha256`
+        exactly, so a reader can resolve provenance -> this store with no
+        separate index.
+        """
+        digest = sha256_file(route_path)
+        destination = (
+            self.cache_root / "transformed-routes" / digest[:2]
+            / f"{digest}.rou.xml.gz"
+        )
+        if destination.is_file():
+            if _sha256_gzip_payload(destination) != digest:
+                raise closure_routing.ClosureRoutingError(
+                    f"cached transformed route at {destination} does not "
+                    "hash to its own filename after decompression; refusing "
+                    "to reuse it")
+        else:
+            _atomic_gzip_content_addressed_copy(
+                route_path, destination, expected_sha256=digest)
+        return digest
+
+    def _preserve_canonical_observation(self, canonical: Mapping[str, Any]) -> str:
+        """Persist one complete canonical monthly observation into
+        content-addressed, permanent storage, mirroring
+        `_preserve_access_impact_evidence`'s pattern.
+
+        Review finding 4 (2026-08-29): before this call,
+        `CandidateEvidence.canonical_observation_digests` retained only a
+        `CanonicalObservationDigest.sha256` of this payload; nothing ever
+        wrote the payload itself anywhere durable (`self.canonical_observations`
+        is reset to `[]` at the top of every `run_candidate` call), so that
+        digest was, in the review's own words, "an unrecoverable digest" --
+        no reader could ever resolve it back to the routing provenance
+        (including the access-impact digest it in turn names), feasibility,
+        recovery, or baseline/candidate metrics it summarizes. Storage is
+        keyed by the payload's own digest, so re-persisting the identical
+        observation (a cache re-read, a retried seed that reproduces the same
+        result) writes it once. See `resolve_canonical_observation` for the
+        fail-closed read side.
+        """
+        digest = _canonical_digest(canonical)
+        destination = (
+            self.cache_root / "canonical-observations" / digest[:2]
+            / f"{digest}.json"
+        )
+        if destination.is_file():
+            # Same reuse-validation as `_preserve_access_impact_evidence`
+            # (review finding 1): a present file is not, on its own, proof
+            # it is the observation this digest names.
+            existing = json.loads(destination.read_text(encoding="utf-8"))
+            if _canonical_digest(existing) != digest:
+                raise CanonicalObservationTampered(
+                    f"cached canonical observation at {destination} does "
+                    "not hash to its own filename; refusing to reuse it")
+        else:
+            _atomic_json(destination, canonical)
+        return digest
+
     def _default_warm_invoker(self, *, plan, schedule, variant, seed, closures,
                               workspace, prefix_evidence):
         """Post-warm phase: load the prefix state and apply the closure.
@@ -1576,9 +2074,51 @@ class ArchivedDemandSumoRunner:
         run_dir.mkdir(parents=True, exist_ok=True)
         rs.write_closure_additional(plan.closure_additional, closures,
                                     self.rerouter_edges)
-        truncated, dropped = rs.truncate_stranded_vehicles(
+        access_impact_path = run_dir / "post_access_impact.json"
+        # `reroute_closure_affected_vehicles` returns (n_rerouted, n_denied).
+        # A successful reroute is completed traffic and must never be counted
+        # as `truncated_unreachable` -- see closure_routing.py's root-cause
+        # note and run_scenario.prepare_variant_job for the same pattern.
+        # `truncated_unreachable` is retained as an always-0 field for
+        # callers still reading the pre-2026-08-29 name; only a genuine
+        # denial belongs in `dropped_unreachable`.
+        rerouted, denied = rs.reroute_closure_affected_vehicles(
             self.variants[variant], self.close_edges, plan.filtered_route,
-            self.adjacency, closures, self.freeflow)
+            self.adjacency, closures, self.freeflow,
+            access_impact_path=access_impact_path,
+            identity={
+                "unit_id": self._unit_identity(schedule),
+                "candidate_id": schedule.schedule_id,
+                "demand_variant": variant,
+                "seed": seed,
+                "execution_arm": "warm",
+                "work_date": schedule.first_work_date,
+                "vehicle_class": closure_routing.DEFAULT_VCLASS,
+            })
+        truncated, dropped = 0, denied
+        access_impact_sha256 = self._preserve_access_impact_evidence(
+            access_impact_path)
+        # The route file `reroute_closure_affected_vehicles` just rewrote in
+        # place is exactly what SUMO is about to run (below); its digest at
+        # THIS moment is the transformed-route evidence, computed the same
+        # way `write_access_impact_report` computed its own
+        # `output_route_sha256` for the same file.
+        transformed_route_sha256 = self._preserve_transformed_route(
+            plan.filtered_route)
+        routing_provenance = closure_routing.RoutingProvenance(
+            routing_policy_version=closure_routing.POLICY_VERSION,
+            vehicle_class=closure_routing.DEFAULT_VCLASS,
+            unit_id=self._unit_identity(schedule),
+            candidate_id=schedule.schedule_id,
+            work_date=schedule.first_work_date,
+            demand_variant=variant,
+            seed=seed,
+            execution_arm="warm",
+            access_impact_sha256=access_impact_sha256,
+            transformed_route_sha256=transformed_route_sha256,
+            rerouted_around_closure=rerouted,
+            denied_count=denied,
+        ).to_dict()
         edge_data = run_dir / "post_edgedata.xml"
         add_path = run_dir / "post_edgedata.add.xml"
         rs.write_edgedata_additional(add_path, edge_data, self.duration_s,
@@ -1593,11 +2133,15 @@ class ArchivedDemandSumoRunner:
             load_state_path=plan.state_path,
             output_precision=WARM_OUTPUT_PRECISION,
             # The warm arm must be equivalent to the cold arm it replaces, and
-            # the cold arm (legacy.simulate_closure) now runs the Stage 3
-            # teleport policy. Only the post-warm segment carries it, because
-            # only that segment has the closure — the candidate-free prefix
-            # keeps SUMO's default exactly as before.
-            time_to_teleport_s=(closure_teleport.CLOSURE_TIME_TO_TELEPORT_S
+            # the cold arm (legacy.simulate_closure) now defaults to the
+            # closure-routing teleport policy (closure_teleport.
+            # CLOSURE_ROUTING_TELEPORT_POLICY_S, i.e. SUMO's own default --
+            # safe because every affected route is already rewritten around
+            # the closure before SUMO starts). Only the post-warm segment
+            # carries it, because only that segment has the closure — the
+            # candidate-free prefix keeps SUMO's default exactly as before,
+            # which for this policy is the same value either way.
+            time_to_teleport_s=(closure_teleport.CLOSURE_ROUTING_TELEPORT_POLICY_S
                                 if closures else None),
             tripinfo_write_unfinished=True)
         measurement = self._boundary_controller.run_resumed(
@@ -1617,7 +2161,7 @@ class ArchivedDemandSumoRunner:
                 edge_data, self.n_intervals,
                 measured_empty_edges=tuple(self.close_edges))
             active_throughput = closure_metrics.active_closure_throughput(
-                seed_flows, closures)
+                seed_flows, closures, window_begin_s=plan.warm_point_s)
             if active_throughput is None:
                 return None
         else:
@@ -1655,6 +2199,7 @@ class ArchivedDemandSumoRunner:
             "raw_post_warm_metrics": raw_post_metrics,
             "restore_correction": correction_summary,
             "candidate_buckets": _read_warm_edgedata_time_loss(edge_data),
+            "routing_provenance": routing_provenance,
         }
 
     def _provisional_predecessor(self, *, variant: str, seed: int,
@@ -1708,7 +2253,7 @@ class ArchivedDemandSumoRunner:
             prefix=f"warm-audit-{schedule.schedule_id[:12]}-{variant}-{seed}-"))
         try:
             filtered = audit_workspace / "filtered.rou.xml"
-            rs.truncate_stranded_vehicles(
+            rs.reroute_closure_affected_vehicles(
                 self.variants[variant], self.close_edges, filtered,
                 self.adjacency, closures, self.freeflow)
             audit = audit_route_mutation(self.variants[variant], filtered)
@@ -1932,8 +2477,19 @@ class ArchivedDemandSumoRunner:
                     evidence["recovery_buckets"], result["candidate_buckets"],
                     decision.warm_point_s, domain_start_s=0,
                     domain_end_s=self.duration_s))
+            # Review finding 3 (2026-08-29): `closure_feasibility`'s own
+            # default is the legacy `CLOSURE_TIME_TO_TELEPORT_S = -1`, but
+            # the SUMO run this feasibility judges was actually launched
+            # with the policy actually supplied on this arm -- see
+            # `_default_warm_invoker`'s `time_to_teleport_s=` (SUMO's own
+            # default, teleporting ENABLED, once every affected route is
+            # already rewritten around the closure) — an omitted argument
+            # here would make the published `teleport_policy` provenance
+            # claim teleporting was disabled when it was not.
             feasibility = legacy.closure_feasibility(
-                metrics, baseline, detour=self.detour)
+                metrics, baseline, detour=self.detour,
+                time_to_teleport_s=(closure_teleport.CLOSURE_ROUTING_TELEPORT_POLICY_S
+                                     if self.close_edges else None))
             failures = set(feasibility["hard_failures"])
             failures.update(
                 f"baseline_{reason}"
@@ -1948,6 +2504,22 @@ class ArchivedDemandSumoRunner:
                 policy=self.envelope_policy)
             if not recovery.recovered:
                 failures.add(f"recovery_{recovery.status}")
+            # Review finding 1 (2026-08-30): this used to fall back to a
+            # synthetic zero-valued `RoutingProvenance` (access_impact_sha256
+            # =None, rerouted/denied both fabricated as 0) whenever
+            # `result` did not carry one -- silently PUBLISHING a fake "no
+            # routing happened" record instead of surfacing that the real
+            # one went missing. `_default_warm_invoker`'s only two return
+            # paths are `None` (already handled by the caller as a warm
+            # decline, never reaching here) or a dict that always sets
+            # `"routing_provenance"`, so a missing key here can only mean an
+            # actual defect upstream -- fail closed rather than publish
+            # invented evidence.
+            if "routing_provenance" not in result:
+                raise closure_routing.ClosureRoutingError(
+                    f"warm observation for {schedule.schedule_id!r} "
+                    f"({variant}/{seed}) produced no routing_provenance; "
+                    "refusing to publish a synthetic fallback")
             canonical = build_monthly_observation(
                 schedule_id=schedule.schedule_id, variant=variant, seed=seed,
                 simulation_mode="meso",
@@ -1958,7 +2530,8 @@ class ArchivedDemandSumoRunner:
                 failures=sorted(failures),
                 matched_baseline_id=self.matched_baseline_id,
                 provenance_key=self.study_provenance_key,
-                provenance=self.provenance(),
+                provenance={**self.provenance(),
+                            "routing_provenance": result["routing_provenance"]},
                 execution_arm="warm", warm_point_s=decision.warm_point_s,
                 split_diagnostics={
                     "route_audit": audit,
@@ -2022,6 +2595,7 @@ class ArchivedDemandSumoRunner:
         *,
         variant: str,
         seed: int,
+        timeout_s: float | None = None,
     ) -> tuple[PairedObservation, tuple[str, ...], dict[str, Any] | None]:
         envelope = self._envelope(schedule)
         (
@@ -2095,8 +2669,9 @@ class ArchivedDemandSumoRunner:
             prefix=f"monthly-{schedule.schedule_id[:20]}-{variant}-{seed}-"
         ))
         scratch: list[Path] = []
+        cold_records: list[dict[str, Any]] = []
         try:
-            metrics, _, _, _ = legacy.simulate_closure(
+            metrics, _, _, _, _ = legacy.simulate_closure(
                 name="candidate",
                 closures=closures,
                 close_edges=self.close_edges,
@@ -2116,7 +2691,68 @@ class ArchivedDemandSumoRunner:
                 seed_workers=1,
                 seed_start=seed,
                 variant_labels=[variant],
+                sumo_timeout_s=timeout_s,
+                replication_records=cold_records,
+                routing_identity_extra={
+                    "unit_id": self._unit_identity(schedule),
+                    "candidate_id": schedule.schedule_id,
+                    "execution_arm": "cold",
+                    "work_date": schedule.first_work_date,
+                    "vehicle_class": closure_routing.DEFAULT_VCLASS,
+                },
             )
+            # Preserve the cold path's per-trip denial evidence the same way
+            # the warm path does, before `temporary_root` below is deleted.
+            for access_impact_path in scratch:
+                if Path(access_impact_path).name.endswith(
+                        ".access_impact.json"):
+                    self._preserve_access_impact_evidence(
+                        Path(access_impact_path))
+            # Same durability for the transformed route file itself (review
+            # finding 3) -- exactly one `.rou.xml` scratch entry exists here
+            # because `simulate_closure` was called with a single variant
+            # above (`variants=[self.variants[variant]]`).
+            for candidate_route_path in scratch:
+                if Path(candidate_route_path).name.endswith(".rou.xml"):
+                    self._preserve_transformed_route(Path(candidate_route_path))
+            # Bind the routing policy identity and this specific run's
+            # transformed-route/access-report digest into provenance, so a
+            # cached/published observation can be traced back to exactly the
+            # closure_routing rule and evidence file that produced it (review
+            # finding: these digests were computed but discarded). There is
+            # exactly one candidate variant/seed per call here, so there is
+            # exactly one record.
+            #
+            # Review finding 1 (2026-08-30): `cold_records` is populated
+            # exactly when `close_edges` was non-empty inside
+            # `simulate_closure` (see its `if close_edges:` gate) -- and
+            # `self.close_edges` is this runner's own closure set, fixed at
+            # construction, never empty for a real closure observation. An
+            # empty `cold_records` here is therefore not a legitimate "no
+            # routing happened" state to paper over with None/0 defaults; it
+            # means the cold call silently skipped routing it should have
+            # done. Fail closed instead of publishing invented evidence.
+            if not cold_records:
+                raise closure_routing.ClosureRoutingError(
+                    f"cold observation for {schedule.schedule_id!r} "
+                    f"({variant}/{seed}) produced no routing evidence "
+                    f"despite close_edges={self.close_edges!r}; refusing to "
+                    "publish a synthetic fallback")
+            routing_provenance = closure_routing.RoutingProvenance(
+                routing_policy_version=closure_routing.POLICY_VERSION,
+                vehicle_class=closure_routing.DEFAULT_VCLASS,
+                unit_id=self._unit_identity(schedule),
+                candidate_id=schedule.schedule_id,
+                work_date=schedule.first_work_date,
+                demand_variant=variant, seed=seed,
+                execution_arm="cold",
+                access_impact_sha256=cold_records[0]["access_impact_sha256"],
+                transformed_route_sha256=(
+                    cold_records[0]["transformed_route_sha256"]),
+                rerouted_around_closure=(
+                    cold_records[0]["rerouted_around_closure"]),
+                denied_count=cold_records[0]["dropped_unreachable"],
+            ).to_dict()
             if self._forensic_observer is not None:
                 tripinfo_paths = [Path(path) for path in scratch
                                   if Path(path).name.endswith("_tripinfo.xml")]
@@ -2128,10 +2764,18 @@ class ArchivedDemandSumoRunner:
                     schedule_id=schedule.schedule_id, variant=variant,
                     seed=seed, phase="cold_candidate",
                     tripinfo_path=tripinfo_paths[0], metrics=metrics)
+            # Same provenance-accuracy fix as the warm arm above: the cold
+            # `legacy.simulate_closure` call just above did not override
+            # `time_to_teleport_s` either, so it ran with SUMO's own default
+            # (teleporting enabled) via `simulate_closure`'s own default
+            # argument -- `closure_feasibility` must be told the same value
+            # rather than fall back to its own legacy `-1` default.
             feasibility = legacy.closure_feasibility(
                 metrics,
                 baseline,
                 detour=self.detour,
+                time_to_teleport_s=(closure_teleport.CLOSURE_ROUTING_TELEPORT_POLICY_S
+                                     if self.close_edges else None),
             )
             failures = set(feasibility["hard_failures"])
             baseline_failures = closure_metrics.disqualification_reasons(
@@ -2183,7 +2827,8 @@ class ArchivedDemandSumoRunner:
                 failures=sorted(failures),
                 matched_baseline_id=matched_baseline_id,
                 provenance_key=self.study_provenance_key,
-                provenance=self.provenance(),
+                provenance={**self.provenance(),
+                            "routing_provenance": routing_provenance},
                 # ALWAYS "cold" here: this is the cold simulation path, and it
                 # is also where the warm arm falls back to. Labelling it from
                 # the runner's setting would mark a genuinely cold result
@@ -2338,6 +2983,9 @@ class ArchivedDemandSumoRunner:
                 work_date=schedule.first_work_date,
                 search_content_key=schedule.search_content_key,
                 provenance_key=self.study_provenance_key,
+                attempt=2,
+                threshold_s=self.recovery_timeout_s,
+                retry_protocol=RETRY_PROTOCOL_TWO_TIER_EXACT,
             )
 
         def bump(variant: str, seed: int, *, timed_out: bool, outcome: str) -> None:
@@ -2353,47 +3001,85 @@ class ArchivedDemandSumoRunner:
                 work_date=schedule.first_work_date,
                 variant=variant, seed=seed)
 
-        def run_started(variant: str, seed: int):
+        def launch(
+            variant: str,
+            seed: int,
+            *,
+            timeout_s: float | None = None,
+        ):
+            """Execute and account for exactly one SUMO process launch."""
             record_start(variant, seed)
-            return self._run_observation(schedule, variant=variant, seed=seed)
+            try:
+                if timeout_s is None:
+                    result = self._run_observation(
+                        schedule, variant=variant, seed=seed)
+                else:
+                    result = self._run_observation(
+                        schedule, variant=variant, seed=seed,
+                        timeout_s=timeout_s)
+            except SystemExit as error:
+                message = str(error)
+                timed_out = "sumo timed out" in message
+                recognized = timed_out or "sumo failed" in message
+                bump(
+                    variant,
+                    seed,
+                    timed_out=timed_out,
+                    outcome=(
+                        "timeout" if timed_out else
+                        ("recognized_failure" if recognized else
+                         "unrecognized_exception")
+                    ),
+                )
+                if not recognized:
+                    raise
+                failures = (() if timed_out else (
+                    f"sumo_execution_failure:{variant}:{seed}:" + message,
+                ))
+                return None, failures, None, (message if timed_out else None)
+            except BaseException:
+                bump(
+                    variant,
+                    seed,
+                    timed_out=False,
+                    outcome="unrecognized_exception",
+                )
+                raise
+            bump(variant, seed, timed_out=False, outcome="success")
+            observation, failures, canonical = result
+            return observation, failures, canonical, None
+
+        def run_with_recovery(variant: str, seed: int):
+            """Use the registered exact two-tier wall-clock protocol."""
+            observation, failures, canonical, timeout_message = launch(
+                variant, seed)
+            if timeout_message is None:
+                return observation, failures, (), canonical
+
+            # Change only how long the parent waits.  Simulation inputs, seed,
+            # worker count, routing, teleport and every scientific gate remain
+            # identical.  The first timed-out scratch is discarded by
+            # `_run_observation`; this is a fresh exact replay, never a parse of
+            # incomplete XML.
+            observation, failures, canonical, timeout_message = launch(
+                variant,
+                seed,
+                timeout_s=self.recovery_timeout_s,
+            )
+            if timeout_message is None:
+                return observation, failures, (), canonical
+            return (
+                None,
+                (),
+                timeout_identity_for(variant, seed, timeout_message),
+                None,
+            )
 
         if self.seed_workers == 1 or len(pending) <= 1:
             for variant, seed in pending:
-                run_timeouts: tuple[TimeoutIdentity, ...] = ()
-                try:
-                    observation, run_failures, canonical = run_started(
-                        variant, seed)
-                except SystemExit as error:
-                    message = str(error)
-                    timed_out = "sumo timed out" in message
-                    recognized = timed_out or "sumo failed" in message
-                    # Attempt telemetry is bumped here, at the launch
-                    # boundary, BEFORE deciding whether this outcome is
-                    # recognized — a SystemExit this module does not know how
-                    # to classify is still a real SUMO launch that happened,
-                    # and it must not go uncounted merely because the search
-                    # is about to re-raise and abort.
-                    bump(variant, seed, timed_out=timed_out,
-                         outcome=("timeout" if timed_out else
-                                  ("recognized_failure" if recognized else
-                                   "unrecognized_exception")))
-                    if not recognized:
-                        raise
-                    observation, canonical = None, None
-                    run_failures = (
-                        f"sumo_execution_failure:{variant}:{seed}:" + message,
-                    )
-                    if timed_out:
-                        run_timeouts = timeout_identity_for(variant, seed, message)
-                except BaseException:
-                    # Any other failure at the launch seam (a bug, a signal,
-                    # anything not SystemExit) is still a launched attempt;
-                    # count it, then let it propagate unchanged.
-                    bump(variant, seed, timed_out=False,
-                         outcome="unrecognized_exception")
-                    raise
-                else:
-                    bump(variant, seed, timed_out=False, outcome="success")
+                observation, run_failures, run_timeouts, canonical = (
+                    run_with_recovery(variant, seed)
+                )
                 yield variant, seed, observation, run_failures, run_timeouts, canonical
             return
 
@@ -2405,37 +3091,15 @@ class ArchivedDemandSumoRunner:
         try:
             futures = [
                 executor.submit(
-                    run_started, variant, seed)
+                    run_with_recovery, variant, seed)
                 for variant, seed in pending
             ]
             for index, ((variant, seed), future) in enumerate(
                     zip(pending, futures)):
                 consumed.add(index)
-                run_timeouts = ()
-                try:
-                    observation, run_failures, canonical = future.result()
-                except SystemExit as error:
-                    message = str(error)
-                    timed_out = "sumo timed out" in message
-                    recognized = timed_out or "sumo failed" in message
-                    bump(variant, seed, timed_out=timed_out,
-                         outcome=("timeout" if timed_out else
-                                  ("recognized_failure" if recognized else
-                                   "unrecognized_exception")))
-                    if not recognized:
-                        raise
-                    observation, canonical = None, None
-                    run_failures = (
-                        f"sumo_execution_failure:{variant}:{seed}:" + message,
-                    )
-                    if timed_out:
-                        run_timeouts = timeout_identity_for(variant, seed, message)
-                except BaseException:
-                    bump(variant, seed, timed_out=False,
-                         outcome="unrecognized_exception")
-                    raise
-                else:
-                    bump(variant, seed, timed_out=False, outcome="success")
+                observation, run_failures, run_timeouts, canonical = (
+                    future.result()
+                )
                 yield variant, seed, observation, run_failures, run_timeouts, canonical
         finally:
             # Every future not yet consumed above is either genuinely
@@ -2453,20 +3117,14 @@ class ArchivedDemandSumoRunner:
                     continue
                 if future.cancel():
                     continue
-                abandoned_variant, abandoned_seed = pending[index]
                 try:
                     future.result()
-                except SystemExit as error:
-                    timed_out = "sumo timed out" in str(error)
-                    bump(abandoned_variant, abandoned_seed, timed_out=timed_out,
-                         outcome=("timeout" if timed_out else
-                                  "recognized_failure_abandoned"))
                 except BaseException:
-                    bump(abandoned_variant, abandoned_seed, timed_out=False,
-                         outcome="unrecognized_exception_abandoned")
-                else:
-                    bump(abandoned_variant, abandoned_seed, timed_out=False,
-                         outcome="success_abandoned")
+                    # `run_with_recovery` records every started attempt at the
+                    # launch seam, including its exception.  Cleanup must not
+                    # count the same process a second time merely because the
+                    # canonical consumer stopped before reaching this future.
+                    pass
             executor.shutdown(wait=True)
 
     def run_candidate(
@@ -2524,19 +3182,36 @@ class ArchivedDemandSumoRunner:
             for variant, seed, observation, run_failures, run_timeouts, canonical in stream:
                 if observation is not None:
                     observations.append(observation)
+                    # A deliberately initiated recovery may supply earlier
+                    # undecided evidence.  Once the exact same launch identity
+                    # succeeds, retaining its stale timeout would make the
+                    # completed evidence inconclusive forever.
+                    timeouts = {
+                        item for item in timeouts
+                        if not (
+                            item.candidate_id == schedule.schedule_id
+                            and item.work_date == schedule.first_work_date
+                            and item.search_content_key
+                            == schedule.search_content_key
+                            and item.variant == variant
+                            and item.seed == seed
+                        )
+                    }
                 if canonical is not None:
                     self.canonical_observations.append(canonical)
+                    canonical_sha256 = self._preserve_canonical_observation(
+                        canonical)
                     canonical_digests.add(CanonicalObservationDigest(
                         candidate_id=schedule.schedule_id,
                         work_date=schedule.first_work_date,
                         variant=variant,
                         seed=seed,
-                        sha256=_canonical_digest(canonical),
+                        sha256=canonical_sha256,
                     ))
                 seen.add((variant, seed))
                 failures.update(run_failures)
                 timeouts.update(run_timeouts)
-                if failures:
+                if failures or timeouts:
                     break
         observations.sort(
             key=lambda item: (

@@ -1,0 +1,90 @@
+{
+ "schema_version": "direction_decision_sensitivity_v1",
+ "study_id": "direction_decision_sensitivity_v1",
+ "question": "Does plausible direction-split variation change the closure decision — viable set, shortlist, winner — when the SUMO seed is held matched across stress cases?",
+ "created": "2026-08-31",
+ "release_evidence": false,
+ "demand": {
+  "date": "2025-09-16",
+  "source": "historical",
+  "window_start": "07:00",
+  "window_end": "09:00",
+  "window_rationale": "AM peak: the transfer model claims its largest directional asymmetry there, so it is where direction variation has the best chance of mattering."
+ },
+ "stress_cases": [
+  "q50",
+  "q10",
+  "q90"
+ ],
+ "stress_case_semantics": "Named stress cases from the existing q10/q50/q90 demand artifacts. No probability weight is asserted or implied.",
+ "seeds": [
+  1000,
+  1001,
+  1002,
+  1003
+ ],
+ "seed_rationale": "Four repetitions per condition, following FHWA's Traffic Analysis Toolbox guidance; the same list runs under every stress case.",
+ "candidates": [
+  {
+   "candidate_id": "skanegatan_n_107",
+   "edges": [
+    "60786979_3575001205_0"
+   ],
+   "street": "Skanegatan"
+  },
+  {
+   "candidate_id": "skanegatan_s_107",
+   "edges": [
+    "1455801464_18241874_0"
+   ],
+   "street": "Skanegatan"
+  },
+  {
+   "candidate_id": "valhallagatan_v_1074",
+   "edges": [
+    "60790252_60790253_0"
+   ],
+   "street": "Valhallagatan"
+  },
+  {
+   "candidate_id": "gibraltargatan_so_134",
+   "edges": [
+    "26355153_96523321_0"
+   ],
+   "street": "Gibraltargatan"
+  }
+ ],
+ "comparison": {
+  "primary_cost": "delta_time_loss_s",
+  "primary_cost_basis": "candidate minus baseline total time loss, matched per (stress case, seed)",
+  "decision_fields": [
+   "viable_set",
+   "shortlist",
+   "winner"
+  ],
+  "shortlist_size": 2
+ },
+ "tolerances": {
+  "winner_margin_pct": 5.0,
+  "material_rank_correlation": 0.9,
+  "material_regret_pct": 10.0,
+  "min_pairs_per_cell": 4
+ },
+ "budget": {
+  "timeout_s": 7200,
+  "simulation_mode": "meso"
+ },
+ "decision_rule": {
+  "NO": "hard failures, viable set, shortlist and winner (or tie) are identical across all stress cases within tolerance",
+  "YES": "at least one preregistered decision field differs materially",
+  "INCONCLUSIVE": "timeout, failed run health, or fewer matched pairs than min_pairs_per_cell"
+ },
+ "forbidden": [
+  "ScenarioSpec change",
+  "monthly integration",
+  "warm-state integration",
+  "API change",
+  "UI change",
+  "release promotion"
+ ]
+}

@@ -1,0 +1,47 @@
+{
+  "activation": {
+    "q50_only": false,
+    "ui_api_change": false
+  },
+  "bound_evidence": {
+    "content_key": "c5f3158aada3c8ae6a2eab6861e639e9365beb4d59dd11ef682ce31f3914f9d4",
+    "evidence_id": "subhour-gate-s-evidence-20260831-v5",
+    "path": "/Users/gt/Documents/gs-project/validation/subhour_gate_s_evidence_20260831-v5.json",
+    "schema": "subhour_gate_s_evidence_v1",
+    "sha256": "61e6dc3498d72f3749c638bf288dfe3981211ecf4f73cdd8403816f0058440e1",
+    "source_lineage": {
+      "content_key": "a86860b00f52a8cfbcf7e19c343b1586a3a3204a663aaf7d20cb4f45def17065",
+      "evidence_id": "subhour-bounded-sumo-20260831-v23",
+      "path": "/Users/gt/Documents/gs-project/validation/subhour_bounded_sumo_outcome_subhour-bounded-sumo-20260831-v23.json",
+      "schema": "subhour_cost_ordered_bounded_outcome_v1",
+      "sha256": "f6f908ed9db8357b198eeb996ca6962562e6aa0e5eb35aefa132a886b6622336"
+    }
+  },
+  "claim_boundary": "q50_only_inactive_without_strict_gate_and_review",
+  "content_key": "7f8de73af9af56af09e40990654fd26c111823022465ac6e1b87e6bd32ccf8d1",
+  "decision_fields": [
+    "hard_failures",
+    "viable_set",
+    "finalists",
+    "winner"
+  ],
+  "evidence_id": "subhour-gate-s-20260831-v5",
+  "kind": "subhour_gate_s_registration",
+  "policy": {
+    "FINALIST_STRESS": "stress changes finalists or a decision-relevant failure",
+    "INCONCLUSIVE": "missing, unhealthy, or non-comparable bound evidence",
+    "Q50_ONLY": {
+      "identical_finalists": true,
+      "variant_unique_failure_recall": 1.0,
+      "zero_decision_regret": true
+    },
+    "ROBUST_THREE_VARIANT": "all decision fields identical across q10/q50/q90"
+  },
+  "release_evidence": false,
+  "schema": "subhour_gate_s_registration_v2",
+  "stress_cases": [
+    "q10",
+    "q50",
+    "q90"
+  ]
+}

@@ -41,7 +41,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from traffic_sim.core.contracts import ClosureSchedule, ClosureSearchSpec
@@ -134,15 +136,47 @@ class IndependentDailyCostSource:
                                   Sequence[tuple[str, ClosureSchedule]]],
         provider_for: Callable[[ClosureSchedule], Any],
         cache: Any = None,
+        window_cost_index: Any = None,
     ) -> None:
         self.spec = spec
         self._daily_units_for = daily_units_for
         self._provider_for = provider_for
         self._cache = cache
+        self._window_cost_index = window_cost_index
         self._providers: dict[str, Any] = {}
         self._identity: dict[str, Any] | None = None
+        if window_cost_index is not None:
+            bound = getattr(window_cost_index, "bound_identity", {})
+            if not isinstance(bound, Mapping) \
+                    or bound.get("search_content_key") != spec.content_key:
+                raise ValueError(
+                    "window cost index is not bound to this search spec")
+            provider_identity = bound.get("provider_identity")
+            if not isinstance(provider_identity, Mapping):
+                raise ValueError(
+                    "window cost index lacks its provider identity")
+            self._identity = dict(provider_identity)
         self.cache_hits = 0
+        self.cache_misses = 0
+        self.memory_cache_hits = 0
+        self.memory_cache_misses = 0
+        self.disk_cache_hits = 0
+        self.disk_cache_misses = 0
+        self.index_lookups = 0
         self.computed_units = 0
+        # Population telemetry for the cold-ledger contract.  These are
+        # distinct daily units, not parent-to-unit lookups: overlapping five
+        # day parents must not inflate the 1,950 x 3 population.
+        self._profile_unit_ids: set[str] = set()
+        self._profile_variant_records = 0
+        self._timings: dict[str, float] = {
+            "xml_parse": 0.0,
+            "route_vehicle_grouping": 0.0,
+            "shortest_path_detour": 0.0,
+            "window_aggregation": 0.0,
+            "parent_aggregation_sorting": 0.0,
+        }
+        self._profile_daily_records: dict[str, dict[str, Any]] = {}
 
     def _provider(self, unit_schedule: ClosureSchedule):
         key = unit_schedule.schedule_id
@@ -159,6 +193,30 @@ class IndependentDailyCostSource:
                 "something: the archive identities are resolved per daily unit")
         return dict(self._identity)
 
+    def validate_window_cost_index_binding(
+        self, unit_id: str, unit_schedule: ClosureSchedule) -> None:
+        """Reconstruct the current provider identity before the first lookup.
+
+        Index JSON can validate its own bytes, but only the active resolver can
+        independently reconstruct the archive, network and costing-source
+        identity for this invocation.  This check intentionally performs no
+        deterministic calculation and therefore keeps index loading fail
+        closed without paying the old per-window cost.
+        """
+        if self._window_cost_index is None:
+            return
+        provider = self._provider(unit_schedule)
+        actual = dict(provider.identity())
+        bound = getattr(self._window_cost_index, "bound_identity", {})
+        expected_by_unit = bound.get("provider_identities")
+        expected = (expected_by_unit.get(str(unit_id))
+                    if isinstance(expected_by_unit, Mapping)
+                    else bound.get("provider_identity"))
+        if not isinstance(expected, Mapping) or dict(expected) != actual:
+            raise ValueError(
+                "window cost index provider/input identity is stale or swapped")
+        self._identity = actual
+
     def parent_cost(self, parent: ClosureSchedule) -> ParentCost:
         units = list(self._daily_units_for(parent))
         if not units:
@@ -168,10 +226,69 @@ class IndependentDailyCostSource:
         unit_ids: list[str] = []
         hits = 0
         for unit_id, unit_schedule in units:
-            provider = self._provider(unit_schedule)
-            before = getattr(provider, "cache_hits", 0)
-            records = provider.disruption(unit_schedule)
-            hits += max(0, getattr(provider, "cache_hits", 0) - before)
+            if self._window_cost_index is not None:
+                self.validate_window_cost_index_binding(unit_id, unit_schedule)
+                records = self._window_cost_index.lookup(
+                    unit_id, unit_schedule.schedule_id)
+                self.index_lookups += 1
+            else:
+                provider = self._provider(unit_schedule)
+                # Observe the two cache layers at their actual seams without
+                # changing the deterministic provider (whose source digest is
+                # part of the bound cost identity).  Providers retain one
+                # memory record per daily schedule; the optional DailyCostCache
+                # is consulted only after that memory miss.
+                memory_hit = unit_schedule.schedule_id in getattr(
+                    provider, "_memory", {})
+                disk_hit = None
+                if not memory_hit and self._cache is not None:
+                    cache_identity = getattr(provider, "cache_identity", None)
+                    cache_key = getattr(self._cache, "key", None)
+                    path_for = getattr(self._cache, "path_for", None)
+                    if callable(cache_identity) and callable(cache_key) \
+                            and callable(path_for):
+                        disk_hit = Path(path_for(cache_key(
+                            cache_identity(unit_schedule)))).is_file()
+                records = provider.disruption(unit_schedule)
+                if memory_hit:
+                    self.memory_cache_hits += 1
+                else:
+                    self.memory_cache_misses += 1
+                if disk_hit is True:
+                    self.disk_cache_hits += 1
+                elif disk_hit is False:
+                    self.disk_cache_misses += 1
+            variants = tuple(str(item.get("demand_variant", ""))
+                             for item in records)
+            if variants != ("q10", "q50", "q90"):
+                raise ValueError(
+                    "deterministic cost provider must return one actual "
+                    "q10/q50/q90 record per daily unit")
+            if unit_id not in self._profile_unit_ids:
+                self._profile_unit_ids.add(unit_id)
+                self._profile_variant_records += len(records)
+                self._profile_daily_records[unit_id] = {
+                    "schedule_id": unit_schedule.schedule_id,
+                    "records": tuple(dict(item) for item in records),
+                }
+            provider = (None if self._window_cost_index is not None
+                        else provider)
+            snapshot = getattr(provider, "timing_snapshot", None)
+            if callable(snapshot):
+                for phase, elapsed in snapshot().items():
+                    if phase in self._timings:
+                        # Providers expose cumulative values.  The snapshot is
+                        # sampled below after each unit, so retain a separate
+                        # per-provider watermark to avoid double counting.
+                        previous = getattr(provider, "_profile_timing_seen", {})
+                        delta = max(0.0, float(elapsed) -
+                                    float(previous.get(phase, 0.0)))
+                        self._timings[phase] += delta
+                        previous[phase] = float(elapsed)
+                        setattr(provider, "_profile_timing_seen", previous)
+            if self._window_cost_index is None:
+                if memory_hit:
+                    hits += 1
             daily_records.append(records)
             unit_ids.append(unit_id)
             if self._identity is None:
@@ -181,9 +298,15 @@ class IndependentDailyCostSource:
                 identity = dict(provider.identity())
                 identity.pop("demand", None)
                 self._identity = identity
-        self.cache_hits += hits
+        # Per-provider deltas above already update the aggregate memory
+        # counter.  Do not add the local compatibility tally a second time.
+        self.cache_hits = self.memory_cache_hits
+        self.cache_misses = self.memory_cache_misses
         self.computed_units += len(units)
+        aggregate_started = time.perf_counter()
         combined = parent_closure_cost(parent.schedule_id, daily_records)
+        self._timings["parent_aggregation_sorting"] += (
+            time.perf_counter() - aggregate_started)
         from traffic_sim.simulation.deterministic_disruption import (
             sum_daily_disruption,
         )
@@ -195,6 +318,40 @@ class IndependentDailyCostSource:
             cache_hits=hits,
         )
 
+    def timing_snapshot(self) -> Mapping[str, float]:
+        """Return deterministic parent-aggregation timing for profiling."""
+        return dict(self._timings)
+
+    def population_snapshot(self) -> Mapping[str, int]:
+        """Return the actual distinct unit/variant records observed."""
+        return {
+            "daily_units": len(self._profile_unit_ids),
+            "daily_variant_records": self._profile_variant_records,
+        }
+
+    def cache_snapshot(self) -> Mapping[str, int]:
+        """Return parent-facing and disk cache counters with one meaning."""
+        return {
+            "lookups": int(self.memory_cache_hits + self.memory_cache_misses),
+            "memory_cache_hits": int(self.memory_cache_hits),
+            "memory_cache_misses": int(self.memory_cache_misses),
+            "disk_cache_lookups": int(self.disk_cache_hits +
+                                       self.disk_cache_misses),
+            "disk_cache_hits": int(self.disk_cache_hits),
+            "disk_cache_misses": int(self.disk_cache_misses),
+            "index_lookups": int(self.index_lookups),
+        }
+
+    def daily_records_snapshot(self) -> Mapping[str, Mapping[str, Any]]:
+        """Return the exact daily oracle population observed by this source."""
+        return {
+            unit_id: {
+                "schedule_id": str(value["schedule_id"]),
+                "records": [dict(item) for item in value["records"]],
+            }
+            for unit_id, value in self._profile_daily_records.items()
+        }
+
 
 @dataclass(frozen=True)
 class CostLedger:
@@ -205,6 +362,11 @@ class CostLedger:
     costs: tuple[ParentCost, ...]
     cache_hits: int
     computed_units: int
+    cache_misses: int = 0
+    memory_cache_hits: int = 0
+    memory_cache_misses: int = 0
+    disk_cache_hits: int = 0
+    disk_cache_misses: int = 0
 
     @property
     def candidates(self) -> tuple[CostOrderedCandidate, ...]:
@@ -228,6 +390,11 @@ class CostLedger:
             "provider_identity": dict(self.provider_identity),
             "candidate_count": len(self.costs),
             "cache_hits": int(self.cache_hits),
+            "cache_misses": int(self.cache_misses),
+            "memory_cache_hits": int(self.memory_cache_hits),
+            "memory_cache_misses": int(self.memory_cache_misses),
+            "disk_cache_hits": int(self.disk_cache_hits),
+            "disk_cache_misses": int(self.disk_cache_misses),
             "computed_daily_units": int(self.computed_units),
             "costs": [item.to_dict() for item in self.costs],
         }
@@ -268,6 +435,11 @@ class CostLedger:
             costs=tuple(costs),
             cache_hits=int(raw.get("cache_hits", 0)),
             computed_units=int(raw.get("computed_daily_units", 0)),
+            cache_misses=int(raw.get("cache_misses", 0)),
+            memory_cache_hits=int(raw.get("memory_cache_hits", 0)),
+            memory_cache_misses=int(raw.get("memory_cache_misses", 0)),
+            disk_cache_hits=int(raw.get("disk_cache_hits", 0)),
+            disk_cache_misses=int(raw.get("disk_cache_misses", 0)),
         )
 
 
@@ -301,12 +473,22 @@ def build_cost_ledger(
             "cost_total": total,
             "cache_hits": getattr(source, "cache_hits", 0),
         })
+    cache = (dict(source.cache_snapshot())
+             if callable(getattr(source, "cache_snapshot", None)) else {})
+    memory_hits = int(cache.get("memory_cache_hits", getattr(
+        source, "cache_hits", 0)))
+    memory_misses = int(cache.get("memory_cache_misses", 0))
     return CostLedger(
         search_content_key=spec.content_key,
         provider_identity=dict(source.identity()),
         costs=tuple(costs),
-        cache_hits=int(getattr(source, "cache_hits", 0)),
+        cache_hits=memory_hits,
         computed_units=int(getattr(source, "computed_units", 0)),
+        cache_misses=memory_misses,
+        memory_cache_hits=memory_hits,
+        memory_cache_misses=memory_misses,
+        disk_cache_hits=int(cache.get("disk_cache_hits", 0)),
+        disk_cache_misses=int(cache.get("disk_cache_misses", 0)),
     )
 
 
@@ -390,6 +572,8 @@ def run_cost_ordered_execution(
     checkpoint: Callable[[ExecutionCursor, str, CandidateEvidence], None] | None = None,
     progress: Callable[[str, int, int, Mapping[str, Any]], None] | None = None,
     disable_early_stop: bool = False,
+    max_verifications: int | None = None,
+    max_exact_launches: int | None = None,
 ) -> CostOrderedResult:
     """Verify in cost order, checkpointing after every SUMO run.
 
@@ -497,7 +681,31 @@ def run_cost_ordered_execution(
         state=state,
         verified_evidence=verified_evidence,
         disable_early_stop=disable_early_stop,
+        max_verifications=max_verifications,
+        max_exact_launches=max_exact_launches,
     )
+    # The per-candidate checkpoint above is deliberately written before the
+    # search can inspect the returned evidence.  Publish the terminal cursor
+    # as a second immutable checkpoint so a timeout/budget stop cannot be
+    # reopened as active work after restart.  Re-entering an already terminal
+    # cursor is idempotent and does not invoke ``verify`` again.
+    if (checkpoint is not None and result.terminal_status is not None
+            and (cursor is None or cursor.state.stop_reason is None)):
+        if not result.state.verified:
+            raise ValueError(
+                "a terminal cost-ordered result has no verified cursor prefix")
+        last_id = result.state.verified[-1]
+        last_evidence = next(
+            item for item in result.evidence if item.candidate_id == last_id)
+        checkpoint(
+            ExecutionCursor(
+                bound_identity=identity,
+                ledger_content_key=ledger_key,
+                state=result.state,
+            ),
+            last_id,
+            last_evidence,
+        )
     # The mirror and the scan must agree, or a resumed run would continue from
     # a cursor describing a position the scan was never at.
     if (tuple(result.state.verified) != tuple(verified)
@@ -533,6 +741,8 @@ def reconcile_disruption(
             hard_failures=evidence.hard_failures,
             disruption=tuple(priced.per_variant),
             timeout_undecided=evidence.timeout_undecided,
+            canonical_observation_digests=(
+                evidence.canonical_observation_digests),
         )
     produced = {str(item.get("demand_variant")): item
                 for item in evidence.disruption}
@@ -582,6 +792,7 @@ def execution_record(
         "provider_identity": dict(ledger.provider_identity),
         "cost_ledger_content_key": ledger.to_dict()["content_key"],
         "status": result.selection.status,
+        "terminal_status": result.terminal_status,
         "selected_ids": list(result.selection.selected_ids),
         "ordered_candidates": len(result.ordered_costs),
         "deterministically_disqualified": len(result.disqualified),
@@ -595,6 +806,7 @@ def execution_record(
         "stop_proof": dict(result.stop_proof),
         "cursor": result.state.to_dict(),
         "disable_early_stop": bool(disable_early_stop),
+        "candidate_statuses": dict(result.candidate_statuses),
     }
     if wall_time_s is not None:
         payload["wall_time_s"] = round(float(wall_time_s), 3)

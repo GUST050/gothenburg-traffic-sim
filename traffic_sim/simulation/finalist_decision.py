@@ -67,16 +67,22 @@ CLOSURE_COST_DECISION_METHOD = "deterministic_worst_variant_closure_cost_v1"
 #: silently reading back as valid.
 TIMEOUT_IDENTITY_SCHEMA = "timeout_v3"
 
-#: The one retry/threshold protocol every producer of a `TimeoutIdentity`
-#: currently implements: a candidate (variant, seed) run gets exactly one
-#: attempt at a fixed wall-clock threshold, and a timeout is never silently
-#: retried with more time or resources. Named explicitly (not merely implied
-#: by `attempt=1`) so the record states the POLICY, not only its numeric
-#: effect — a reader should not have to infer "no retries happen" from the
-#: absence of a second record for the same candidate/variant/seed.
+#: Historical one-attempt protocol retained so existing immutable v3 evidence
+#: remains readable. New product runs use the two-tier protocol below.
 RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD = (
     "single_attempt_fixed_threshold_no_retry_v1"
 )
+
+#: Product recovery protocol for exact monthly SUMO observations.  The first
+#: launch retains the established 300 s fast-fail boundary.  Only a launch
+#: that reaches that boundary is repeated, with byte-identical simulation
+#: inputs/resources and a larger registered wall-clock allowance.  A timeout
+#: record is published only if the recovery attempt also expires.
+RETRY_PROTOCOL_TWO_TIER_EXACT = "two_tier_exact_wallclock_v1"
+SUPPORTED_TIMEOUT_RETRY_PROTOCOLS = frozenset({
+    RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+    RETRY_PROTOCOL_TWO_TIER_EXACT,
+})
 
 
 @dataclass(frozen=True, order=True)
@@ -164,11 +170,24 @@ class TimeoutIdentity:
             or self.threshold_s <= 0
         ):
             raise ValueError("timeout identity threshold_s must be positive")
-        if self.retry_protocol != (
-                RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD):
+        if self.retry_protocol not in SUPPORTED_TIMEOUT_RETRY_PROTOCOLS:
             raise ValueError(
                 "timeout identity retry_protocol is unsupported: "
                 f"{self.retry_protocol!r}"
+            )
+        if (
+            self.retry_protocol == RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD
+            and self.attempt != 1
+        ):
+            raise ValueError(
+                "single-attempt timeout identities must record attempt 1"
+            )
+        if (
+            self.retry_protocol == RETRY_PROTOCOL_TWO_TIER_EXACT
+            and self.attempt != 2
+        ):
+            raise ValueError(
+                "two-tier timeout identities must record the terminal attempt 2"
             )
 
     def to_dict(self) -> dict[str, Any]:
@@ -461,10 +480,10 @@ class CandidateEvidence:
     #: candidate was evaluated before this objective existed.
     disruption: tuple[Mapping, ...] = ()
     #: Validated `TimeoutIdentity` records for SUMO runs that hit the frozen
-    #: wall-clock timeout for this candidate. A timeout is folded into
-    #: ``hard_failures`` too (so old readers that only check ``eligible``
-    #: still exclude it), but this field is what lets a reader distinguish
-    #: "we don't know" from "genuinely disqualified" — see
+    #: wall-clock timeout for this candidate. A timeout is deliberately NOT
+    #: folded into ``hard_failures``: no completed simulation exists from
+    #: which to infer a traffic-health failure. This field lets a reader
+    #: distinguish "we don't know" from "genuinely disqualified" — see
     #: ``has_undecided_timeout`` and ``pilot_selection.
     #: select_pilot_finalists``, which refuses to declare a decision while
     #: this is non-empty rather than silently treating a timed-out candidate

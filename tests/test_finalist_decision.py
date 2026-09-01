@@ -6,6 +6,7 @@ import pytest
 
 from traffic_sim.simulation.finalist_decision import (
     RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+    RETRY_PROTOCOL_TWO_TIER_EXACT,
     TIMEOUT_IDENTITY_SCHEMA,
     CandidateEvidence,
     FinalistPolicy,
@@ -94,17 +95,14 @@ class TestUndecidedTimeoutEvidence:
         assert evidence.timeout_undecided == ()
         assert evidence.has_undecided_timeout is False
 
-    def test_an_undecided_timeout_is_reported_but_stays_ineligible(self):
+    def test_an_undecided_timeout_is_reported_without_faking_a_hard_failure(self):
         evidence = CandidateEvidence(
             candidate_id="a",
-            hard_failures=("sumo_execution_failure:q50:1000:sumo timed out"
-                           " after 300s (seed 1000)",),
             timeout_undecided=(_timeout_identity("a"),),
         )
         assert evidence.has_undecided_timeout is True
-        # Still ineligible: an "old reader" that only checks .eligible must
-        # keep excluding it exactly as before this field existed.
-        assert evidence.eligible is False
+        assert evidence.eligible is True
+        assert evidence.hard_failures == ()
 
     def test_a_bare_string_timeout_entry_is_rejected(self):
         """The old v1/v2 wire format must fail closed, not be reinterpreted."""
@@ -119,6 +117,25 @@ class TestTimeoutIdentity:
     def test_round_trips_through_to_dict_and_from_dict(self):
         identity = _timeout_identity("a")
         assert TimeoutIdentity.from_dict(identity.to_dict()) == identity
+
+    def test_two_tier_terminal_attempt_round_trips(self):
+        identity = _timeout_identity(
+            "a",
+            attempt=2,
+            threshold_s=1800.0,
+            retry_protocol=RETRY_PROTOCOL_TWO_TIER_EXACT,
+        )
+        assert TimeoutIdentity.from_dict(identity.to_dict()) == identity
+
+    @pytest.mark.parametrize(("protocol", "attempt"), [
+        (RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD, 2),
+        (RETRY_PROTOCOL_TWO_TIER_EXACT, 1),
+    ])
+    def test_retry_protocol_rejects_impossible_attempt_number(
+            self, protocol, attempt):
+        with pytest.raises(ValueError, match="attempt"):
+            _timeout_identity(
+                "a", retry_protocol=protocol, attempt=attempt)
 
     def test_from_dict_rejects_a_bare_string(self):
         with pytest.raises(ValueError, match="not accepted"):
@@ -443,10 +460,6 @@ class TestRobustFinalistDecision:
         """
         timed_out = CandidateEvidence(
             candidate_id="timed-out",
-            hard_failures=(
-                "sumo_execution_failure:q50:1000:sumo timed out after 300s "
-                "(seed 1000)",
-            ),
             timeout_undecided=(_timeout_identity("timed-out"),),
         )
         result = decide_finalists(

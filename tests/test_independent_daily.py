@@ -18,6 +18,7 @@ from traffic_sim.simulation.finalist_decision import (
     TimeoutIdentity,
 )
 from traffic_sim.simulation.independent_daily import (
+    CompatibleDailyCacheImport,
     IndependentDailyRunner,
     IsolatedDailySumoRunner,
     aggregate_daily_evidence,
@@ -82,6 +83,164 @@ class FakeDailyRunner:
             candidate_id=schedule.schedule_id,
             observations=tuple(observations),
         )
+
+
+def test_compatible_recovery_imports_completed_units_and_resumes_timeout(
+        tmp_path):
+    spec = _spec(
+        permitted_date_start="2027-01-01",
+        permitted_date_end="2027-01-02",
+    )
+    parent = next(
+        item for item in generate_closure_schedules(spec)
+        if item.day_count == 2 and item.daily_start == "15:00"
+    )
+    source_root = tmp_path / "source-cache"
+    source_child = FakeDailyRunner()
+    source = IndependentDailyRunner(
+        spec, daily_runner=source_child, cache_root=source_root)
+    source.prepare((parent,))
+    units = [source._units[key] for key in sorted(source._units)]
+    completed, timed_out = units
+    source._save_cached(completed, source_child.run_candidate(
+        completed.schedule,
+        target_repetitions={"q10": 1, "q50": 1, "q90": 0},
+        existing=None,
+        stage="pilot",
+    ))
+    timeout_identity = TimeoutIdentity(
+        schema=TIMEOUT_IDENTITY_SCHEMA,
+        candidate_id=timed_out.schedule.schedule_id,
+        work_date=timed_out.schedule.first_work_date,
+        search_content_key=timed_out.schedule.search_content_key,
+        variant="q50",
+        seed=1001,
+        attempt=1,
+        threshold_s=300.0,
+        retry_protocol=RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+        search_provenance_key="old-study",
+    )
+    source._save_cached(timed_out, CandidateEvidence(
+        candidate_id=timed_out.schedule.schedule_id,
+        observations=(PairedObservation(
+            candidate_id=timed_out.schedule.schedule_id,
+            demand_variant="q10",
+            seed=1000,
+            baseline_time_loss_s=1000.0,
+            candidate_time_loss_s=1010.0,
+            matched_baseline_id="baseline-2027-01-02",
+            provenance_key=f"daily-{completed.schedule.first_work_date}",
+        ),),
+        hard_failures=(
+            "sumo_execution_failure:q50:1001:sumo timed out after 300s "
+            "(seed 1001)",
+        ),
+        timeout_undecided=(timeout_identity,),
+    ))
+
+    recovery = CompatibleDailyCacheImport(
+        source_root=source_root.resolve(),
+        source_search_id="old-search",
+        source_search_content_key=spec.content_key,
+        source_backend_artifact_sha256="a" * 64,
+        source_unit_backend_digests=dict(source._unit_backend_digests),
+    )
+    # Same backend identity as the source: this is a same-code resume from
+    # another workspace root, not a translation across a policy change.
+    recovered_child = FakeDailyRunner()
+    destination = tmp_path / "recovery-cache"
+    runner = IndependentDailyRunner(
+        spec,
+        daily_runner=recovered_child,
+        cache_root=destination,
+        compatible_cache_import=recovery,
+    )
+    runner.prepare((parent,))
+
+    manifest = json.loads(
+        (destination / "compatible-import-old-search.json").read_text()
+    )
+    assert manifest["imported_completed_units"] == 1
+    assert manifest["imported_partial_units"] == 1
+    assert manifest["recovery_pending_units"] == 1
+    assert manifest["skipped_empty_timeout_units"] == 0
+    assert manifest["skipped_incompatible_backend_units"] == 0
+    sanitized = runner._load_cached(timed_out, count=False)
+    assert sanitized is not None
+    assert len(sanitized.observations) == 1
+    assert not sanitized.hard_failures
+    assert not sanitized.timeout_undecided
+    result = runner.run_candidate(
+        parent,
+        target_repetitions={"q10": 1, "q50": 1, "q90": 0},
+        existing=None,
+        stage="pilot",
+    )
+    assert len(result.observations) == 2
+    assert len(recovered_child.calls) == 1
+    assert recovered_child.calls[0][0] == timed_out.schedule.schedule_id
+
+
+def test_compatible_recovery_rejects_units_with_a_different_backend_digest(
+        tmp_path):
+    """A routing-policy (or any other backend) change must never re-key old
+    evidence under the new policy's cache lookup -- it must be treated as a
+    normal cache miss instead, exactly the failure mode the review found:
+    old candidate observations silently satisfying a new-policy lookup."""
+    spec = _spec(
+        permitted_date_start="2027-01-01",
+        permitted_date_end="2027-01-02",
+    )
+    parent = next(
+        item for item in generate_closure_schedules(spec)
+        if item.day_count == 2 and item.daily_start == "15:00"
+    )
+    source_root = tmp_path / "source-cache"
+    source_child = FakeDailyRunner()
+    source = IndependentDailyRunner(
+        spec, daily_runner=source_child, cache_root=source_root)
+    source.prepare((parent,))
+    units = [source._units[key] for key in sorted(source._units)]
+    completed, _timed_out = units
+    source._save_cached(completed, source_child.run_candidate(
+        completed.schedule,
+        target_repetitions={"q10": 1, "q50": 1, "q90": 0},
+        existing=None,
+        stage="pilot",
+    ))
+
+    recovery = CompatibleDailyCacheImport(
+        source_root=source_root.resolve(),
+        source_search_id="old-search",
+        source_search_content_key=spec.content_key,
+        source_backend_artifact_sha256="a" * 64,
+        source_unit_backend_digests=dict(source._unit_backend_digests),
+    )
+    # A different backend -- e.g. a retired routing policy -- must produce a
+    # different unit backend digest for every unit.
+    recovered_child = FakeDailyRunner()
+    recovered_child.provenance = lambda: {
+        "kind": "fake-daily-sumo", "identity": "closure_origin_routing_v1"}
+    destination = tmp_path / "recovery-cache"
+    runner = IndependentDailyRunner(
+        spec,
+        daily_runner=recovered_child,
+        cache_root=destination,
+        compatible_cache_import=recovery,
+    )
+    runner.prepare((parent,))
+
+    manifest = json.loads(
+        (destination / "compatible-import-old-search.json").read_text()
+    )
+    assert manifest["imported_completed_units"] == 0
+    assert manifest["imported_partial_units"] == 0
+    assert manifest["retained_destination_units"] == 0
+    assert manifest["available_completed_units"] == 0
+    assert manifest["skipped_incompatible_backend_units"] == len(units)
+    # No file was written under the new backend digest -- the unit is a
+    # genuine cache miss, not a demoted/partial import.
+    assert runner._load_cached(completed, count=False) is None
 
 
 def test_decomposition_deduplicates_units_shared_by_overlapping_schedules():
@@ -623,10 +782,6 @@ def test_daily_timeout_is_undecided_not_silently_a_hard_failure_and_keeps_disrup
     evidence = {
         units[0].unit_id: CandidateEvidence(
             candidate_id=units[0].schedule.schedule_id,
-            hard_failures=(
-                "sumo_execution_failure:q50:1000:sumo timed out after 300s "
-                "(seed 1000)",
-            ),
             disruption=disruption,
             timeout_undecided=(daily_timeout,),
         ),
@@ -648,11 +803,8 @@ def test_daily_timeout_is_undecided_not_silently_a_hard_failure_and_keeps_disrup
     combined = aggregate_daily_evidence(parent, units, evidence)
 
     assert combined.observations == ()
-    assert not combined.eligible
-    assert combined.hard_failures == (
-        "2027-01-01:sumo_execution_failure:q50:1000:sumo timed out after "
-        "300s (seed 1000)",
-    )
+    assert combined.eligible
+    assert combined.hard_failures == ()
     # The bug: this used to be (), losing the deterministic disruption a
     # timed-out unit still computed.
     assert combined.disruption != ()
@@ -668,6 +820,50 @@ def test_daily_timeout_is_undecided_not_silently_a_hard_failure_and_keeps_disrup
     assert combined.timeout_undecided == (daily_timeout,)
     assert combined.timeout_undecided[0].work_date == "2027-01-01"
     assert combined.has_undecided_timeout
+
+
+def test_cached_timeout_is_terminal_for_the_frozen_no_retry_campaign(tmp_path):
+    spec = _spec(
+        permitted_date_start="2027-01-01",
+        permitted_date_end="2027-01-01",
+        required_work_minutes=60,
+        max_consecutive_start_days=1,
+        permitted_daily_band=DailyTimeBand("15:00", "16:00"),
+    )
+    parent = generate_closure_schedules(spec)[0]
+    child = FakeDailyRunner()
+    runner = IndependentDailyRunner(
+        spec, daily_runner=child, cache_root=tmp_path / "cache"
+    )
+    runner.prepare((parent,))
+    unit = next(iter(runner._units.values()))
+    timeout = TimeoutIdentity(
+        schema=TIMEOUT_IDENTITY_SCHEMA,
+        candidate_id=unit.schedule.schedule_id,
+        work_date=unit.identity["work_date"],
+        search_content_key=unit.schedule.search_content_key,
+        variant="q10",
+        seed=1000,
+        attempt=1,
+        threshold_s=300.0,
+        retry_protocol=RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+        search_provenance_key="study",
+    )
+    runner._save_cached(unit, CandidateEvidence(
+        candidate_id=unit.schedule.schedule_id,
+        timeout_undecided=(timeout,),
+    ))
+
+    result = runner.run_candidate(
+        parent,
+        target_repetitions={"q10": 1, "q50": 1, "q90": 1},
+        existing=None,
+        stage="pilot",
+    )
+
+    assert child.calls == []
+    assert result.hard_failures == ()
+    assert result.timeout_undecided == (timeout,)
 
 
 @pytest.mark.parametrize(("field", "value"), [
@@ -740,6 +936,188 @@ def test_daily_cache_round_trip_preserves_canonical_observation_digest(tmp_path)
     loaded = resumed._load_cached(resumed_unit)
     assert loaded is not None
     assert loaded.canonical_observation_digests == (digest,)
+
+
+class FakeDailyRunnerWithCacheRoot(FakeDailyRunner):
+    """A `daily_runner` double that exposes the durable-evidence
+    `cache_root` a real `ArchivedDemandSumoRunner`/`IsolatedDailySumoRunner`
+    always has, so `_load_cached`/`_save_cached` actually run the
+    end-to-end routing-evidence validation (review finding 1)."""
+
+    def __init__(self, cache_root):
+        super().__init__()
+        self.cache_root = cache_root
+
+
+def _real_durable_digest(cache_root, *, candidate_id, unit_id="unit-a",
+                          work_date="2027-01-01", variant="q10", seed=1000):
+    """Persist one complete, real durable-evidence chain under `cache_root`
+    using the actual production preservation code, and return its digest."""
+    from traffic_sim.simulation import closure_routing
+    from traffic_sim.simulation.monthly_sumo import ArchivedDemandSumoRunner
+
+    archive = cache_root.parent / "archive"
+    if not archive.is_dir():
+        archive.mkdir(parents=True)
+        (archive / "manifest.json").write_text(
+            json.dumps({"status": "succeeded"}))
+        (archive / "demand_meta.json").write_text(json.dumps({
+            "demand_build_key": "demand-key",
+            "epoch_sim": "2025-09-16T00:00:00",
+            "n_intervals": 96, "n_variants": 3,
+        }))
+        for filename in (
+            "calibrated.rou.xml", "calibrated_v1.rou.xml",
+            "calibrated_v2.rou.xml",
+        ):
+            (archive / filename).write_text("<routes/>")
+
+    from traffic_sim.core.contracts import ClosureSearchSpec, DailyTimeBand
+    spec = ClosureSearchSpec(
+        search_id="fixture", directed_edges=("edge-a",),
+        demand_build_id="demand-key", source="historical",
+        permitted_date_start=work_date, permitted_date_end=work_date,
+        required_work_minutes=60, max_consecutive_start_days=1,
+        permitted_daily_band=DailyTimeBand("06:00", "07:00"))
+    runner = ArchivedDemandSumoRunner(
+        spec, archive=archive, baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=cache_root)
+
+    route_path = cache_root.parent / f"scratch-route-{seed}.rou.xml"
+    route_path.write_text("<routes/>\n", encoding="utf-8")
+    transformed_route_sha256 = runner._preserve_transformed_route(route_path)
+
+    access_impact_path = cache_root.parent / f"scratch-access-{seed}.json"
+    closure_routing.write_access_impact_report(
+        access_impact_path,
+        result=closure_routing.ClosureRoutingResult(
+            unaffected=0, rerouted=0, denied=0, access_impact=()),
+        close_edges=[], closures=None, source_route_path=route_path,
+        out_route_path=route_path,
+        identity={
+            "unit_id": unit_id,
+            "candidate_id": candidate_id,
+            "work_date": work_date,
+            "demand_variant": variant,
+            "seed": seed,
+            "execution_arm": "cold",
+            "vehicle_class": closure_routing.DEFAULT_VCLASS,
+        })
+    access_impact_sha256 = runner._preserve_access_impact_evidence(
+        access_impact_path)
+
+    routing_provenance = closure_routing.RoutingProvenance(
+        routing_policy_version=closure_routing.POLICY_VERSION,
+        vehicle_class=closure_routing.DEFAULT_VCLASS,
+        unit_id=unit_id, candidate_id=candidate_id, work_date=work_date,
+        demand_variant=variant, seed=seed, execution_arm="cold",
+        access_impact_sha256=access_impact_sha256,
+        transformed_route_sha256=transformed_route_sha256,
+        rerouted_around_closure=0, denied_count=0,
+    ).to_dict()
+    sha256 = runner._preserve_canonical_observation({
+        "schedule_id": candidate_id,
+        "demand_variant": variant,
+        "seed": seed,
+        "execution_arm": "cold",
+        "feasibility": {"vehicles_denied_departure": 0},
+        "candidate_metrics": {"dropped_unreachable": 0},
+        "truncation": {"candidate": {"dropped_unreachable": 0}},
+        "provenance": {"routing_provenance": routing_provenance},
+    })
+    return CanonicalObservationDigest(
+        candidate_id=candidate_id, work_date=work_date, variant=variant,
+        seed=seed, sha256=sha256)
+
+
+def test_daily_cache_round_trip_validates_a_real_durable_evidence_chain(
+        tmp_path):
+    """The happy path: a cache hit whose canonical/routing/access-impact/
+    transformed-route chain is real and untampered must still resolve --
+    the new validation must not reject legitimate evidence."""
+    spec = _spec()
+    schedule = generate_closure_schedules(spec)[0]
+    cache_root = tmp_path / "backend-cache"
+    first = IndependentDailyRunner(
+        spec, daily_runner=FakeDailyRunnerWithCacheRoot(cache_root),
+        cache_root=tmp_path / "daily-cache")
+    first.prepare((schedule,))
+    unit = next(iter(first._units.values()))
+    digest = _real_durable_digest(
+        cache_root, candidate_id=unit.schedule.schedule_id,
+        unit_id=unit.unit_id, work_date=unit.identity["work_date"])
+    first._save_cached(unit, CandidateEvidence(
+        candidate_id=unit.schedule.schedule_id,
+        canonical_observation_digests=(digest,)))
+
+    resumed = IndependentDailyRunner(
+        spec, daily_runner=FakeDailyRunnerWithCacheRoot(cache_root),
+        cache_root=tmp_path / "daily-cache")
+    resumed.prepare((schedule,))
+    resumed_unit = next(iter(resumed._units.values()))
+    loaded = resumed._load_cached(resumed_unit)
+    assert loaded is not None
+    assert loaded.canonical_observation_digests == (digest,)
+
+
+def test_save_cached_fails_closed_when_evidence_is_not_durable(tmp_path):
+    """Review finding 1: fresh evidence must be validated on WRITE, not
+    just on reload -- a backend that returns a digest naming no real
+    durable artifact must never be allowed to poison the cache."""
+    spec = _spec()
+    schedule = generate_closure_schedules(spec)[0]
+    cache_root = tmp_path / "backend-cache"
+    runner = IndependentDailyRunner(
+        spec, daily_runner=FakeDailyRunnerWithCacheRoot(cache_root),
+        cache_root=tmp_path / "daily-cache")
+    runner.prepare((schedule,))
+    unit = next(iter(runner._units.values()))
+    phantom_digest = CanonicalObservationDigest(
+        candidate_id=unit.schedule.schedule_id,
+        work_date=unit.identity["work_date"], variant="q10", seed=1000,
+        sha256="c" * 64)
+    with pytest.raises(Exception):
+        runner._save_cached(unit, CandidateEvidence(
+            candidate_id=unit.schedule.schedule_id,
+            canonical_observation_digests=(phantom_digest,)))
+    # And nothing was written to the daily cache as a result.
+    assert not (tmp_path / "daily-cache").exists() or not any(
+        (tmp_path / "daily-cache").rglob("*.json"))
+
+
+def test_load_cached_fails_closed_when_durable_evidence_is_tampered(
+        tmp_path):
+    """Review finding 1: a cache hit whose backing canonical observation was
+    tampered with after the fact must be treated as corrupt, not returned as
+    valid evidence."""
+    spec = _spec()
+    schedule = generate_closure_schedules(spec)[0]
+    cache_root = tmp_path / "backend-cache"
+    first = IndependentDailyRunner(
+        spec, daily_runner=FakeDailyRunnerWithCacheRoot(cache_root),
+        cache_root=tmp_path / "daily-cache")
+    first.prepare((schedule,))
+    unit = next(iter(first._units.values()))
+    digest = _real_durable_digest(
+        cache_root, candidate_id=unit.schedule.schedule_id,
+        unit_id=unit.unit_id, work_date=unit.identity["work_date"])
+    first._save_cached(unit, CandidateEvidence(
+        candidate_id=unit.schedule.schedule_id,
+        canonical_observation_digests=(digest,)))
+    canonical_path = (
+        cache_root / "canonical-observations" / digest.sha256[:2]
+        / f"{digest.sha256}.json")
+    canonical_path.write_text(json.dumps({"tampered": True}), encoding="utf-8")
+
+    resumed = IndependentDailyRunner(
+        spec, daily_runner=FakeDailyRunnerWithCacheRoot(cache_root),
+        cache_root=tmp_path / "daily-cache")
+    resumed.prepare((schedule,))
+    resumed_unit = next(iter(resumed._units.values()))
+    before = resumed.timing_snapshot()["cache_corrupt"]
+    loaded = resumed._load_cached(resumed_unit)
+    assert loaded is None
+    assert resumed.timing_snapshot()["cache_corrupt"] == before + 1
 
 
 def test_worker_result_rejects_missing_timeout_and_unknown_envelope_fields():

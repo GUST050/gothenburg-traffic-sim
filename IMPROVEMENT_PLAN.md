@@ -15,6 +15,25 @@ model-independent protocol in `AGENTS.md`.
 
 ## Current verified status — 2026-08-24
 
+- FASTEST-SENSOR-ROUTE LOSO DIAGNOSTIC (added 2026-09-01). The corrected
+  demand contract now emits only deterministic global fastest OD routes for
+  sensor-attributed candidates and requires a finite strictly slower
+  sensor-avoiding route. The 50-route-floor build contains 539 candidates and
+  passed exact active counts. Its six-fold
+  `loso_pfe_meso_v11_observability_gate` preserved every active fold margin,
+  but all held stations remained structurally underidentified. The
+  preregistered same-protocol floors 25/50/100/200/500 produced median daily
+  multiplicative errors 1.642x/1.560x/1.946x/2.293x/2.425x and mean GEH<5
+  55.8%/57.3%/49.6%/43.3%/37.0%. Floor 50 therefore wins both primary and
+  secondary selection rules and is restored as active; its rebuilt candidate
+  SHA exactly matches its LOSO report. This is the best tested level for this
+  network/date/seed, not a universal optimum. The mechanism is observability:
+  route variables rise 390/498/834/1,534/3,634 while independent station data
+  do not, and the added routes are largely exclusive to the held sensor.
+  Evidence: `validation/sensor_od_ablation_20260901_plan.json` and
+  `validation/sensor_od_ablation_20260901_result.json` plus the five linked
+  LOSO reports.
+
 - MONTHLY SEARCH THROUGHPUT (added 2026-08-27). The declared 8x1 worker policy
   was never achieved: campaign `ui-monthly-13lhsoy-5d` measured 80 330.94
   worker-seconds over 88 771.27 active seconds (ratio 0.905 - one busy worker

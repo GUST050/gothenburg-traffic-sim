@@ -314,22 +314,37 @@ class TestDisableEarlyStop:
                 state=bounded.state, disable_early_stop=True)
 
 
-class TestUndecidedTimeoutBlocksEarlyStop:
-    """cost-order-v5's failure mode: a timeout must never justify a stop."""
+class TestUndecidedTimeoutIsTerminal:
+    """An unresolved timeout stops both arms before any later candidate."""
 
-    def test_a_timeout_inside_the_band_forces_full_exhaustion(self):
+    def test_a_timeout_inside_the_band_is_terminal_immediately(self):
         candidates = [_candidate(index, float(index))
                       for index in range(1, 8)]
         result, verified = _run(candidates, _policy(minimum=2), band=0.0,
                                 timeouts={"closure-0002"})
         # Without the timeout this would stop at closure-0002 (cutoff 2.0,
-        # band_exhausted at closure-0003). The undecided evidence must push
-        # it all the way to exhaustion instead.
-        assert verified == [f"closure-{index:04d}" for index in range(1, 8)]
-        assert result.stop_proof["stop_reason"] == "search_space_exhausted"
+        # band_exhausted at closure-0003). An unresolved timeout is terminal;
+        # it must not trigger exhaustive fallback.
+        assert verified == ["closure-0001", "closure-0002"]
+        assert result.stop_proof["stop_reason"] == "inconclusive_timeout"
+        assert result.terminal_status == "INCONCLUSIVE_TIMEOUT"
+        assert result.stop_proof["valid_for_ready"] is False
+        assert result.stop_proof["selection_band_added_vehicle_hours"] is None
+        assert result.candidate_statuses["closure-0003"].startswith(
+            "not_run_terminal_")
         assert result.stop_proof["undecided_candidate_ids"] == [
             "closure-0002"]
         assert result.selection.status == "inconclusive"
+
+    def test_exhaustive_arm_has_the_same_terminal_boundary(self):
+        candidates = [_candidate(index, float(index))
+                      for index in range(1, 8)]
+        result, verified = _run(
+            candidates, _policy(minimum=2), band=0.0,
+            timeouts={"closure-0002"}, disable_early_stop=True)
+        assert verified == ["closure-0001", "closure-0002"]
+        assert result.terminal_status == "INCONCLUSIVE_TIMEOUT"
+        assert result.selection.selected_ids == ()
 
     def test_a_timeout_never_reached_does_not_taint_a_clean_stop(self):
         """A candidate beyond the band is never examined either way — a

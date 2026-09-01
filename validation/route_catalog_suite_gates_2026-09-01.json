@@ -1,0 +1,62 @@
+{
+ "environment": {
+  "date": "2026-09-01",
+  "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+  "sumo_version": "1.27.1"
+ },
+ "gates": {
+  "day_library_restore": {
+   "status": "pass",
+   "tests": [
+    "tests/test_day_library.py"
+   ]
+  },
+  "deterministic_repeat": {
+   "status": "pass",
+   "tests": [
+    "tests/test_route_catalog.py::test_catalog_identity_excludes_date_but_keeps_structure",
+    "tests/test_route_catalog.py::TestCatalogSourceContract"
+   ]
+  },
+  "malformed_catalog_rejected": {
+   "status": "pass",
+   "tests": [
+    "tests/test_route_catalog.py::test_ensure_catalog_is_single_complete_manifest",
+    "tests/test_route_catalog.py::test_adoption_default_is_fail_safe_and_explicit"
+   ]
+  },
+  "purpose_route_compatibility": {
+   "status": "pass",
+   "tests": [
+    "tests/test_pfe.py::TestPurposeStratifiedCalibration",
+    "tests/test_demand_provenance.py"
+   ]
+  },
+  "singleflight_recovery": {
+   "status": "pass",
+   "tests": [
+    "tests/test_singleflight.py"
+   ]
+  },
+  "sumo_runtime_no_regression": {
+   "status": "pass",
+   "tests": [
+    "tests/test_warm_state_sumo_equivalence.py"
+   ]
+  },
+  "warm_state_identity": {
+   "status": "pass",
+   "tests": [
+    "tests/test_warm_state_cache.py",
+    "tests/test_q50_subset_identity.py"
+   ]
+  }
+ },
+ "kind": "route_catalog_suite_gate_evidence",
+ "note": "Re-established 2026-09-01 for the strict sensor-route contract (sensor_shortest_positive_gap_v1) at min_per_sensor=50, after the catalog was rebuilt from the qualified pool. The prior 2026-08-26 evidence bound a catalog generated under the permissive bounded-detour rule and cannot cover this pool.",
+ "schema_version": 2,
+ "verification": {
+  "command_scope": "catalog qualification, route catalog source contract, purpose/provenance, singleflight, day library, warm-state identity and SUMO equivalence focused tests",
+  "result": "111 passed on 2026-09-01 against the strict sensor-route contract"
+ }
+}

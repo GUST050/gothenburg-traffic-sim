@@ -206,6 +206,7 @@ def candidate_identity_components(
     is_weekend: bool,
     start_date: str,
     seed: int,
+    min_per_sensor: int,
     home: Path,
     flows_path: Path,
     day_shape_path: Path | None = None,
@@ -243,7 +244,7 @@ def candidate_identity_components(
         "cross_fraction": cross_fraction,
         "is_weekend": bool(is_weekend),
         "start_date": start_date,
-        "min_per_sensor": 50,
+        "min_per_sensor": int(min_per_sensor),
         "route_diversity": build_candidates.DEFAULT_ROUTE_DIVERSITY,
         "max_stretch": build_candidates.DEFAULT_MAX_STRETCH,
         "max_local_stretch": build_candidates.DEFAULT_MAX_LOCAL_STRETCH,
@@ -264,6 +265,10 @@ def candidate_identity_components(
         "sensor_registry_loader": Path("traffic_sim/intake/sensors.py"),
         "direction_anchor": Path("traffic_sim/intake/direction_anchor.py"),
         "pipeline_fingerprint": Path("traffic_sim/core/fingerprint.py"),
+        "sensor_route_contract": Path(
+            "traffic_sim/demand/sensor_route_contract.py"),
+        "closure_disruption": Path("traffic_sim/simulation/disruption.py"),
+        "network_metadata": Path("traffic_sim/simulation/metadata.py"),
     }
     return config, inputs, sources
 
@@ -428,6 +433,8 @@ def parse_args() -> argparse.Namespace:
                         "record and is bypassed for congestion feedback.")
     p.add_argument("--candidate-n-total", type=int, default=None,
                    help=argparse.SUPPRESS)
+    p.add_argument("--candidate-min-per-sensor", type=int, default=None,
+                   help=argparse.SUPPRESS)
     p.add_argument("--candidate-cache-root", type=Path,
                    default=candidate_cache.DEFAULT_ROOT,
                    help=argparse.SUPPRESS)
@@ -519,6 +526,10 @@ def parse_args() -> argparse.Namespace:
                         "use for a final accuracy check, not routine runs).")
     args = p.parse_args()
 
+    if args.candidate_min_per_sensor is None:
+        from build_candidates import STRICT_SENSOR_OD_TARGET
+        args.candidate_min_per_sensor = STRICT_SENSOR_OD_TARGET
+
     def provided(flag: str) -> bool:
         return any(value == flag or value.startswith(flag + "=")
                    for value in sys.argv[1:])
@@ -536,6 +547,8 @@ def parse_args() -> argparse.Namespace:
         p.error("--pfe-workers must be a positive integer")
     if args.candidate_n_total is not None and args.candidate_n_total < 1:
         p.error("--candidate-n-total must be a positive integer")
+    if args.candidate_min_per_sensor < 1:
+        p.error("--candidate-min-per-sensor must be a positive integer")
     if args.candidate_source == "catalog" and args.legacy_random_pool:
         p.error("--candidate-source catalog cannot be combined with "
                 "--legacy-random-pool")
@@ -906,7 +919,9 @@ def main() -> None:
                     is_weekend=use_weekend_shape,
                     start_date=(cache_date
                                 or range_start.strftime("%Y-%m-%d")),
-                    seed=args.seed, home=home, flows_path=flows_path,
+                    seed=args.seed,
+                    min_per_sensor=args.candidate_min_per_sensor,
+                    home=home, flows_path=flows_path,
                     day_shape_path=day_shape_path,
                     day_blocks_path=day_blocks_path,
                     weight_file=weight_file))
@@ -951,7 +966,8 @@ def main() -> None:
                             cross_fraction=args.cross_fraction,
                             assignment_priors=(
                                 SUMO_DIR / "assignment_priors.json"),
-                            seed=args.seed, min_per_sensor=50)
+                            seed=args.seed,
+                            min_per_sensor=args.candidate_min_per_sensor)
 
                     if args.candidate_source_implicit:
                         adoption = route_catalog.adopted_catalog_config(
@@ -964,7 +980,8 @@ def main() -> None:
                                 "catalog_selected_n_total"][pool_key]
                             expected_key = route_catalog.catalog_key(
                                 dict(pool_config, n_total=catalog_n_total,
-                                     min_per_sensor=50),
+                                     min_per_sensor=(
+                                         args.candidate_min_per_sensor)),
                                 pool_inputs, catalog_sources,
                                 pool_key=pool_key)
                             reason = implicit_catalog_fallback_reason(
@@ -997,7 +1014,8 @@ def main() -> None:
                         base_config=pool_config, inputs=pool_inputs,
                         source_files=catalog_sources,
                         destinations=destinations, command_for=command_for,
-                        start_n_total=catalog_n_total, min_per_sensor=50,
+                        start_n_total=catalog_n_total,
+                        min_per_sensor=args.candidate_min_per_sensor,
                         attempts=(1 if args.candidate_source_implicit else 3))
                     catalog_identity_keys[pool_key] = selected["key"]
                     catalog_cache_events[pool_key] = selected["cache_event"]
@@ -1043,7 +1061,8 @@ def main() -> None:
                   "--gravity-alpha", str(args.gravity_alpha),
                   "--cross-fraction", str(args.cross_fraction),
                   "--assignment-priors", str(SUMO_DIR / "assignment_priors.json"),
-                  "--n-total", str(n_total), "--seed", str(args.seed)]
+                  "--n-total", str(n_total), "--seed", str(args.seed),
+                  "--min-per-sensor", str(args.candidate_min_per_sensor)]
             if use_weekend_shape:
                 cmd += ["--is-weekend"]
             if day_shape_path is not None:
@@ -1664,6 +1683,7 @@ def main() -> None:
             "candidate_source": args.candidate_source,
             "candidate_source_implicit": args.candidate_source_implicit,
             "candidate_n_total": args.candidate_n_total,
+            "candidate_min_per_sensor": args.candidate_min_per_sensor,
             "catalog_enabled": catalog_enabled,
             "catalog_pool_keys": list(catalog_pool_keys),
             "catalog_keys": dict(catalog_identity_keys),

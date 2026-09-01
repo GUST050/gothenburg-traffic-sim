@@ -244,6 +244,22 @@ class TestB1DateRangeContract:
         with pytest.raises(SystemExit):
             bsd.parse_args()
 
+    def test_candidate_sensor_floor_defaults_to_adopted_value(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["build_sumo_demand.py"])
+        assert bsd.parse_args().candidate_min_per_sensor == 50
+
+    def test_candidate_sensor_floor_override_is_positive(self, monkeypatch):
+        monkeypatch.setattr(
+            sys, "argv",
+            ["build_sumo_demand.py", "--candidate-min-per-sensor", "200"])
+        assert bsd.parse_args().candidate_min_per_sensor == 200
+
+        monkeypatch.setattr(
+            sys, "argv",
+            ["build_sumo_demand.py", "--candidate-min-per-sensor", "0"])
+        with pytest.raises(SystemExit):
+            bsd.parse_args()
+
 
     def test_widened_pfe_counts_retry_exact_no_bounds_before_publication(
             self, monkeypatch):

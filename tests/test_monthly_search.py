@@ -19,6 +19,7 @@ from traffic_sim.simulation.finalist_decision import (
     CandidateEvidence,
     FinalistPolicy,
     PairedObservation,
+    TimeoutIdentity,
 )
 from traffic_sim.simulation.monthly_search import (
     EVIDENCE_SCHEMA_VERSION,
@@ -118,6 +119,7 @@ def test_workspace_artifact_deserialization_rejects_malformed_timeout_fields(
             "disruption": [],
             "timeout_undecided": [raw_timeout],
             "canonical_observation_digests": [],
+            "canonical_evidence_store": None,
         })
 
 
@@ -133,13 +135,14 @@ def test_workspace_artifact_rejects_missing_timeout_population():
         "disruption": [],
         "timeout_undecided": [],
         "canonical_observation_digests": [],
+        "canonical_evidence_store": None,
     }
     del raw["timeout_undecided"]
     with pytest.raises(ValueError, match="fields are invalid"):
         evidence_from_dict(raw)
 
 
-def test_workspace_artifact_round_trips_canonical_observation_digest():
+def test_workspace_artifact_serializes_canonical_evidence_store(tmp_path):
     digest = CanonicalObservationDigest(
         candidate_id="daily-a", work_date="2027-01-01", variant="q50",
         seed=1001, sha256="a" * 64)
@@ -147,12 +150,94 @@ def test_workspace_artifact_round_trips_canonical_observation_digest():
         candidate_id="candidate-a", canonical_observation_digests=(digest,))
     payload = evidence_to_dict(
         evidence, stage="pilot",
-        target_repetitions={"q10": 0, "q50": 0, "q90": 0})
-    assert evidence_from_dict(payload).canonical_observation_digests == (digest,)
+        target_repetitions={"q10": 0, "q50": 0, "q90": 0},
+        cache_root=tmp_path / "backend-cache")
+    assert payload["canonical_evidence_store"] == {
+        "schema": "canonical_evidence_store_v1",
+        "root": str((tmp_path / "backend-cache").resolve()),
+    }
 
     payload["unknown"] = True
     with pytest.raises(ValueError, match="fields are invalid"):
         evidence_from_dict(payload)
+
+
+def test_evidence_from_dict_fails_closed_on_unresolvable_digest_when_cache_root_given(
+        tmp_path):
+    """Review finding 1: `evidence_from_dict` must not accept a digest that
+    cannot be resolved to real durable evidence once given somewhere to
+    look -- shape validation alone (the pre-existing behaviour, still
+    exercised by `test_workspace_artifact_round_trips_canonical_observation_digest`
+    with no `cache_root`) is not durability validation."""
+    from traffic_sim.simulation import monthly_sumo
+
+    digest = CanonicalObservationDigest(
+        candidate_id="daily-a", work_date="2027-01-01", variant="q50",
+        seed=1001, sha256="a" * 64)
+    evidence = CandidateEvidence(
+        candidate_id="candidate-a", canonical_observation_digests=(digest,))
+    payload = evidence_to_dict(
+        evidence, stage="pilot",
+        target_repetitions={"q10": 0, "q50": 0, "q90": 0},
+        cache_root=tmp_path / "backend-cache")
+    with pytest.raises(monthly_sumo.CanonicalObservationNotFound):
+        evidence_from_dict(payload, cache_root=tmp_path / "backend-cache")
+
+
+def test_evidence_from_dict_rejects_successful_observation_without_digest(
+        tmp_path):
+    observation = PairedObservation(
+        candidate_id="candidate-a", demand_variant="q10", seed=1000,
+        baseline_time_loss_s=10.0, candidate_time_loss_s=11.0,
+        matched_baseline_id="baseline-a", provenance_key="study")
+    digest = CanonicalObservationDigest(
+        candidate_id="daily-a", work_date="2027-01-01", variant="q10",
+        seed=1000, sha256="a" * 64)
+    payload = evidence_to_dict(
+        CandidateEvidence(
+            candidate_id="candidate-a", observations=(observation,),
+            canonical_observation_digests=(digest,)),
+        stage="pilot",
+        target_repetitions={"q10": 1, "q50": 0, "q90": 0},
+        cache_root=tmp_path / "backend-cache")
+    payload["canonical_observation_digests"] = []
+    with pytest.raises(ValueError, match="lack canonical observation digests"):
+        evidence_from_dict(payload)
+
+
+def test_evidence_from_dict_rejects_swapped_store_reference(tmp_path):
+    digest = CanonicalObservationDigest(
+        candidate_id="daily-a", work_date="2027-01-01", variant="q10",
+        seed=1000, sha256="a" * 64)
+    payload = evidence_to_dict(
+        CandidateEvidence(
+            candidate_id="candidate-a",
+            canonical_observation_digests=(digest,)),
+        stage="pilot",
+        target_repetitions={"q10": 0, "q50": 0, "q90": 0},
+        cache_root=tmp_path / "backend-cache")
+    with pytest.raises(ValueError, match="does not match backend"):
+        evidence_from_dict(payload, cache_root=tmp_path / "other-cache")
+
+
+def test_evidence_cache_root_duck_types_the_runner():
+    """`_evidence_cache_root` must use whatever the configured backend
+    exposes (production: `IndependentDailyRunner._canonical_evidence_cache_root`)
+    without importing `independent_daily`'s heavier module at load time, and
+    must return `None` for a backend that exposes nothing -- matching
+    `IndependentDailyRunner._load_cached`'s own fallback."""
+    from traffic_sim.simulation import monthly_search
+
+    class RunnerWithRoot:
+        def _canonical_evidence_cache_root(self):
+            return Path("/some/cache/root")
+
+    class RunnerWithoutRoot:
+        pass
+
+    assert monthly_search._evidence_cache_root(RunnerWithRoot()) == Path(
+        "/some/cache/root")
+    assert monthly_search._evidence_cache_root(RunnerWithoutRoot()) is None
 
 
 def _frozen_campaign_gate_record(**overrides):
@@ -297,6 +382,37 @@ class CostedFakeRunner(FakeRunner):
         )
 
 
+class TimeoutRunner(FakeRunner):
+    def __init__(self):
+        super().__init__()
+        self.speculation_stopped = False
+
+    def stop_speculative_work(self):
+        self.speculation_stopped = True
+
+    def run_candidate(self, schedule, **kwargs):
+        self.calls.append((
+            schedule.schedule_id,
+            kwargs["stage"],
+            dict(kwargs["target_repetitions"]),
+        ))
+        return CandidateEvidence(
+            candidate_id=schedule.schedule_id,
+            timeout_undecided=(TimeoutIdentity(
+                schema=TIMEOUT_IDENTITY_SCHEMA,
+                candidate_id=schedule.schedule_id,
+                work_date=schedule.first_work_date,
+                search_content_key=schedule.search_content_key,
+                variant="q10",
+                seed=1000,
+                attempt=1,
+                threshold_s=300.0,
+                retry_protocol=RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+                search_provenance_key="monthly-study-provenance",
+            ),),
+        )
+
+
 def test_policy_round_trips_with_stable_content_key():
     policy = _policy()
     loaded = MonthlySearchPolicy.from_dict(policy.to_dict())
@@ -318,6 +434,27 @@ def test_backend_prepares_only_screened_shortlist_before_provenance(tmp_path):
     assert len(runner.prepared) == 2
     assert result["simulation_backend"]["prepared_schedule_ids"] == list(
         runner.prepared
+    )
+
+
+def test_exhaustive_search_stops_after_first_unresolved_no_retry_timeout(
+        tmp_path):
+    runner = TimeoutRunner()
+
+    result = run_monthly_search(
+        _spec("monthly-timeout-stop"),
+        _policy(),
+        runner=runner,
+        screen_builder=_screen_builder,
+        root=tmp_path,
+    )
+
+    assert result["status"] == "inconclusive"
+    assert len(runner.calls) == 1
+    assert runner.speculation_stopped
+    assert result["pilot_selection"]["reason"] == (
+        "pilot evidence includes an unresolved SUMO timeout; the search "
+        "cannot rule out that candidate changing the retained set"
     )
 
 

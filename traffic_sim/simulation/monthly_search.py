@@ -15,6 +15,8 @@ import math
 import os
 import shutil
 import tempfile
+import threading
+import time
 from collections.abc import Mapping as MappingABC
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -61,8 +63,10 @@ from traffic_sim.simulation.period_comparison import build_period_comparison
 #: its OWN dedicated version instead.
 SCHEMA_VERSION = 1
 
-#: v3: v2 made `timeout_undecided` entries validated `TimeoutIdentity`
-#: records; v3 adds complete canonical-observation digests and requires the
+#: v4: v2 made `timeout_undecided` entries validated `TimeoutIdentity`
+#: records; v3 added complete canonical-observation digests; v4 binds those
+#: digests to an explicit durable content-addressed store and requires exact
+#: successful-observation coverage.
 #: exact current evidence envelope. This is deliberately its OWN constant,
 #: separate from the shared
 #: `SCHEMA_VERSION` above: candidate evidence is the only artifact kind this
@@ -72,7 +76,8 @@ SCHEMA_VERSION = 1
 #: touch. The version-gate in `evidence_from_dict` fails closed on any
 #: artifact written under v1; no v1 artifact is rewritten, it simply becomes
 #: unreadable, exactly as a genuine schema break should.
-EVIDENCE_SCHEMA_VERSION = 3
+EVIDENCE_SCHEMA_VERSION = 4
+CANONICAL_EVIDENCE_STORE_SCHEMA = "canonical_evidence_store_v1"
 POLICY_STATUSES = frozenset({"provisional", "golden_frozen"})
 RANKING_OBJECTIVES = frozenset({"legacy_time_loss_v1", "closure_cost_v1"})
 # PR C.  The streaming enumeration lives in a workspace-owned directory OUTSIDE
@@ -111,6 +116,224 @@ PROGRESS_PHASES = (
     "adaptive_finalists",
     "publish",
 )
+
+
+class ActiveBudgetExceeded(RuntimeError):
+    """The registered awake active-time budget was exhausted."""
+
+
+class ActiveTimeController:
+    """Fail-closed Phase 6 clock with a publication-only reserve.
+
+    The controller uses one monotonic clock for preflight, ledger, pilot and
+    finalist work.  A timer asks a backend to cancel queued/in-flight work at
+    the hard stop; the runner wrapper then refuses every later candidate start.
+    The final reserve is available only to validation/publication code.
+    """
+
+    def __init__(self, *, hard_stop_s: float = 55 * 60,
+                 publication_reserve_s: float = 5 * 60,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        if (not math.isfinite(float(hard_stop_s))
+                or not math.isfinite(float(publication_reserve_s))
+                or hard_stop_s <= 0 or publication_reserve_s < 0):
+            raise ValueError("active-time limits must be non-negative and finite")
+        self.hard_stop_s = float(hard_stop_s)
+        self.publication_reserve_s = float(publication_reserve_s)
+        self._clock = clock
+        self.started = float(clock())
+        self.stop_new_starters = False
+        self.cancel_requests = 0
+        self.eta_checkpoints: list[dict[str, Any]] = []
+        self.starter_events: list[dict[str, Any]] = []
+        self.work_stopped_elapsed_s: float | None = None
+        self._progress: dict[str, Any] = {}
+        self._phase_progress_started_s: float | None = None
+        self._phase_progress_start_completed: int | None = None
+        self._phase_progress_total: int | None = None
+
+    @property
+    def elapsed_s(self) -> float:
+        return max(0.0, float(self._clock()) - self.started)
+
+    @property
+    def hard_deadline_s(self) -> float:
+        return self.hard_stop_s
+
+    @property
+    def publication_deadline_s(self) -> float:
+        return self.hard_stop_s + self.publication_reserve_s
+
+    def mark_work_stopped(self) -> float:
+        """Record the producer's work-to-publication transition exactly once."""
+        if self.work_stopped_elapsed_s is None:
+            self.work_stopped_elapsed_s = round(self.elapsed_s, 6)
+        return self.work_stopped_elapsed_s
+
+    def checkpoint(self, phase: str, *, publication: bool = False,
+                   completed: int | None = None,
+                   total: int | None = None) -> None:
+        if publication:
+            self.mark_work_stopped()
+        elapsed = self.elapsed_s
+        if completed is not None or total is not None:
+            if completed is None or total is None or completed < 0 \
+                    or total < 1 or completed > total:
+                raise ValueError("ETA progress must have 0 <= completed <= total")
+            # Rates are meaningful only for identical units in the same
+            # phase.  A preflight/ledger duration must never dilute or
+            # inflate the pilot rate used at the 45-minute admission gate.
+            if (
+                self._phase_progress_started_s is None
+                or self._progress.get("phase") != str(phase)
+                or self._phase_progress_start_completed is None
+                or completed < self._progress.get("completed", 0)
+            ):
+                self._phase_progress_started_s = elapsed
+                self._phase_progress_start_completed = int(completed)
+                self._phase_progress_total = int(total)
+            self._progress = {
+                "phase": str(phase), "completed": int(completed),
+                "total": int(total), "elapsed_s": elapsed,
+            }
+        for threshold, label in ((10 * 60, "10m"), (45 * 60, "45m"),
+                                 (55 * 60, "55m")):
+            checkpoint = next(
+                (item for item in self.eta_checkpoints
+                 if item["label"] == label), None)
+            first_checkpoint = checkpoint is None
+            if elapsed >= threshold and (first_checkpoint or label == "45m"):
+                item = {
+                    "label": label,
+                    "elapsed_s": round(elapsed, 6),
+                    "phase": str(phase),
+                    "publication": bool(publication),
+                }
+                if self._progress:
+                    progress = self._progress
+                    phase_started = self._phase_progress_started_s
+                    phase_elapsed = max(
+                        0.0, elapsed - float(
+                            elapsed if phase_started is None else phase_started))
+                    completed_units = max(
+                        0,
+                        int(progress["completed"])
+                        - int(self._phase_progress_start_completed or 0),
+                    )
+                    rate = (completed_units / phase_elapsed
+                            if phase_elapsed > 0 and completed_units > 0
+                            else 0.0)
+                    remaining = int(progress["total"] - progress["completed"])
+                    item.update({
+                        "completed": progress["completed"],
+                        "total": progress["total"],
+                        "phase_elapsed_s": round(phase_elapsed, 6),
+                        "phase_completed_units": completed_units,
+                        "completed_unit_rate_per_s": round(rate, 9),
+                        "conservative_eta_s": (
+                            None if rate <= 0 else round(remaining / rate, 6)),
+                        "eta_basis": "completed_identical_work_units_monotonic_v1",
+                    })
+                else:
+                    item.update({
+                        "completed": None, "total": None,
+                        "completed_unit_rate_per_s": None,
+                        "conservative_eta_s": None,
+                        "eta_basis": "no_completed_unit_measurement",
+                    })
+                if first_checkpoint:
+                    self.eta_checkpoints.append(item)
+                elif label == "45m":
+                    # Keep the stable public checkpoint while retaining every
+                    # admission decision made before a new candidate starter.
+                    item["admission_history"] = list(
+                        checkpoint.get("admission_history", ()))
+                    checkpoint.clear()
+                    checkpoint.update(item)
+                    item = checkpoint
+                if (not publication and label == "45m"):
+                    eta = item.get("conservative_eta_s")
+                    fits_before_hard_stop = (
+                        isinstance(eta, (int, float))
+                        and not isinstance(eta, bool)
+                        and math.isfinite(float(eta))
+                        and float(eta) >= 0
+                        and elapsed + float(eta) <= self.hard_stop_s)
+                    item["admission"] = {
+                        "required": True,
+                        "fits_before_hard_stop": fits_before_hard_stop,
+                    }
+                    item.setdefault("admission_history", []).append({
+                        "elapsed_s": round(elapsed, 6),
+                        "conservative_eta_s": item.get("conservative_eta_s"),
+                        "fits_before_hard_stop": fits_before_hard_stop,
+                    })
+                    # At the 45-minute checkpoint a new candidate may start
+                    # only when its conservative measured ETA fits inside the
+                    # 55-minute execution budget. Missing progress/ETA is
+                    # deliberately fail-closed; otherwise a candidate could
+                    # begin at 45 minutes and overrun the publication reserve.
+                    if not fits_before_hard_stop:
+                        self.stop_new_starters = True
+                        raise ActiveBudgetExceeded(
+                            "45-minute admission rule rejected new work: "
+                            "missing or non-fitting conservative ETA")
+        limit = (self.publication_deadline_s if publication
+                 else self.hard_deadline_s)
+        if (not publication and self.stop_new_starters) or self.elapsed_s >= limit:
+            self.stop_new_starters = True
+            raise ActiveBudgetExceeded(
+                f"awake active budget exhausted during {phase}: "
+                f"{self.elapsed_s:.3f}s >= {limit:.3f}s")
+
+    def cancel_in_flight(self, runner: Any) -> None:
+        self.stop_new_starters = True
+        self.cancel_requests += 1
+        for name in ("cancel_in_flight", "stop_speculative_work"):
+            callback = getattr(runner, name, None)
+            if callable(callback):
+                callback()
+
+    def wrap_runner(self, runner: CandidateRunner) -> CandidateRunner:
+        controller = self
+
+        class DeadlineRunner:
+            def __init__(self, inner: CandidateRunner) -> None:
+                self._inner = inner
+
+            def __getattr__(self, name: str) -> Any:
+                return getattr(self._inner, name)
+
+            def run_candidate(self, schedule, *, target_repetitions,
+                              existing, stage):
+                controller.checkpoint(stage)
+                controller.starter_events.append({
+                    "phase": str(stage),
+                    "elapsed_s": round(controller.elapsed_s, 6),
+                    "after_hard_stop": controller.elapsed_s
+                    > controller.hard_stop_s,
+                })
+                timer = threading.Timer(
+                    max(0.0, controller.hard_stop_s - controller.elapsed_s),
+                    controller.cancel_in_flight, args=(self._inner,))
+                timer.daemon = True
+                timer.start()
+                try:
+                    evidence = self._inner.run_candidate(
+                        schedule,
+                        target_repetitions=target_repetitions,
+                        existing=existing,
+                        stage=stage,
+                    )
+                    controller.checkpoint(stage)
+                    return evidence
+                finally:
+                    timer.cancel()
+
+            def provenance(self):
+                return self._inner.provenance()
+
+        return DeadlineRunner(runner)  # type: ignore[return-value]
 # The tracked held-out release gate (IMPROVEMENT_PLAN.md Phase 4).  When
 # this record exists, is well-formed and says "pass", the pre-registered
 # release contract is satisfied: the pilot/finalist policy is golden-frozen
@@ -380,7 +603,11 @@ def evidence_to_dict(
     *,
     stage: str,
     target_repetitions: Mapping[str, int],
+    cache_root: Path | None = None,
 ) -> dict[str, Any]:
+    if evidence.canonical_observation_digests and cache_root is None:
+        raise ValueError(
+            "canonical observation digests require a durable evidence store")
     return {
         "schema_version": EVIDENCE_SCHEMA_VERSION,
         "kind": "monthly_closure_candidate_evidence",
@@ -399,16 +626,90 @@ def evidence_to_dict(
         "canonical_observation_digests": [
             item.to_dict() for item in evidence.canonical_observation_digests
         ],
+        "canonical_evidence_store": (
+            {
+                "schema": CANONICAL_EVIDENCE_STORE_SCHEMA,
+                "root": str(Path(cache_root).resolve()),
+            }
+            if evidence.canonical_observation_digests else None
+        ),
     }
 
 
-def evidence_from_dict(raw: Mapping[str, Any]) -> CandidateEvidence:
+def _evidence_cache_root(runner: "CandidateRunner") -> Path | None:
+    """The routing-evidence durable-artifact root the given backend uses, if
+    it exposes one -- duck-typed so this module (which must not depend on
+    `monthly_sumo`'s heavy SUMO imports at module load) can still validate
+    what production's `IndependentDailyRunner` publishes. Returns ``None``
+    for a backend (e.g. a test double) with no such root, in which case no
+    durable-artifact validation runs -- matching `IndependentDailyRunner.
+    _load_cached`'s own fallback.
+    """
+    accessor = getattr(runner, "_canonical_evidence_cache_root", None)
+    if callable(accessor):
+        return accessor()
+    root = getattr(runner, "cache_root", None)
+    return Path(root) if root is not None else None
+
+
+def _evidence_expected_units(
+    runner: "CandidateRunner", candidate_id: str,
+) -> Mapping[str, str] | None:
+    accessor = getattr(runner, "_canonical_evidence_expected_units", None)
+    return accessor(candidate_id) if callable(accessor) else None
+
+
+def _validate_evidence_durability(
+    evidence: CandidateEvidence,
+    *,
+    cache_root: Path | None,
+    expected_units: Mapping[str, str] | None = None,
+) -> None:
+    """Fail closed unless every canonical-observation digest `evidence`
+    retains resolves to real, untampered durable routing evidence.
+
+    Review finding 1 (2026-08-30, review-03): evidence read back from a
+    published workspace artifact (resume) or about to be published
+    (`_run_and_publish_candidate`) was validated only for its own JSON shape
+    -- a digest naming missing or tampered canonical/routing/access-impact/
+    transformed-route evidence could be resumed from or published without
+    ever being resolved. Shares its check with `IndependentDailyRunner.
+    _load_cached` via `monthly_sumo.validate_canonical_observation_evidence`
+    so cache reload and monthly publication can never disagree.
+    """
+    if (
+        cache_root is not None
+        and evidence.observations
+        and not evidence.canonical_observation_digests
+    ):
+        raise ValueError(
+            "successful observations lack canonical observation digests")
+    if not evidence.canonical_observation_digests:
+        return
+    if cache_root is None:
+        raise ValueError(
+            "canonical observation digests lack a durable evidence store")
+    from traffic_sim.simulation.monthly_sumo import (
+        validate_canonical_observation_evidence,
+    )
+    validate_canonical_observation_evidence(
+        cache_root, evidence, expected_units=expected_units)
+
+
+def evidence_from_dict(
+    raw: Mapping[str, Any],
+    *,
+    cache_root: Path | None = None,
+    expected_units: Mapping[str, str] | None = None,
+    _resolve_durability: bool = True,
+) -> CandidateEvidence:
     if not isinstance(raw, Mapping):
         raise ValueError("candidate evidence must be an object")
     expected_fields = {
         "schema_version", "kind", "stage", "candidate_id",
         "target_repetitions", "hard_failures", "observations", "disruption",
         "timeout_undecided", "canonical_observation_digests",
+        "canonical_evidence_store",
     }
     if set(raw) != expected_fields:
         raise ValueError("candidate evidence fields are invalid")
@@ -437,7 +738,7 @@ def evidence_from_dict(raw: Mapping[str, Any]) -> CandidateEvidence:
         PairedObservation(**dict(item))
         for item in raw["observations"]
     )
-    return CandidateEvidence(
+    evidence = CandidateEvidence(
         candidate_id=candidate_id,
         observations=observations,
         hard_failures=tuple(str(item) for item in raw["hard_failures"]),
@@ -451,6 +752,39 @@ def evidence_from_dict(raw: Mapping[str, Any]) -> CandidateEvidence:
             for item in raw["canonical_observation_digests"]
         ),
     )
+    store = raw["canonical_evidence_store"]
+    serialized_root: Path | None = None
+    if store is not None:
+        if (
+            not isinstance(store, Mapping)
+            or set(store) != {"schema", "root"}
+            or store.get("schema") != CANONICAL_EVIDENCE_STORE_SCHEMA
+            or not isinstance(store.get("root"), str)
+            or not store["root"]
+            or not Path(store["root"]).is_absolute()
+        ):
+            raise ValueError("canonical evidence store reference is invalid")
+        serialized_root = Path(store["root"]).resolve()
+    if cache_root is not None:
+        supplied_root = Path(cache_root).resolve()
+        if serialized_root is not None and serialized_root != supplied_root:
+            raise ValueError("canonical evidence store reference does not match backend")
+        serialized_root = supplied_root
+    if _resolve_durability:
+        _validate_evidence_durability(
+            evidence,
+            cache_root=serialized_root,
+            expected_units=expected_units,
+        )
+    if not evidence.hard_failures and not evidence.timeout_undecided:
+        expected_counts = {
+            variant: int(raw["target_repetitions"][variant])
+            for variant in DEMAND_VARIANTS
+        }
+        if _counts(evidence) != expected_counts:
+            raise ValueError(
+                "successful candidate evidence does not match target repetitions")
+    return evidence
 
 
 def _artifact_records(
@@ -822,13 +1156,32 @@ def _evidence_records(
     workspace: SearchWorkspace,
     *,
     kind: str,
+    runner: "CandidateRunner" | None = None,
 ) -> dict[str, list[tuple[int, CandidateEvidence]]]:
     grouped: dict[str, list[tuple[int, CandidateEvidence]]] = {}
     for record in _artifact_records(workspace, kind=kind):
         provenance = record.get("provenance", {})
         candidate_id = str(provenance.get("candidate_id", ""))
         round_index = int(provenance.get("round", 0))
-        evidence = evidence_from_dict(_read_artifact(workspace, record))
+        raw_evidence = _read_artifact(workspace, record)
+        # Forensic benchmark fixtures may intentionally use a non-durable
+        # fake backend and then inject malformed digest records so the
+        # semantic population checker can describe the mismatch. Production
+        # artifacts carry a store reference (or are read with their runner)
+        # and always take the strict resolution path.
+        resolve_durability = (
+            runner is not None
+            or raw_evidence.get("canonical_evidence_store") is not None
+        )
+        evidence = evidence_from_dict(
+            raw_evidence,
+            cache_root=(
+                _evidence_cache_root(runner) if runner is not None else None),
+            expected_units=(
+                _evidence_expected_units(runner, candidate_id)
+                if runner is not None else None),
+            _resolve_durability=resolve_durability,
+        )
         if evidence.candidate_id != candidate_id:
             raise ValueError("candidate evidence provenance mismatch")
         grouped.setdefault(candidate_id, []).append((round_index, evidence))
@@ -859,7 +1212,7 @@ def _validate_evidence_target(
 ) -> None:
     if evidence.candidate_id != schedule_id:
         raise ValueError("simulation backend returned another candidate")
-    if evidence.hard_failures:
+    if evidence.hard_failures or evidence.timeout_undecided:
         return
     counts = _counts(evidence)
     expected = {variant: int(targets[variant]) for variant in DEMAND_VARIANTS}
@@ -891,6 +1244,7 @@ def _run_and_publish_candidate(
     kind: str,
     round_index: int,
     policy: MonthlySearchPolicy,
+    transform: Callable[[CandidateEvidence], CandidateEvidence] | None = None,
 ) -> CandidateEvidence:
     evidence = runner.run_candidate(
         schedule,
@@ -903,10 +1257,23 @@ def _run_and_publish_candidate(
         schedule_id=schedule.schedule_id,
         targets=targets,
     )
+    if transform is not None:
+        evidence = transform(evidence)
+    # Review finding 1: evidence a backend just returned is validated end to
+    # end -- not merely shape-checked -- before it is published as a monthly
+    # artifact, so a backend defect or a corrupted durable artifact can never
+    # reach published evidence undetected.
+    cache_root = _evidence_cache_root(runner)
+    _validate_evidence_durability(
+        evidence,
+        cache_root=cache_root,
+        expected_units=_evidence_expected_units(runner, schedule.schedule_id),
+    )
     payload = evidence_to_dict(
         evidence,
         stage=stage,
         target_repetitions=targets,
+        cache_root=cache_root,
     )
     _publish_json(
         workspace,
@@ -999,18 +1366,27 @@ def _final_result(
     decision: Mapping[str, Any] | None,
     backend_provenance: Mapping[str, Any],
     cost_ordered_execution: Mapping[str, Any] | None = None,
+    execution_telemetry: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    terminal_status = str(
+        (cost_ordered_execution or {}).get("terminal_status") or "")
     decision_status = (
-        str(decision["status"])
-        if decision is not None
+        terminal_status
+        if terminal_status
         else (
-            "no_viable"
-            if pilot_selection.get("status") == "no_viable"
-            else "inconclusive"
+            str(decision["status"])
+            if decision is not None
+            else (
+                "no_viable"
+                if pilot_selection.get("status") == "no_viable"
+                else "inconclusive"
+            )
         )
     )
-    winner_id = decision.get("winner_id") if decision else None
-    tie_ids = list(decision.get("tie_ids", ())) if decision else []
+    winner_id = (None if terminal_status
+                 else decision.get("winner_id") if decision else None)
+    tie_ids = ([] if terminal_status
+               else list(decision.get("tie_ids", ())) if decision else [])
     selected = [item for item in [winner_id, *tie_ids] if item]
     shortlist_ids = [
         str(item["schedule_id"])
@@ -1099,6 +1475,10 @@ def _final_result(
         "cost_ordered_execution": (
             dict(cost_ordered_execution)
             if cost_ordered_execution is not None else None),
+        # Producer-owned, result-neutral measurements are carried into the
+        # Phase 6 outcome.  They must not be reconstructed from controller
+        # prose after the search has been cleaned up.
+        "execution_telemetry": dict(execution_telemetry or {}),
         "robust_decision": dict(decision) if decision is not None else None,
         "period_comparison": period_comparison,
         "claim_boundary": _claim_boundary(
@@ -1268,6 +1648,7 @@ def _pilot_evidence_for(
     existing_records: Sequence[tuple[int, CandidateEvidence]],
     compact_pilot: bool,
     policy: "MonthlySearchPolicy",
+    transform: Callable[[CandidateEvidence], CandidateEvidence] | None = None,
 ) -> CandidateEvidence:
     """One candidate's pilot evidence: reused, run compactly, or published.
 
@@ -1281,7 +1662,7 @@ def _pilot_evidence_for(
             schedule_id=schedule.schedule_id,
             targets=targets,
         )
-        return evidence
+        return transform(evidence) if transform is not None else evidence
     if compact_pilot:
         evidence = runner.run_candidate(
             schedule,
@@ -1294,7 +1675,7 @@ def _pilot_evidence_for(
             schedule_id=schedule.schedule_id,
             targets=targets,
         )
-        return evidence
+        return transform(evidence) if transform is not None else evidence
     return _run_and_publish_candidate(
         workspace,
         runner,
@@ -1305,6 +1686,7 @@ def _pilot_evidence_for(
         kind="monthly_pilot_candidate",
         round_index=0,
         policy=policy,
+        transform=transform,
     )
 
 
@@ -1347,6 +1729,7 @@ def _exhaustive_pilot(
     pilot_records: Mapping[str, Any],
     compact_pilot: bool,
     phase: str = "pilot",
+    active_controller: ActiveTimeController | None = None,
 ) -> list[CandidateEvidence]:
     """Simulate every shortlisted candidate. The reference path, unchanged."""
     pilot_evidence: list[CandidateEvidence] = []
@@ -1365,13 +1748,40 @@ def _exhaustive_pilot(
                 total=len(shortlist_ids),
                 detail=detail,
             )
-        pilot_evidence.append(_pilot_evidence_for(
+        if active_controller is not None:
+            active_controller.checkpoint(
+                phase, completed=index, total=len(shortlist_ids))
+        evidence = _pilot_evidence_for(
             workspace, runner, schedules[candidate_id],
             targets=pilot_targets,
             existing_records=pilot_records.get(candidate_id, []),
             compact_pilot=compact_pilot,
             policy=policy,
-        ))
+        )
+        pilot_evidence.append(evidence)
+        if evidence.timeout_undecided:
+            # Once the registered exact retry protocol is exhausted, the selector
+            # must return inconclusive as soon as any timeout is unresolved.
+            # Continuing an exhaustive sweep cannot change that verdict and
+            # merely burns the remaining SUMO budget.  Retire optional global
+            # lookahead now; already published daily evidence stays reusable.
+            stop_speculation = getattr(runner, "stop_speculative_work", None)
+            if callable(stop_speculation):
+                stop_speculation()
+            detail = _runner_timing_snapshot(runner)
+            detail.update({
+                "candidate_index": index + 1,
+                "stopped_by": "unresolved_timeout_after_registered_retry",
+                "unresolved_timeout_count": len(
+                    evidence.timeout_undecided),
+            })
+            workspace.update_progress(
+                phase,
+                completed=index + 1,
+                total=len(shortlist_ids),
+                detail=detail,
+            )
+            break
     return pilot_evidence
 
 
@@ -1388,6 +1798,9 @@ def _cost_ordered_pilot(
     pilot_records: Mapping[str, Any],
     compact_pilot: bool,
     disable_early_stop: bool = False,
+    max_verifications: int | None = None,
+    max_exact_launches: int | None = None,
+    active_controller: ActiveTimeController | None = None,
 ) -> tuple[list[CandidateEvidence], Any]:
     """Price every candidate, then simulate only the boundary set.
 
@@ -1407,6 +1820,9 @@ def _cost_ordered_pilot(
         if workspace.status == "running":
             workspace.update_progress(
                 phase, completed=completed, total=total, detail=dict(detail))
+        if active_controller is not None:
+            active_controller.checkpoint(
+                phase, completed=completed, total=total)
 
     # --- cost_units / cost_parents -------------------------------------
     ledger_records = _artifact_records(workspace, kind=coe.COST_LEDGER_KIND)
@@ -1501,17 +1917,42 @@ def _cost_ordered_pilot(
         )
         checkpoint_index += 1
 
+    pilot_started = 0
+
     def verify(candidate_id: str) -> CandidateEvidence:
+        nonlocal pilot_started
+        # Seed the deadline wrapper with the actual pilot-unit progress before
+        # it checks whether this candidate may start. This prevents a prior
+        # completed ledger phase from being reused as a pilot ETA.
+        if active_controller is not None:
+            active_controller.checkpoint(
+                "pilot", completed=pilot_started,
+                total=len(shortlist_ids))
+        if max_exact_launches is not None:
+            snapshot = _runner_timing_snapshot(runner)
+            records = snapshot.get("exact_launch_records")
+            if isinstance(records, list) and len(records) >= max_exact_launches:
+                raise ActiveBudgetExceeded(
+                    "exact SUMO launch-attempt cap reached before a new candidate")
         evidence = _pilot_evidence_for(
             workspace, runner, schedules[candidate_id],
             targets=pilot_targets,
             existing_records=pilot_records.get(candidate_id, []),
             compact_pilot=compact_pilot,
             policy=policy,
+            transform=lambda item: coe.reconcile_disruption(
+                item, priced_by_id[candidate_id]),
         )
         # The price the ordering used and the price the runner reports must be
         # the same number. Checked on every candidate, not only in a benchmark.
-        return coe.reconcile_disruption(evidence, priced_by_id[candidate_id])
+        pilot_started += 1
+        if max_exact_launches is not None:
+            snapshot = _runner_timing_snapshot(runner)
+            records = snapshot.get("exact_launch_records")
+            if isinstance(records, list) and len(records) > max_exact_launches:
+                raise ActiveBudgetExceeded(
+                    "exact SUMO launch-attempt cap exceeded")
+        return evidence
 
     result = coe.run_cost_ordered_execution(
         spec, ledger, policy.pilot,
@@ -1523,6 +1964,8 @@ def _cost_ordered_pilot(
         checkpoint=checkpoint,
         progress=report,
         disable_early_stop=disable_early_stop,
+        max_verifications=max_verifications,
+        max_exact_launches=max_exact_launches,
     )
 
     # The durable account of what cost ordering actually did. Without it
@@ -1571,6 +2014,9 @@ def run_monthly_search(
     root: Path = DEFAULT_ROOT,
     cost_source: Any = None,
     disable_early_stop: bool = False,
+    max_verifications: int | None = None,
+    max_exact_launches: int | None = None,
+    active_controller: ActiveTimeController | None = None,
 ) -> dict[str, Any]:
     """Run or resume one monthly search through a robust mesoscopic decision.
 
@@ -1594,13 +2040,29 @@ def run_monthly_search(
     spec = ClosureSearchSpec.from_dict(spec.to_dict())
     policy = MonthlySearchPolicy.from_dict(policy.to_dict())
     workspace, _ = open_search_workspace(spec, root=root)
+
+    def check_active(phase: str, *, publication: bool = False,
+                     completed: int | None = None,
+                     total: int | None = None) -> None:
+        if active_controller is not None:
+            if publication:
+                # This is the producer-owned transition, before result
+                # construction and workspace publication. The CLI must not
+                # infer work completion from the later return timestamp.
+                active_controller.mark_work_stopped()
+            active_controller.checkpoint(
+                phase, publication=publication, completed=completed,
+                total=total)
+
     phase = "policy"
     try:
+        check_active(phase)
         if workspace.status == "running":
             workspace.update_progress(phase)
         _existing_policy(workspace, policy)
 
         phase = "preflight"
+        check_active(phase)
         if workspace.status == "running":
             # The exact size is already known — the product CLI computes it
             # before this function is reached — so the user sees what the run
@@ -1608,6 +2070,7 @@ def run_monthly_search(
             workspace.update_progress(phase)
 
         phase = "enumerate"
+        check_active(phase)
         if workspace.status == "running":
             workspace.update_progress(phase)
         schedules = _candidate_ledger(workspace, spec)
@@ -1624,6 +2087,7 @@ def run_monthly_search(
             )
 
         phase = "screen"
+        check_active(phase)
         if workspace.status == "running":
             workspace.update_progress(phase)
         screening = _screening_artifact(
@@ -1667,12 +2131,15 @@ def run_monthly_search(
             }
 
         phase = "prepare_backend"
+        check_active(phase)
         if workspace.status == "running":
             workspace.update_progress(
                 phase,
                 completed=0,
                 total=len(shortlist_ids),
             )
+        if active_controller is not None:
+            runner = active_controller.wrap_runner(runner)
         _prepare_shortlist(runner, schedules, shortlist_ids)
         backend_provenance = _backend_provenance(workspace, runner)
         final_records = _artifact_records(
@@ -1687,9 +2154,11 @@ def run_monthly_search(
             return _read_artifact(workspace, final_records[0])
 
         phase = "pilot"
+        check_active(phase)
         pilot_records = _evidence_records(
             workspace,
             kind="monthly_pilot_candidate",
+            runner=runner,
         )
         # Compaction exists because an EXHAUSTIVE independent pilot writes one
         # JSON file per parent — tens of thousands of them — and the parent
@@ -1732,6 +2201,9 @@ def run_monthly_search(
                 pilot_records=pilot_records,
                 compact_pilot=compact_pilot,
                 disable_early_stop=disable_early_stop,
+                max_verifications=max_verifications,
+                max_exact_launches=max_exact_launches,
+                active_controller=active_controller,
             )
         else:
             pilot_evidence = _exhaustive_pilot(
@@ -1744,6 +2216,7 @@ def run_monthly_search(
                 pilot_records=pilot_records,
                 compact_pilot=compact_pilot,
                 phase=phase,
+                active_controller=active_controller,
             )
 
         pilot_selection = select_pilot_finalists(
@@ -1778,11 +2251,18 @@ def run_monthly_search(
             )
 
         decision_payload: dict[str, Any] | None = None
-        if pilot_selection.status == "ready":
+        # A cost-ordered terminal is fail-closed even when the verified
+        # prefix happened to contain enough viable candidates. In particular,
+        # an unresolved timeout must not enter finalist/adaptive SUMO and
+        # must not publish a winner from a partial prefix.
+        if (pilot_selection.status == "ready"
+                and not (cost_ordered_result or {}).get("terminal_status")):
             phase = "finalists"
+            check_active(phase)
             finalist_records = _evidence_records(
                 workspace,
                 kind="monthly_finalist_candidate",
+                runner=runner,
             )
             current: dict[str, CandidateEvidence] = {}
             round_by_candidate: dict[str, int] = {}
@@ -1796,11 +2276,12 @@ def run_monthly_search(
             for index, candidate_id in enumerate(
                 pilot_selection.selected_ids
             ):
+                check_active(
+                    phase, completed=index,
+                    total=len(pilot_selection.selected_ids))
                 workspace.update_progress(
-                    phase,
-                    completed=index,
-                    total=len(pilot_selection.selected_ids),
-                )
+                    phase, completed=index,
+                    total=len(pilot_selection.selected_ids))
                 existing_rounds = finalist_records.get(candidate_id, [])
                 if existing_rounds:
                     round_index, evidence = existing_rounds[-1]
@@ -1883,11 +2364,12 @@ def run_monthly_search(
                     targets = targets_by_candidate[candidate_id]
                     if targets == _counts(current[candidate_id]):
                         continue
+                    check_active(
+                        phase, completed=index,
+                        total=len(pilot_selection.selected_ids))
                     workspace.update_progress(
-                        phase,
-                        completed=index,
-                        total=len(pilot_selection.selected_ids),
-                    )
+                        phase, completed=index,
+                        total=len(pilot_selection.selected_ids))
                     next_round = round_by_candidate[candidate_id] + 1
                     current[candidate_id] = _run_and_publish_candidate(
                         workspace,
@@ -1904,6 +2386,7 @@ def run_monthly_search(
                 decision_round += 1
 
         phase = "publish"
+        check_active(phase, publication=True)
         workspace.update_progress(
             phase,
             detail=_runner_timing_snapshot(runner),
@@ -1917,6 +2400,7 @@ def run_monthly_search(
             decision=decision_payload,
             backend_provenance=backend_provenance,
             cost_ordered_execution=cost_ordered_result,
+            execution_telemetry=_runner_timing_snapshot(runner),
         )
         # Return the exact JSON representation that is persisted so an
         # idempotent reload cannot differ only because dataclass tuples became
@@ -1926,6 +2410,10 @@ def run_monthly_search(
             sort_keys=True,
             allow_nan=False,
         ))
+        # Final-result construction can be expensive (large finalist payloads
+        # and validation). Recheck before publication so it cannot consume the
+        # five-minute reserve and still be reported as a completed search.
+        check_active(phase, publication=True)
         _publish_json(
             workspace,
             result,
@@ -1940,6 +2428,11 @@ def run_monthly_search(
                 ),
             },
         )
+        # The publication itself is part of the bounded reserve. A clock-driven
+        # overrun is therefore terminal and is handled by the Phase 6 caller;
+        # the atomic workspace artifact remains complete and cannot be reused
+        # as a READY outcome without that terminal proof.
+        check_active(phase, publication=True)
         workspace.finish("succeeded")
         return result
     except BaseException as exc:

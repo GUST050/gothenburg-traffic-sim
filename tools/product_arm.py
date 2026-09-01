@@ -29,6 +29,7 @@ import subprocess
 import sys
 import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -36,7 +37,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.process_census import (  # noqa: E402
+    ProcessCensusUnavailable, process_group_snapshot)
 from traffic_sim.core.contracts import ClosureSearchSpec  # noqa: E402
+from traffic_sim.simulation.closure_ranking import ClosureCost  # noqa: E402
+from traffic_sim.simulation.finalist_decision import CandidateEvidence  # noqa: E402
+from traffic_sim.simulation.cost_ordered_execution import ParentCost  # noqa: E402
 
 #: Frozen resource shape for a comparison arm. Both the benchmark's main
 #: gate and any isolated subprocess arm must run at exactly this width:
@@ -53,6 +59,134 @@ BENCHMARK_MAX_ACTIVE_SUMO_SLOTS = 1
 BASELINE_TRIP_DURATION_P99_S = 3600
 MAXIMUM_CANDIDATES = 100_000
 MAXIMUM_DAILY_UNITS = 10_000
+
+
+class _FixtureCostSource:
+    """Apply only the immutable, symmetric boundary fixture to both arms."""
+
+    def __init__(self, inner: Any, controls: Mapping[str, Any], state: dict[str, Any]):
+        self.inner = inner
+        self.controls = controls
+        self.state = state
+
+    def identity(self):
+        return self.inner.identity()
+
+    def parent_cost(self, parent):
+        result = self.inner.parent_cost(parent)
+        no_detour = self.controls.get("no_detour") or {}
+        if parent.schedule_id == str(no_detour.get("candidate_id")):
+            forced = no_detour.get("forced_fields") or {}
+            count = max(1, int(forced.get("vehicles_no_detour", 1)))
+            variants = tuple({**dict(item), "vehicles_no_detour": count}
+                             for item in result.per_variant)
+            cost = replace(result.cost, vehicles_no_detour=count)
+            self.state.setdefault("no_detour_records", {})[
+                parent.schedule_id] = variants
+            self.state.setdefault("applied", set()).add("no_detour")
+            self.state.setdefault("runner_events", []).append({
+                "fixture": "no_detour", "candidate_id": parent.schedule_id,
+                "stage": "cost_ledger", "pre_sumo": True,
+                "vehicles_no_detour": count,
+            })
+            return replace(result, cost=cost, per_variant=variants)
+        dense = self.controls.get("dense_boundary") or {}
+        targets = dense.get("candidate_ids") or ()
+        if parent.schedule_id not in targets:
+            return result
+        # The values are part of the preregistered fixture, not measured data.
+        # Keep the full per-variant payload coherent so reconciliation still
+        # proves that the ordering and the runner judged the same price.
+        fields = dense.get("forced_fields") or {
+            "added_vehicle_hours": 0.0,
+            "added_metres_total": 0.0,
+            "vehicles_affected": 0,
+            "vehicles_no_detour": 0,
+        }
+        variants = tuple({**dict(item), **fields} for item in result.per_variant)
+        cost = ClosureCost(
+            candidate_id=result.candidate_id,
+            added_vehicle_hours=float(fields["added_vehicle_hours"]),
+            added_metres_total=float(fields["added_metres_total"]),
+            vehicles_affected=int(fields["vehicles_affected"]),
+            vehicles_no_detour=int(fields["vehicles_no_detour"]),
+        )
+        self.state.setdefault("dense_records", {})[parent.schedule_id] = variants
+        self.state.setdefault("applied", set()).add("dense_boundary")
+        return replace(result, cost=cost, per_variant=variants)
+
+
+class _FixtureRunner:
+    """Inject registered pre-SUMO failures and observe cancellation telemetry."""
+
+    def __init__(self, inner: Any, controls: Mapping[str, Any], state: dict[str, Any]):
+        self.inner = inner
+        self.controls = controls
+        self.state = state
+        self._seen = 0
+        self._synthetic_pending = int(
+            (controls.get("restart_cancel") or {}).get("synthetic_queued", 1))
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.inner, name)
+
+    def run_candidate(self, schedule, *, target_repetitions, existing, stage):
+        if existing is None and stage == "pilot":
+            self._seen += 1
+            no_detour = self.controls.get("no_detour") or {}
+            if str(no_detour.get("candidate_id")) == schedule.schedule_id:
+                self.state.setdefault("runner_events", []).append({
+                    "fixture": "no_detour", "candidate_id": schedule.schedule_id,
+                    "stage": stage, "pre_sumo": False,
+                    "error": "deterministic no-detour candidate reached runner",
+                })
+                raise AssertionError(
+                    "deterministic no-detour candidate must be rejected by the "
+                    "cost ledger before SUMO")
+            for name, failure in (("backfill", "fixture_backfill"),):
+                control = self.controls.get(name) or {}
+                if str(control.get("candidate_id")) == schedule.schedule_id:
+                    self.state.setdefault("applied", set()).add(name)
+                    self.state.setdefault("runner_events", []).append({
+                        "fixture": name, "candidate_id": schedule.schedule_id,
+                        "stage": stage, "pre_sumo": True,
+                    })
+                    return CandidateEvidence(
+                        candidate_id=schedule.schedule_id,
+                        observations=(), hard_failures=(failure,),
+                        disruption=(), timeout_undecided=())
+        result = self.inner.run_candidate(
+            schedule, target_repetitions=target_repetitions,
+            existing=existing, stage=stage)
+        dense = self.state.get("dense_records", {}).get(schedule.schedule_id)
+        if dense is not None:
+            result = replace(result, disruption=dense)
+        return result
+
+    def stop_speculative_work(self) -> None:
+        before = self._synthetic_pending
+        self._synthetic_pending = 0
+        self.state["cancel_observed"] = {
+            "called": True, "queued_before": before, "queued_after": 0,
+            "no_later_starter": True,
+        }
+        callback = getattr(self.inner, "stop_speculative_work", None)
+        if callable(callback):
+            callback()
+
+    def timing_snapshot(self) -> dict[str, Any]:
+        snapshot = {}
+        callback = getattr(self.inner, "timing_snapshot", None)
+        if callable(callback):
+            raw = callback()
+            if isinstance(raw, Mapping):
+                snapshot.update(raw)
+        snapshot["fixture_telemetry"] = {
+            "applied": sorted(self.state.get("applied", set())),
+            "runner_events": list(self.state.get("runner_events", [])),
+            "cancel_observed": self.state.get("cancel_observed"),
+        }
+        return snapshot
 
 
 def _runner_exact_launch_telemetry(runner: Any) -> dict[str, Any]:
@@ -198,47 +332,23 @@ def peak_rss_bytes() -> int:
     return int(max(own, children)) * scale
 
 
-class ProcessCensusUnavailable(RuntimeError):
-    """`ps` could not be trusted to enumerate live processes right now.
-
-    Callers that reaped-process or peak-RSS evidence depends on must treat
-    this as UNKNOWN, never as "zero processes"/"zero bytes" — an unavailable
-    census silently read as empty is exactly how a surviving SUMO process or
-    an under-reported memory peak could slip past the reaping/resource
-    gates.
-    """
-
-
 def _process_group_snapshot() -> list[tuple[int, int, int]]:
-    """`(pid, pgid, rss_kib)` for every process on the system, via `ps`.
+    """`(pid, pgid, rss_kib)` for every visible process.
 
-    Uses `-eo pid=,pgid=,rss=` (every process, explicit numeric fields) and
-    filters by the `pgid` FIELD in Python, rather than `ps -g <pgid>`: `-g`'s
-    meaning is not the same across BSD ps (macOS) and GNU ps (Linux) — this
-    is the one invocation both agree on unambiguously, at the cost of one
-    whole-system snapshot instead of a pre-filtered one.
+    Delegates to `tools.process_census`, which owns the mechanism ladder and
+    the trust contract: it raises `ProcessCensusUnavailable` rather than
+    returning an empty list when no mechanism can be believed, because an
+    empty return is indistinguishable from "genuinely no processes" and would
+    let a failed census masquerade as a clean reap or a zero RSS reading.
 
-    Raises `ProcessCensusUnavailable` rather than returning an empty list
-    when `ps` cannot be run or exits non-zero: an empty return here used to
-    be indistinguishable from "genuinely no processes", which let a failed
-    census masquerade as a clean reap or a zero RSS reading.
+    This used to shell out to `ps` directly. It stopped working wherever the
+    workflow actually runs: `/bin/ps` is setuid root on macOS, and a Seatbelt
+    sandbox refuses to exec a setuid binary, so the census EPERM'd and the
+    resource gates could only publish INCONCLUSIVE. The replacement reads the
+    same kernel data through libproc — see that module's header for the
+    measurement it makes and why it is the stronger one.
     """
-    try:
-        completed = subprocess.run(
-            ["ps", "-eo", "pid=,pgid=,rss="],
-            capture_output=True, text=True, timeout=5)
-    except (OSError, subprocess.SubprocessError) as error:
-        raise ProcessCensusUnavailable(
-            f"could not run `ps` to census process groups: {error}") from error
-    if completed.returncode != 0:
-        raise ProcessCensusUnavailable(
-            f"`ps` exited {completed.returncode}: {completed.stderr.strip()}")
-    rows = []
-    for line in completed.stdout.splitlines():
-        parts = line.split()
-        if len(parts) == 3 and all(part.isdigit() for part in parts):
-            rows.append((int(parts[0]), int(parts[1]), int(parts[2])))
-    return rows
+    return process_group_snapshot()
 
 
 def _process_group_pids(pgid: int) -> list[int]:
@@ -250,8 +360,8 @@ def _process_group_pids(pgid: int) -> list[int]:
 def _process_tree_rss_bytes(pgid: int) -> int:
     """Sum of RSS, in bytes, of every process alive in group `pgid` RIGHT NOW.
 
-    This is the simultaneous total `peak_rss_bytes()` cannot report: one `ps`
-    snapshot covers every member of the group at once, so a parent
+    This is the simultaneous total `peak_rss_bytes()` cannot report: one
+    census snapshot covers every member of the group at once, so a parent
     interpreter and a live SUMO child are counted together rather than
     reduced to whichever one's own peak was larger.
     """
@@ -302,7 +412,7 @@ class ProcessTreeRSSSampler:
         """Stop sampling and return the peak — a verified, trustworthy one.
 
         If any sample (including this final one, taken after the group has
-        had a chance to be reaped) lost the `ps` census, the peak this
+        had a chance to be reaped) lost the census, the peak this
         instance collected cannot be trusted as a true maximum: a failed
         sample could have missed the real peak entirely. Raises
         `ProcessCensusUnavailable` in that case instead of returning a
@@ -313,7 +423,7 @@ class ProcessTreeRSSSampler:
         self._sample()
         if self._census_error is not None:
             raise ProcessCensusUnavailable(
-                "process-tree RSS sampling lost the `ps` census at least "
+                "process-tree RSS sampling lost the process census at least "
                 "once; the peak this sampler collected cannot be trusted: "
                 f"{self._census_error}"
             ) from self._census_error
@@ -346,6 +456,7 @@ def build_arm(
     max_active_sumo_slots: int = 1,
     daily_results_cache_root: Path | None = None,
     disable_early_stop: bool = False,
+    window_cost_index: Any = None,
 ):
     """Return `(runner, screen_builder, cost_source)` for one arm.
 
@@ -462,7 +573,8 @@ def build_arm(
     cost_source = None
     if cost_ordered:
         cost_source = _cost_source_for(
-            spec, runner, daily_cost_cache=daily_cost_cache)
+            spec, runner, daily_cost_cache=daily_cost_cache,
+            window_cost_index=window_cost_index)
     return runner, screen_builder, cost_source
 
 
@@ -481,13 +593,19 @@ def run_arm(
     max_active_sumo_slots: int = 1,
     daily_results_cache_root: Path | None = None,
     disable_early_stop: bool = False,
+    window_cost_index: Any = None,
+    max_verifications: int | None = None,
+    max_exact_launches: int | None = None,
+    fixture_controls: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Execute one arm end to end and report what it cost.
 
     `disable_early_stop=True` (only valid with `cost_ordered=True`) produces
     the ordered-exhaustive reference arm — see `build_arm`.
     """
-    from traffic_sim.simulation.monthly_search import run_monthly_search
+    from traffic_sim.simulation.monthly_search import (
+        ActiveBudgetExceeded, run_monthly_search,
+    )
 
     runner, screen_builder, cost_source = build_arm(
         spec,
@@ -502,30 +620,65 @@ def run_arm(
         max_active_sumo_slots=max_active_sumo_slots,
         daily_results_cache_root=daily_results_cache_root,
         disable_early_stop=disable_early_stop,
+        window_cost_index=window_cost_index,
     )
+    fixture_state: dict[str, Any] = {}
+    if fixture_controls:
+        runner = _FixtureRunner(runner, fixture_controls, fixture_state)
+        if cost_source is not None:
+            cost_source = _FixtureCostSource(
+                cost_source, fixture_controls, fixture_state)
     started = time.monotonic()
+    budget_error: ActiveBudgetExceeded | None = None
+    execution_error: BaseException | None = None
     rss_before = peak_rss_bytes()
     try:
-        result = run_monthly_search(
-            spec, policy,
-            runner=runner,
-            screen_builder=screen_builder,
-            root=Path(workspace_root),
-            cost_source=cost_source,
-            disable_early_stop=disable_early_stop,
-        )
-        # Pulled BEFORE cleanup, which only stops the daily-unit queue and
-        # never resets these counters, but a caller must not have to guess
-        # that ordering is safe on both sides of it.
-        exact_launch_telemetry = _runner_exact_launch_telemetry(runner)
-        exact_launch_records = _runner_exact_launch_records(runner)
-        daily_results_cache_events = _runner_daily_results_cache_events(runner)
-        daily_results_cache_event_records = (
-            _runner_daily_results_cache_event_records(runner))
+        try:
+            result = run_monthly_search(
+                spec, policy,
+                runner=runner,
+                screen_builder=screen_builder,
+                root=Path(workspace_root),
+                cost_source=cost_source,
+                disable_early_stop=disable_early_stop,
+                max_verifications=max_verifications,
+                max_exact_launches=max_exact_launches,
+            )
+        except ActiveBudgetExceeded as error:
+            # Preserve the runner's exact launch telemetry even when the
+            # registered cap stops the search before a normal result exists.
+            budget_error = error
+            result = {
+                "status": "inconclusive",
+                "terminal_status": "INCONCLUSIVE_BUDGET_EXHAUSTED",
+                "error": str(error),
+            }
+        except (OSError, RuntimeError, TimeoutError, ValueError, KeyError) as error:
+            # Preserve the producer's live telemetry when a real execution
+            # fails after SUMO work has already happened.  Raising here made
+            # the registered benchmark replace the whole case with a tiny
+            # {case_id, error} dictionary, losing attempts, active time and
+            # the runner's exact launch records before the validator saw it.
+            execution_error = error
+            result = {
+                "status": "inconclusive",
+                "terminal_status": "INCONCLUSIVE_EXECUTION_ERROR",
+                "error": {
+                    "type": type(error).__name__,
+                    "message": str(error),
+                },
+            }
     finally:
         cleanup = getattr(runner, "cleanup", None)
         if callable(cleanup):
             cleanup()
+    # Pulled after the search and before the counters can be discarded by a
+    # caller.  This also runs for an exact-launch cap terminal.
+    exact_launch_telemetry = _runner_exact_launch_telemetry(runner)
+    exact_launch_records = _runner_exact_launch_records(runner)
+    daily_results_cache_events = _runner_daily_results_cache_events(runner)
+    daily_results_cache_event_records = (
+        _runner_daily_results_cache_event_records(runner))
     if not cost_ordered:
         arm_name = "exhaustive"
     elif disable_early_stop:
@@ -539,6 +692,11 @@ def run_arm(
         "workspace": str(workspace_directory),
         "search_content_key": spec.content_key,
         "result": result,
+        "budget_exhausted": budget_error is not None,
+        "execution_error": (
+            {"type": type(execution_error).__name__,
+             "message": str(execution_error)}
+            if execution_error is not None else None),
         "wall_time_s": round(time.monotonic() - started, 3),
         # Reported as a pair: the peak BEFORE this arm is what the process had
         # already reached, so a reader can tell a genuine arm cost from a high
@@ -575,6 +733,9 @@ def run_arm(
         "active_elapsed_s": _workspace_active_elapsed_s(workspace_directory),
         "active_elapsed_basis": _workspace_active_elapsed_basis(
             workspace_directory),
+        "fixture_telemetry": dict(fixture_state.get("cancel_observed") or {})
+        | {"applied": sorted(fixture_state.get("applied", set())),
+           "runner_events": list(fixture_state.get("runner_events", []))},
     }
 
 
@@ -617,8 +778,8 @@ def _ensure_process_group_reaped(pgid: int, grace_s: float) -> list[int]:
 
     Every census here (`_process_group_pids`, which calls
     `_process_group_snapshot`) raises `ProcessCensusUnavailable` rather than
-    reporting an empty group when `ps` itself is untrustworthy, so a failed
-    `ps` invocation fails this function loudly instead of being read as "no
+    reporting an empty group when the census itself is untrustworthy, so an
+    unavailable census fails this function loudly instead of being read as "no
     survivors". After any escalation, a FINAL verified post-termination
     census confirms the group is actually empty before this returns — an
     escalation that merely timed out without ever re-checking would let a
@@ -698,6 +859,13 @@ def _run_arm_worker(args: Mapping[str, Any]) -> None:
                 Path(daily_results_cache_root)
                 if daily_results_cache_root is not None else None),
             disable_early_stop=bool(args.get("disable_early_stop", False)),
+            max_verifications=(
+                None if args.get("max_verifications") is None
+                else int(args["max_verifications"])),
+            max_exact_launches=(
+                None if args.get("max_exact_launches") is None
+                else int(args["max_exact_launches"])),
+            fixture_controls=args.get("fixture_controls"),
         )
         outcome = {"ok": True, "result": result}
     except BaseException as exc:  # noqa: BLE001 - report every failure, then exit
@@ -730,6 +898,9 @@ def run_arm_isolated(
     reap_grace_s: float = 30.0,
     daily_results_cache_root: Path | None = None,
     disable_early_stop: bool = False,
+    max_verifications: int | None = None,
+    max_exact_launches: int | None = None,
+    fixture_controls: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run one arm in its own process AND process group.
 
@@ -786,6 +957,9 @@ def run_arm_isolated(
             str(Path(daily_results_cache_root))
             if daily_results_cache_root is not None else None),
         "disable_early_stop": disable_early_stop,
+        "max_verifications": max_verifications,
+        "max_exact_launches": max_exact_launches,
+        "fixture_controls": dict(fixture_controls or {}),
         "result_path": str(result_path),
     }, indent=1, sort_keys=True), encoding="utf-8")
 

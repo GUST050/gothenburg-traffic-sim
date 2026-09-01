@@ -1,0 +1,70 @@
+{
+  "schema": "subhour_cost_ordered_bounded_outcome_v1",
+  "kind": "subhour_bounded_sumo_outcome",
+  "release_evidence": false,
+  "evidence_id": "subhour-bounded-sumo-20260831-v19",
+  "status": "INCONCLUSIVE_PROCESS_CENSUS_UNAVAILABLE",
+  "content_key": "7b03940114f4cb6d28c314fcb7f0dd111dbe57ad88deafc9a63b1ac885720d54",
+  "registration": {
+    "path": "validation/subhour_bounded_sumo_registration_20260831-v19.json",
+    "content_key": "ac4694047d79946c700d6fecd2736cc2913fbbdeb6c4e6341f5209f72498fb71"
+  },
+  "preflight": {
+    "required_before_execution": "trusted process-tree census for RSS and reap gates",
+    "census_command": ["ps", "-eo", "pid=,pgid=,rss="],
+    "status": "unavailable",
+    "error": "could not run ps to census process groups: [Errno 1] Operation not permitted: 'ps'",
+    "execution_started": false,
+    "selection_read_before_outcome": true
+  },
+  "selection": {
+    "selected_case_count": 8,
+    "eligible_count": 648,
+    "distinct_edges": 4,
+    "distinct_demand_periods": 2,
+    "selected_ids": [
+      "89542ecc89d9b4df7106",
+      "22b87e26579cb9e4ea32",
+      "95922837ea5cc4755f20",
+      "96a090a3088ff35b6ce0",
+      "0f9eef6ec98c89f6f15d",
+      "4af5f499ec0287de33dd",
+      "cbc0f4626d4336535926",
+      "683027ca6eed0147991f"
+    ]
+  },
+  "paired_attempts": {
+    "cost_ordered": null,
+    "ordered_exhaustive": null,
+    "exact_attempts_reduction": null,
+    "active_elapsed_s": null
+  },
+  "restart_cancellation": {
+    "status": "NOT_RUN_PRE_EXECUTION",
+    "paired": null,
+    "no_later_starter": null
+  },
+  "correctness_gates": {
+    "status": "NOT_EVALUATED_PRE_EXECUTION",
+    "terminal_semantics_identical": null,
+    "selected_ids_identical": null,
+    "ledger_identical": null,
+    "stop_proof_valid": null,
+    "exact_attempt_reduction_meets_30_percent": null,
+    "active_time_reduction_meets_30_percent": null
+  },
+  "resources": {
+    "peak_rss_bytes": null,
+    "disk_growth_bytes": null,
+    "rss_status": "unavailable",
+    "disk_status": "not_run",
+    "caps": {
+      "active_seconds": 3300,
+      "attempts_per_case": 10000,
+      "peak_rss_bytes": 8589934592,
+      "disk_growth_bytes": 21474836480
+    }
+  },
+  "remaining_registered_cases": 8,
+  "claim_boundary": "diagnostic only; no 30-percent, restart, or product-activation claim"
+}

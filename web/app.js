@@ -1454,8 +1454,9 @@
                 : ''));
           }
           if (summary.closure) {
-            metaLines.push(`${summary.truncated_vehicles} förkortade, ` +
-              `${summary.dropped_vehicles} borttagna fordon (ingen omväg runt avstängningen).`);
+            metaLines.push(`${summary.truncated_vehicles} omdirigerade, ` +
+              `${summary.dropped_vehicles} nekade fordon (ingen laglig väg ` +
+              `till målet efter avstängningen).`);
             if (summary.route_stability.fraction_identical !== null) {
               metaLines.push(`Ruttstabilitet: ` +
                 `${(summary.route_stability.fraction_identical * 100).toFixed(1)}% av ` +
