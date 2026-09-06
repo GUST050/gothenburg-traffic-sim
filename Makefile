@@ -135,7 +135,19 @@ test:
 # `signals` is deliberately absent from the target list: AGENTS.md's repo map
 # names a signals/ package that does not exist; the signal studies are root
 # modules (signal_lab.py and friends) and are covered by *.py.
-LINT_TARGETS = $(wildcard *.py) traffic_sim demand dirsplit
+# tools/ is the evidence layer — the measurement, freeze and benchmark scripts
+# the project's scientific claims come from — and leaving it out cost four
+# working tools. Three recent commits changed a shared signature or a shared
+# constant and left tools/ call sites behind: a mandatory `cache_root`, a
+# renamed schema constant, and a fifth return value unpacked as four. Every one
+# of them is a guaranteed crash on the first call, none was caught, because
+# tools/ was neither linted nor executed by a test. Note the fifth-value case
+# is W0632, a WARNING: an errors-only gate would still have missed it, which is
+# why the critical profile — not `-E` — is what runs here and in CI.
+#
+# A RETIRED script is excluded by name in .pylintrc, never by dropping the
+# directory: retirement is a per-file decision with a reason, not a blanket.
+LINT_TARGETS = $(wildcard *.py) traffic_sim demand dirsplit tools
 
 lint:
 	python3 -m pylint --rcfile=.pylintrc --disable=import-error $(LINT_TARGETS)

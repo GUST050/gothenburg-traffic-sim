@@ -21,6 +21,15 @@ suggestion-mode=yes
 # phantom no-member on real attributes.
 limit-inference-results=250
 
+# A RETIRED evidence tool is not dead code and must not be repaired into
+# working order: freeze_monthly_warm_state_v3.py is bound to accounting that
+# LUNA-WARM-09 removed, and tests/test_monthly_warm_state_v3_freeze.py asserts
+# it still raises ImportError — a spent campaign that could rebuild itself
+# would invite reuse. Linting it as if it were active would demand exactly the
+# repair that is forbidden, so it is excluded here rather than silenced inside
+# the file, where a future reader could mistake the pragma for an oversight.
+ignore=freeze_monthly_warm_state_v3.py
+
 [MESSAGES CONTROL]
 disable=
     C,

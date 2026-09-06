@@ -6,6 +6,38 @@ on:
   pull_request:
 
 jobs:
+  # A JOB OF ITS OWN, not a step after the tests. The repository had no lint at
+  # all, and four tools were broken by signature changes their call sites never
+  # saw — every one a pylint finding. Making it a step would have tied it to
+  # the suite's 20-minute budget: a timeout kills the whole job, so the lint
+  # result would vanish exactly when the suite is in trouble and a second
+  # signal is worth most. Separate jobs also fail independently and run in
+  # parallel.
+  #
+  # The dependency install is duplicated on purpose: pylint resolves
+  # first-party classes through astroid, which has to IMPORT them, and the
+  # signature checks that caught the broken tools infer nothing without the
+  # stack those modules import.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install pandas numpy scipy osmnx networkx pyproj shapely geopandas \
+                      lightgbm scikit-learn numba==0.60.0 pytest
+          pip install 'pylint>=3.3,<4'
+
+      - name: Lint
+        run: make lint
+
   pytest:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -25,5 +57,11 @@ jobs:
           pip install pandas numpy scipy osmnx networkx pyproj shapely geopandas \
                       lightgbm scikit-learn numba==0.60.0 pytest
 
+      # tests/test_web_provider_js.py executes web/provider.js under node. It
+      # skips where node is absent, which is right on a contributor's machine
+      # and wrong here — a skipped executable check is indistinguishable from a
+      # passing one. CI=true turns that skip into a failure.
       - name: Run tests
         run: python3 -m pytest tests/ -q
+        env:
+          CI: "true"
