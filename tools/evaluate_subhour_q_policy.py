@@ -352,7 +352,7 @@ def _load_gate_evidence(raw: bytes) -> dict[str, Any]:
             raise ValueError("Gate S evidence has an incomplete decision population")
         failures = item.get("decision_relevant_failures")
         if not isinstance(failures, list) or len({str(value) for value in failures}) != len(failures):
-                raise ValueError("Gate S evidence has an invalid failure population")
+            raise ValueError("Gate S evidence has an invalid failure population")
         candidate_costs = item.get("candidate_costs")
         if not isinstance(candidate_costs, Mapping) or not candidate_costs:
             raise ValueError("Gate S evidence lacks candidate-level cost population")

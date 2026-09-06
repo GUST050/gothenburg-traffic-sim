@@ -1038,30 +1038,29 @@ def validate_result(result: Mapping[str, Any],
             f"arm_records must cover exactly the {len(ARMS)} arms; got "
             f"{sorted(raw) if isinstance(raw, Mapping) else raw!r}. An empty "
             f"map previously skipped reconstruction entirely")
-    if True:
-        declared = cohort_index(build_population())
-        for block, arms in (("production", ("cold", "prefix", "resumed")),
-                            ("control", ("cold_control", "prefix_control",
-                                         "resumed_control"))):
-            if not all(arm in raw for arm in arms):
-                raise DiagnosticError(
-                    f"{block} cannot be reconstructed: raw records missing for "
-                    f"{sorted(set(arms) - set(raw))}")
-            rebuilt = compare_population(
-                cold=raw[arms[0]], prefix=raw[arms[1]], resumed=raw[arms[2]],
-                declared_cohorts=declared)
-            # WHOLE-object equality, not a chosen subset. Comparing selected
-            # summary fields leaves everything unlisted trusted, and the point
-            # of reconstruction is that nothing is.
-            stored = json.loads(json.dumps(result[block]))
-            if json.loads(json.dumps(rebuilt)) != stored:
-                differing = sorted(
-                    k for k in set(rebuilt) | set(stored)
-                    if json.loads(json.dumps(rebuilt.get(k)))
-                    != stored.get(k))
-                raise DiagnosticError(
-                    f"{block} does not reconstruct from the raw arm records; "
-                    f"differing fields: {differing}")
+    declared = cohort_index(build_population())
+    for block, arms in (("production", ("cold", "prefix", "resumed")),
+                        ("control", ("cold_control", "prefix_control",
+                                     "resumed_control"))):
+        if not all(arm in raw for arm in arms):
+            raise DiagnosticError(
+                f"{block} cannot be reconstructed: raw records missing for "
+                f"{sorted(set(arms) - set(raw))}")
+        rebuilt = compare_population(
+            cold=raw[arms[0]], prefix=raw[arms[1]], resumed=raw[arms[2]],
+            declared_cohorts=declared)
+        # WHOLE-object equality, not a chosen subset. Comparing selected
+        # summary fields leaves everything unlisted trusted, and the point
+        # of reconstruction is that nothing is.
+        stored = json.loads(json.dumps(result[block]))
+        if json.loads(json.dumps(rebuilt)) != stored:
+            differing = sorted(
+                k for k in set(rebuilt) | set(stored)
+                if json.loads(json.dumps(rebuilt.get(k)))
+                != stored.get(k))
+            raise DiagnosticError(
+                f"{block} does not reconstruct from the raw arm records; "
+                f"differing fields: {differing}")
 
     validate_boundary_facts(result["boundary_facts"],
                             result["arm_records"]["cold"])

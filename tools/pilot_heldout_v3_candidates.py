@@ -76,7 +76,9 @@ def probe_closure(*, edge_id: str, start: str, minutes: int,
                                            dir=str(run_root)))
     scratch: list[Path] = []
     try:
-        metrics, truncated, dropped, per_seed = legacy.simulate_closure(
+        # Fifth value n_rerouted (commit 3f20d70); see simulate_closure.
+        # Unpacking four raised ValueError on every probe.
+        metrics, truncated, dropped, per_seed, _rerouted = legacy.simulate_closure(
             name=f"probe-{start.replace(':', '')}",
             closures=closures,
             close_edges=[edge_id],

@@ -423,7 +423,14 @@ def _run_arm(case: Mapping[str, Any], arm: str, *, policy, runs_root: Path,
         envelope_policy=(INDEPENDENT_DAILY_ENVELOPE_POLICY if independent
                          else EnvelopePolicy()),
     )
-    runner = (IndependentDailyRunner(spec, daily_runner=resolved)
+    # A daily-result cache is per ARM and per CASE. The two arms are the whole
+    # comparison, so a cache they shared would let one arm answer from results
+    # the other produced — the measurement would then be partly of itself.
+    # `workspace_root` is already scoped to one case by the caller, so a
+    # sibling of the arm's run root keeps both dimensions separate.
+    runner = (IndependentDailyRunner(
+                  spec, daily_runner=resolved,
+                  cache_root=workspace_root / f"{arm}-daily-cache")
               if independent else resolved)
     if independent:
         def screen_builder(path):

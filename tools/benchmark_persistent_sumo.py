@@ -185,7 +185,11 @@ def load_contract(path: Path) -> dict:
     try:
         contract = json.loads(Path(path).read_text(),
                               object_pairs_hook=_reject_duplicate_keys)
-    except ContractRefused:
+    except ContractRefused:  # pylint: disable=try-except-raise
+        # Redundant only while ContractRefused derives from Exception rather
+        # than ValueError. Kept deliberately: _reject_duplicate_keys raises it
+        # from INSIDE the decode, and a refusal must reach the caller as
+        # itself, never re-wrapped as "cannot read contract".
         raise
     except (OSError, ValueError) as error:
         raise ContractRefused(f"cannot read contract {path}: {error}") from None

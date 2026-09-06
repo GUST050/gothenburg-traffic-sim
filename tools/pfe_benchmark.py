@@ -35,7 +35,10 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pfe
-from pfe import Candidate
+# pfe.py replaces itself in sys.modules with traffic_sim.demand.pfe, so its
+# real exports exist only at runtime and no static analyser can see them.
+# The import IS correct — `python3 -c "import pfe; pfe.Candidate"` succeeds.
+from pfe import Candidate  # pylint: disable=no-name-in-module
 
 BASELINE_PATH = (Path(__file__).resolve().parent.parent
                  / "tests" / "data" / "pfe_benchmark_baseline.json")

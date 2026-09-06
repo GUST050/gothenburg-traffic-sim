@@ -561,7 +561,11 @@ def _external_phase_probe(case: Mapping[str, Any], *, repeats: int,
         work_dir = scratch / f"sumo-probe-{invocation}"
         scratch_paths: list[Path] = []
         try:
-            metrics, truncated, dropped, _raw = legacy.simulate_closure(
+            # Fifth value n_rerouted (commit 3f20d70); see
+            # simulate_closure. Unpacking four raised ValueError, so this
+            # probe could not run — the change cannot alter any timing it
+            # never reached, but it does move this file's bound digest.
+            metrics, truncated, dropped, _raw, _rerouted = legacy.simulate_closure(
                 name=f"scaling-probe-{invocation}",
                 closures=closures,
                 close_edges=list(spec.directed_edges),

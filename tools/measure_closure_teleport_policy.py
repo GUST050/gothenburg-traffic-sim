@@ -160,7 +160,11 @@ def run_arm(*, label, time_to_teleport_s, closures, close_edges, variants,
     scratch: list[Path] = []
     replications: list[dict] = []
     started = time.time()
-    metrics, truncated, dropped, per_seed = legacy.simulate_closure(
+    # simulate_closure returns n_rerouted as a FIFTH value (commit
+    # 3f20d70): a closure-avoiding detour must never be counted as lost
+    # access. Unpacking four raised ValueError on every call, so this
+    # arm could not run at all.
+    metrics, truncated, dropped, per_seed, _rerouted = legacy.simulate_closure(
         name=f"teleport-{label}", closures=closures, close_edges=close_edges,
         variants=variants, seeds=seeds, n_intervals=n_intervals,
         duration_s=duration_s, home=home, micro=False, adj=adjacency,

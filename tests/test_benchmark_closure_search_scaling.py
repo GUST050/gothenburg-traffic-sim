@@ -308,16 +308,29 @@ class TestFrozenArtifact:
     #: it necessarily reports drift on exactly these files — that is the record
     #: doing its job. Every other bound source must still match, or the
     #: baseline's timings would silently be about different code.
+    #: closure_ranking.py joined on 2026-09-06 (commit 779c508, +54/-3), which
+    #: changed how closures are ranked. The baseline is never rewritten, so the
+    #: only correct response to a genuinely changed bound source is to name it
+    #: here — never to relax the equality above, which is what still protects
+    #: every source that has NOT moved.
     PR_C_DRIFTED_SOURCES = frozenset({
         "traffic_sim/core/closure_calendar.py",
         "traffic_sim/core/contracts.py",
         "traffic_sim/simulation/closure_preflight.py",
+        "traffic_sim/simulation/closure_ranking.py",
         "traffic_sim/simulation/closure_teleport.py",
         "traffic_sim/simulation/independent_daily.py",
         "traffic_sim/simulation/monthly_search.py",
         "run_monthly_closure_search.py",
         "run_scenario.py",
         "suggest_closure_time.py",
+        # This harness binds ITSELF. It joined on 2026-09-06 because its probe
+        # unpacked four values from simulate_closure's five and raised
+        # ValueError before reaching SUMO — the baseline's timings therefore
+        # already described code that could not execute, and recording the
+        # repair is more honest than leaving the tool broken to protect a
+        # digest.
+        "tools/benchmark_closure_search_scaling.py",
     })
 
     def test_frozen_input_key_and_tracked_sources_recompute(self):
