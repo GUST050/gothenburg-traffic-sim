@@ -28,7 +28,10 @@ owners, states and approval formulas are not active workflow rules. See
   reachability proof; never make genuinely unreachable destinations valid by
   waiting, teleporting or widening the radius. SUMO's required transient-route
   tolerance is guarded by exact population and zero-throughput gates. Preserve
-  historical artifacts and stash@{0}; no delete/commit/push/deploy.`
+  historical artifacts and stash@{0}; no delete or deploy. The no-commit/push
+  part of this boundary was lifted by the project owner on 2026-09-06 for the
+  review-driven repair pass described under Updated, and for that change only;
+  it is otherwise still in force.`
 - Updated: `2026-09-06. The v4 build completed in 55.772 s and its focused suite
   evidence records 105 passes. A clean 30-pair campaign passed all eight
   qualification gates: 18.061x median paired speedup, 2.600 s adapter p95,
@@ -46,7 +49,29 @@ owners, states and approval formulas are not active workflow rules. See
   70 failed and 26 skipped in 817.71 s; failures remain concentrated in frozen
   historical fingerprint/campaign contracts, production-mode expectation,
   two warm-state integrations and one stale UI-text assertion. The two
-  blank-at-EOF findings were removed and git diff --check passes.`
+  blank-at-EOF findings were removed and git diff --check passes.
+  SUPERSEDED LATER THE SAME DAY (2026-09-06, review-driven repair pass):
+  the 70 failures are closed and the full suite measures **5,925 passed,
+  26 skipped, 0 failed in 833.70 s**, with `make lint` green over a target that
+  now includes `tools/`. None of the frozen artifacts was edited. The failures
+  resolved to five distinct causes, not one: a test module that read the
+  git-ignored `sumo/demand_meta.json` at IMPORT time (a collection error, which
+  aborts the whole run — CI had therefore executed ZERO tests since 2026-08-26
+  and its last green run was 18 July); two drift ledgers that had genuinely
+  drifted on `closure_ranking.py`; two stale test expectations (the deliberately
+  removed vehicle toggle, and the 2026-09-04 switch to
+  `independent-cost-ordered-exact`); and one REAL production defect in commit
+  779c508 — `require_sumo_population_identity` compared the resumed segment's
+  own trip_count against the whole population, so every healthy warm run was
+  refused and silently fell back to cold. Lint over `tools/` then found three
+  more tools that unpacked four values from `simulate_closure`'s five (commit
+  3f20d70) and one missing mandatory `cache_root` (commit 6d735cc): four tools
+  that crashed on their first call, none covered by a test. Also fixed: a
+  latent arbitrary-file-write in `job_record` (validation lived in the reader
+  only) and the map drawing "empty at this quarter" and "empty all window"
+  identically. Not done: nothing committed, no simulation run, no catalog
+  update, and no real GitHub Actions run — the workflow change is verified only
+  structurally.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- WORKFLOW_HISTORY_START -->

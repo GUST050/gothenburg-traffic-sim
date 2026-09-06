@@ -40,9 +40,21 @@ two original sensor clusters (that scope was superseded 2026-07-05). Only 6
 sensors exist, so accuracy is a **gradient**: hard/measured near a sensor,
 prior-driven further away. Every edge carries a `confidence` value (0–1) —
 `exp(-d²/2σ²)`, with σ fitted from real leave-one-station-out validation
-(currently 144.0 m), not a guessed constant — that decays with distance from
-the nearest sensor. The web app shows it on hover; simulation results are
-presented with it rather than a false claim of citywide accuracy.
+(currently **119.5 m** — the value actually in the shipped `network.geojson`;
+144.0 m was the earlier fit, before the sensor-crossing baseline rule changed
+the demand and LOSO was re-run), not a guessed constant — that decays with
+distance from the nearest sensor. The web app shows it on hover; simulation
+results are presented with it rather than a false claim of citywide accuracy.
+
+Confidence describes how well a road that carries simulated traffic is pinned
+down; it says nothing about whether a road carries any. Under the baseline rule
+only sensor-crossing paths are calibrated, and most inner-city streets end up
+with no flow at any quarter — 5 643 of 7 147 edges on the baseline shipped
+2026-09-06. The map now draws those separately ("Ingen trafik i detta
+scenario"), because a street that is empty all window and one that is empty at
+this instant are different claims. The map states the observation, not the
+cause: there is no per-edge route-coverage artifact, so it cannot assert that
+no sensor-crossing route reaches a given street.
 
 | Cluster | Sensors | Type |
 |---|---|---|

@@ -33,7 +33,18 @@ which model may continue. See `AGENTS.md`.
   44 catalog/mixed tests passed and 60 live-publication/scenario-timing tests
   passed. make scenario inserted 4,196/4,196 vehicles in six seed runs with
   zero teleports. Final full suite: 5,832 passed, 70 failed, 26 skipped and two
-  warnings in 817.71 s; git diff --check and staged JSON validation pass.`
+  warnings in 817.71 s; git diff --check and staged JSON validation pass.
+  SUPERSEDED LATER THE SAME DAY (2026-09-06, review-driven repair pass): all 70
+  failures are closed and the suite measures 5,925 passed, 26 skipped, 0 failed
+  in 833.70 s; make lint is green over a target that now includes tools/. No
+  frozen artifact was edited. The headline finding was that CI had run ZERO
+  tests since 2026-08-26 — tests/test_benchmark_speed.py read the git-ignored
+  sumo/demand_meta.json at import time, and a collection error aborts the whole
+  pytest run; the last green CI run was 18 July. Four tools were also found
+  crashing on their first call from three recent signature changes, plus one
+  real warm-arm defect in 779c508 that made every warm run fall back to cold.
+  Not done: nothing committed, no simulation, no catalog update, and no real
+  GitHub Actions run.`
 - Decisions and evidence: `An initial campaign became irreversibly rejectable
   after two cold mixed adapter values near 30 s. It was stopped and preserved;
   the current-identity mixed sensor-basis cache was prewarmed and independently
@@ -47,19 +58,31 @@ which model may continue. See `AGENTS.md`.
   A post-adoption direct 2027-12-09 06:00-10:00 build proved implicit catalog
   selection in 0.34 s, then exposed a separate PFE runaway: ten workers used
   about 52 minutes CPU before manual interruption. The prior complete live
-  product remained intact. The final 70 full-suite failures are concentrated
-  in frozen historical fingerprint/campaign records, an exhaustive-vs-cost-
-  ordered production-mode expectation, two warm-state integrations and one
-  stale UI-label assertion; the suite is not green and this commit must not be
-  described as such.`
+  product remained intact. The 70 full-suite failures reported earlier that
+  day were concentrated in frozen historical fingerprint/campaign records, an
+  exhaustive-vs-cost-ordered production-mode expectation, two warm-state
+  integrations and one stale UI-label assertion. THEY ARE NOW CLOSED
+  (2026-09-06, review-driven repair pass): the suite measures 5,925 passed,
+  26 skipped, 0 failed, and make lint is green over a target that now includes
+  tools/. No frozen artifact was edited -- the frozen records were drift
+  ledgers that had genuinely drifted, and the two warm-state failures were
+  hiding a real production defect in 779c508. The suite IS green and may be
+  described as such; what must still NOT be claimed is a passing GitHub
+  Actions run (none has been executed) or any new scientific result -- nothing
+  was simulated, no catalog was updated and nothing was committed.`
 - Suggested next action: `Diagnose the subwindow PFE runaway without changing
   catalog identity or adoption evidence. Separately decide whether to expand
   the simulation boundary/endpoints or revise the purpose contract before any
   new held-out semantic claim.`
-- Actor notes: `No commit, push, deploy or monthly campaign launch occurred.
-  The stale v3 adoption was replaced by passing v4 evidence. One orphan temp
-  snapshot was consumed to restore the known 4,196-vehicle live release; the
-  rejected benchmark artifacts remain available under validation/.`
+- Actor notes: `No deploy or monthly campaign launch occurred, and no
+  simulation was run or catalog rebuilt. The stale v3 adoption was replaced by
+  passing v4 evidence. One orphan temp snapshot was consumed to restore the
+  known 4,196-vehicle live release; the rejected benchmark artifacts remain
+  available under validation/. The later repair pass on 2026-09-06 WAS
+  committed and pushed to origin/strict-sensor-routes-2026-09-01, on the
+  project owner's explicit instruction after three review rounds; the
+  standing no-commit/push boundary was lifted for that change only and still
+  holds for delete and deploy.`
 <!-- CURRENT_HANDOFF_END -->
 
 <!-- CURRENT_HANDOFF_HISTORY_START -->
