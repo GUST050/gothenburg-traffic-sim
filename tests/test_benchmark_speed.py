@@ -58,21 +58,75 @@ RETIRED = ((CAMPAIGN_V1, "scenario_phase_profile_v1"),
 
 TEST_CAMPAIGN_ID = "scenario_phase_profile_test"
 
+# The harness resolves every input it fingerprints, and the live demand it
+# verifies a contract against, through its module-level ROOT. Pointing that at
+# the developer's real tree coupled this module to a git-ignored build artifact
+# twice over, and both couplings fired:
+#
+#   * `sumo/demand_meta.json` does not exist on CI, so reading it at IMPORT
+#     time raised FileNotFoundError during collection. pytest aborts the whole
+#     run on a collection error, so from 2026-08-26 no test in this suite ran
+#     in CI at all — the failure cost the entire suite, not one module.
+#   * Where the file did exist, its window was spliced into a contract whose
+#     `cases[*].closure_window` stays frozen at a whole day. After
+#     `make demand-morning` (16 intervals = 14 400 s) that contradicted the
+#     frozen 86 400 s and the loader refused the campaign, so the project's own
+#     documented fast-iteration target turned 63 tests red.
+#
+# The module is hermetic instead: a throwaway ROOT holding exactly the
+# artifacts REQUIRED_FINGERPRINT_LABELS names, whose demand_meta is generated
+# FROM the frozen contract's own declared window and identity. The loader
+# therefore checks the contract against the demand the contract itself
+# declares. No frozen byte is read for anything but its declared values, none
+# is written, and the result no longer depends on what was last built locally.
+def _build_hermetic_root(contract: dict) -> Path:
+    """A self-contained ROOT that satisfies the harness's input verification."""
+    root = Path(tempfile.mkdtemp(prefix="pp_root_"))
+    (root / "sumo").mkdir()
+    # The live-demand check compares every demand_window and demand_identity
+    # field against this file, so it is built from those very fields.
+    (root / "sumo" / "demand_meta.json").write_text(json.dumps(
+        {**contract["demand_window"], **contract["demand_identity"]},
+        sort_keys=True))
+    # Content is irrelevant and deliberately constant: the campaign freezes
+    # these digests and then verifies them against the same files, so what is
+    # under test is the binding, not the bytes.
+    for name in ("calibrated.rou.xml", "calibrated_v1.rou.xml",
+                 "calibrated_v2.rou.xml", "net.net.xml"):
+        (root / "sumo" / name).write_text(f"<!-- hermetic {name} -->\n")
+    (root / "run_scenario.py").write_text("# hermetic stand-in\n")
+    # Provenance is collected by running git with cwd=ROOT, and the report gate
+    # requires git_dirty to be a real bool — an unreadable repository is
+    # "unknown", never "clean", which is the correct production behaviour and
+    # is left untouched. Giving the fixture its own committed repository keeps
+    # `_command_output` genuinely exercised (the tests that pin its
+    # failure-vs-clean distinction patch subprocess.run themselves and must
+    # keep seeing the real helper) while making git_dirty deterministically
+    # False. Previously the recorded provenance changed depending on whether
+    # the developer happened to have uncommitted edits.
+    identity = ("-c", "user.email=hermetic@example.invalid",
+                "-c", "user.name=hermetic", "-c", "commit.gpgsign=false")
+    for command in (("git", "init", "-q"),
+                    ("git", *identity, "add", "-A"),
+                    ("git", *identity, "commit", "-q", "-m", "hermetic fixture",
+                     "--no-gpg-sign")):
+        # Never raise here: this runs at import, and an exception at import is
+        # a COLLECTION error, which aborts the entire pytest run rather than
+        # this module. A missing git fails the few provenance tests loudly
+        # instead, which is a proportionate failure.
+        subprocess.run(command, cwd=root, capture_output=True, check=False)
+    return root
+
+
 # A synthetic loadable "current" campaign, generated once for this module: the
-# v6 contract with a test identity and fingerprints refreshed to the live files
-# so it verifies against them. `CAMPAIGN` points at it; the autouse fixture
+# v6 contract under a test identity, with fingerprints taken from the hermetic
+# ROOT so it verifies against it. `CAMPAIGN` points at it; the autouse fixture
 # marks TEST_CAMPAIGN_ID current so `load_campaign(CAMPAIGN)` succeeds.
-def _build_synthetic_current() -> Path:
-    contract = json.loads(CAMPAIGN_V6.read_text())
+def _build_synthetic_current(contract: dict) -> Path:
+    contract = json.loads(json.dumps(contract))   # never mutate the caller's
     contract["campaign_id"] = TEST_CAMPAIGN_ID
-    live_meta = json.loads(
-        (benchmark_speed.ROOT / "sumo" / "demand_meta.json").read_text())
-    contract["demand_window"] = {
-        field: live_meta[field] for field in contract["demand_window"]
-    }
-    contract["demand_identity"] = {
-        field: live_meta[field] for field in contract["demand_identity"]
-    }
+    # demand_window and demand_identity stay exactly as frozen — the hermetic
+    # demand_meta was generated from them.
     inputs = dict(benchmark_speed.file_fingerprints())
     inputs["harness:benchmark_speed.py"] = benchmark_speed.sha256_file(
         benchmark_speed.HARNESS)
@@ -85,14 +139,30 @@ def _build_synthetic_current() -> Path:
     return path
 
 
-CAMPAIGN = _build_synthetic_current()
+_V6_CONTRACT = json.loads(CAMPAIGN_V6.read_text())
+HERMETIC_ROOT = _build_hermetic_root(_V6_CONTRACT)
+
+# tests/test_scenario_timing.py imports the same module object, so the patch is
+# applied only for the duration of this build and re-applied per test by the
+# autouse fixture below, which undoes it again afterwards.
+_REAL_ROOT = benchmark_speed.ROOT
+benchmark_speed.ROOT = HERMETIC_ROOT
+try:
+    CAMPAIGN = _build_synthetic_current(_V6_CONTRACT)
+finally:
+    benchmark_speed.ROOT = _REAL_ROOT
 
 
 @pytest.fixture(autouse=True)
 def _seed_parallel_line_current(monkeypatch):
     """Mark the synthetic `CAMPAIGN` current so the loader machinery is testable
     even though production's CURRENT_CAMPAIGN_ID is None. Retirement/closure
-    tests that need the real None behavior reset it inside the test."""
+    tests that need the real None behavior reset it inside the test.
+
+    ROOT is repointed at the hermetic tree for the same reason `CAMPAIGN` was
+    built against it: input verification must resolve to the fixture, never to
+    whatever the developer last built."""
+    monkeypatch.setattr(benchmark_speed, "ROOT", HERMETIC_ROOT)
     monkeypatch.setattr(benchmark_speed, "CURRENT_CAMPAIGN_ID", TEST_CAMPAIGN_ID)
 
 
