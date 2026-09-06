@@ -1507,11 +1507,25 @@ class TestDefaultProductionPathEndToEnd:
         harness = _harness()
         monkeypatch.setattr(harness, "REPO_ROOT", tmp_path)
         archive = helpers._archive(tmp_path)
+        # The route file must declare exactly the vehicles the fake run
+        # completes. require_sumo_population_identity (added 2026-09-06,
+        # commit 779c508) refuses a run whose transformed population differs
+        # from what SUMO loaded, inserted and finished — the check that catches
+        # a run silently executing a different population than it was given.
+        # This fixture still declared a single "v1" while the fake completed
+        # c1..c3 (prefix) and r1..r2 (resumed), so the invariant refused both
+        # arms and the campaign failed for a fixture reason, not a real one.
+        # The five ids are load-bearing: boundary reconciliation is by vehicle
+        # IDENTITY and the two phases must partition them exactly.
         for name in ("calibrated.rou.xml", "calibrated_v1.rou.xml",
                      "calibrated_v2.rou.xml"):
             (Path(archive) / name).write_text(
-                '<routes>\n<vehicle id="v1" depart="60.0">'
-                '<route edges="a_b_0 b_c_0"/></vehicle>\n</routes>\n')
+                '<routes>\n' + "\n".join(
+                    f'<vehicle id="{vid}" depart="{depart:.1f}">'
+                    '<route edges="a_b_0 b_c_0"/></vehicle>'
+                    for vid, depart in (("c1", 60.0), ("c2", 61.0),
+                                        ("c3", 62.0), ("r1", 25000.0),
+                                        ("r2", 25001.0))) + '\n</routes>\n')
         manifest = dict(_load())
         manifest["demand_requirement"] = dict(
             manifest["demand_requirement"],
@@ -1570,6 +1584,22 @@ class TestDefaultProductionPathEndToEnd:
         record = harness.run_paired_campaign(
             manifest, tmp_path / "root",
             boundary_controller=calls["controller"])
+
+        # A warm arm that FELL BACK to cold still loads state and still
+        # compares equal — to itself. That is how a broken warm path passed
+        # here on 2026-09-06: require_sumo_population_identity was asking the
+        # resumed segment's own trip_count to equal the whole population, so
+        # every warm run was refused, silently degraded to cold_fallback, and
+        # the campaign reported a comparison that tested nothing. Assert the
+        # arm actually stayed warm, and name the reason when it did not.
+        evidence = record["execution_evidence"]
+        outcomes = [attempt["outcome"] for attempt in evidence["warm_attempts"]]
+        assert evidence["warm_executions"] >= 1, (
+            "the warm arm fell back to cold, so the comparison is warm in name "
+            "only", outcomes,
+            [event for attempt in evidence["warm_attempts"]
+             for event in attempt["events"] if event["code"] == "invoker_failed"])
+        assert "cold_fallback" not in outcomes, outcomes
 
         assert calls["save_state"] >= 1, "no candidate-free bootstrap ran"
         assert calls["load_state"] >= 1, (

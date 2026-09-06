@@ -2238,17 +2238,31 @@ class ArchivedDemandSumoRunner:
         transformed_population = (
             int(access_impact_payload["summary"]["unaffected"])
             + int(access_impact_payload["summary"]["rerouted"]))
-        closure_routing.require_sumo_population_identity(
-            transformed_population,
-            loaded=raw_post_metrics.loaded,
-            inserted=raw_post_metrics.inserted,
-            trip_count=raw_post_metrics.trip_count,
-            context=f"warm/{schedule.schedule_id}/{variant}/seed-{seed}")
         correction = reconcile_resumed_tripinfo(
             metric_paths["tripinfo"], prefix_evidence["active_accumulator"],
             completed_vehicle_ids=sorted(prefix_evidence["completed_records"]),
             completed_prefix_total=prefix_evidence["completed_trips"][
                 "total_time_loss_s"])
+        # The population identity has to be asked of the WHOLE run, and on this
+        # arm the run is two segments. A vehicle that finished before the
+        # snapshot is in the prefix aggregate and is absent from the resumed
+        # tripinfo by construction — which is precisely what the reconciliation
+        # above exists to account for — while `loaded`/`inserted` are
+        # cumulative across the restored state and therefore already describe
+        # the whole population. Comparing them against the resumed segment's
+        # own trip_count asked whether a part equalled the whole, so a healthy
+        # warm run was refused and fell back to cold. The summed count is the
+        # project's standing rule for this (warm_state_boundary: "add the two
+        # segment aggregates"), so the check now uses it and keeps its full
+        # force: a warm run that executes a different population than it was
+        # handed still fails here.
+        closure_routing.require_sumo_population_identity(
+            transformed_population,
+            loaded=raw_post_metrics.loaded,
+            inserted=raw_post_metrics.inserted,
+            trip_count=(prefix_evidence["completed_trips"]["trip_count"]
+                        + correction["trip_count"]),
+            context=f"warm/{schedule.schedule_id}/{variant}/seed-{seed}")
         post_metrics = dataclasses.replace(
             raw_post_metrics,
             total_time_loss_s=correction["corrected_total_time_loss_s"],
