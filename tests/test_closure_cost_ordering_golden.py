@@ -54,6 +54,19 @@ def test_the_named_real_benchmark_matches_exhaustive_without_overclaiming():
 
 
 def test_the_frozen_golden_reports_current_interpreter_drift():
+    """A maintained ledger of which bound sources have moved since the freeze.
+
+    The frozen record is immutable evidence and is never edited to make this
+    pass; the SET BELOW is the thing that is maintained. A source appearing
+    here means the golden no longer describes the code that produced it, so
+    the golden may not be quoted as current behaviour for that file — which
+    is the whole point of listing them by name rather than counting them.
+
+    Adding an entry is therefore a deliberate act, not a green-making one:
+    closure_ranking.py joined on 2026-09-06 (commit 779c508, +54/-3), which
+    changed how closures are ranked and so genuinely invalidates the golden's
+    claim over that file.
+    """
     sources = _read()["sources"]
     drifted = set()
     for name, source in sources.items():
@@ -65,6 +78,7 @@ def test_the_frozen_golden_reports_current_interpreter_drift():
             drifted.add(name)
     assert drifted == {
         "run_scenario.py",
+        "traffic_sim/simulation/closure_ranking.py",
         "traffic_sim/simulation/cost_ordered_search.py",
         "traffic_sim/simulation/deterministic_disruption.py",
         "traffic_sim/simulation/disruption.py",

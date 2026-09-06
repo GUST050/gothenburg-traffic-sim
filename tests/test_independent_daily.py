@@ -1460,9 +1460,19 @@ def test_server_routes_independent_search_to_exact_exhaustive_mode():
         monthly_screening_cli_args,
     )
 
+    # Cost-ordered exact EXECUTION, adopted 2026-09-04: candidates are priced
+    # from the calibrated routes before any SUMO starts and only the prefix the
+    # boundary proof needs is simulated. Enumeration, ordering, routing, health
+    # and provenance semantics are the exhaustive mode's, unchanged — which is
+    # why this stays one equality over the whole argument vector rather than a
+    # loosened membership check.
     assert monthly_screening_cli_args(_spec()) == [
         "--screening-mode",
-        "independent-exhaustive",
+        "independent-cost-ordered-exact",
+        # A UI search is an operational answer, never release evidence. The
+        # flag is asserted here because dropping it is exactly how a server
+        # run could start publishing Phase 6 outcomes it never earned.
+        "--operational-no-evidence",
         "--daily-workers",
         str(MONTHLY_DAILY_WORKERS),
         "--seed-workers",
