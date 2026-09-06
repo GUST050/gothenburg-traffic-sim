@@ -723,9 +723,44 @@ JOBS_DIR = ROOT / "runs" / "jobs"
 _jobs_file_lock = threading.Lock()
 
 
+#: Job ids are server-generated as f"{kind}-{timestamp}-{hex}".
+_JOB_ID_RE = re.compile(r"[A-Za-z0-9._-]+")
+
+
+def _job_path(job_id: object) -> Path | None:
+    """The record path for `job_id`, or None if it is not a plain job id.
+
+    The validation lives HERE, at the boundary both the reader and the writer
+    cross, because it used to live only in the reader. `job_record()` writes
+    even when `job_read()` returns None, so an id containing a separator or a
+    parent reference produced a file OUTSIDE JOBS_DIR — verified directly:
+    `job_record("../PWNED", ...)` created PWNED.json one level up. No live
+    endpoint could reach it (the only caller taking a caller-supplied id,
+    `_acknowledge_orphan`, returns early on the reader's None), so this closes
+    a latent hole rather than an exploited one. A guard that protects a writer
+    only by way of a different function's early return is one refactor away
+    from protecting nothing.
+    """
+    if not isinstance(job_id, str) or not job_id:
+        return None
+    # A leading dot would also collide with the ".tmp" write convention and
+    # produce hidden files; "." and ".." stay inside JOBS_DIR but are still not
+    # ids. Real ids are f"{kind}-{timestamp}-{hex}", so this is permissive.
+    if job_id.startswith(".") or not _JOB_ID_RE.fullmatch(job_id):
+        return None
+    candidate = Path(job_id + ".json")
+    # One plain component, no separators, no parent reference, not absolute.
+    if candidate.is_absolute() or len(candidate.parts) != 1 \
+            or candidate.name != job_id + ".json":
+        return None
+    return JOBS_DIR / candidate
+
+
 def _job_write(job_id: str, record: dict) -> None:
+    path = _job_path(job_id)
+    if path is None:
+        raise ValueError(f"refusing to write a job record for {job_id!r}")
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
-    path = JOBS_DIR / f"{job_id}.json"
     tmp = path.with_name(path.name + ".tmp")
     with open(tmp, "w") as f:
         json.dump(record, f, indent=1, sort_keys=True)
@@ -733,8 +768,8 @@ def _job_write(job_id: str, record: dict) -> None:
 
 
 def job_read(job_id: str) -> dict | None:
-    path = JOBS_DIR / f"{job_id}.json"
-    if not path.exists() or "/" in job_id or ".." in job_id:
+    path = _job_path(job_id)
+    if path is None or not path.exists():
         return None
     try:
         with open(path) as f:

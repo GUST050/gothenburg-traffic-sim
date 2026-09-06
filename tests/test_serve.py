@@ -258,6 +258,61 @@ class TestPing:
         assert body == {"ok": True}
 
 
+class TestJobRecordPaths:
+    """The durable job layer must confine itself to JOBS_DIR at the WRITE
+    boundary, not only at the read one.
+
+    Before this, `job_read()` rejected separators and parent references but
+    `job_record()` wrote regardless of what the reader returned, so
+    `job_record("../PWNED", ...)` created a file one directory up — verified
+    directly. No HTTP endpoint could reach it: the only handler that takes a
+    caller-supplied id, `_acknowledge_orphan`, returns early when the read
+    fails. That made it latent, not exploited — and a writer whose safety
+    depends on a different function's early return is one refactor from being
+    no safety at all.
+    """
+
+    @pytest.fixture
+    def jobs_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(serve, "JOBS_DIR", tmp_path / "jobs")
+        return tmp_path
+
+    @pytest.mark.parametrize("job_id", [
+        "../PWNED", "a/b", "..", ".", "", "/abs", "x\\y", ".hidden",
+        "a b", "a;b", "a\x00b",
+    ])
+    def test_a_malformed_id_is_refused_by_the_writer(self, jobs_dir, job_id):
+        with pytest.raises(ValueError):
+            serve.job_record(job_id, status="x")
+
+    def test_nothing_is_written_outside_the_jobs_directory(self, jobs_dir):
+        with pytest.raises(ValueError):
+            serve.job_record("../PWNED", status="x")
+        assert not (jobs_dir / "PWNED.json").exists()
+        assert list(jobs_dir.rglob("PWNED*")) == []
+
+    @pytest.mark.parametrize("job_id", [
+        "close-20260906-1200-ab12",
+        "recalibrate-20260101-000000-ffff",
+        "monthly-20270722-235959-0f0f",
+    ])
+    def test_a_real_server_generated_id_round_trips(self, jobs_dir, job_id):
+        serve.job_record(job_id, status="running")
+        assert serve.job_read(job_id)["status"] == "running"
+        assert (serve.JOBS_DIR / f"{job_id}.json").is_file()
+
+    def test_the_id_shape_matches_what_the_server_actually_generates(
+            self, jobs_dir, monkeypatch):
+        """Whatever begin_active_job mints must survive the new guard."""
+        recorded = {}
+        monkeypatch.setattr(serve, "job_record",
+                            lambda job_id, **f: recorded.setdefault("id", job_id))
+        monkeypatch.setattr(serve, "_active_job_lock", threading.Lock())
+        serve.begin_active_job("close", {})
+
+        assert serve._job_path(recorded["id"]) is not None
+
+
 class TestServerStartup:
     def test_startup_never_reconciles_the_repositorys_own_job_records(self):
         assert serve.JOBS_DIR != serve.ROOT / "runs" / "jobs"
