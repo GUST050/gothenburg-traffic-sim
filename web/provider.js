@@ -111,9 +111,11 @@ class HistoricalProvider {
     // large, avoidable parse-time allocation.  null remains missing and
     // never participates in max or calm.
     this._calmByEdge = {};
+    this._noTrafficByEdge = {};
     for (const [edgeId, arr] of Object.entries(this._flows)) {
       let max = 0;
       let hasValue = false;
+      let hasGap = false;
       let calmSum = 0;
       let calmN = 0;
       for (let i = 0; i < arr.length; i++) {
@@ -126,10 +128,21 @@ class HistoricalProvider {
           // their middays).
           const slot = i % 96;
           if (slot >= 40 && slot < 60) { calmSum += value; calmN++; }
+        } else {
+          hasGap = true;
         }
       }
       this._maxByEdge[edgeId] = hasValue ? max : 1;
       this._calmByEdge[edgeId] = calmN ? calmSum / calmN : null;
+      // "Carries no traffic anywhere in this window" is a claim about EVERY
+      // quarter, so it may only be made from a COMPLETE series of zeros. A
+      // maximum of 0 is not enough: [0, null, 0, 0] has a maximum of 0 while
+      // one quarter is unknown, and null means missing — never zero — under
+      // the project's data contract. A series shorter than the provider's own
+      // window is the same situation written differently: the quarters past
+      // its end read back as null through flowAt(), so they are gaps too.
+      this._noTrafficByEdge[edgeId] =
+        hasValue && max === 0 && !hasGap && arr.length >= this.numQuarters;
     }
     return this;
   }
@@ -144,6 +157,20 @@ class HistoricalProvider {
 
   maxFlow(edgeId) {
     return this._maxByEdge[edgeId] ?? null;
+  }
+
+  // True only when this provider carries the edge with a COMPLETE series of
+  // zeros covering its whole window. Deliberately not called "unsimulated":
+  // all this observes is that no vehicle ran here, never why. Three cases
+  // that are NOT this, each for its own reason:
+  //   * an edge the provider does not carry — "absent from this artifact" and
+  //     "modelled as carrying nothing" are different statements;
+  //   * an all-null edge — missing data, never zero;
+  //   * a partially null edge, e.g. [0, null, 0, 0] — the maximum is 0 but
+  //     one quarter is unknown, so "no vehicle during the whole window" is
+  //     not something this provider can say.
+  carriesNoTraffic(edgeId) {
+    return this._noTrafficByEdge?.[edgeId] === true;
   }
 
   // Calm midday (10:00–15:00) mean for this edge, from this provider's own
@@ -298,6 +325,16 @@ class DeltaProvider {
   // caller of flowAt() keeps getting a real, unmodified flow value.
   flowAt(edgeId, qi)      { return this.closure.flowAt(edgeId, qi); }
   maxFlow(edgeId)         { return this.closure.maxFlow(edgeId); }
+
+  // BOTH arms, never just the closure one. maxFlow() above delegates to the
+  // closure, so a street the closure empties completely reports 0 there while
+  // the baseline still carries traffic — asking the delegate alone would mark
+  // the largest reduction the comparison can express as "no traffic here" and
+  // hide it, which is the very failure the comparison view exists to surface.
+  carriesNoTraffic(edgeId) {
+    return this.baseline.carriesNoTraffic?.(edgeId) === true
+        && this.closure.carriesNoTraffic?.(edgeId) === true;
+  }
   calmFlow(edgeId)        { return this.closure.calmFlow ? this.closure.calmFlow(edgeId) : null; }
   dateFromQI(qi)          { return this.closure.dateFromQI(qi); }
   closureWindowText(id)   { return this.closure.closureWindowText?.(id); }

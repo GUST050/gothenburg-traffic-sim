@@ -15,6 +15,16 @@ const Render = (() => {
   const _pending     = new Set();   // edges selected for closure, not yet simulated
 
   const PENDING_STYLE = { color: '#b91c1c', weight: 5, opacity: 0.9, dashArray: '2 6' };
+  // A street the simulation never reaches is NOT a street that happens to be
+  // empty at this quarter, and the two were drawn the same solid grey. Under
+  // the baseline rule only sensor-crossing paths carry traffic, so most of the
+  // inner city has no simulated flow at ANY quarter — measured on the current
+  // baseline, 5 643 of 7 147 edges. Rendering that as ordinary "0 vehicles"
+  // invites reading an unmodelled road as a quiet one. A hairline, faded and
+  // dashed, is the same "no claim is made here" language the comparison view
+  // already uses for missing data.
+  const UNSIMULATED_STYLE = {
+    color: '#cbd5e1', weight: 1.5, opacity: 0.35, dashArray: '1 5' };
 
   // ── Vehicle playback state (every dot = one simulated car with real OD) ──
   let _traj        = null;   // {edges:[ids], vehicles:[{d,e,x,p?,a?}]} sorted by depart
@@ -95,6 +105,52 @@ const Render = (() => {
   // Sets line style, colour level (e.t) and active car count for a flow value.
   // count may be an interpolated float — called both per tick (raw value)
   // and per frame (blended value) via animLoop.
+  // True when the active provider carries this edge and never puts a vehicle
+  // on it, at any quarter it covers. The provider answers, not the renderer:
+  // the comparison view has to consult BOTH arms, and an earlier version of
+  // this asked only maxFlow(), which a DeltaProvider delegates to its closure
+  // arm — so a street the closure emptied completely (baseline 10, closure 0)
+  // reported 0 and was drawn as carrying no traffic, hiding the largest
+  // reduction the map can show behind the very styling meant to stop the map
+  // overclaiming. Scoped to scenario views: in Historisk/Prognos a zero is a
+  // measurement, not a modelling boundary.
+  function carriesNoTraffic(edgeId) {
+    if (!_provider || !(_provider.isScenario || _provider.isDelta)) return false;
+    if (typeof _provider.carriesNoTraffic !== 'function') return false;
+    return _provider.carriesNoTraffic(edgeId) === true;
+  }
+
+  // Comparison view styling, extracted so applyFlowStyle can consult it before
+  // the plain-flow shortcuts rather than after them.
+  function applyDeltaStyle(e, edgeId, qi) {
+    const cmp = _provider.compare(edgeId, qi);
+    e.t = null; e.activeCars = 0;
+    e.cmp = cmp;
+    if (cmp.status === 'closed') {
+      e.line.setStyle({
+        color: '#111827', weight: 5, opacity: 0.95, dashArray: '6 5',
+      });
+      return;
+    }
+    if (cmp.status === 'no_data') {
+      // A gap is drawn as a gap — never as "no change".
+      e.line.setStyle({
+        color: '#cbd5e1', weight: 2, opacity: 0.25, dashArray: '2 4',
+      });
+      return;
+    }
+    // Unclaimable edges are shown but visibly weaker: the redistribution is
+    // real, the confidence to assert its size is not.
+    const claimable = cmp.status !== 'unclaimable';
+    e.line.setStyle({
+      color: deltaColor(cmp.rel ?? 0),
+      weight: e.isSensor ? 4 : 3,
+      opacity: cmp.status === 'within_noise' ? 0.35
+             : (claimable ? 0.9 : 0.5),
+      dashArray: claimable ? '' : '4 3',
+    });
+  }
+
   function applyFlowStyle(e, edgeId, count, qi) {
     e.count = count;
 
@@ -110,6 +166,28 @@ const Render = (() => {
     if (_provider.isEdgeClosed && _provider.isEdgeClosed(edgeId, qi)) {
       e.line.setStyle({ color: '#0f172a', weight: 5, opacity: 0.85, dashArray: '4 7' });
       e.t = null; e.activeCars = 0;
+      return;
+    }
+
+    // A road the active view never puts a vehicle on, at any quarter it
+    // covers. Checked before the per-quarter shortcuts because that is a
+    // property of the whole window, not of this instant, and answering it
+    // with the same grey as a momentarily empty street erases the
+    // distinction. In the comparison view the predicate consults both arms,
+    // so an edge one arm empties still reaches the delta styling below.
+    if (carriesNoTraffic(edgeId)) {
+      e.line.setStyle(UNSIMULATED_STYLE);
+      e.t = null; e.activeCars = 0;
+      return;
+    }
+
+    // The comparison decides BEFORE the flow shortcuts below. A closure that
+    // empties a street completely arrives here with count === 0, and the old
+    // order returned neutral grey for it — drawing the largest reduction the
+    // map can express as though nothing had changed. compare() handles its own
+    // missing-data and closed cases, so nothing is lost by asking it first.
+    if (_provider.isDelta) {
+      applyDeltaStyle(e, edgeId, qi);
       return;
     }
 
@@ -138,43 +216,10 @@ const Render = (() => {
     // Because confidence = f(distance to nearest sensor), this renders as
     // visible certainty zones around the sensor clusters. Per-scenario
     // confidence (Monte Carlo spread) beats the static prior when present.
-    // Comparison view: colour by CHANGE against the baseline, not by volume.
-    // Placed before the scenario branch because a DeltaProvider is a scenario
-    // comparison, not a confidence display.
-    if (_provider.isDelta) {
-      const cmp = _provider.compare(edgeId, qi);
-      e.t = null; e.activeCars = 0;
-      e.cmp = cmp;
-      if (cmp.status === 'closed') {
-        e.line.setStyle({
-          color: '#111827', weight: 5, opacity: 0.95, dashArray: '6 5',
-        });
-        return;
-      }
-      if (cmp.status === 'no_data') {
-        // A gap is drawn as a gap — never as "no change".
-        e.line.setStyle({
-          color: '#cbd5e1', weight: 2, opacity: 0.25, dashArray: '2 4',
-        });
-        return;
-      }
-      // Unclaimable edges are shown but visibly weaker: the redistribution is
-      // real, the confidence to assert its size is not.
-      const claimable = cmp.status !== 'unclaimable';
-      e.line.setStyle({
-        color: deltaColor(cmp.rel ?? 0),
-        weight: e.isSensor ? 4 : 3,
-        opacity: cmp.status === 'within_noise' ? 0.35
-               : (claimable ? 0.9 : 0.5),
-        dashArray: claimable ? '' : '4 3',
-      });
-      return;
-    }
-
     if (_provider.isScenario) {
       const conf = (_provider.confidence && _provider.confidence[edgeId] != null)
         ? _provider.confidence[edgeId] : (e.conf ?? 0);
-      // Display transform: the empirical sigma (127.5 m) makes raw
+      // Display transform: the empirical sigma (119.5 m) makes raw
       // confidence collapse within ~300 m, which paints the whole city one
       // flat red and hides the very zone structure the colouring should
       // show. conf^(1/8) is monotone in the SAME confidence value (order
@@ -613,6 +658,20 @@ const Render = (() => {
             else if (level)         html += `<br><small>Enkelriktad mätning (${level})</small>`;
             if (_provider.isEdgeClosed && _provider.isEdgeClosed(id, qi)) {
               html += `<br><span style="color:#dc2626;font-weight:600">AVSTÄNGD i scenariot</span>`;
+            } else if (carriesNoTraffic(id)) {
+              // Say which of the two zeroes this is, and claim only what is
+              // observed. The check sees zero flow across THIS artifact's own
+              // window — it does not know WHY, and in particular it has no
+              // route-coverage metadata, so it must not assert that no
+              // sensor-crossing route reaches the street. (Under the baseline
+              // rule that is the usual reason, but "usually" is not evidence
+              // about this edge.)
+              html += '<br><span style="color:#64748b;font-weight:600">'
+                    + 'Ingen trafik i detta scenario</span>'
+                    + '<br><small>Inget fordon körde här under hela det '
+                    + 'simulerade tidsfönstret — inte bara vid denna kvart. '
+                    + 'Varför framgår inte av kartan: modellen saknar '
+                    + 'ruttäckningsdata per väg.</small>';
             } else if (_provider.isScenario) {
               html += '<br><small>Simulerat (SUMO)</small>';
             }

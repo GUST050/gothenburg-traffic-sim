@@ -990,7 +990,17 @@
     </div>
     <div class="legend-row">
       <div class="legend-swatch"><div class="legend-line" style="background:#94a3b8"></div></div>
-      <span>Noll fordon</span>
+      <span>Noll fordon <small>(gatan simuleras, men är tom just nu)</small></span>
+    </div>
+    <!-- Roughly four in five inner-city streets carry no simulated flow at ANY
+         quarter, and that used to be drawn with the same grey as "zero right
+         now". The legend states the OBSERVATION only: the map has no per-edge
+         route-coverage data, so it cannot say why a street is empty. -->
+    <div class="legend-row">
+      <div class="legend-swatch"><div class="legend-line"
+           style="background:#cbd5e1;opacity:0.55;height:1.5px"></div></div>
+      <span>Ingen trafik i detta scenario
+        <small>(inget fordon under hela tidsfönstret)</small></span>
     </div>
     <div class="legend-row">
       <div class="legend-swatch"><div class="legend-dashed"></div></div>

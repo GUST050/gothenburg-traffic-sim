@@ -24,7 +24,14 @@ def test_web_hides_internal_seed_and_describes_demand_truthfully():
     assert "representativ körning (frö" not in source
     assert "visad körning ${variant}" not in source
     assert "AUDIT_VARIANT_LABEL" not in source
-    assert "🚗 Fordonsanimation" in source
+    # The 🚗 vehicle-animation toggle was deliberately removed: vehicles ARE
+    # the Simulering view, and offering a switch implied the conveyor-dot
+    # illustration was an equally valid picture of the same run. Pinned as an
+    # absence so it cannot quietly return; the mode switch drives
+    # Render.setVehicleMode instead.
+    assert "🚗 Fordonsanimation" not in source
+    assert "🚗 Fordonsanimation" not in html
+    assert "Render.setVehicleMode(true)" in source
     assert "modellerat reseärende:" in source
     assert "geografiskt flöde:" in source
     assert "Sensorindatan anger antal passager" in source
@@ -34,6 +41,53 @@ def test_web_hides_internal_seed_and_describes_demand_truthfully():
     assert "SUMO visad" not in html
     assert "Mål, enskild" in html
     assert "SUMO, enskild" in html
+
+
+def test_the_map_separates_unsimulated_roads_from_empty_ones():
+    """Two different zeroes must not share one appearance.
+
+    Under the baseline rule only sensor-crossing paths carry traffic, so most
+    inner-city streets have no simulated flow at any quarter — 5 643 of 7 147
+    edges on the baseline measured 2026-09-06. They were drawn with the same
+    solid grey as a street the simulation DOES cover that happens to be empty
+    at this quarter, which invites reading a modelling boundary as a quiet
+    road. pytest cannot execute the renderer, so the invariant is pinned at
+    source level, the way this file already pins other UI copy.
+    """
+    root = Path(__file__).parent.parent
+    render = (root / "web" / "render.js").read_text()
+    html = (root / "web" / "index.html").read_text()
+
+    assert "UNSIMULATED_STYLE" in render
+    # The renderer must ASK the provider, not compute the answer from
+    # maxFlow(): a DeltaProvider delegates maxFlow to its closure arm, so a
+    # street the closure empties reports 0 and the largest reduction the map
+    # can show would be hidden. tests/js/provider_coverage.test.js executes
+    # that case; this only pins that the renderer still delegates.
+    assert "_provider.carriesNoTraffic(edgeId)" in render
+    assert "maxFlow" not in render.split("function carriesNoTraffic")[1][:600]
+    # Scoped to scenario views: in Historisk/Prognos a zero is a measurement.
+    assert "_provider.isScenario || _provider.isDelta" in render
+    # Claim only what is observed: no route-coverage metadata exists per edge,
+    # so the copy may not assert WHY the street is empty.
+    assert "Ingen trafik i detta scenario" in render
+    assert "sensorkorsande" not in render
+
+    # The comparison must decide BEFORE the plain-flow shortcuts, or a closure
+    # that empties a street completely (count === 0) is drawn neutral grey —
+    # the largest reduction the map can show, rendered as no change.
+    assert render.index("applyDeltaStyle(e, edgeId, qi)") \
+        < render.index("if (count === null)")
+
+
+def test_the_render_comment_states_the_deployed_sigma():
+    """The comment named 127.5 m, which matches no deployment; the shipped
+    network.geojson is 119.5 m. A wrong number in a comment about how the
+    confidence gradient is drawn is how the next reader mis-describes it."""
+    render = (Path(__file__).parent.parent / "web" / "render.js").read_text()
+
+    assert "127.5 m" not in render
+    assert "119.5 m" in render
 
 
 def test_ui_demand_copy_matches_the_sensor_input_schema():
