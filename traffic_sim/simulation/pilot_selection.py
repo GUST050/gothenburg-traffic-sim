@@ -23,16 +23,22 @@ from traffic_sim.simulation.finalist_decision import (
     TimeoutIdentity,
 )
 from traffic_sim.simulation.closure_ranking import (
+    CLOSURE_COST_OBJECTIVES,
     ClosureCost,
+    Q50_COST_OBJECTIVE,
     rank_closures,
-    worst_variant_cost,
+    reduce_variant_cost,
 )
 
 
 SCHEMA_VERSION = 1
 PILOT_METHOD = "matched_worst_variant_pilot_v1"
 CLOSURE_COST_PILOT_METHOD = "deterministic_closure_cost_pilot_v1"
-RANKING_OBJECTIVES = frozenset({"legacy_time_loss_v1", "closure_cost_v1"})
+Q50_CLOSURE_COST_PILOT_METHOD = "deterministic_q50_closure_cost_pilot_v2"
+RANKING_OBJECTIVES = frozenset({
+    "legacy_time_loss_v1",
+    *CLOSURE_COST_OBJECTIVES,
+})
 _STATUSES = frozenset(
     {"ready", "incomplete", "no_viable", "capacity_exceeded", "inconclusive"}
 )
@@ -225,11 +231,12 @@ def select_pilot_finalists(
         raise ValueError(
             "practical_equivalence_vehicle_hours must be finite and non-negative"
         )
-    selection_method = (
-        CLOSURE_COST_PILOT_METHOD
-        if ranking_objective == "closure_cost_v1"
-        else PILOT_METHOD
-    )
+    if ranking_objective == Q50_COST_OBJECTIVE:
+        selection_method = Q50_CLOSURE_COST_PILOT_METHOD
+    elif ranking_objective in CLOSURE_COST_OBJECTIVES:
+        selection_method = CLOSURE_COST_PILOT_METHOD
+    else:
+        selection_method = PILOT_METHOD
     candidate_ids = [candidate.candidate_id for candidate in evidence]
     if len(candidate_ids) != len(set(candidate_ids)):
         raise ValueError("pilot candidate IDs must be unique")
@@ -354,7 +361,7 @@ def select_pilot_finalists(
             method=selection_method,
         )
 
-    if ranking_objective == "closure_cost_v1":
+    if ranking_objective in CLOSURE_COST_OBJECTIVES:
         evidence_by_id = {
             candidate.candidate_id: candidate
             for candidate in evidence
@@ -367,12 +374,14 @@ def select_pilot_finalists(
         )
         if missing_disruption:
             raise ValueError(
-                "closure_cost_v1 requires disruption evidence for every "
+                f"{ranking_objective} requires disruption evidence for every "
                 f"viable pilot candidate: missing={missing_disruption}"
             )
         all_costs_by_id = {
-            candidate.candidate_id: worst_variant_cost(
-                candidate.candidate_id, candidate.disruption
+            candidate.candidate_id: reduce_variant_cost(
+                candidate.candidate_id,
+                candidate.disruption,
+                ranking_objective,
             )
             for candidate in evidence
             if candidate.disruption
@@ -429,7 +438,7 @@ def select_pilot_finalists(
             ),
         )
     minimum_count = min(policy.minimum_finalists, len(ranked))
-    if ranking_objective == "closure_cost_v1":
+    if ranking_objective in CLOSURE_COST_OBJECTIVES:
         cutoff = costs_by_id[
             ranked[minimum_count - 1].candidate_id
         ].added_vehicle_hours
@@ -466,8 +475,8 @@ def select_pilot_finalists(
         reason=(
             "retained the frozen minimum plus every candidate inside the "
             + (
-                "worst-variant closure-cost equivalence band"
-                if ranking_objective == "closure_cost_v1"
+                "closure-cost equivalence band"
+                if ranking_objective in CLOSURE_COST_OBJECTIVES
                 else "worst-variant pilot retention band"
             )
         ),

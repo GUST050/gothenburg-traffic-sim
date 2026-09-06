@@ -129,7 +129,12 @@ class TestExactSelectiveContract:
             FINAL_LEDGER_SCHEMA, RESTORE_AUDIT_SCHEMA,
             RESTORE_CORRECTION_SCHEMA, SAVE_LEDGER_SCHEMA)
         manifest = _load()
-        assert manifest["prefix_evidence_schema"] == PREFIX_EVIDENCE_SCHEMA
+        if _is_current():
+            assert manifest["prefix_evidence_schema"] == PREFIX_EVIDENCE_SCHEMA
+        else:
+            assert manifest["prefix_evidence_schema"] != PREFIX_EVIDENCE_SCHEMA
+            with pytest.raises(SystemExit, match="frozen sources drifted"):
+                _harness().load_frozen_manifest(MANIFEST)
         correction = manifest["restore_correction"]
         assert correction["save_ledger_schema"] == SAVE_LEDGER_SCHEMA
         assert correction["restore_audit_schema"] == RESTORE_AUDIT_SCHEMA

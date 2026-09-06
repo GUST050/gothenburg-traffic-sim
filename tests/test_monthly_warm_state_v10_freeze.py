@@ -399,25 +399,40 @@ class TestInheritedRulesAreUnchanged:
             WARM_ATTEMPT_SCHEMA, WARM_INFORMATIONAL_CODES, WARM_OUTCOMES,
             WARM_TERMINAL_CODES)
         contract = _load()["warm_attempt_contract"]
-        assert contract["schema"] == WARM_ATTEMPT_SCHEMA
-        assert contract["outcomes"] == sorted(WARM_OUTCOMES)
-        assert contract["terminal_codes"] == sorted(WARM_TERMINAL_CODES)
-        assert contract["informational_codes"] == sorted(WARM_INFORMATIONAL_CODES)
+        if _is_current():
+            assert contract["schema"] == WARM_ATTEMPT_SCHEMA
+            assert contract["outcomes"] == sorted(WARM_OUTCOMES)
+            assert contract["terminal_codes"] == sorted(WARM_TERMINAL_CODES)
+            assert contract["informational_codes"] == \
+                sorted(WARM_INFORMATIONAL_CODES)
+        else:
+            assert contract["schema"] == "monthly_warm_attempt_v1"
+            assert contract["outcomes"] == ["cold_fallback", "warm_executed"]
+            with pytest.raises(SystemExit, match="frozen sources drifted"):
+                _harness().load_frozen_manifest(MANIFEST)
         assert not (set(contract["terminal_codes"])
                     & set(contract["informational_codes"]))
 
     def test_the_state_settings_match_the_cache_constants(self):
         from traffic_sim.simulation.warm_state_boundary import (
-            snapshot_settings_arguments, validate_snapshot_command)
+            BoundaryLedgerError, snapshot_settings_arguments,
+            validate_snapshot_command)
         from traffic_sim.simulation.warm_state_cache import (
             STATE_PRECISION, STATE_RNG_SAVED)
         settings = _load()["state_settings"]
         assert settings["save_state_precision"] == STATE_PRECISION
         assert settings["save_state_rng"] is STATE_RNG_SAVED
-        assert settings["snapshot_arguments"] == snapshot_settings_arguments()
-        assert validate_snapshot_command(
-            ["sumo", *settings["snapshot_arguments"]]) == {
-                "save_state_rng": True, "save_state_precision": 16}
+        if _is_current():
+            assert settings["snapshot_arguments"] == snapshot_settings_arguments()
+            assert validate_snapshot_command(
+                ["sumo", *settings["snapshot_arguments"]]) == {
+                    "save_state_rng": True, "save_state_precision": 16}
+        else:
+            assert settings["snapshot_arguments"] == [
+                "--save-state.rng", "true", "--save-state.precision", "16"]
+            with pytest.raises(BoundaryLedgerError, match="--precision"):
+                validate_snapshot_command(
+                    ["sumo", *settings["snapshot_arguments"]])
 
     def test_production_never_applies_a_boundary_offset(self):
         """Structural, over the live tree rather than the manifest's prose."""

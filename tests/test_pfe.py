@@ -1060,6 +1060,86 @@ class TestJointIntegerPublicationScaling:
         assert served(counts, shapes, "B") == 2
         assert served(counts, shapes, "NEW") == 1
 
+    def test_integer_projection_recovers_feasible_purpose_margin(self):
+        """A non-exact continuous mix must not suppress a feasible integer mix.
+
+        Both routes have the same measured signature, so replacing two work
+        instances with two genuine leisure instances preserves the literal
+        M=2 sensor target.  The old publication path skipped that integer
+        reconciliation solely because the continuous warm start was all-work.
+        """
+        work = Candidate(0.0, ["M", "work"], intent={"purpose": "arbete"})
+        leisure = Candidate(
+            0.0, ["M", "leisure"], intent={"purpose": "fritid"})
+
+        counts, purpose_enforced = pfe.quarter_publish_counts(
+            [work, leisure], np.asarray([2.0, 0.0]), {"M": 2.0}, {},
+            RUNG_CLEAN, Counter({"fritid": 1}), True, True, None)
+
+        assert counts.tolist() == [0, 2]
+        assert purpose_enforced is True
+
+    def test_purpose_recovery_avoids_forced_group_milp(self, monkeypatch):
+        """Purpose recovery must not turn every publication into a dense MILP."""
+        work = Candidate(0.0, ["M", "work"], intent={"purpose": "arbete"})
+        leisure = Candidate(
+            0.0, ["M", "leisure"], intent={"purpose": "fritid"})
+        original = pfe.repair_integer_bounds
+
+        def bounded_repair(*args, groups=None, force=False, reference=None,
+                           **kwargs):
+            if groups and force and reference is not None:
+                raise AssertionError("dense forced purpose MILP")
+            return original(
+                *args, groups=groups, force=force, reference=reference,
+                **kwargs)
+
+        monkeypatch.setattr(pfe, "repair_integer_bounds", bounded_repair)
+
+        counts, purpose_enforced = pfe.quarter_publish_counts(
+            [work, leisure], np.asarray([2.0, 0.0]), {"M": 2.0}, {},
+            RUNG_CLEAN, Counter({"fritid": 1}), True, True, None)
+
+        assert counts.tolist() == [0, 2]
+        assert purpose_enforced is True
+
+    def test_purpose_recovery_spreads_new_mass_across_compatible_routes(self):
+        """A recovered margin must not dump a whole signature on one route."""
+        work = Candidate(0.0, ["M", "work"], intent={"purpose": "arbete"})
+        leisure = [
+            Candidate(0.0, ["M", f"leisure-{index}"],
+                      intent={"purpose": "fritid"})
+            for index in range(3)
+        ]
+        shapes = [work, *leisure]
+        groups = [([0], 0.0, 0.0), ([1, 2, 3], 6.0, 6.0)]
+
+        reconciled = pfe.reconcile_groups_by_protected_signature(
+            np.asarray([6, 0, 0, 0]), shapes, groups, {"M"})
+
+        assert reconciled is not None
+        assert reconciled.tolist() == [0, 2, 2, 2]
+
+    def test_purpose_recovery_can_move_between_signatures_in_sensor_nullspace(self):
+        """Aggregate recovery may change signatures, never protected totals."""
+        shapes = [
+            Candidate(0.0, ["A", "leisure"], intent={"purpose": "fritid"}),
+            Candidate(0.0, ["B", "work-b"], intent={"purpose": "arbete"}),
+            Candidate(0.0, ["A", "B", "work-ab"],
+                      intent={"purpose": "arbete"}),
+            Candidate(0.0, ["unmeasured", "work-empty"],
+                      intent={"purpose": "arbete"}),
+        ]
+        groups = [([1, 2, 3], 1.0, 1.0), ([0], 1.0, 1.0)]
+
+        reconciled = pfe.reconcile_groups_by_protected_signature(
+            np.asarray([0, 0, 1, 1]), shapes, groups, {"A", "B"})
+
+        assert reconciled is not None
+        assert reconciled.tolist() == [1, 1, 0, 0]
+        assert served(reconciled, shapes, "A") == 1
+        assert served(reconciled, shapes, "B") == 1
+
     def test_fifty_sensor_integer_projection_has_no_fixed_station_cap(self):
         edges = [f"S{index:02d}" for index in range(50)]
         shapes = [cand(edge) for edge in edges]
@@ -1682,11 +1762,12 @@ class TestPurposeStratifiedCalibration:
 
     def test_integer_writer_retries_purpose_margin_from_count_valid_vector(
             self, tmp_path, monkeypatch):
-        """A failed joint repair is not proof that the margin is infeasible.
+        """Purpose recovery starts from a count-valid published vector.
 
         The full-day baseline found four quarters where the local integer
-        repair failed from the directly rounded entropy vector but succeeded
-        after count/bound reconciliation supplied a better starting point.
+        purpose repair failed from the directly rounded entropy vector.  The
+        publication path must establish sensor counts first, then recover the
+        exact mix without putting purpose groups into that forced MILP.
         """
         through = self._shape(["M"], "through", "t")
         work = self._shape(["M"], "arbete", "w")
@@ -1712,7 +1793,9 @@ class TestPurposeStratifiedCalibration:
             enforce_integer_bounds=True, purpose_mixes_per_q=[mix],
             structure_groups=[])
 
-        assert calls[:2] == [(True, True), (True, False)]
+        assert calls[:2] == [(False, True), (False, False)]
+        assert not any(has_groups and preserve_total is True
+                       for has_groups, preserve_total in calls)
         assert report["purpose_allocation_summary"][
             "quarters_with_relaxed_mix"] == 0
         agents = json.loads(

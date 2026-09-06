@@ -1,0 +1,44 @@
+{
+ "environment": {
+  "date": "2026-09-02",
+  "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+  "sumo_version": "1.27.1"
+ },
+ "gates": {
+  "day_library_restore": {"status": "pass", "tests": ["tests/test_day_library.py"]},
+  "deterministic_repeat": {
+   "status": "pass",
+   "tests": [
+    "tests/test_route_catalog.py::test_catalog_identity_excludes_date_but_keeps_structure",
+    "tests/test_route_catalog.py::TestCatalogSourceContract"
+   ]
+  },
+  "malformed_catalog_rejected": {
+   "status": "pass",
+   "tests": [
+    "tests/test_route_catalog.py::test_ensure_catalog_is_single_complete_manifest",
+    "tests/test_route_catalog.py::test_adoption_default_is_fail_safe_and_explicit"
+   ]
+  },
+  "purpose_route_compatibility": {
+   "status": "pass",
+   "tests": [
+    "tests/test_pfe.py::TestPurposeStratifiedCalibration",
+    "tests/test_demand_provenance.py"
+   ]
+  },
+  "singleflight_recovery": {"status": "pass", "tests": ["tests/test_singleflight.py"]},
+  "sumo_runtime_no_regression": {"status": "pass", "tests": ["tests/test_warm_state_sumo_equivalence.py"]},
+  "warm_state_identity": {
+   "status": "pass",
+   "tests": ["tests/test_warm_state_cache.py", "tests/test_q50_subset_identity.py"]
+  }
+ },
+ "kind": "route_catalog_suite_gate_evidence",
+ "note": "Re-established after the content-addressed shared mixed-pool sensor-basis cache and strict warm-hit proof validation.",
+ "schema_version": 2,
+ "verification": {
+  "command_scope": "catalog source contract, cached mixed adapter regression, purpose/provenance, singleflight, day library, warm-state identity and SUMO equivalence focused tests",
+  "result": "112 passed on 2026-09-02 against the final cached strict sensor-route contract"
+ }
+}

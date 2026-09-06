@@ -24,6 +24,14 @@ def _tool():
     return module
 
 
+def _frozen_contract(module):
+    """Load the immutable retired contract without re-keying current sources."""
+    contract = json.loads(
+        (module.ROOT / module.CONTRACT_PATH).read_text(encoding="utf-8"))
+    assert module.canonical_key(contract) == contract["content_key"]
+    return contract
+
+
 def _record(loss, *, arrival):
     return {
         "timeLoss": float(loss), "depart": 0.0, "arrival": float(arrival),
@@ -97,7 +105,7 @@ class TestFrozenContract:
 
     def test_contract_binds_v1_v9_and_boundary_rule(self):
         module = _tool()
-        contract = module.build_contract()
+        contract = _frozen_contract(module)
         assert contract["status"] == "frozen_unapproved_unexecuted"
         assert contract["supersedes"]["content_key"] == module.V1_CONTENT_KEY
         assert contract["supersedes"]["preserved_files_sha256"] == \
@@ -113,9 +121,13 @@ class TestFrozenContract:
         assert module.canonical_key(contract) == contract["content_key"]
         assert not any(path.startswith("runs/")
                        for path in contract["source_fingerprints"])
+        with pytest.raises(module.DiagnosticError, match="preserved v9 file drifted"):
+            module.build_contract()
 
-    def test_freeze_verify_and_no_clobber(self, tmp_path):
+    def test_freeze_verify_and_no_clobber(self, tmp_path, monkeypatch):
         module = _tool()
+        contract = _frozen_contract(module)
+        monkeypatch.setattr(module, "build_contract", lambda: contract)
         path = tmp_path / "v2.json"
         key = module.freeze(path)
         assert len(key) == 64 and module.verify(path)
@@ -198,7 +210,7 @@ class TestTerminalArtifacts:
 
     def test_fake_full_path_is_boundary_aware_and_recomputable(self, tmp_path):
         module = _tool()
-        contract = module.build_contract()
+        contract = _frozen_contract(module)
         schedule = SimpleNamespace(
             schedule_id=contract["identities"][0]["schedule_id"])
         root = tmp_path / "outcome"
@@ -216,7 +228,7 @@ class TestTerminalArtifacts:
 
     def test_success_validator_rejects_tamper(self, tmp_path):
         module = _tool()
-        contract = module.build_contract()
+        contract = _frozen_contract(module)
         schedule = SimpleNamespace(
             schedule_id=contract["identities"][0]["schedule_id"])
         root = tmp_path / "outcome"
@@ -232,7 +244,7 @@ class TestTerminalArtifacts:
 
     def test_success_validator_rejects_symlink_member(self, tmp_path):
         module = _tool()
-        contract = module.build_contract()
+        contract = _frozen_contract(module)
         schedule = SimpleNamespace(
             schedule_id=contract["identities"][0]["schedule_id"])
         root = tmp_path / "outcome"
@@ -249,7 +261,7 @@ class TestTerminalArtifacts:
 
     def test_failure_artifact_is_strict_and_recomputable(self, tmp_path):
         module = _tool()
-        contract = module.build_contract()
+        contract = _frozen_contract(module)
         key = contract["content_key"]
         root = tmp_path / "failure"
         members = {
@@ -271,4 +283,3 @@ class TestTerminalArtifacts:
         (root / "extra.json").write_text("{}")
         with pytest.raises(module.DiagnosticError, match="allowlist"):
             module.validate_failure_artifact(root, key)
-

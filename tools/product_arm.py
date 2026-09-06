@@ -457,6 +457,7 @@ def build_arm(
     daily_results_cache_root: Path | None = None,
     disable_early_stop: bool = False,
     window_cost_index: Any = None,
+    qualified_demand_manifest: Mapping[str, Any] | None = None,
 ):
     """Return `(runner, screen_builder, cost_source)` for one arm.
 
@@ -543,9 +544,11 @@ def build_arm(
         baseline_trip_duration_p99_s=BASELINE_TRIP_DURATION_P99_S,
         study_provenance_key=study_provenance_key,
         seed_workers=seed_workers,
-        include_disruption=objective_method == "closure_cost_v1",
+        include_disruption=objective_method in {"closure_cost_v1", "closure_cost_v2"},
+        ranking_objective_evidence=objective_method,
         envelope_policy=(INDEPENDENT_DAILY_ENVELOPE_POLICY if independent
                          else EnvelopePolicy()),
+        qualified_demand_manifest=qualified_demand_manifest,
     )
     if independent:
         resolved_cache_root = (
@@ -574,7 +577,8 @@ def build_arm(
     if cost_ordered:
         cost_source = _cost_source_for(
             spec, runner, daily_cost_cache=daily_cost_cache,
-            window_cost_index=window_cost_index)
+            window_cost_index=window_cost_index,
+            objective_method=objective_method)
     return runner, screen_builder, cost_source
 
 
@@ -597,6 +601,7 @@ def run_arm(
     max_verifications: int | None = None,
     max_exact_launches: int | None = None,
     fixture_controls: Mapping[str, Any] | None = None,
+    qualified_demand_manifest: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Execute one arm end to end and report what it cost.
 
@@ -621,6 +626,7 @@ def run_arm(
         daily_results_cache_root=daily_results_cache_root,
         disable_early_stop=disable_early_stop,
         window_cost_index=window_cost_index,
+        qualified_demand_manifest=qualified_demand_manifest,
     )
     fixture_state: dict[str, Any] = {}
     if fixture_controls:
@@ -866,6 +872,7 @@ def _run_arm_worker(args: Mapping[str, Any]) -> None:
                 None if args.get("max_exact_launches") is None
                 else int(args["max_exact_launches"])),
             fixture_controls=args.get("fixture_controls"),
+            qualified_demand_manifest=args.get("qualified_demand_manifest"),
         )
         outcome = {"ok": True, "result": result}
     except BaseException as exc:  # noqa: BLE001 - report every failure, then exit
@@ -901,6 +908,7 @@ def run_arm_isolated(
     max_verifications: int | None = None,
     max_exact_launches: int | None = None,
     fixture_controls: Mapping[str, Any] | None = None,
+    qualified_demand_manifest: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run one arm in its own process AND process group.
 
@@ -960,6 +968,7 @@ def run_arm_isolated(
         "max_verifications": max_verifications,
         "max_exact_launches": max_exact_launches,
         "fixture_controls": dict(fixture_controls or {}),
+        "qualified_demand_manifest": qualified_demand_manifest,
         "result_path": str(result_path),
     }, indent=1, sort_keys=True), encoding="utf-8")
 

@@ -17,6 +17,8 @@ import pytest
 
 import run_scenario
 from traffic_sim.simulation import closure_routing as cr
+from traffic_sim.simulation import disruption
+from traffic_sim.simulation.disruption import DestinationAccessResolver
 
 
 # ── A small deterministic test network ───────────────────────────────────
@@ -61,6 +63,137 @@ def vehicles_by_id(path) -> dict[str, str]:
                          text, re.DOTALL):
         out[m.group(1)] = m.group(2)
     return out
+
+
+def _write_destination_access_net(path) -> None:
+    path.write_text(
+        "<net>"
+        '<edge id="origin"><lane id="origin_0" index="0" speed="10" '
+        'length="10" shape="0,0 10,0"/></edge>'
+        '<edge id="closed"><lane id="closed_0" index="0" speed="10" '
+        'length="10" shape="10,0 20,0"/></edge>'
+        '<edge id="near"><lane id="near_0" index="0" speed="5" '
+        'length="10" shape="15,1 25,1"/></edge>'
+        '<connection from="origin" to="closed"/>'
+        '<connection from="origin" to="near"/>'
+        "</net>", encoding="utf-8")
+
+
+class TestClosedDestinationNearbyAccess:
+    def test_closed_destination_moves_to_nearest_open_arrival_position(
+            self, tmp_path):
+        network = tmp_path / "net.net.xml"
+        _write_destination_access_net(network)
+        resolver = DestinationAccessResolver(
+            network, permitted_edges={"origin", "closed", "near"},
+            radius_m=2.0)
+        route_path = tmp_path / "in.rou.xml"
+        write_routes(route_path, [
+            '  <vehicle id="v0" depart="0" arrivalPos="8.00">'
+            '<route edges="origin closed"/></vehicle>',
+        ])
+        out_path = tmp_path / "out.rou.xml"
+
+        result = cr.rewrite_route_file(
+            route_path, ["closed"], out_path,
+            {"origin": ["closed", "near"], "closed": [], "near": []},
+            edge_travel_s={"origin": 1.0, "closed": 1.0, "near": 2.0},
+            destination_access=resolver)
+
+        assert (result.unaffected, result.rerouted, result.denied) == (0, 1, 0)
+        assert vehicles_by_id(out_path)["v0"] == "origin near"
+        assert 'arrivalPos="3.00"' in out_path.read_text()
+        assert result.destination_relocations[0].to_dict() == {
+            "vehicle_id": "v0",
+            "original_origin": "origin",
+            "original_destination": "closed",
+            "replacement_destination": "near",
+            "original_depart_s": 0.0,
+            "original_arrival_pos": "8.00",
+            "replacement_arrival_pos": 3.0,
+            "access_distance_m": 1.0,
+            "applicable_closed_edges": ["closed"],
+        }
+
+    def test_relocation_validator_recomputes_position_and_distance(
+            self, tmp_path):
+        network = tmp_path / "net.net.xml"
+        _write_destination_access_net(network)
+        resolver = DestinationAccessResolver(
+            network, permitted_edges={"origin", "closed", "near"},
+            radius_m=2.0)
+        source = tmp_path / "in.rou.xml"
+        output = tmp_path / "out.rou.xml"
+        report_path = tmp_path / "access.json"
+        write_routes(source, [
+            '  <vehicle id="v0" depart="0" arrivalPos="8.00">'
+            '<route edges="origin closed"/></vehicle>',
+        ])
+        result = cr.rewrite_route_file(
+            source, ["closed"], output,
+            {"origin": ["closed", "near"], "closed": [], "near": []},
+            edge_travel_s={"origin": 1.0, "closed": 1.0, "near": 2.0},
+            destination_access=resolver)
+        identity = {
+            "unit_id": "unit", "candidate_id": "candidate",
+            "work_date": "2027-09-01", "demand_variant": "q90",
+            "seed": 1002, "execution_arm": "cold",
+            "vehicle_class": cr.DEFAULT_VCLASS,
+        }
+        cr.write_access_impact_report(
+            report_path, result=result, close_edges=["closed"], closures=None,
+            source_route_path=source, out_route_path=output,
+            network_path=network, identity=identity)
+        report = json.loads(report_path.read_text())
+
+        def provenance(payload):
+            return cr.RoutingProvenance(
+                routing_policy_version=cr.POLICY_VERSION,
+                access_impact_sha256="a" * 64,
+                access_impact_semantic_sha256=(
+                    cr.access_impact_semantic_sha256(payload)),
+                transformed_route_sha256=payload["output_route_sha256"],
+                rerouted_around_closure=1, denied_count=0, **identity)
+
+        cr.validate_access_impact_report(
+            report, provenance(report), transformed_route_path=output,
+            network_path=network)
+
+        report["destination_relocations"][0]["replacement_arrival_pos"] = 11.0
+        with pytest.raises(cr.ClosureRoutingError, match="outside its edge"):
+            cr.validate_access_impact_report(
+                report, provenance(report), transformed_route_path=output,
+                network_path=network)
+
+        report["destination_relocations"][0]["replacement_arrival_pos"] = 3.0
+        report["destination_relocations"][0]["access_distance_m"] = 0.0
+        with pytest.raises(cr.ClosureRoutingError, match="disagrees with network"):
+            cr.validate_access_impact_report(
+                report, provenance(report), transformed_route_path=output,
+                network_path=network)
+
+    def test_closed_destination_without_nearby_access_remains_denied(
+            self, tmp_path):
+        network = tmp_path / "net.net.xml"
+        _write_destination_access_net(network)
+        resolver = DestinationAccessResolver(
+            network, permitted_edges={"origin", "closed", "near"},
+            radius_m=0.5)
+        route_path = tmp_path / "in.rou.xml"
+        write_routes(route_path, [
+            '  <vehicle id="v0" depart="0" arrivalPos="8.00">'
+            '<route edges="origin closed"/></vehicle>',
+        ])
+
+        result = cr.rewrite_route_file(
+            route_path, ["closed"], tmp_path / "out.rou.xml",
+            {"origin": ["closed", "near"], "closed": [], "near": []},
+            edge_travel_s={"origin": 1.0, "closed": 1.0, "near": 2.0},
+            destination_access=resolver)
+
+        assert (result.rerouted, result.denied) == (0, 1)
+        assert result.access_impact[0].reason == cr.DESTINATION_CLOSED
+        assert result.destination_relocations == ()
 
 
 class TestFastestClosureExcludingRerouting:
@@ -298,18 +431,23 @@ class TestWindowedFixedPoint:
 
 
 class TestClosureTimingInvariant:
-    """Superseded 2026-08-29 (review finding): the original fixed 900s
-    additive margin was itself unsound -- congestion delay has no
-    demonstrated upper bound, so no finite margin can PROVE a vehicle
-    clears an edge before a still-open closure ends. `_closures_overlapping`
-    now uses the one interval fact that IS provable without bounding
-    congestion at all: real transit is never faster than free flow, so
-    `depart_s + free_flow_elapsed` is a true LOWER BOUND on occupancy. A
-    window is provably missed only when that lower bound has already
-    reached or passed the window's end; every other case -- including a
-    window still far in the future -- is classified applicable, because
-    there is no available proof otherwise. See closure_routing.py's module
-    docstring above `_edge_occupancy_lower_bound` for the full argument.
+    """The predicate bounds occupancy on BOTH sides.
+
+    Real transit is never faster than free flow, so
+    `depart_s + free_flow_elapsed` is a true LOWER BOUND on occupancy: a
+    window is provably missed once that bound has reached its end. The 900s
+    additive margin removed in 2026-08-29 was unsound as an upper bound, but
+    the rule that replaced it supplied no upper bound at all, which is not
+    conservative -- it is vacuous. It asserted that a vehicle passing at
+    00:30 might still occupy the edge at 22:00, so a window's cost grew with
+    its END time rather than with the traffic inside it (measured: a
+    22:00-24:00 shift scored 3025 vehicles where 72 cross it).
+
+    `MAX_ASSUMED_CONGESTION_DELAY_S` now supplies the upper bound as a
+    DECLARED modelling constant rather than a derived one, and `begin_s` is
+    read. Occupancy lies in `[lower, lower + max_assumed_delay_s]`, and a
+    window applies exactly when that interval overlaps `[begin_s, end_s)`.
+    See the constant's own docstring in disruption.py for the argument.
     """
 
     def test_a_window_entirely_in_the_future_is_still_applicable(self):
@@ -336,14 +474,50 @@ class TestClosureTimingInvariant:
             close_edges_set=frozenset({"b_c"}), edge_travel_s=COSTS)
         assert applicable == frozenset()
 
-    def test_a_window_far_in_the_future_is_still_applicable(self):
-        # A margin-based rule would have called a window 5000s away safe;
-        # the corrected rule does not, because no evidence bounds
-        # congestion delay that far out either -- only "already past" is
-        # provable.
+    def test_a_window_beyond_the_declared_delay_bound_is_not_applicable(self):
+        # Free-flow arrival at b_c is 10s and the window opens at 5000s.
+        # Reaching it would take 4990s of congestion delay on one inner-city
+        # edge, well past the declared one-hour bound, so this vehicle is
+        # ahead of the roadworks rather than blocked by them.
         applicable = cr._closures_overlapping(
             ["a_b", "b_c", "c_d"], depart_s=0.0,
             closures=[{"edge_id": "b_c", "begin_s": 5000, "end_s": 6000}],
+            close_edges_set=frozenset({"b_c"}), edge_travel_s=COSTS)
+        assert applicable == frozenset()
+
+    def test_the_declared_bound_is_exactly_what_separates_the_two_cases(self):
+        # Same vehicle, same window, only the declared bound moves. This is
+        # the knob the classification turns on -- nothing infers it from data.
+        window = [{"edge_id": "b_c", "begin_s": 5000, "end_s": 6000}]
+        events = (("b_c", 10.0),)
+        assert disruption.applicable_closed_edges_from_events(
+            events, window, frozenset({"b_c"}),
+            max_assumed_delay_s=4989.0) == frozenset()
+        assert disruption.applicable_closed_edges_from_events(
+            events, window, frozenset({"b_c"}),
+            max_assumed_delay_s=4990.0) == frozenset({"b_c"})
+
+    def test_a_closure_start_time_changes_which_vehicles_are_blocked(self):
+        # The defect this replaced: begin_s was never read, so two closures
+        # sharing an end time blocked identical traffic no matter when they
+        # started.
+        late = cr._closures_overlapping(
+            ["a_b", "b_c", "c_d"], depart_s=0.0,
+            closures=[{"edge_id": "b_c", "begin_s": 90000, "end_s": 100000}],
+            close_edges_set=frozenset({"b_c"}), edge_travel_s=COSTS)
+        early = cr._closures_overlapping(
+            ["a_b", "b_c", "c_d"], depart_s=0.0,
+            closures=[{"edge_id": "b_c", "begin_s": 0, "end_s": 100000}],
+            close_edges_set=frozenset({"b_c"}), edge_travel_s=COSTS)
+        assert late == frozenset()
+        assert early == frozenset({"b_c"})
+
+    def test_a_record_without_begin_s_keeps_whole_run_semantics(self):
+        # Legacy records carry only end_s; those must still mean "closed from
+        # the start of the run", not "closed at an unknown time".
+        applicable = cr._closures_overlapping(
+            ["a_b", "b_c", "c_d"], depart_s=0.0,
+            closures=[{"edge_id": "b_c", "end_s": 100000}],
             close_edges_set=frozenset({"b_c"}), edge_travel_s=COSTS)
         assert applicable == frozenset({"b_c"})
 
@@ -358,6 +532,21 @@ class TestClosureTimingInvariant:
             closures=[{"edge_id": "b_c", "begin_s": 15, "end_s": 100}])
         assert (result.unaffected, result.rerouted, result.denied) == (0, 1, 0)
         assert vehicles_by_id(out_path)["v0"] == "a_b b_e e_c c_d"
+
+
+class TestSumoPopulationIdentity:
+    def test_exact_transformed_population_passes(self):
+        cr.require_sumo_population_identity(
+            7, loaded=7, inserted=7, trip_count=7, context="candidate/q90")
+
+    @pytest.mark.parametrize(
+        "loaded,inserted,trip_count", [(6, 7, 7), (7, 6, 7), (7, 7, 6)])
+    def test_any_population_loss_is_a_hard_failure(
+            self, loaded, inserted, trip_count):
+        with pytest.raises(cr.ClosureRoutingError, match="population=7"):
+            cr.require_sumo_population_identity(
+                7, loaded=loaded, inserted=inserted, trip_count=trip_count,
+                context="candidate/q90")
 
 
 class TestFailsClosedOnUnsupportedShapes:
@@ -527,6 +716,7 @@ class TestRoutingProvenance:
         seed=1000,
         execution_arm="cold",
         access_impact_sha256="a" * 64,
+        access_impact_semantic_sha256="c" * 64,
         transformed_route_sha256="b" * 64,
         rerouted_around_closure=3,
         denied_count=1,
@@ -631,7 +821,13 @@ class TestAccessImpactEvidence:
         assert payload["schema_version"] == (
             cr.ACCESS_IMPACT_DIAGNOSTIC_SCHEMA_VERSION)
         assert payload["policy_version"] == cr.POLICY_VERSION
-        assert payload["summary"] == {"unaffected": 0, "rerouted": 1, "denied": 1}
+        assert payload["summary"] == {
+            "unaffected": 0,
+            "rerouted": 1,
+            "destination_relocated": 0,
+            "denied": 1,
+        }
+        assert payload["destination_relocations"] == []
         assert len(payload["access_impact"]) == 1
         record = payload["access_impact"][0]
         assert record["vehicle_id"] == "v0"
@@ -705,15 +901,15 @@ class TestAccessImpactEvidence:
         assert payload["identity"] is None
 
     def test_old_policy_versions_can_never_satisfy_the_current_lookup(self):
-        # The routing rule changed twice (destination-window awareness plus
-        # the provable timing invariant, then single-vClass permission
-        # filtering and fail-closed vehicle-type handling), so an
-        # evidence/cache reader keyed on either OLD version string must
-        # never match current output.
-        assert cr.POLICY_VERSION != "closure_origin_routing_v1"
-        assert cr.POLICY_VERSION != "closure_origin_routing_v2"
-        assert cr.POLICY_VERSION != "closure_origin_routing_v3"
-        assert cr.POLICY_VERSION == "closure_origin_routing_v4"
+        # The routing rule has changed repeatedly (destination-window
+        # awareness, the timing invariant, single-vClass permission
+        # filtering and fail-closed vehicle types, destination access, and
+        # now the two-sided occupancy bound that reads begin_s), so an
+        # evidence/cache reader keyed on ANY old version string must never
+        # match current output.
+        for superseded in range(1, 8):
+            assert cr.POLICY_VERSION != f"closure_origin_routing_v{superseded}"
+        assert cr.POLICY_VERSION == "closure_origin_routing_v8"
 
     def test_denied_count_matches_access_impact_length(self):
         with pytest.raises(cr.ClosureRoutingError):

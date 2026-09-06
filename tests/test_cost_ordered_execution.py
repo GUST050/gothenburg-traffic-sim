@@ -340,6 +340,30 @@ class TestReconcileDisruption:
         assert reconciled is evidence
         assert reconciled.timeout_undecided == ()
 
+    def test_all_variant_field_mismatches_are_reported_in_stable_order(self):
+        priced = _priced()
+        produced = []
+        for record in reversed(priced.per_variant):
+            changed = dict(record)
+            changed["vehicles_affected"] += 1
+            changed["added_metres_total"] += 2
+            produced.append(changed)
+        evidence = CandidateEvidence(
+            candidate_id="closure-a", disruption=tuple(produced))
+
+        with pytest.raises(ValueError) as caught:
+            coe.reconcile_disruption(evidence, priced)
+
+        message = str(caught.value)
+        expected = [
+            f"{variant}.{field}"
+            for variant in ("q10", "q50", "q90")
+            for field in ("vehicles_affected", "added_metres_total")
+        ]
+        assert all(item in message for item in expected)
+        assert [message.index(item) for item in expected] == sorted(
+            message.index(item) for item in expected)
+
 
 class TestRealCostFirstExecution:
     def test_sumo_runs_only_for_the_boundary_set(self, tmp_path):

@@ -174,6 +174,35 @@ def _prefix(**over):
                         "save_state_precision": 16},
     )
     kwargs.update(over)
+    completed = kwargs["completed_trips"]
+    count = completed["trip_count"]
+    records = {f"completed-{index}": 0.0 for index in range(count)}
+    if records:
+        records["completed-0"] = completed["total_time_loss_s"]
+    population = {
+        "schema": "warm_boundary_active_v3",
+        "warm_point_s": kwargs["warm_point_s"],
+        "captured_at_s": float(kwargs["warm_point_s"]),
+        "vehicle_ids": [],
+    }
+    population_digest = hashlib.sha256(json.dumps(
+        population, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=True, allow_nan=False).encode()).hexdigest()
+    accumulator = {
+        "schema": "warm_prefix_meso_accumulator_v3",
+        "warm_point_s": kwargs["warm_point_s"],
+        "output_precision": 16,
+        "active_population_digest": population_digest,
+        "entries": {},
+    }
+    accumulator["digest"] = hashlib.sha256(json.dumps(
+        accumulator, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=True, allow_nan=False).encode()).hexdigest()
+    kwargs.update(
+        active_accumulator=accumulator,
+        completed_records=records,
+        completed_record_order=list(records),
+    )
     return build_prefix_evidence(**kwargs)
 
 
@@ -186,6 +215,25 @@ def _post(**over):
             "max_queue_vehicles": 5, "closed_edge_throughput": 0}
     base.update(over)
     return base
+
+
+def _correction(raw, *, combined_total):
+    """Current no-op reconciliation around this retired v2 fixture."""
+    return {
+        "schema": "warm_meso_reconciliation_v2",
+        "active_count": 0,
+        "resumed_count": raw["trip_count"],
+        "corrected_count": 0,
+        "prefix_accumulator_total_s": 0.0,
+        "raw_total_time_loss_s": raw["total_time_loss_s"],
+        "corrected_total_time_loss_s": raw["total_time_loss_s"],
+        "combined_total_time_loss_s": combined_total,
+        "correction_delta_s": 0.0,
+        "trip_count": raw["trip_count"],
+        "tripinfo_precision": 2,
+        "prefix_accumulator_digest": "a" * 64,
+        "records_digest": "b" * 64,
+    }
 
 
 class TestTheLunaWarm05DoubleCount:
@@ -509,12 +557,15 @@ class TestSolReviewRound11:
     def test_stored_teleport_reasons_may_not_exceed_the_total(self):
         from traffic_sim.simulation.monthly_warm_state import parse_prefix_evidence
         payload = self._stored(teleport_reasons={"jam": 5})
-        with pytest.raises(WarmStateContractError, match="stored prefix teleport"):
+        with pytest.raises(
+                WarmStateContractError, match="legacy prefix-evidence schema"):
             parse_prefix_evidence(payload)
 
-    def test_a_consistent_stored_payload_still_parses(self):
+    def test_a_consistent_legacy_payload_is_a_cache_miss(self):
         from traffic_sim.simulation.monthly_warm_state import parse_prefix_evidence
-        assert parse_prefix_evidence(self._stored())["counters"]["loaded"] == 3
+        with pytest.raises(
+                WarmStateContractError, match="legacy prefix-evidence schema"):
+            parse_prefix_evidence(self._stored())
 
     # [2] cold observations keep their exact prior structure
     def test_a_cold_observation_has_no_split_diagnostics_key(self):
@@ -578,6 +629,7 @@ class TestSolReviewRound11:
     def _diag(self, point=24300, **over):
         """Self-consistent: prefix (3 trips, 5.0 s) + post (2 trips, 5.0 s)
         reconstructs to 5 trips and 10.0 s, with cumulative counters."""
+        post = self._post_metrics()
         base = {"route_audit": self._audit(), "selected_warm_point_s": point,
                 "prefix_completed_trips": {"total_time_loss_s": 5.0,
                                            "trip_count": 3},
@@ -586,7 +638,10 @@ class TestSolReviewRound11:
                 "prefix_teleport_reasons": {}, "prefix_queue_maximum": None,
                 **bounded_sections(point, total_time_loss_s=10.0,
                                    prefix_trips=3, resumed_trips=2),
-                "raw_post_metrics": self._post_metrics(),
+                "raw_post_metrics": post,
+                "corrected_post_metrics": post,
+                "restore_correction": _correction(
+                    post, combined_total=10.0),
                 "reconstructed_metrics": self._post_metrics(
                     total_time_loss_s=10.0, trip_count=5)}
         base.update(over)
@@ -875,6 +930,7 @@ class TestDiagnosticsMustBeSelfConsistent:
         return base
 
     def _diag(self, **over):
+        post = self._post()
         base = {"route_audit": self._audit(), "selected_warm_point_s": 900,
                 "prefix_completed_trips": {"total_time_loss_s": 5.0,
                                            "trip_count": 3},
@@ -884,7 +940,10 @@ class TestDiagnosticsMustBeSelfConsistent:
                 "prefix_queue_maximum": 0,
                 **bounded_sections(900, total_time_loss_s=10.0,
                                    prefix_trips=3, resumed_trips=2),
-                "raw_post_metrics": self._post(),
+                "raw_post_metrics": post,
+                "corrected_post_metrics": post,
+                "restore_correction": _correction(
+                    post, combined_total=10.0),
                 "reconstructed_metrics": self._post(total_time_loss_s=10.0,
                                                     trip_count=5)}
         base.update(over)

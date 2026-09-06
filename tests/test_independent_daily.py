@@ -1,5 +1,9 @@
 import pytest
 import json
+from datetime import datetime
+
+from traffic_sim.simulation import deterministic_disruption
+from traffic_sim.simulation import disruption
 
 from traffic_sim.simulation import independent_daily as independent_daily_module
 from traffic_sim.core.closure_calendar import generate_closure_schedules
@@ -1012,6 +1016,9 @@ def _real_durable_digest(cache_root, *, candidate_id, unit_id="unit-a",
         unit_id=unit_id, candidate_id=candidate_id, work_date=work_date,
         demand_variant=variant, seed=seed, execution_arm="cold",
         access_impact_sha256=access_impact_sha256,
+        access_impact_semantic_sha256=(
+            closure_routing.access_impact_semantic_sha256(
+                json.loads(access_impact_path.read_text(encoding="utf-8")))),
         transformed_route_sha256=transformed_route_sha256,
         rerouted_around_closure=0, denied_count=0,
     ).to_dict()
@@ -1276,6 +1283,7 @@ def test_independent_cli_rejects_before_network_or_search_workspace(monkeypatch)
         screening_mode="independent-exhaustive",
         spec="unused-spec.json",
         policy="unused-policy.json",
+        window_cost_index=None,
     )
 
     class Lock:
@@ -1468,3 +1476,68 @@ def test_server_routes_independent_search_to_exact_exhaustive_mode():
         "--independent-exhaustive-candidate-cap",
         str(MONTHLY_PARENT_SCHEDULE_CAP),
     ]
+
+
+class TestWholeDayClosures:
+    """"Seven whole days" must decompose into seven fully-closed days.
+
+    A whole day means the road is shut for that entire calendar day, so the
+    hours inside it carry no decision. The calendar used to refuse
+    back-to-back whole days, leaving the request expressible only as seven
+    23:45 shifts -- a different closure, with six nightly openings in it.
+    """
+
+    @staticmethod
+    def _seven_whole_days():
+        return _spec(
+            permitted_date_start="2027-05-03",
+            permitted_date_end="2027-05-09",
+            required_work_minutes=7 * 24 * 60,
+            min_consecutive_start_days=7,
+            max_consecutive_start_days=7,
+            permitted_daily_band=DailyTimeBand("00:00", "24:00"),
+            work_allocation_policy="exact_equal_daily_v1",
+        )
+
+    def test_it_becomes_seven_distinct_fully_closed_daily_units(self):
+        spec = self._seven_whole_days()
+        parent = generate_closure_schedules(spec)[0]
+
+        records = independent_daily_module.daily_unit_records(spec, parent)
+
+        assert len(records) == 7
+        assert len({unit_id for unit_id, _identity, _build in records}) == 7
+        for _unit_id, identity, build in records:
+            schedule = build()
+            assert (schedule.daily_start, schedule.daily_end) == (
+                "00:00", "24:00")
+            assert schedule.actual_closed_minutes == 24 * 60
+            assert identity["work_date"] == schedule.first_work_date
+
+    def test_each_day_is_shut_from_first_second_to_last(self):
+        spec = self._seven_whole_days()
+        parent = generate_closure_schedules(spec)[0]
+
+        for _unit_id, _identity, build in independent_daily_module.daily_unit_records(
+                spec, parent):
+            schedule = build()
+            closures = deterministic_disruption.closure_seconds(
+                spec, schedule,
+                epoch=datetime.fromisoformat(schedule.intervals[0].start_time),
+                duration_s=86400)
+            assert [(item["begin_s"], item["end_s"]) for item in closures] == [
+                (0, 86400)]
+
+    def test_a_whole_day_closure_does_not_depend_on_the_congestion_bound(self):
+        """The declared congestion-delay bound only ever decides whether a
+        vehicle arriving BEFORE a window should still be counted. A whole-day
+        closure has no before, so this class of schedule is immune to the one
+        unvalidated assumption in the timing rule."""
+        events = ((("a_b_0"), occupancy) for occupancy in (0.0, 43200.0))
+        window = [{"edge_id": "a_b_0", "begin_s": 0, "end_s": 86400}]
+
+        for edge, occupancy in list(events):
+            for bound in (0.0, 900.0, 3600.0, 7200.0):
+                assert disruption.applicable_closed_edges_from_events(
+                    ((edge, occupancy),), window, frozenset({edge}),
+                    max_assumed_delay_s=bound) == frozenset({edge})

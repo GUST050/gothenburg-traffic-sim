@@ -411,6 +411,46 @@ class TestAggregationOrder:
         assert cost.added_vehicle_hours == 4.0
         assert cost.added_vehicle_hours != 6.0
 
+    def test_q50_parent_cost_uses_central_sum_and_all_variant_safety(self):
+        day = [
+            {"demand_variant": "q10", **_record(hours=1.0)},
+            {"demand_variant": "q50", **_record(hours=2.0)},
+            {"demand_variant": "q90", **_record(hours=9.0, no_detour=1)},
+        ]
+
+        cost = dd.parent_closure_cost(
+            "closure-x", [day], objective_method="closure_cost_v2")
+
+        assert cost.added_vehicle_hours == 2.0
+        assert cost.vehicles_no_detour == 1
+        assert cost.disqualified
+
+    def test_destination_relocation_evidence_is_aggregated(self):
+        first = [
+            {"demand_variant": variant,
+             **_record(),
+             "vehicles_destination_relocated": 2,
+             "destination_relocation_metres_total": 14.0,
+             "destination_relocation_metres_max": 8.0}
+            for variant in dd.DEMAND_VARIANTS
+        ]
+        second = [
+            {"demand_variant": variant,
+             **_record(),
+             "vehicles_destination_relocated": 3,
+             "destination_relocation_metres_total": 21.0,
+             "destination_relocation_metres_max": 9.0}
+            for variant in dd.DEMAND_VARIANTS
+        ]
+
+        combined = dd.sum_daily_disruption([first, second])
+
+        assert all(
+            item["vehicles_destination_relocated"] == 5
+            and item["destination_relocation_metres_total"] == 35.0
+            and item["destination_relocation_metres_max"] == 9.0
+            for item in combined)
+
     def test_it_matches_the_post_sumo_daily_aggregation_field_for_field(self):
         """The pre-SUMO sum must equal what `aggregate_daily_evidence` sums.
 
@@ -476,6 +516,11 @@ class TestAggregationOrder:
         for produced, wanted in zip(aggregated.disruption, expected):
             for field in ("demand_variant", "vehicles_affected",
                           "vehicles_considered", "vehicles_no_detour",
+                          "vehicles_denied_departure",
+                          "vehicles_severed_destination",
+                          "vehicles_destination_relocated",
+                          "destination_relocation_metres_total",
+                          "destination_relocation_metres_max",
                           "added_vehicle_hours", "added_metres_total",
                           "basis", "reduction"):
                 assert produced[field] == wanted[field], field
@@ -541,6 +586,11 @@ class TestNoDetourDisqualifies:
 
 
 class TestDailyCostCache:
+    def test_metadata_builder_is_part_of_costing_source_identity(self):
+        assert "traffic_sim/simulation/metadata.py" in dd.COSTING_SOURCES
+        assert "traffic_sim/simulation/metadata.py" in (
+            dd.costing_source_identity())
+
     def _provider(self, tmp_path, monkeypatch, *, archive_dir="a",
                   network=None, table=None):
         _fake_disruption(monkeypatch, table or _table())

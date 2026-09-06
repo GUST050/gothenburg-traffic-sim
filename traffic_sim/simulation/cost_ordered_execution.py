@@ -47,7 +47,11 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from traffic_sim.core.contracts import ClosureSchedule, ClosureSearchSpec
-from traffic_sim.simulation.closure_ranking import ClosureCost
+from traffic_sim.simulation.closure_ranking import (
+    CLOSURE_COST_OBJECTIVES,
+    ClosureCost,
+    LEGACY_WORST_COST_OBJECTIVE,
+)
 from traffic_sim.simulation.cost_ordered_search import (
     CostOrderedCandidate,
     CostOrderedResult,
@@ -137,12 +141,17 @@ class IndependentDailyCostSource:
         provider_for: Callable[[ClosureSchedule], Any],
         cache: Any = None,
         window_cost_index: Any = None,
+        objective_method: str = LEGACY_WORST_COST_OBJECTIVE,
     ) -> None:
         self.spec = spec
         self._daily_units_for = daily_units_for
         self._provider_for = provider_for
         self._cache = cache
         self._window_cost_index = window_cost_index
+        if objective_method not in CLOSURE_COST_OBJECTIVES:
+            raise ValueError(
+                f"unsupported closure-cost objective {objective_method!r}")
+        self.objective_method = objective_method
         self._providers: dict[str, Any] = {}
         self._identity: dict[str, Any] | None = None
         if window_cost_index is not None:
@@ -156,6 +165,7 @@ class IndependentDailyCostSource:
                 raise ValueError(
                     "window cost index lacks its provider identity")
             self._identity = dict(provider_identity)
+            self._identity["cost_reduction_objective"] = objective_method
         self.cache_hits = 0
         self.cache_misses = 0
         self.memory_cache_hits = 0
@@ -297,6 +307,7 @@ class IndependentDailyCostSource:
                 # each unit is already bound through the unit's own cache key.
                 identity = dict(provider.identity())
                 identity.pop("demand", None)
+                identity["cost_reduction_objective"] = self.objective_method
                 self._identity = identity
         # Per-provider deltas above already update the aggregate memory
         # counter.  Do not add the local compatibility tally a second time.
@@ -304,7 +315,11 @@ class IndependentDailyCostSource:
         self.cache_misses = self.memory_cache_misses
         self.computed_units += len(units)
         aggregate_started = time.perf_counter()
-        combined = parent_closure_cost(parent.schedule_id, daily_records)
+        combined = parent_closure_cost(
+            parent.schedule_id,
+            daily_records,
+            objective_method=self.objective_method,
+        )
         self._timings["parent_aggregation_sorting"] += (
             time.perf_counter() - aggregate_started)
         from traffic_sim.simulation.deterministic_disruption import (
@@ -683,6 +698,8 @@ def run_cost_ordered_execution(
         disable_early_stop=disable_early_stop,
         max_verifications=max_verifications,
         max_exact_launches=max_exact_launches,
+        objective_method=str(ledger.provider_identity.get(
+            "cost_reduction_objective", LEGACY_WORST_COST_OBJECTIVE)),
     )
     # The per-candidate checkpoint above is deliberately written before the
     # search can inspect the returned evidence.  Publish the terminal cursor
@@ -752,16 +769,26 @@ def reconcile_disruption(
         raise ValueError(
             f"runner disruption for {evidence.candidate_id} covers "
             f"{sorted(produced)} but the cost ledger covers {sorted(expected)}")
-    for variant, wanted in expected.items():
+    mismatches: list[str] = []
+    for variant in sorted(expected):
+        wanted = expected[variant]
         actual = produced[variant]
-        for field in ("vehicles_affected", "vehicles_no_detour",
-                      "added_vehicle_hours", "added_metres_total"):
-            if float(actual[field]) != float(wanted[field]):
-                raise ValueError(
-                    f"deterministic cost disagreement for "
-                    f"{evidence.candidate_id} {variant} {field}: the runner "
-                    f"reports {actual[field]} but the cost ledger the ordering "
-                    f"used says {wanted[field]}")
+        for field in (
+            "vehicles_affected", "vehicles_no_detour",
+            "vehicles_denied_departure", "vehicles_severed_destination",
+            "vehicles_destination_relocated",
+            "destination_relocation_metres_total",
+            "destination_relocation_metres_max",
+            "added_vehicle_hours", "added_metres_total",
+        ):
+            if float(actual.get(field, 0.0)) != float(wanted.get(field, 0.0)):
+                mismatches.append(
+                    f"{variant}.{field}: runner={actual.get(field, 0.0)!r}, "
+                    f"ledger={wanted.get(field, 0.0)!r}")
+    if mismatches:
+        raise ValueError(
+            f"deterministic cost disagreement for {evidence.candidate_id}: "
+            + "; ".join(mismatches))
     return evidence
 
 

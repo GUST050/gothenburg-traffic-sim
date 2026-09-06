@@ -213,8 +213,16 @@ def profile_ledger(
     runs_root: Path | None = None,
     policy_path: Path | None = None,
     producer_binding: Mapping[str, Any] | None = None,
+    qualified_demand_manifest: Mapping[str, Any] | None = None,
+    qualified_demand_manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     """Run and account for a cold deterministic ledger profile."""
+    from traffic_sim.simulation.monthly_demand import validate_qualified_demand_manifest_shape
+    if qualified_demand_manifest is None:
+        raise ValueError("Phase 4 requires a qualified-demand manifest")
+    validate_qualified_demand_manifest_shape(qualified_demand_manifest)
+    if qualified_demand_manifest.get("status") != "PASS":
+        raise ValueError("Phase 4 requires a passing qualified-demand manifest")
     binding_snapshot = validate_producer_binding(
         producer_binding
         if producer_binding is not None
@@ -413,10 +421,26 @@ def profile_ledger(
     # Re-read every bound byte after the measurement.  Drift invalidates the
     # attempt before profile.json or validation evidence can be published.
     binding_snapshot = validate_producer_binding(binding_snapshot)
+    qualified_binding = {
+        "evidence_id": qualified_demand_manifest["evidence_id"],
+        "content_key": qualified_demand_manifest["content_key"],
+    }
+    if qualified_demand_manifest_path is not None:
+        qualified_path = Path(qualified_demand_manifest_path).resolve()
+        if not qualified_path.is_file():
+            raise ValueError("qualified-demand manifest binding path is missing")
+        loaded_qualified = json.loads(qualified_path.read_text(encoding="utf-8"))
+        if loaded_qualified != dict(qualified_demand_manifest):
+            raise ValueError("qualified-demand manifest binding bytes drifted")
+        qualified_binding.update({
+            "path": str(qualified_path),
+            "sha256": sha256_file(qualified_path),
+        })
     record = {
         "schema": PROFILE_SCHEMA,
         "kind": "monthly_cost_ledger_profile",
         "release_evidence": False,
+        "qualified_demand_manifest": qualified_binding,
         "cold": True,
         "execution_started": True,
         "sumo_started": sumo_started,
@@ -531,12 +555,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--evidence-out", type=Path,
                         help="append-only validation record for this profile")
     parser.add_argument("--evidence-id", default=None)
+    parser.add_argument("--qualified-demand-manifest", type=Path, required=True)
     args = parser.parse_args(argv)
     if args.spec is None:
         raise SystemExit("--spec is required for a real cold profile")
     from traffic_sim.core.contracts import ClosureSearchSpec
     from traffic_sim.core.closure_calendar import iter_closure_schedules
     from tools import product_arm
+    from traffic_sim.simulation.monthly_demand import validate_qualified_demand_manifest_shape
+
+    qualified_manifest = json.loads(
+        args.qualified_demand_manifest.read_text(encoding="utf-8"))
+    validate_qualified_demand_manifest_shape(qualified_manifest)
 
     spec = ClosureSearchSpec.from_dict(
         json.loads(args.spec.read_text(encoding="utf-8")))
@@ -571,7 +601,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         daily_results_cache_root=daily_results_root,
         study_provenance_key="subhour-cold-ledger-profile",
         objective_method="closure_cost_v1", seed_workers=1, daily_workers=1,
-        max_active_sumo_slots=1)
+        max_active_sumo_slots=1,
+        qualified_demand_manifest=qualified_manifest)
     try:
         def sumo_start_probe() -> int:
             snapshot = getattr(runner, "timing_snapshot", None)
@@ -608,7 +639,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                                 sumo_start_before=sumo_after_prepare,
                                 runs_root=args.runs_root,
                                 policy_path=policy_path,
-                                producer_binding=producer_binding)
+                                producer_binding=producer_binding,
+                                qualified_demand_manifest=qualified_manifest,
+                                qualified_demand_manifest_path=(
+                                    args.qualified_demand_manifest))
         (output_root / "profile.json").write_text(
             json.dumps(record, indent=2, sort_keys=True) + "\n",
             encoding="utf-8")

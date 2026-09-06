@@ -31,6 +31,11 @@ SCRIPT_ROOT = Path(__file__).resolve().parents[1]
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
+from traffic_sim.simulation.phase6_eligibility import (  # noqa: E402
+    phase3_outcome_population_eligible,
+    phase6_prerequisites_allow,
+)
+
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
@@ -101,6 +106,10 @@ class EvidencePolicy:
     phase_checkpoint_globs: tuple[str, ...] = ()
     phase6_registration_globs: tuple[str, ...] = ()
     phase_report_globs: tuple[str, ...] = ()
+    # Controller-owned execution authorization. Gate S is separate because a
+    # complete bounded Phase 3 population may feed it without a Phase 6 run.
+    allow_phase6: bool = True
+    allow_gate_s: bool = True
 
 
 @dataclass(frozen=True)
@@ -285,7 +294,12 @@ def load_config(path: Path, root: Path) -> Config:
             phase_checkpoint_globs=phase_checkpoint_globs,
             phase6_registration_globs=phase6_registration_globs,
             phase_report_globs=phase_report_globs,
+            allow_phase6=bool(evidence_raw.get("allow_phase6", True)),
+            allow_gate_s=bool(evidence_raw.get("allow_gate_s", True)),
         )
+        for key in ("allow_phase6", "allow_gate_s"):
+            if key in evidence_raw and not isinstance(evidence_raw[key], bool):
+                raise FlowError(f"evidence.{key} must be boolean")
 
     return Config(
         path=path,
@@ -496,6 +510,17 @@ def _signal_process_groups(groups: Sequence[int], signum: int) -> None:
             os.killpg(group, signum)
         except ProcessLookupError:
             pass
+        except PermissionError as exc:
+            # ``killpg(..., 0)`` deliberately treats EPERM as proof that a
+            # group still exists.  Sending the real signal must therefore
+            # turn the matching EPERM into a controlled workflow failure,
+            # rather than leaking a raw exception past run_flow's status and
+            # lock cleanup.  Never report an unsignalable owned group as
+            # reaped: it may still contain a test, SUMO, or agent process.
+            raise FlowError(
+                "permission denied while signaling owned process group "
+                f"{group} with signal {signum}; refusing to claim it was reaped"
+            ) from exc
 
 
 def _process_group_alive(group: int) -> bool:
@@ -525,18 +550,12 @@ def _terminate_process_group(
     """Stop and reap an invocation plus new sessions it launched."""
     _signal_process_groups(owned_descendant_groups, signal.SIGTERM)
     if process.poll() is None:
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
+        _signal_process_groups((process.pid,), signal.SIGTERM)
     try:
         return process.communicate(timeout=10)
     except subprocess.TimeoutExpired:
         _signal_process_groups(owned_descendant_groups, signal.SIGKILL)
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        _signal_process_groups((process.pid,), signal.SIGKILL)
         return process.communicate()
 
 
@@ -1121,11 +1140,38 @@ def build_phase_3_5_checkpoint(
             "Phase 6/7 evidence was registered before the independent Phase "
             f"3-5 review: {forbidden}"
         )
-    missing = [
-        pattern
-        for pattern in policy.phase_checkpoint_globs
-        if not added.get(pattern)
-    ]
+    required_patterns = list(policy.phase_checkpoint_globs)
+    qualified_pattern = next((pattern for pattern in required_patterns
+                              if "qualified_demand_manifest" in pattern), None)
+    window_pattern = next((pattern for pattern in required_patterns
+                           if "window_cost_index" in pattern), None)
+    if qualified_pattern is not None:
+        qualified_paths = list((added.get(qualified_pattern) or {}).keys())
+        if len(qualified_paths) != 1:
+            raise FlowError("Phase checkpoint requires exactly one fresh qualified-demand manifest")
+        qualified = _read_existing_json(root / qualified_paths[0], "qualified demand")
+        if qualified.get("status") != "PASS":
+            downstream = {pattern: added.get(pattern) for pattern in required_patterns
+                          if pattern != qualified_pattern and added.get(pattern)}
+            if downstream:
+                raise FlowError("non-PASS Phase D must not create Phase 3-5 artifacts")
+            required_patterns = [qualified_pattern]
+        else:
+            profile_pattern = next((pattern for pattern in required_patterns
+                                    if "monthly_cost_ledger_profile" in pattern), None)
+            if profile_pattern and added.get(profile_pattern):
+                profiles = list(added[profile_pattern])
+                if len(profiles) != 1:
+                    raise FlowError("Phase checkpoint requires one fresh Phase 4 profile")
+                profile = _read_existing_json(root / profiles[0], "Phase 4 profile")
+                decision = profile.get("phase_5_decision")
+                if decision == "NOT_TRIGGERED" and window_pattern in required_patterns:
+                    required_patterns.remove(window_pattern)
+                    if added.get(window_pattern):
+                        raise FlowError("Phase 5 NOT_TRIGGERED must not execute WindowCostIndex")
+                elif decision != "TRIGGERED":
+                    raise FlowError("Phase 4 profile has no valid Phase 5 trigger decision")
+    missing = [pattern for pattern in required_patterns if not added.get(pattern)]
     if missing:
         raise FlowError(
             "Phase 3-5 checkpoint is missing fresh evidence series: "
@@ -1237,6 +1283,19 @@ _PHASE_REPORT_KIND = "subhour_phase_report"
 _PHASE_TERMINAL_STATUSES = {"PASS", "INCONCLUSIVE", "NOT_TRIGGERED", "NOT_ALLOWED"}
 _PHASE_REPORT_PHASES = tuple(f"phase_{number}" for number in range(8))
 
+# Phases 0-2 are mechanically derived from ONE Phase D producer artifact: the
+# qualified-demand manifest that binds the frozen source approval, the
+# support audit, and the exact 30-date/65-window/five-consecutive-day
+# `closure_cost_v1` search contract this plan is not allowed to loosen.
+_QUALIFIED_DEMAND_MANIFEST_SCHEMA = "subhour_qualified_demand_manifest_v1"
+_QUALIFIED_DEMAND_MANIFEST_KIND = "subhour_qualified_demand_manifest"
+_FROZEN_SEARCH_CONTRACT = {
+    "dates": 30,
+    "windows": 65,
+    "consecutive_days": 5,
+    "closure_cost_policy": "closure_cost_v1",
+}
+
 
 def _validate_report_reference(
     root: Path, reference: Any, *, label: str,
@@ -1291,12 +1350,111 @@ def _validate_report_reference(
     return path, artifact
 
 
-def _derive_report_phase_status(
-    root: Path, phase_name: str, status_artifact: Mapping[str, Any]
+def _derive_phase012_status(
+    root: Path, phase_name: str, status_artifact: Mapping[str, Any],
+    *, expected_source_digest: str | None = None,
 ) -> str:
-    """Derive a Phase 3--5 status from the referenced producer bytes."""
-    if phase_name in {"phase_0", "phase_1", "phase_2"}:
+    """Derive Phases 0-2 from the bound Phase D qualified-demand manifest.
+
+    These phases used to return an unconditional "PASS" regardless of any
+    referenced evidence -- a report could declare Phases 0-2 green with no
+    producer bytes behind that claim at all. They are now derived exactly
+    like Phase 3-5: the status artifact must reference the single qualified-
+    demand manifest Phase D emitted, and that manifest must itself carry a
+    CODE_APPROVED binding, the frozen 30-date/65-window/five-consecutive-day
+    `closure_cost_v1` search contract unchanged, and all three q10/q50/q90
+    demand variants. A missing, unbound, or contract-violating manifest fails
+    closed instead of silently returning PASS.
+    """
+    values = _report_producer_values(root, status_artifact)
+    candidates = [
+        item for item in values
+        if item.get("schema") == _QUALIFIED_DEMAND_MANIFEST_SCHEMA
+        and item.get("kind") == _QUALIFIED_DEMAND_MANIFEST_KIND
+    ]
+    if len(candidates) != 1:
+        raise FlowError(
+            f"{phase_name} status is not bound to one qualified-demand manifest")
+    manifest = candidates[0]
+    if manifest.get("code_approved") is not True:
+        raise FlowError(
+            f"{phase_name} qualified-demand manifest is not bound to CODE_APPROVED")
+    if expected_source_digest is not None \
+            and manifest.get("source_digest") != expected_source_digest:
+        raise FlowError(f"{phase_name} qualified-demand manifest source freeze drifted")
+    approval = manifest.get("code_approval")
+    prerequisites = approval.get("phase_prerequisites") if isinstance(approval, Mapping) else None
+    if (not isinstance(approval, Mapping) or approval.get("status") != "CODE_APPROVED"
+            or approval.get("checks_status") != "PASS"
+            or approval.get("source_digest") != manifest.get("source_digest")
+            or not isinstance(prerequisites, Mapping)):
+        raise FlowError(f"{phase_name} qualified-demand manifest lacks source-bound checks")
+    contract = manifest.get("search_contract")
+    if not isinstance(contract, Mapping) or any(
+            contract.get(key) != value
+            for key, value in _FROZEN_SEARCH_CONTRACT.items()):
+        raise FlowError(
+            f"{phase_name} qualified-demand manifest violates the frozen "
+            "search contract")
+    status = manifest.get("status")
+    if isinstance(status, str) and status.startswith("INCONCLUSIVE"):
+        terminal = manifest.get("terminal")
+        if not isinstance(terminal, Mapping) or not terminal.get("code"):
+            raise FlowError(
+                f"{phase_name} inconclusive qualified-demand manifest lacks a terminal")
+        return "NOT_ALLOWED"
+    archives = manifest.get("archives")
+    if (not isinstance(archives, Mapping) or not archives
+            or any(not isinstance(item, Mapping)
+                   or set(item.get("variants", {})) != {"q10", "q50", "q90"}
+                   for item in archives.values())):
+        raise FlowError(
+            f"{phase_name} qualified-demand manifest lacks all three demand "
+            "variants")
+    if phase_name == "phase_0":
+        expected = {
+            **_FROZEN_SEARCH_CONTRACT, "q_variants": ["q10", "q50", "q90"],
+            "work_budget_seconds": 3300, "publication_budget_seconds": 300,
+            "fresh_roots": True, "tie_finalist_rules_unchanged": True,
+            "timeouts_capacity_terminals_bound": True,
+        }
+        if prerequisites.get("phase_0") != expected:
+            raise FlowError("phase_0 prerequisite contract is incomplete")
+    elif phase_name == "phase_1":
+        expected = {
+            "shared_kernel": "run_cost_ordered_execution",
+            "only_allowed_difference": "disable_early_stop",
+            "cost_ordered": {"disable_early_stop": False},
+            "ordered_exhaustive": {"disable_early_stop": True},
+            "shared_ledger_order_verifier_attempt_health_reconciliation_cursor": True,
+        }
+        if prerequisites.get("phase_1") != expected:
+            raise FlowError("phase_1 arm-equivalence contract is incomplete")
+    else:
+        phase2 = prerequisites.get("phase_2")
+        if (not isinstance(phase2, Mapping) or phase2.get("status") != "PASS"
+                or not isinstance(phase2.get("required_tests"), list)
+                or not phase2["required_tests"]):
+            raise FlowError("phase_2 deterministic prerequisite suite is incomplete")
+    if status == "PASS":
+        if manifest.get("support_audit_pass") is not True:
+            raise FlowError(
+                f"{phase_name} qualified-demand manifest PASS lacks a "
+                "passed support audit")
         return "PASS"
+    raise FlowError(
+        f"{phase_name} qualified-demand manifest has no legal terminal status")
+
+
+def _derive_report_phase_status(
+    root: Path, phase_name: str, status_artifact: Mapping[str, Any],
+    *, expected_source_digest: str | None = None,
+) -> str:
+    """Derive a Phase 0--5 status from the referenced producer bytes."""
+    if phase_name in {"phase_0", "phase_1", "phase_2"}:
+        return _derive_phase012_status(
+            root, phase_name, status_artifact,
+            expected_source_digest=expected_source_digest)
     references = status_artifact.get("references")
     if not isinstance(references, list) or not references:
         raise FlowError(f"{phase_name} status artifact lacks producer evidence")
@@ -1519,8 +1677,6 @@ def _phase3_gate_source_paths(
         selected_ids = selection.get("selected_ids") if isinstance(
             selection, Mapping
         ) else None
-        cases = value.get("case_results")
-        gate_s = value.get("gate_s")
         registration = value.get("registration")
         if not isinstance(registration, Mapping):
             continue
@@ -1544,9 +1700,6 @@ def _phase3_gate_source_paths(
         registered_ids = (
             registered_selection.get("selected_ids")
             if isinstance(registered_selection, Mapping) else None)
-        registered_cases = (
-            bound_registration.get("selected_cases")
-            if isinstance(bound_registration, Mapping) else None)
         if (
             not isinstance(bound_registration, Mapping)
             or bound_registration.get("schema")
@@ -1561,60 +1714,9 @@ def _phase3_gate_source_paths(
                 _canonical_digest(registration_body)[:32],
             }
             or registered_ids != selected_ids
-            or not isinstance(registered_cases, list)
         ):
             continue
-        if (
-            not isinstance(selected_ids, list)
-            or not selected_ids
-            or any(not isinstance(item, str) or not item for item in selected_ids)
-            or len(set(selected_ids)) != len(selected_ids)
-            or not isinstance(cases, list)
-            # Gate S is a decision over the complete registered population.
-            # A prefix (or an empty list) is useful diagnostic information, but
-            # it cannot be promoted merely because the producer happened to
-            # publish a gate_s mapping alongside it.
-            or len(cases) != len(selected_ids)
-            or value.get("decision_population_complete") is not True
-            or not isinstance(gate_s, Mapping)
-            or gate_s.get("population_complete") is not True
-            or not isinstance(gate_s.get("variants"), Mapping)
-            or set(gate_s["variants"]) != {"q10", "q50", "q90"}
-        ):
-            continue
-        registered_pairs = [
-            (item.get("case_id"), item.get("search_content_key"))
-            for item in registered_cases if isinstance(item, Mapping)
-        ]
-        source_pairs = [
-            (item.get("case_id"), item.get("search_content_key"))
-            for item in cases if isinstance(item, Mapping)
-        ]
-        if source_pairs != registered_pairs:
-            continue
-        seen_case_ids: set[str] = set()
-        seen_content_keys: set[str] = set()
-        valid_cases = True
-        for case in cases:
-            if not isinstance(case, Mapping):
-                valid_cases = False
-                break
-            case_id = case.get("case_id")
-            content_key = case.get("search_content_key")
-            if (
-                not isinstance(case_id, str)
-                or not case_id
-                or case_id in seen_case_ids
-                or not isinstance(content_key, str)
-                or content_key not in selected_ids
-                or content_key in seen_content_keys
-                or case.get("decision_population_complete") is not True
-            ):
-                valid_cases = False
-                break
-            seen_case_ids.add(case_id)
-            seen_content_keys.add(content_key)
-        if valid_cases and seen_content_keys == set(selected_ids):
+        if phase3_outcome_population_eligible(value, bound_registration):
             eligible_paths.append(path.resolve())
     return tuple(eligible_paths)
 
@@ -2182,7 +2284,7 @@ def validate_post_review_terminal_artifacts(
                 or not isinstance(resource.get("disk_growth_bytes"), int)
                 or resource["disk_growth_bytes"] < 0
                 or not isinstance(resource.get("disk_roots"), list)):
-                raise FlowError(f"{phase_name} report resources have invalid integers")
+            raise FlowError(f"{phase_name} report resources have invalid integers")
         if isinstance(resource.get("peak_rss_bytes"), dict) and (
                 resource.get("status") != "INCONCLUSIVE"):
             raise FlowError(
@@ -2226,7 +2328,8 @@ def validate_post_review_terminal_artifacts(
                 or status_artifact.get("release_evidence") is not False):
             raise FlowError(f"{phase_name} report status is not derived from its artifact")
         derived_status = _derive_report_phase_status(
-            root, phase_name, status_artifact)
+            root, phase_name, status_artifact,
+            expected_source_digest=source_freeze.get("digest"))
         if status_artifact.get("status") != derived_status:
             raise FlowError(
                 f"{phase_name} report status is not derived from producer evidence"
@@ -2235,7 +2338,7 @@ def validate_post_review_terminal_artifacts(
         if not isinstance(status_evidence_id, str) \
                 or status_evidence_id not in evidence_ids[phase_name]:
             raise FlowError(f"{phase_name} status artifact evidence ID is not reported")
-        if phase_name in {"phase_3", "phase_4", "phase_5"}:
+        if phase_name in {"phase_0", "phase_1", "phase_2", "phase_3", "phase_4", "phase_5"}:
             producer_ids = {
                 str(value["evidence_id"])
                 for value in _report_producer_values(root, status_artifact)
@@ -2253,7 +2356,7 @@ def validate_post_review_terminal_artifacts(
                 raise FlowError(
                     f"{phase_name} evidence IDs do not exactly match producer artifacts"
                 )
-        if phase_name in {"phase_3", "phase_4", "phase_5"}:
+        if phase_name in {"phase_0", "phase_1", "phase_2", "phase_3", "phase_4", "phase_5"}:
             references = status_artifact.get("references")
             if not isinstance(references, list) or not references:
                 raise FlowError(
@@ -2316,15 +2419,10 @@ def validate_post_review_terminal_artifacts(
                 expected_schema="subhour_phase_status_v1",
                 expected_kind="subhour_phase_status",
             )[1],
+            expected_source_digest=source_freeze.get("digest"),
         )
         for phase_name in required_status_phases
     }
-    phase6_prerequisites_green = (
-        all(status_by_phase[name] == "PASS"
-            for name in ("phase_0", "phase_1", "phase_2", "phase_3", "phase_4"))
-        and status_by_phase["phase_5"] in {"PASS", "NOT_TRIGGERED"}
-        and phase_review.get("status") == "PASS"
-    )
     phase6_status = phases["phase_6"]
     phase7_status = phases["phase_7"]
     phase3_status_artifact = _validate_report_reference(
@@ -2337,24 +2435,54 @@ def validate_post_review_terminal_artifacts(
         root, phase3_status_artifact
     ))
     phase3_gate_population_eligible = bool(phase3_gate_source_paths)
-    if phase6_prerequisites_green:
-        if phase6_status not in {"PASS", "INCONCLUSIVE"}:
+    phase6_prerequisites_green = phase6_prerequisites_allow(
+        {**status_by_phase, "review": str(phase_review.get("status"))},
+        phase3_population_eligible=phase3_gate_population_eligible,
+        # Phase 0 is derived from the exact Phase D manifest and can be PASS
+        # only when that manifest is PASS and source/check bound.
+        phase_d_pass=status_by_phase.get("phase_0") == "PASS",
+    )
+    bounded_run_authorization = report.get("bounded_run_authorization")
+    if bounded_run_authorization is not None and (
+            not isinstance(bounded_run_authorization, Mapping)
+            or bounded_run_authorization.get("authorized") is not True
+            or not isinstance(bounded_run_authorization.get("reason"), str)
+            or not bounded_run_authorization["reason"].strip()):
+        raise FlowError("bounded_run_authorization is malformed")
+    if not policy.allow_phase6:
+        # Authorization comes from controller configuration loaded before the
+        # producer runs; report prose cannot widen it by omission.
+        if phase6_status != "NOT_ALLOWED":
             raise FlowError(
-                "Phase 6 must execute when Phases 0-5 and the independent checkpoint review are green"
+                "The controller execution ceiling forces Phase 6 to NOT_ALLOWED "
+                "for this run"
             )
-    elif phase6_status != "NOT_ALLOWED":
-        raise FlowError(
-            "Phase 6 is not allowed without mechanically green Phase 0-5 prerequisites"
-        )
-    if _gate_s_is_required(phase6_status, phase3_gate_population_eligible):
-        if phase7_status not in {"PASS", "INCONCLUSIVE"}:
+    else:
+        if phase6_prerequisites_green:
+            if phase6_status not in {"PASS", "INCONCLUSIVE"}:
+                raise FlowError(
+                    "Phase 6 must execute when Phases 0-5 and the independent checkpoint review are green"
+                )
+        elif phase6_status != "NOT_ALLOWED":
             raise FlowError(
-                "Phase 7 must execute after eligible bounded or full-month evidence"
+                "Phase 6 is not allowed without mechanically green Phase 0-5 prerequisites"
             )
-    elif phase7_status != "NOT_TRIGGERED":
-        raise FlowError(
-            "Phase 7 may be NOT_TRIGGERED only when no eligible bounded or full-month evidence exists"
-        )
+    if not policy.allow_gate_s:
+        if phase7_status != "NOT_TRIGGERED":
+            raise FlowError(
+                "The controller execution ceiling forces Phase 7/Gate S to "
+                "NOT_TRIGGERED for this run"
+            )
+    else:
+        if _gate_s_is_required(phase6_status, phase3_gate_population_eligible):
+            if phase7_status not in {"PASS", "INCONCLUSIVE"}:
+                raise FlowError(
+                    "Phase 7 must execute after eligible bounded or full-month evidence"
+                )
+        elif phase7_status != "NOT_TRIGGERED":
+            raise FlowError(
+                "Phase 7 may be NOT_TRIGGERED only when no eligible bounded or full-month evidence exists"
+            )
     lineage = report.get("lineage")
     if not isinstance(lineage, dict) \
             or lineage.get("source_digest") != source_freeze.get("digest") \
@@ -3631,7 +3759,12 @@ def run_flow(
                         (
                             "CODE STABILIZATION CONTRACT",
                             "Repair the complete supplied defect set and run focused tests, "
-                            "but do not freeze, create, execute, or modify any evidence "
+                            "but never start a test or validation command in the background. "
+                            "Every child process started by this attempt must reach a terminal "
+                            "exit before returning. The controller runs the complete configured "
+                            "suite synchronously after the fixer returns, so the fixer should "
+                            "use only bounded focused checks needed for its repairs. "
+                            "Do not freeze, create, execute, or modify any evidence "
                             "registration/outcome. The controller owns evidence only after "
                             "an independent CODE_APPROVED decision. Return IMPLEMENTED only "
                             "when all supplied findings are repaired together. Before returning, "
@@ -3639,7 +3772,17 @@ def run_flow(
                             "reported exploit, adjacent self-attestation/freshness/status bypasses, "
                             "and the real multi-step producer path rather than only mocked units. "
                             "Re-read the complete changed files and add adversarial regression "
-                            "tests so the verification review sees a stable implementation.",
+                            "tests so the verification review sees a stable implementation. "
+                            "Never weaken the operator-selected ai-flow configuration to make "
+                            "a failing check pass: do not lower review, repair, timeout, or turn "
+                            "budgets; do not remove or narrow configured lint, focused-test, or "
+                            "full-suite commands; and do not remove or broaden source, Phase D, "
+                            "checkpoint, or evidence bindings. A configuration repair may only "
+                            "preserve or strengthen those gates. Never start a test or validation "
+                            "command in the background. Every child process started by this "
+                            "attempt must reach a terminal exit before returning; use only bounded "
+                            "focused checks because the controller runs the complete configured "
+                            "suite synchronously after the fixer returns.",
                         ),
                     ),
                 ),
@@ -4209,13 +4352,25 @@ def run_flow(
                                 "POST-REVIEW EVIDENCE CONTRACT",
                                 "The independent Phase 3-5 review is the sole prerequisite "
                                 "for later evidence. Revalidate its digest-bound lineage "
-                                "before doing anything. Only now may the already registered "
-                                "plan continue to Phase 6 and, if scientifically allowed, "
-                                "Phase 7. Never register Phase 6 or Phase 7 before this "
-                                "stage, and never start Phase 6 when the reviewed Phase 0-4 "
-                                "statuses do not permit it. Keep all artifacts append-only, "
-                                "source frozen, and publish valid INCONCLUSIVE or "
-                                "NOT_ALLOWED terminals instead of inventing PASS.",
+                                "before doing anything. The User task above governs whether "
+                                "this invocation may go past the Phase 3-5 checkpoint at "
+                                "all -- re-read it now. If it bounds this run to stop after "
+                                "Phase 3-5 (or any earlier phase), you MUST NOT register, "
+                                "execute, or otherwise attempt Phase 6 or Gate S in this "
+                                "invocation: publish phase_6=NOT_ALLOWED, "
+                                "phase_7=NOT_TRIGGERED, and set the report's "
+                                "bounded_run_authorization to {authorized: true, reason: "
+                                "<quote the task's own stop instruction>} so the mechanical "
+                                "check forces both terminals regardless of how green "
+                                "Phases 0-5 came back. Only when the task places no such "
+                                "bound may the already registered plan continue to Phase 6 "
+                                "and, if scientifically allowed, Phase 7. Never register "
+                                "Phase 6 or Phase 7 before this stage, never start Phase 6 "
+                                "when the reviewed Phase 0-4 statuses do not permit it, and "
+                                "never start it when the task itself forbids it. Keep all "
+                                "artifacts append-only, source frozen, and publish valid "
+                                "INCONCLUSIVE or NOT_ALLOWED terminals instead of inventing "
+                                "PASS.",
                             ),
                         ),
                     ),
@@ -4404,24 +4559,64 @@ def run_flow(
         assert_plan_provenance()
         if state.get("next_stage") == "complete":
             terminal = _read_existing_json(run_dir / "status.json", "status") or {}
-            review_cycles = int(state.get("review_cycles", 0))
-            latest_review_path = run_dir / f"review-{review_cycles:02d}.json"
-            latest_review = _read_existing_json(latest_review_path, "reviewer")
-            can_extend = (
-                additional_review_cycles > 0
-                and terminal.get("status") == "BLOCKED"
-                and latest_review is not None
-                and latest_review.get("status") == "CHANGES_REQUIRED"
-            )
-            if can_extend:
-                state["last_review"] = latest_review_path.name
-                mark("review_fix")
-            else:
-                status = str(terminal.get("status", "BLOCKED"))
-                code = EXIT_APPROVED if status == "APPROVED" else EXIT_BLOCKED
-                return finish(
-                    status, str(terminal.get("summary", "run already complete")), code
+            if evidence_policy is not None:
+                # A review-blocked staged run may be reopened only by an
+                # explicit operator extension and only when the persisted
+                # terminal review has concrete repairable findings. Merely
+                # raising the configured budget must not silently restart a
+                # terminal run. Consume the next repair slot here so the
+                # normal fixer -> checks -> independent-review chain remains
+                # intact and no evidence can start on the repaired bytes.
+                review_cycle = int(state.get("code_review_cycles", 0))
+                latest_review_path = (
+                    run_dir / f"code-review-{review_cycle:02d}.json"
                 )
+                latest_review = _read_existing_json(
+                    latest_review_path, "reviewer"
+                )
+                repairs = int(state.get("code_repair_cycles", 0))
+                can_extend_staged = (
+                    additional_review_cycles > 0
+                    and terminal.get("status") == "BLOCKED"
+                    and latest_review is not None
+                    and latest_review.get("status") == "CHANGES_REQUIRED"
+                    and bool(latest_review.get("findings"))
+                    and not state.get("code_review_awaiting_confirmation", False)
+                    and repairs < evidence_policy.max_code_repair_cycles
+                )
+                if can_extend_staged:
+                    state["code_repair_cycles"] = repairs + 1
+                    state["last_code_review"] = latest_review_path.name
+                    mark("code_review_fix")
+                else:
+                    status = str(terminal.get("status", "BLOCKED"))
+                    code = EXIT_APPROVED if status == "APPROVED" else EXIT_BLOCKED
+                    return finish(
+                        status,
+                        str(terminal.get("summary", "run already complete")),
+                        code,
+                    )
+            else:
+                review_cycles = int(state.get("review_cycles", 0))
+                latest_review_path = run_dir / f"review-{review_cycles:02d}.json"
+                latest_review = _read_existing_json(latest_review_path, "reviewer")
+                can_extend = (
+                    additional_review_cycles > 0
+                    and terminal.get("status") == "BLOCKED"
+                    and latest_review is not None
+                    and latest_review.get("status") == "CHANGES_REQUIRED"
+                )
+                if can_extend:
+                    state["last_review"] = latest_review_path.name
+                    mark("review_fix")
+                else:
+                    status = str(terminal.get("status", "BLOCKED"))
+                    code = EXIT_APPROVED if status == "APPROVED" else EXIT_BLOCKED
+                    return finish(
+                        status,
+                        str(terminal.get("summary", "run already complete")),
+                        code,
+                    )
 
         plan = _read_existing_json(run_dir / "plan.json", "planner")
         assert_plan_provenance()
@@ -4479,13 +4674,14 @@ def run_flow(
                         "returning, perform one closure audit across each affected trust "
                         "boundary and its real producer/consumer path, including adversarial "
                         "self-attestation, stale-artifact, cross-generation, status-derivation, "
-                        "budget and interrupted-resume cases. This run permits only one "
-                        "all-findings repair followed by one reserved verification review, so "
-                        "do not defer known defects to the reviewer.",
+                        "budget and interrupted-resume cases. The repair sequence is bounded "
+                        "by the configured code-repair budget and every repair must be followed "
+                        "by deterministic checks and an independent review, so do not defer "
+                        "known defects to a later reviewer.",
                     )
                 )
 
-                def progress_guard() -> None:
+                def _worker_progress_guard() -> None:
                     assert_plan_provenance()
                     current = evidence_inventory(
                         root, evidence_policy.registration_globs
@@ -4494,6 +4690,8 @@ def run_flow(
                         raise FlowError(
                             "Worker changed evidence before CODE_APPROVED; stopped"
                         )
+
+                progress_guard = _worker_progress_guard
 
             assert_plan_provenance()
             work = run_work_role(

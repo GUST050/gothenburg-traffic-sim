@@ -68,6 +68,29 @@ def _ports(start=45000):
     return lambda: next(counter)
 
 
+def _exercise_frozen_contract(monkeypatch):
+    """Run pure fake-runner checks against the immutable retired contract.
+
+    The live entry point must reject this contract after source drift.  The
+    historical unit checks still need to exercise the exact frozen state
+    machine, so they inject only the already-canonical stored contract while
+    keeping the real approval, no-clobber, publisher, and validator paths.
+    """
+    contract = json.loads(CONTRACT.read_text())
+    assert diag.canonical_key(contract) == contract["content_key"]
+    monkeypatch.setattr(diag, "verify_live_inputs", lambda: contract)
+
+
+def _output_tree_snapshot(root):
+    root = Path(root)
+    if not root.exists():
+        return None
+    return {
+        str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(root.rglob("*")) if path.is_file()
+    }
+
+
 def _arm_records():
     cold = _perfect_cold()
     pre = set(_ids("completed_before_boundary"))
@@ -152,8 +175,10 @@ class TestProcessFreeBoundary:
                 assert not node.value.startswith("runs/"), node.value
 
     def test_no_output_root_is_created_by_freezing_or_verifying(self):
-        """The contract NAMES where a later run would write; it must not make it."""
-        assert not Path(diag.APPROVED_OUTPUT_ROOT).exists()
+        """Verification never creates or mutates the named historical root."""
+        before = _output_tree_snapshot(diag.APPROVED_OUTPUT_ROOT)
+        assert diag.verify() is False  # source drift retires this contract
+        assert _output_tree_snapshot(diag.APPROVED_OUTPUT_ROOT) == before
 
     def test_the_runner_is_complete_and_gated_not_crippled(self):
         """Sol review: a permanently-dead runner is not a dormant pipeline.
@@ -741,6 +766,7 @@ class TestFakeRunnerEndToEnd:
         """
         monkeypatch.setattr(diag, "APPROVED_OUTPUT_ROOT",
                             str(tmp_path / "outcome"))
+        _exercise_frozen_contract(monkeypatch)
         kwargs = dict(
             approval_token=json.loads(CONTRACT.read_text())["content_key"],
             home=tmp_path / "sumo", workspace=tmp_path / "work",
@@ -819,8 +845,9 @@ class TestFakeRunnerEndToEnd:
         """Verification happens while this is still a pure program."""
         import sys as _sys
         before = set(_sys.modules)
-        with pytest.raises(SystemExit):
-            diag.execute(approval_token="wrong")
+        key = json.loads(CONTRACT.read_text())["content_key"]
+        with pytest.raises(SystemExit, match="bound sources drifted"):
+            diag.execute(approval_token=key)
         assert "traci" not in set(_sys.modules) - before
 
     def test_publication_is_all_or_nothing(self, tmp_path):
@@ -839,6 +866,7 @@ class TestFailurePreservesItsOwnEvidence:
     def _run(self, tmp_path, monkeypatch, runner):
         monkeypatch.setattr(diag, "APPROVED_OUTPUT_ROOT",
                             str(tmp_path / "outcome"))
+        _exercise_frozen_contract(monkeypatch)
         return diag.execute(
             approval_token=json.loads(CONTRACT.read_text())["content_key"],
             home=tmp_path / "sumo", workspace=tmp_path / "work",
@@ -937,6 +965,7 @@ class TestFailurePreservesItsOwnEvidence:
         root.mkdir(parents=True)
         (root / "sentinel").write_text("keep me")
         monkeypatch.setattr(diag, "APPROVED_OUTPUT_ROOT", str(root))
+        _exercise_frozen_contract(monkeypatch)
         with pytest.raises(SystemExit, match="refusing to reuse an existing"):
             diag.execute(
                 approval_token=json.loads(CONTRACT.read_text())["content_key"],
@@ -957,6 +986,7 @@ class TestSolRoundTwoCounterexamples:
     def _root(self, tmp_path, monkeypatch):
         monkeypatch.setattr(diag, "APPROVED_OUTPUT_ROOT",
                             str(tmp_path / "outcome"))
+        _exercise_frozen_contract(monkeypatch)
         return tmp_path / "outcome"
 
     def _runner(self, payload):
@@ -1138,6 +1168,7 @@ class TestSolRoundThreeCounterexamples:
     def _failed_run(self, tmp_path, monkeypatch):
         monkeypatch.setattr(diag, "APPROVED_OUTPUT_ROOT",
                             str(tmp_path / "outcome"))
+        _exercise_frozen_contract(monkeypatch)
         key = json.loads(CONTRACT.read_text())["content_key"]
         with pytest.raises(SystemExit):
             diag.execute(approval_token=key, home=tmp_path / "sumo",
@@ -1233,6 +1264,7 @@ class TestSolRoundThreeCounterexamples:
         staging = root.with_name(root.name + ".partial")
         staging.mkdir(parents=True)
         monkeypatch.setattr(diag, "APPROVED_OUTPUT_ROOT", str(root))
+        _exercise_frozen_contract(monkeypatch)
         started = []
 
         def runner(*, cmd, cwd, **kwargs):
@@ -1285,6 +1317,7 @@ class TestSolRoundFourCounterexamples:
     def _failed_run(self, tmp_path, monkeypatch):
         monkeypatch.setattr(diag, "APPROVED_OUTPUT_ROOT",
                             str(tmp_path / "outcome"))
+        _exercise_frozen_contract(monkeypatch)
         key = json.loads(CONTRACT.read_text())["content_key"]
         with pytest.raises(SystemExit):
             diag.execute(approval_token=key, home=tmp_path / "sumo",
@@ -1460,6 +1493,7 @@ class TestFailurePhasesAreSelfConsistent:
     def _run(self, tmp_path, monkeypatch, runner):
         monkeypatch.setattr(diag, "APPROVED_OUTPUT_ROOT",
                             str(tmp_path / "outcome"))
+        _exercise_frozen_contract(monkeypatch)
         key = json.loads(CONTRACT.read_text())["content_key"]
         with pytest.raises(SystemExit) as caught:
             diag.execute(approval_token=key, home=tmp_path / "sumo",
@@ -1611,6 +1645,7 @@ class TestArmSetupPhase:
     def _run(self, tmp_path, monkeypatch):
         monkeypatch.setattr(diag, "APPROVED_OUTPUT_ROOT",
                             str(tmp_path / "outcome"))
+        _exercise_frozen_contract(monkeypatch)
         key = json.loads(CONTRACT.read_text())["content_key"]
         with pytest.raises(BaseException) as caught:
             diag.execute(approval_token=key, home=tmp_path / "sumo",
@@ -1722,8 +1757,8 @@ class TestTheGatedCli:
             diag.main(["--verify", "--execute", "tok"])
 
     def test_verify_reports_reproduction(self, capsys):
-        assert diag.main(["--verify"]) == 0
-        assert "reproduces byte-for-byte: True" in capsys.readouterr().out
+        assert diag.main(["--verify"]) == 1
+        assert "reproduces byte-for-byte: False" in capsys.readouterr().out
 
     def test_execute_requires_the_exact_key_and_exits_nonzero(self, capsys):
         """A diagnostic that fails quietly is worse than one that does not run."""
@@ -2054,9 +2089,9 @@ class TestFrozenContract:
         assert hashlib.sha256(diag.canonical_bytes(body)).hexdigest() == \
             payload["content_key"]
 
-    def test_it_reproduces_byte_for_byte(self):
+    def test_retired_contract_no_longer_reproduces_but_is_not_rewritten(self):
         before = CONTRACT.read_bytes()
-        assert diag.verify()
+        assert diag.verify() is False
         assert CONTRACT.read_bytes() == before, "verification mutated it"
 
     def test_it_is_frozen_unapproved_and_unexecuted(self):
@@ -2083,9 +2118,12 @@ class TestFrozenContract:
                          "tests/test_warm_state_population_semantics.py"):
             assert required in fingerprints, required
 
-    def test_every_bound_source_matches_the_live_tree(self):
-        for name, digest in self._load()["source_fingerprints"].items():
-            assert diag.sha256_file(Path(name)) == digest, name
+    def test_bound_source_drift_retires_the_contract(self):
+        drifted = sorted(
+            name for name, digest in self._load()["source_fingerprints"].items()
+            if diag.sha256_file(Path(name)) != digest)
+        assert drifted
+        assert "run_scenario.py" in drifted
 
     def test_a_source_edit_would_invalidate_the_contract(self):
         """Drift detection is real, proven without touching the tree."""
@@ -2110,9 +2148,11 @@ class TestFrozenContract:
         assert payload["classification_contract"]["production_precision"] == \
             diag.TRIPINFO_PRECISION
 
-    def test_it_names_its_future_output_root_without_creating_it(self):
+    def test_it_names_one_fixed_output_root_without_mutating_it(self):
         assert self._load()["output_root"] == diag.APPROVED_OUTPUT_ROOT
-        assert not Path(diag.APPROVED_OUTPUT_ROOT).exists()
+        before = _output_tree_snapshot(diag.APPROVED_OUTPUT_ROOT)
+        diag.contract_text()
+        assert _output_tree_snapshot(diag.APPROVED_OUTPUT_ROOT) == before
 
     def test_the_claim_scope_forbids_adoption(self):
         scope = self._load()["claim_scope"]

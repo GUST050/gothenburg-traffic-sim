@@ -52,6 +52,13 @@ from traffic_sim.simulation.seed_worker_budget import (
     SEED_WORKER_BENCHMARK_RECORD,
     approved_seed_workers,
 )
+from traffic_sim.simulation.monthly_demand import (
+    validate_qualified_demand_manifest_shape,
+)
+from traffic_sim.simulation.phase6_eligibility import (
+    phase3_outcome_population_eligible,
+    phase6_prerequisites_allow,
+)
 from traffic_sim.simulation.search_workspace import DEFAULT_ROOT
 
 
@@ -546,7 +553,63 @@ def _validate_independent_review_artifact(
     return {}, normalized
 
 
-def _require_phase6_green_prerequisites(statuses: Mapping[str, str]) -> None:
+def _phase6_bound_inputs(
+    bindings: Mapping[str, Mapping[str, Any]],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Resolve the one Phase D manifest and bounded Phase 3 producer chain."""
+    referenced: dict[Path, dict[str, Any]] = {}
+    for name, binding in bindings.items():
+        if name == "review":
+            continue
+        for reference in binding.get("references", ()):
+            path = Path(str(reference.get("path", ""))).resolve()
+            if path.is_file():
+                value = _read(path)
+                if isinstance(value, dict):
+                    referenced[path] = value
+    manifests = [(path, value) for path, value in referenced.items()
+                 if value.get("schema") == "subhour_qualified_demand_manifest_v1"
+                 and value.get("kind") == "subhour_qualified_demand_manifest"]
+    outcomes = [(path, value) for path, value in referenced.items()
+                if value.get("schema") == "subhour_cost_ordered_bounded_outcome_v1"
+                and value.get("kind") == "subhour_bounded_sumo_outcome"]
+    if len(manifests) != 1 or len(outcomes) != 1:
+        raise ValueError(
+            "Phase 6 requires exactly one Phase D manifest and Phase 3 outcome")
+    manifest_path, manifest = manifests[0]
+    validate_qualified_demand_manifest_shape(manifest)
+    if manifest.get("status") != "PASS":
+        raise ValueError("Phase 6 requires a passing Phase D manifest")
+    outcome_path, outcome = outcomes[0]
+    outcome_registration = outcome.get("registration")
+    if not isinstance(outcome_registration, Mapping):
+        raise ValueError("Phase 3 outcome lacks its registration binding")
+    registration_path = Path(str(outcome_registration.get("path", ""))).resolve()
+    if (not registration_path.is_file()
+            or sha256_file(registration_path) != outcome_registration.get("sha256")):
+        raise ValueError("Phase 3 registration bytes drifted")
+    phase3_registration = _read(registration_path)
+    qualified_ref = phase3_registration.get("qualified_demand_manifest")
+    expected_manifest_binding = {
+        "path": str(manifest_path),
+        "sha256": sha256_file(manifest_path),
+        "content_key": manifest["content_key"],
+        "evidence_id": manifest["evidence_id"],
+    }
+    if not isinstance(qualified_ref, Mapping) or {
+            "path": str(Path(str(qualified_ref.get("path", ""))).resolve()),
+            "sha256": qualified_ref.get("sha256"),
+            "content_key": qualified_ref.get("content_key"),
+            "evidence_id": qualified_ref.get("evidence_id"),
+    } != expected_manifest_binding:
+        raise ValueError("Phase 3 and Phase 6 qualified-demand manifests differ")
+    return manifest, expected_manifest_binding, outcome, phase3_registration
+
+
+def _require_phase6_green_prerequisites(
+    statuses: Mapping[str, str], *, phase3_outcome: Mapping[str, Any],
+    phase3_registration: Mapping[str, Any], phase_d_manifest: Mapping[str, Any],
+) -> None:
     """Require the reviewed Phase 0--5 gate state before full-month work.
 
     Phase 3/4 may legitimately finish inconclusive, but that terminal result
@@ -555,18 +618,13 @@ def _require_phase6_green_prerequisites(statuses: Mapping[str, str]) -> None:
     neither caller-supplied status maps nor a tampered registration can bypass
     the same gate.
     """
-    required_pass = ("phase_0", "phase_1", "phase_2", "phase_3", "phase_4")
-    if any(statuses.get(name) != "PASS" for name in required_pass):
+    population_eligible = phase3_outcome_population_eligible(
+        phase3_outcome, phase3_registration)
+    if not phase6_prerequisites_allow(
+            statuses, phase3_population_eligible=population_eligible,
+            phase_d_pass=phase_d_manifest.get("status") == "PASS"):
         raise ValueError(
-            "Phase 6 requires PASS for Phase 0-4; inconclusive bounded "
-            "evidence is not an execution authorization"
-        )
-    if statuses.get("phase_5") not in {"PASS", "NOT_TRIGGERED"}:
-        raise ValueError(
-            "Phase 6 requires Phase 5 PASS or NOT_TRIGGERED"
-        )
-    if statuses.get("review") != "PASS":
-        raise ValueError("Phase 6 requires an independent review PASS")
+            "Phase 6 prerequisites do not satisfy the shared admission predicate")
 
 
 def build_phase_status_artifact(
@@ -649,7 +707,12 @@ def build_phase6_registration(
             }),
         }
         statuses[name] = str(artifact["status"])
-    _require_phase6_green_prerequisites(statuses)
+    (qualified_manifest, qualified_binding, phase3_outcome,
+     phase3_registration) = _phase6_bound_inputs(bindings)
+    _require_phase6_green_prerequisites(
+        statuses, phase3_outcome=phase3_outcome,
+        phase3_registration=phase3_registration,
+        phase_d_manifest=qualified_manifest)
     if lineage is None:
         raise ValueError("Phase 6 prerequisites have no shared lineage")
     if not {"source_digests", "input_digests", "runtime_digest",
@@ -672,6 +735,7 @@ def build_phase6_registration(
         },
         "prerequisites": statuses,
         "prerequisite_artifacts": bindings,
+        "qualified_demand_manifest": qualified_binding,
         "lineage": lineage,
         "budget": {
             "active_hard_stop_s": PHASE6_HARD_STOP_S,
@@ -692,7 +756,7 @@ def build_phase6_registration(
 def verify_phase6_registration(
     registration: Mapping[str, Any], spec: Any, policy: MonthlySearchPolicy,
     *, actual_workspace_root: Path, actual_output_root: Path | None = None,
-) -> None:
+) -> dict[str, Any]:
     """Verify the complete Phase 6 binding before any full-month work starts."""
     body = {key: value for key, value in registration.items()
             if key != "content_key"}
@@ -743,9 +807,15 @@ def verify_phase6_registration(
             raise ValueError(f"Phase 6 prerequisite {name} is not bound and green")
         if binding.get("content_key") != normalized["content_key"]:
             raise ValueError(f"Phase 6 prerequisite {name} content binding drifted")
+    (qualified_manifest, qualified_binding, phase3_outcome,
+     phase3_registration) = _phase6_bound_inputs(artifacts)
+    if registration.get("qualified_demand_manifest") != qualified_binding:
+        raise ValueError("Phase 6 qualified-demand manifest binding drifted")
     _require_phase6_green_prerequisites(
-        {name: str(prerequisites.get(name)) for name in required}
-    )
+        {name: str(prerequisites.get(name)) for name in required},
+        phase3_outcome=phase3_outcome,
+        phase3_registration=phase3_registration,
+        phase_d_manifest=qualified_manifest)
     budget = registration.get("budget") or {}
     if (budget.get("active_hard_stop_s") != PHASE6_HARD_STOP_S
             or budget.get("publication_reserve_s") != PHASE6_PUBLICATION_RESERVE_S
@@ -762,6 +832,7 @@ def verify_phase6_registration(
     for label, path in (("workspace", bound_workspace), ("output", bound_output)):
         if path.exists() and any(path.iterdir()):
             raise ValueError(f"Phase 6 {label} root is not fresh")
+    return qualified_manifest
 
 
 RECOVERED_PUBLICATION_STATUS = "INCONCLUSIVE_PUBLICATION_UNVERIFIED"
@@ -1745,7 +1816,8 @@ def _independent_exhaustive_preflight(
 
 
 def _cost_source_for(spec, runner, args=None, *, daily_cost_cache=None,
-                     window_cost_index=None):
+                     window_cost_index=None,
+                     objective_method="closure_cost_v1"):
     """Build the deterministic cost source for real cost-first execution.
 
     Takes either the parsed CLI ``args`` or an explicit ``daily_cost_cache``,
@@ -1774,8 +1846,18 @@ def _cost_source_for(spec, runner, args=None, *, daily_cost_cache=None,
     if resolver is None:
         # IsolatedDailySumoRunner wraps the resolver for parallel execution;
         # the prices come from the resolver underneath it, never from a worker.
-        inner = getattr(daily_runner, "runner", None)
-        resolver = getattr(inner, "deterministic_disruption_provider", None)
+        # It stores that inner runner as `delegate`; this used to look only for
+        # `runner`, which the class has never had, so with --daily-workers > 1
+        # the lookup always failed and cost-ordered execution could not start
+        # at all. Only the single-worker branch (where `daily_runner` IS the
+        # resolver) ever worked, which is why every bounded Phase 3 run - all
+        # specified with one daily worker - passed over this.
+        for attribute in ("delegate", "runner"):
+            inner = getattr(daily_runner, attribute, None)
+            resolver = getattr(
+                inner, "deterministic_disruption_provider", None)
+            if resolver is not None:
+                break
     if resolver is None:
         raise ValueError(
             "cost-ordered execution needs a demand resolver that can produce a "
@@ -1798,6 +1880,7 @@ def _cost_source_for(spec, runner, args=None, *, daily_cost_cache=None,
             unit_schedule, cache=cache, network=network),
         cache=cache,
         window_cost_index=window_cost_index,
+        objective_method=objective_method,
     )
 
 
@@ -1889,12 +1972,16 @@ def parse_args() -> argparse.Namespace:
                  "independent-cost-ordered-exact"),
         default="proxy",
         help=(
-            "independent-cost-ordered-exact runs the SAME exhaustive "
-            "screening and additionally replays the PR E cost-ordered scan "
-            "against the run's own evidence, publishing a shadow comparison. "
-            "It is SHADOW MODE: it changes no ranking, no finalist set and no "
-            "claim, and it is not activated until the equivalence gate has "
-            "passed on a named benchmark."
+            "independent-cost-ordered-exact shares the exhaustive mode's "
+            "candidate ENUMERATION but changes execution: every candidate is "
+            "priced deterministically from the calibrated routes before "
+            "anything is simulated, and SUMO runs only for the prefix the "
+            "cost ordering's boundary proof requires. It is no longer a "
+            "shadow mode -- see the 'REAL cost-first execution' branch in "
+            "main() -- so it does change which candidates are simulated. It "
+            "still requires a bound --phase6-registration; without one the "
+            "run refuses to start rather than publishing an unregistered "
+            "full-month result."
         ),
     )
     parser.add_argument(
@@ -2006,6 +2093,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--phase6-outcome", type=Path,
         help="Fresh append-only Phase 6 outcome path.")
+    parser.add_argument(
+        "--operational-no-evidence",
+        action="store_true",
+        help=(
+            "Run independent-cost-ordered-exact as an OPERATIONAL search "
+            "without a Phase 6 registration. The search itself is unchanged - "
+            "same exact cost ordering, boundary proof, routing, health and "
+            "provenance semantics - but it is NOT release evidence: no Phase 6 "
+            "outcome is published and no registration is consumed. The "
+            "evidence path is untouched and still requires "
+            "--phase6-registration. Mutually exclusive with the Phase 6 flags "
+            "so one invocation can never be both."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -2089,6 +2190,7 @@ def main() -> None:
     # impose the Phase 6 deadline on runs that never opted into that contract.
     active_controller: ActiveTimeController | None = None
     phase6_registration = None
+    phase6_qualified_manifest: dict[str, Any] | None = None
     phase6_initial_disk_bytes = 0
     phase6_telemetry: dict[str, Any] | None = None
     # Read the inputs and SIZE the search before anything expensive exists.
@@ -2104,14 +2206,34 @@ def main() -> None:
                 and args.screening_mode != "independent-cost-ordered-exact":
             raise ValueError(
                 "--window-cost-index requires independent cost-ordered mode")
+        if getattr(args, "operational_no_evidence", False):
+            # Measured on this machine: a 3-day closure-envelope demand build
+            # costs 373 s regenerating candidates from scratch and 37 s when
+            # the content-addressed catalog serves them (0.23 s restore). The
+            # adoption record cannot serve them here because its key binds
+            # build_sumo_demand.py, which this branch's own work edited - the
+            # same coarse-identity trap CLAUDE.md records for c653b24. An
+            # operational run may therefore request the catalog directly; the
+            # evidence path still resolves it only through adoption.
+            os.environ.setdefault(
+                "TRAFFIC_SIM_DEMAND_CANDIDATE_SOURCE", "catalog")
+        if getattr(args, "operational_no_evidence", False) and (
+                getattr(args, "phase6_registration", None) is not None
+                or getattr(args, "phase6_outcome", None) is not None):
+            raise ValueError(
+                "--operational-no-evidence cannot be combined with the Phase 6 "
+                "flags: one invocation is either an operational search or a "
+                "registered evidence run, never both")
         if args.screening_mode == "independent-cost-ordered-exact" \
-                and getattr(args, "phase6_registration", None) is None:
+                and getattr(args, "phase6_registration", None) is None \
+                and not getattr(args, "operational_no_evidence", False):
             raise ValueError(
                 "independent cost-ordered full-month runs require a bound "
                 "--phase6-registration; missing manifest is NOT_ALLOWED")
-        if args.screening_mode == "independent-cost-ordered-exact":
+        if args.screening_mode == "independent-cost-ordered-exact" \
+                and getattr(args, "phase6_registration", None) is not None:
             phase6_registration = _read(args.phase6_registration)
-            verify_phase6_registration(
+            phase6_qualified_manifest = verify_phase6_registration(
                 phase6_registration, spec, policy,
                 actual_workspace_root=args.root,
                 actual_output_root=args.root,
@@ -2307,9 +2429,13 @@ def main() -> None:
             "study_provenance_key": study_key,
             "seed_workers": args.seed_workers,
             "include_disruption": (
-                policy.objective_method == "closure_cost_v1"
+                policy.objective_method in {"closure_cost_v1", "closure_cost_v2"}
             ),
+            "ranking_objective_evidence": policy.objective_method,
         }
+        if phase6_qualified_manifest is not None:
+            runner_options["qualified_demand_manifest"] = (
+                phase6_qualified_manifest)
         if args.warm_execution:
             # Construction is process-free. TraCI is resolved and SUMO starts
             # only if an eligible observation actually enters the warm path.
@@ -2437,7 +2563,8 @@ def main() -> None:
                     raise ValueError(
                         "window cost index source/input/policy identity is stale")
             cost_source = _cost_source_for(
-                spec, runner, args, window_cost_index=window_cost_index)
+                spec, runner, args, window_cost_index=window_cost_index,
+                objective_method=policy.objective_method)
         if active_controller is not None:
             # The monthly runner's child processes are in this process group.
             # Sample while the producer is live, before runner cleanup reaps
@@ -2614,6 +2741,19 @@ def main() -> None:
                 write_append_only_json(
                     outcome_path, terminal, controller=active_controller)
     boundary = result.get("claim_boundary", {})
+    if getattr(args, "operational_no_evidence", False):
+        # Structurally this run already cannot publish evidence: every Phase 6
+        # writer above is guarded by `phase6_registration is not None`, which
+        # stays None here. Say so out loud anyway, so a result pasted into a
+        # report carries its own status rather than relying on the reader to
+        # remember which flag produced it.
+        result["operational_no_evidence"] = True
+        result["release_evidence"] = False
+        print(
+            "OPERATIONAL RUN - NOT RELEASE EVIDENCE: no Phase 6 registration "
+            "was consumed and no Phase 6 outcome was published. The search is "
+            "exact, but it may not be cited as Phase 6 evidence."
+        )
     print(
         f"Monthly closure search {spec.search_id}: {result['status']}; "
         f"winner={result.get('winner_id')}; "

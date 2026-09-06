@@ -310,6 +310,9 @@ class TestFrozenArtifact:
     #: baseline's timings would silently be about different code.
     PR_C_DRIFTED_SOURCES = frozenset({
         "traffic_sim/core/closure_calendar.py",
+        "traffic_sim/core/contracts.py",
+        "traffic_sim/simulation/closure_preflight.py",
+        "traffic_sim/simulation/closure_teleport.py",
         "traffic_sim/simulation/independent_daily.py",
         "traffic_sim/simulation/monthly_search.py",
         "run_monthly_closure_search.py",

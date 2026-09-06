@@ -354,6 +354,7 @@ def run_cost_ordered_search(
     disable_early_stop: bool = False,
     max_verifications: int | None = None,
     max_exact_launches: int | None = None,
+    objective_method: str = "closure_cost_v1",
 ) -> CostOrderedResult:
     """Verify in cost order, stop when nothing unexamined can be retained.
 
@@ -546,7 +547,7 @@ def run_cost_ordered_search(
     selection = select_pilot_finalists(
         selection_evidence,
         policy,
-        ranking_objective="closure_cost_v1",
+        ranking_objective=objective_method,
         practical_equivalence_vehicle_hours=(
             practical_equivalence_vehicle_hours),
     )

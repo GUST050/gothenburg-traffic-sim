@@ -10,7 +10,10 @@ from traffic_sim.simulation.window_cost_index import (
     WindowCostIndexError,
     load_index,
 )
-from traffic_sim.simulation.disruption import build_parsed_window_cost_index
+from traffic_sim.simulation.disruption import (
+    DestinationAccessResolver,
+    build_parsed_window_cost_index,
+)
 
 
 def _records(unit="unit-a", schedule="schedule-a"):
@@ -95,22 +98,65 @@ def test_structural_window_index_reuses_route_grouping_and_detours(monkeypatch):
     calls = []
 
     from traffic_sim.simulation import disruption
-    original = disruption.grouped_path_costs
+    original = disruption.shortest_path_edges
 
     def counted(*args, **kwargs):
-        calls.append(1)
+        calls.append(args[2:5])
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(disruption, "grouped_path_costs", counted)
+    monkeypatch.setattr(disruption, "shortest_path_edges", counted)
     index = build_parsed_window_cost_index(
         ((("A", "B", "C"), 0.0),), {"B"}, edge_time, edge_length,
         adjacency=adjacency)
-    first = index.disruption(({"begin_s": 0.0, "end_s": 1.5},))
-    second = index.disruption(({"begin_s": 2.0, "end_s": 3.5},))
+    first = index.disruption(({
+        "edge_id": "B", "begin_s": 0.0, "end_s": 1.5},))
+    after_first = len(calls)
+    second = index.disruption(({
+        "edge_id": "B", "begin_s": 2.0, "end_s": 3.5},))
+    ended = index.disruption(({
+        "edge_id": "B", "begin_s": 0.0, "end_s": 1.0},))
 
     assert first["vehicles_affected"] == 1
-    assert second["vehicles_affected"] == 0
-    assert len(calls) == 4  # baseline/detour x time/length, once at build
+    assert second["vehicles_affected"] == 1
+    assert ended["vehicles_affected"] == 0
+    # Routing is the expensive work, memoised by (origin, destination,
+    # banned). This fixture has no bypass, so the first window pays for the
+    # one failed detour attempt and never needs a baseline (a severed vehicle
+    # is not a delayed one)...
+    assert after_first == 1
+    assert len(calls) == len(set(calls))
+    # ...and every later window over the same archive reuses both, which is
+    # the property that makes a whole-month ledger affordable.
+    assert len(calls) == after_first
+
+
+def test_structural_window_index_relocates_a_closed_destination(tmp_path):
+    network = tmp_path / "net.net.xml"
+    network.write_text(
+        "<net>"
+        '<edge id="origin"><lane id="origin_0" length="10" speed="10" '
+        'shape="0,0 10,0"/></edge>'
+        '<edge id="closed"><lane id="closed_0" length="10" speed="10" '
+        'shape="10,0 20,0"/></edge>'
+        '<edge id="near"><lane id="near_0" length="30" speed="10" '
+        'shape="15,1 25,1"/></edge>'
+        '<connection from="origin" to="closed"/>'
+        '<connection from="origin" to="near"/>'
+        "</net>", encoding="utf-8")
+    adjacency = {"origin": ["closed", "near"], "closed": [], "near": []}
+    resolver = DestinationAccessResolver(
+        network, permitted_edges=adjacency, radius_m=2.0)
+    index = build_parsed_window_cost_index(
+        ((('origin', 'closed'), 0.0, '8'),), {"closed"},
+        {"origin": 1.0, "closed": 1.0, "near": 3.0},
+        {"origin": 10.0, "closed": 10.0, "near": 30.0},
+        adjacency=adjacency, destination_access=resolver)
+
+    report = index.disruption(())
+
+    assert report["vehicles_no_detour"] == 0
+    assert report["vehicles_destination_relocated"] == 1
+    assert report["added_metres_total"] == 1.0
 
 
 def test_index_rejects_non_finite_preparation_time():
@@ -192,12 +238,14 @@ def test_raw_index_path_never_constructs_a_cache_backed_provider(
                                                lambda: Schedule()),))
     monkeypatch.setattr(builder, "MonthlyDemandResolverRunner", Resolver)
     monkeypatch.setattr(builder, "find_demand_archives",
-                        lambda runs_root, required: [{"archive": tmp_path}])
+                        lambda runs_root, required, **_kwargs: [{"archive": tmp_path}])
     monkeypatch.setattr(builder, "ArchiveDisruptionProvider", Provider)
     monkeypatch.setattr(builder, "NetworkCostModel", lambda: object())
 
+    qualified = {"content_key": "qualified"}
     indexed, oracle, measurement = builder._raw_index_records(
-        object(), runs_root=tmp_path, oracle_cache=Oracle())
+        object(), runs_root=tmp_path, oracle_cache=Oracle(),
+        qualified_demand_manifest=qualified)
     assert seen == [None]
     assert indexed == oracle
     assert measurement["raw_input_algorithm"] == (

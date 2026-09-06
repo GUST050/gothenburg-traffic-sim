@@ -37,7 +37,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-RUNS_DIR = Path("runs")
+RUNS_DIR = Path(os.environ.get("TRAFFIC_SIM_RUNS_DIR", "runs"))
 
 _SCHEMA_VERSION = 1
 

@@ -40,6 +40,7 @@ from traffic_sim.simulation.independent_daily import daily_unit_records
 from traffic_sim.simulation.monthly_demand import (
     MonthlyDemandResolverRunner,
     find_demand_archives,
+    validate_qualified_demand_manifest_shape,
 )
 from traffic_sim.simulation.window_cost_index import (
     WindowCostIndex,
@@ -163,6 +164,7 @@ def _raw_index_records(
     *,
     runs_root: Path,
     oracle_cache: DailyCostCache,
+    qualified_demand_manifest: Mapping[str, Any],
 ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, Any]]:
     """Compute index records from route XML and return a separate oracle.
 
@@ -179,6 +181,7 @@ def _raw_index_records(
         build_missing=False,
         baseline_trip_duration_p99_s=3600,
         study_provenance_key="subhour-phase5-raw-index",
+        qualified_demand_manifest=qualified_demand_manifest,
     )
     units: dict[str, tuple[dict[str, Any], ClosureSchedule, Path]] = {}
     for parent in iter_closure_schedules(spec):
@@ -191,7 +194,9 @@ def _raw_index_records(
                         f"daily unit identity collision for {unit_id}")
                 continue
             required = resolver._required(schedule)
-            matches = find_demand_archives(Path(runs_root), required)
+            matches = find_demand_archives(
+                Path(runs_root), required,
+                qualified_manifest=qualified_demand_manifest)
             if not matches:
                 raise WindowCostIndexError(
                     f"no immutable demand archive for daily unit {unit_id}")
@@ -243,6 +248,7 @@ def _raw_index_records(
                 parsed_by_archive[archive][variant], set(spec.directed_edges),
                 network.edge_time, network.edge_len,
                 adjacency=network.adjacency,
+                destination_access=network.destination_access,
                 timing=lambda phase, elapsed: timings.__setitem__(
                     phase, timings.get(phase, 0.0) + float(elapsed)),
             )
@@ -321,6 +327,25 @@ def build_from_profile(
     profile_path = Path(profile_path).resolve()
     profile = json.loads(profile_path.read_text(encoding="utf-8"))
     _validate_profile_binding(profile, profile_path)
+    qualified_ref = profile.get("qualified_demand_manifest")
+    if (not isinstance(qualified_ref, Mapping)
+            or set(qualified_ref) != {"path", "sha256", "content_key", "evidence_id"}):
+        raise WindowCostIndexError(
+            "Phase 5 profile lacks a complete qualified-demand manifest binding")
+    qualified_path = Path(str(qualified_ref["path"])).resolve()
+    if (not qualified_path.is_file()
+            or sha256_file(qualified_path) != qualified_ref["sha256"]):
+        raise WindowCostIndexError("qualified-demand manifest bytes drifted")
+    qualified_manifest = json.loads(qualified_path.read_text(encoding="utf-8"))
+    try:
+        validate_qualified_demand_manifest_shape(qualified_manifest)
+    except ValueError as error:
+        raise WindowCostIndexError(str(error)) from error
+    if (qualified_manifest.get("status") != "PASS"
+            or qualified_manifest.get("content_key") != qualified_ref["content_key"]
+            or qualified_manifest.get("evidence_id") != qualified_ref["evidence_id"]):
+        raise WindowCostIndexError(
+            "Phase 5 qualified-demand manifest binding is not passing")
     if profile.get("phase_5_decision") != "TRIGGERED":
         raise WindowCostIndexError("Phase 5 index is not allowed before trigger")
     if not (profile.get("population_complete")
@@ -362,7 +387,8 @@ def build_from_profile(
             f"bound spec has {len(parents)} parents, expected 1690")
     started = time.perf_counter()
     records, oracle_records, raw_measurement = _raw_index_records(
-        spec, runs_root=runs_root, oracle_cache=DailyCostCache(cache_root))
+        spec, runs_root=runs_root, oracle_cache=DailyCostCache(cache_root),
+        qualified_demand_manifest=qualified_manifest)
     preparation_time_s = time.perf_counter() - started
     baseline_time_s = float(profile.get("wall_time_s", 0.0))
     if baseline_time_s <= 0:
@@ -376,6 +402,7 @@ def build_from_profile(
         "ledger_content_key": str(profile.get("ledger_content_key", "")),
         "provider_identity": ledger.get("provider_identity", {}),
         "source_profile_content_key": str(profile.get("content_key", "")),
+        "qualified_demand_manifest": dict(qualified_ref),
         "policy_content_key": str(
             (profile.get("bindings") or {}).get("policy", {}).get(
                 "content_key", "")),

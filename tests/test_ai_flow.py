@@ -8,6 +8,9 @@ from pathlib import Path
 import pytest
 
 from tools import ai_flow
+from traffic_sim.simulation.phase6_eligibility import (
+    DECISION_POPULATION_GATES,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -119,6 +122,8 @@ def _evidence_policy():
             "validation/phase-report-*.json",
         ),
         phase_report_globs=("validation/phase-report-*.json",),
+        allow_phase6=False,
+        allow_gate_s=False,
     )
 
 
@@ -199,6 +204,48 @@ def _write_phase_producer_fixtures(root, suffix=""):
                        "daily_variant_records": 5850,
                        "parents": 1690},
     })
+    source_digest = ai_flow.source_manifest(root, ("*.py",))["digest"]
+    write_evidence(f"registration-phaseD{suffix}.json", {
+        "schema": "subhour_qualified_demand_manifest_v1",
+        "kind": "subhour_qualified_demand_manifest",
+        "release_evidence": False,
+        "evidence_id": "phaseD-producer",
+        "status": "PASS",
+        "code_approved": True,
+        "source_digest": source_digest,
+        "code_approval": {
+            "status": "CODE_APPROVED",
+            "source_digest": source_digest,
+            "checks_status": "PASS",
+            "phase_prerequisites": {
+                "phase_0": {
+                    "dates": 30, "windows": 65, "consecutive_days": 5,
+                    "closure_cost_policy": "closure_cost_v1",
+                    "q_variants": ["q10", "q50", "q90"],
+                    "work_budget_seconds": 3300, "publication_budget_seconds": 300,
+                    "fresh_roots": True, "tie_finalist_rules_unchanged": True,
+                    "timeouts_capacity_terminals_bound": True,
+                },
+                "phase_1": {
+                    "shared_kernel": "run_cost_ordered_execution",
+                    "only_allowed_difference": "disable_early_stop",
+                    "cost_ordered": {"disable_early_stop": False},
+                    "ordered_exhaustive": {"disable_early_stop": True},
+                    "shared_ledger_order_verifier_attempt_health_reconciliation_cursor": True,
+                },
+                "phase_2": {"status": "PASS", "required_tests": ["deterministic"]},
+            },
+        },
+        "support_audit_pass": True,
+        "search_contract": {
+            "dates": 30, "windows": 65, "consecutive_days": 5,
+            "closure_cost_policy": "closure_cost_v1",
+        },
+        "archives": {
+            "fixture": {"build_key": "fixture",
+                        "variants": {"q10": {}, "q50": {}, "q90": {}}},
+        },
+    })
 
 
 def _write_dummy_evidence(path):
@@ -224,8 +271,11 @@ def _write_not_allowed_phase_report(root, run_dir, filename="phase-report-1.json
     for phase, status in phase_values.items():
         evidence_id = f"{phase}-status"
         references = []
-        if phase in {"phase_3", "phase_4", "phase_5"}:
+        if phase in {"phase_0", "phase_1", "phase_2", "phase_3", "phase_4", "phase_5"}:
             producer_prefix = {
+                "phase_0": "registration-phaseD",
+                "phase_1": "registration-phaseD",
+                "phase_2": "registration-phaseD",
                 "phase_3": "registration-phase3",
                 "phase_4": "registration-phase4",
                 "phase_5": "registration-phase5",
@@ -332,12 +382,12 @@ def test_complete_subhour_config_uses_bounded_staged_evidence():
         ROOT / ".ai-flow" / "config.complete-subhour.toml", ROOT
     )
 
-    assert config.max_review_cycles == 3
+    assert config.max_review_cycles == 8
     assert config.max_review_findings_per_repair == 50
     assert config.evidence_policy is not None
     assert config.evidence_policy.max_generations == 2
     assert config.evidence_policy.max_new_registrations_per_glob == 2
-    assert config.evidence_policy.max_code_repair_cycles == 1
+    assert config.evidence_policy.max_code_repair_cycles == 8
     assert "validation/subhour_bounded_sumo_registration_*.json" in (
         config.evidence_policy.registration_globs
     )
@@ -349,6 +399,7 @@ def test_complete_subhour_config_uses_bounded_staged_evidence():
         "validation/subhour_bounded_sumo_outcome_*.json",
         "validation/monthly_cost_ledger_profile_subhour-*.json",
         "validation/window_cost_index_subhour-*.json",
+        "validation/subhour_qualified_demand_manifest_*.json",
     )
     assert "validation/subhour_full_month_registration_*.json" in (
         config.evidence_policy.phase6_registration_globs
@@ -357,6 +408,17 @@ def test_complete_subhour_config_uses_bounded_staged_evidence():
         config.evidence_policy.source_globs
     )
     assert "web/**/*" in config.evidence_policy.source_globs
+    assert ("python3", "-m", "pytest", "-q", "tests") in config.checks
+    assert any(
+        "tests/test_warm_state_population_semantics.py" in command
+        and "tests/test_simulate_closure_return_arity.py" in command
+        and "tests/test_monthly_warm_state.py" in command
+        and "tests/test_monthly_warm_state_freeze.py" in command
+        and "tests/test_monthly_warm_state_residual_v2.py" in command
+        and "tests/test_monthly_warm_state_v2_freeze.py" in command
+        and "tests/test_monthly_warm_state_v4_freeze.py" in command
+        for command in config.checks
+    )
 
 
 def test_opus_subhour_config_keeps_the_policy_and_pins_requested_routing():
@@ -827,6 +889,15 @@ def test_staged_reserved_verification_review_never_launches_unreviewable_fix(
         for _role, invocation, _prompt in work_calls
         if invocation.startswith("code-review-fix-")
     ] == ["code-review-fix-01"]
+    repair_prompt = next(
+        prompt for _role, invocation, prompt in work_calls
+        if invocation == "code-review-fix-01"
+    )
+    assert "Never weaken the operator-selected ai-flow configuration" in repair_prompt
+    assert "do not remove or narrow configured lint" in repair_prompt
+    assert "do not remove or broaden source, Phase D" in repair_prompt
+    assert "Never start a test or validation command in the background" in repair_prompt
+    assert "controller runs the complete configured suite synchronously" in repair_prompt
     assert not any(
         invocation.startswith("evidence-")
         for _role, invocation, _prompt in work_calls
@@ -835,6 +906,127 @@ def test_staged_reserved_verification_review_never_launches_unreviewable_fix(
     state = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
     assert state["code_review_cycles"] == 2
     assert state["code_repair_cycles"] == 1
+    assert state["evidence_generations"] == 0
+
+
+def test_staged_explicit_extension_reopens_terminal_changes_required_review(
+    tmp_path, monkeypatch
+):
+    """An operator extension spends a newly configured repair slot safely."""
+    initial_policy = replace(
+        _evidence_policy(),
+        max_new_registrations_per_glob=10,
+        max_code_repair_cycles=1,
+    )
+    initial_config = replace(_config(), evidence_policy=initial_policy)
+    (tmp_path / "AGENTS.md").write_text("# Test agents\n", encoding="utf-8")
+    (tmp_path / "source.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (tmp_path / "validation").mkdir()
+    (tmp_path / ".ai-flow").mkdir()
+    monkeypatch.setattr(ai_flow, "git_status", lambda _root: "")
+    monkeypatch.setattr(ai_flow.shutil, "which", lambda command: f"/bin/{command}")
+
+    changes_required = {
+        "status": "CHANGES_REQUIRED",
+        "summary": "repairable defect",
+        "findings": [
+            {
+                "severity": "high",
+                "file": "source.py",
+                "evidence": "reproduced",
+                "required_change": "repair the trust boundary",
+            }
+        ],
+        "blocked_reason": "",
+    }
+    review_results = [dict(changes_required), dict(changes_required)]
+    work_invocations = []
+
+    def fake_codex(_config, role, _root, run_dir, _schema, _prompt,
+                   invocation, *_args, **_kwargs):
+        if role == "planner":
+            result = {"status": "READY", "summary": "plan", "blocked_reason": ""}
+            (run_dir / "plan.json").write_text(
+                json.dumps(result), encoding="utf-8"
+            )
+            return result
+        result = review_results.pop(0)
+        (run_dir / f"{invocation}.json").write_text(
+            json.dumps(result), encoding="utf-8"
+        )
+        return result
+
+    def fake_work(_config, _role, _root, run_dir, _prompt, invocation,
+                  *_args, **_kwargs):
+        work_invocations.append(invocation)
+        if invocation == "code-review-fix-02":
+            return {
+                "status": "BLOCKED",
+                "summary": "test stop after reopening",
+                "changed_files": [],
+                "checks": [],
+                "blockers": ["test stop after reopening"],
+            }
+        result = {
+            "status": "IMPLEMENTED",
+            "summary": "done",
+            "changed_files": [],
+            "checks": [],
+            "blockers": [],
+        }
+        if invocation == "worker-01":
+            (run_dir / "worker-01.json").write_text(
+                json.dumps(result), encoding="utf-8"
+            )
+        return result
+
+    monkeypatch.setattr(ai_flow, "run_codex_role", fake_codex)
+    monkeypatch.setattr(ai_flow, "run_work_role", fake_work)
+    monkeypatch.setattr(
+        ai_flow,
+        "run_checks",
+        lambda *_args, **_kwargs: [
+            {"command": "check", "returncode": 0, "stdout": "", "stderr": ""}
+        ],
+    )
+
+    first = ai_flow.run_flow(
+        initial_config,
+        tmp_path,
+        "build evidence",
+        allow_dirty=False,
+        dry_run=False,
+        extra_checks=(),
+        no_checks=False,
+    )
+    assert first == ai_flow.EXIT_BLOCKED
+    run_dir = next((tmp_path / ".ai-flow" / "runs").iterdir())
+    run_id = run_dir.name
+
+    extended_config = replace(
+        initial_config,
+        evidence_policy=replace(initial_policy, max_code_repair_cycles=3),
+    )
+    second = ai_flow.run_flow(
+        extended_config,
+        tmp_path,
+        "",
+        allow_dirty=False,
+        dry_run=False,
+        extra_checks=(),
+        no_checks=False,
+        resume_run_id=run_id,
+        additional_review_cycles=2,
+    )
+
+    assert second == ai_flow.EXIT_BLOCKED
+    assert work_invocations == [
+        "worker-01",
+        "code-review-fix-01",
+        "code-review-fix-02",
+    ]
+    state = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
+    assert state["code_repair_cycles"] == 2
     assert state["evidence_generations"] == 0
 
 
@@ -1046,6 +1238,178 @@ def test_terminal_report_rejects_status_artifact_mismatch(tmp_path, monkeypatch)
         )
 
 
+def _staged_report_and_state(tmp_path, monkeypatch):
+    """Real, once-valid Phase 0-7 report + the state needed to revalidate it,
+    from a genuine `_staged_flow` run (not a hand-authored fixture)."""
+    _staged_flow(tmp_path, monkeypatch)
+    run_dir = next((tmp_path / ".ai-flow" / "runs").iterdir())
+    state = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
+    report_path = tmp_path / "validation" / "phase-report-1.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    return report, report_path, state
+
+
+def _revalidate(tmp_path, state):
+    policy = _evidence_policy()
+    return ai_flow.validate_post_review_terminal_artifacts(
+        tmp_path, policy, state["code_freeze"], state["phase_3_5_checkpoint"],
+        state["phase_3_5_review"], state["evidence_generation_baseline"],
+    )
+
+
+class TestPhase012DerivedFromQualifiedDemandManifest:
+    """Phases 0-2 used to return an unconditional PASS regardless of any
+    referenced evidence (found by the code review). They must now be
+    mechanically derived from the bound Phase D qualified-demand manifest,
+    exercised here on the real report/producer bytes `_staged_flow` writes
+    (not a mocked derivation unit)."""
+
+    def test_a_manifest_violating_the_frozen_search_contract_is_rejected(
+            self, tmp_path, monkeypatch):
+        _, report_path, state = _staged_report_and_state(tmp_path, monkeypatch)
+        manifest_path = tmp_path / "validation" / "registration-phaseD.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["search_contract"]["dates"] = 29  # was the frozen 30
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        with pytest.raises(ai_flow.FlowError, match="frozen search contract"):
+            _revalidate(tmp_path, state)
+
+    def test_a_manifest_not_bound_to_code_approved_is_rejected(
+            self, tmp_path, monkeypatch):
+        _, report_path, state = _staged_report_and_state(tmp_path, monkeypatch)
+        manifest_path = tmp_path / "validation" / "registration-phaseD.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["code_approved"] = False
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        with pytest.raises(ai_flow.FlowError, match="CODE_APPROVED"):
+            _revalidate(tmp_path, state)
+
+    def test_a_manifest_missing_a_demand_variant_is_rejected(
+            self, tmp_path, monkeypatch):
+        _, report_path, state = _staged_report_and_state(tmp_path, monkeypatch)
+        manifest_path = tmp_path / "validation" / "registration-phaseD.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        del manifest["archives"]["fixture"]["variants"]["q90"]
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        with pytest.raises(ai_flow.FlowError, match="demand variants"):
+            _revalidate(tmp_path, state)
+
+    def test_a_phase_with_no_manifest_reference_at_all_is_rejected(
+            self, tmp_path, monkeypatch):
+        report, report_path, state = _staged_report_and_state(tmp_path, monkeypatch)
+        status_path = Path(report["status_artifacts"]["phase_0"]["path"])
+        status = json.loads(status_path.read_text(encoding="utf-8"))
+        status["references"] = []
+        status["content_key"] = ai_flow._canonical_digest(
+            {key: value for key, value in status.items() if key != "content_key"}
+        )
+        status_path.write_text(json.dumps(status), encoding="utf-8")
+        report["status_artifacts"]["phase_0"].update({
+            "sha256": hashlib.sha256(status_path.read_bytes()).hexdigest(),
+            "content_key": status["content_key"],
+        })
+        report["content_key"] = ai_flow._canonical_digest(
+            {key: value for key, value in report.items() if key != "content_key"}
+        )
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+
+        with pytest.raises(ai_flow.FlowError, match="one qualified-demand manifest"):
+            _revalidate(tmp_path, state)
+
+
+class TestBoundedRunAuthorizationForcesPhase6NotAllowed:
+    """A bounded run must never reach Phase 6/Gate S in this invocation, no
+    matter what the report otherwise claims. `bounded_run_authorization`
+    mechanically forces both terminals instead of trusting a producer's
+    unverified claim that it stopped voluntarily."""
+
+    def test_a_valid_authorization_on_an_already_not_allowed_report_still_passes(
+            self, tmp_path, monkeypatch):
+        report, report_path, state = _staged_report_and_state(tmp_path, monkeypatch)
+        assert report["phases"]["phase_6"] == "NOT_ALLOWED"
+        assert report["phases"]["phase_7"] == "NOT_TRIGGERED"
+        report["bounded_run_authorization"] = {
+            "authorized": True,
+            "reason": "bounded sub-hour run stops after the Phase 3-5 checkpoint",
+        }
+        report["content_key"] = ai_flow._canonical_digest(
+            {key: value for key, value in report.items() if key != "content_key"}
+        )
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+
+        _revalidate(tmp_path, state)  # must not raise
+
+    def test_an_authorization_rejects_any_non_not_allowed_phase6(
+            self, tmp_path, monkeypatch):
+        report, report_path, state = _staged_report_and_state(tmp_path, monkeypatch)
+        report["phases"]["phase_6"] = "INCONCLUSIVE"
+        report["evidence_ids"]["phase_6"] = ["dummy-phase6-evidence"]
+        report["bounded_run_authorization"] = {
+            "authorized": True, "reason": "bounded run",
+        }
+        report["content_key"] = ai_flow._canonical_digest(
+            {key: value for key, value in report.items() if key != "content_key"}
+        )
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+
+        with pytest.raises(ai_flow.FlowError, match="forces Phase 6 to NOT_ALLOWED"):
+            _revalidate(tmp_path, state)
+
+    def test_a_malformed_authorization_without_a_reason_is_rejected(
+            self, tmp_path, monkeypatch):
+        report, report_path, state = _staged_report_and_state(tmp_path, monkeypatch)
+        report["bounded_run_authorization"] = {"authorized": True}
+        report["content_key"] = ai_flow._canonical_digest(
+            {key: value for key, value in report.items() if key != "content_key"}
+        )
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+
+        with pytest.raises(ai_flow.FlowError, match="bounded_run_authorization is malformed"):
+            _revalidate(tmp_path, state)
+
+    def test_controller_ceiling_applies_when_producer_omits_authorization(
+            self, tmp_path, monkeypatch):
+        report, report_path, state = _staged_report_and_state(tmp_path, monkeypatch)
+        assert "bounded_run_authorization" not in report
+        report["phases"]["phase_6"] = "INCONCLUSIVE"
+        report["evidence_ids"]["phase_6"] = ["producer-tried-phase6"]
+        report["content_key"] = ai_flow._canonical_digest(
+            {key: value for key, value in report.items() if key != "content_key"}
+        )
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+
+        with pytest.raises(ai_flow.FlowError,
+                           match="controller execution ceiling forces Phase 6"):
+            _revalidate(tmp_path, state)
+
+
+def test_post_review_evidence_prompt_defers_phase6_to_the_user_task(
+    tmp_path, monkeypatch
+):
+    """The post-review-evidence stage used to hand the fixer an unconditional
+    "you may now continue to Phase 6" instruction -- worded independently of
+    whatever the run's own task text said, so a task that bounds this
+    invocation to stop after the Phase 3-5 checkpoint (as this project's
+    sub-hour plan does) was contradicted by the framework's own boilerplate.
+    The prompt must instead make continuing to Phase 6 conditional on the
+    task not bounding the run, and must instruct the actor to set
+    `bounded_run_authorization` when it does -- so the actor is never told
+    two incompatible things in the same message."""
+    _result, _codex_calls, work_calls = _staged_flow(tmp_path, monkeypatch)
+    post_review_prompts = [
+        prompt for role, invocation, prompt in work_calls
+        if invocation == "evidence-post-review-01"
+    ]
+    assert post_review_prompts, "post-review evidence stage never ran"
+    prompt = post_review_prompts[0]
+    assert "bounded_run_authorization" in prompt
+    assert "MUST NOT register" in prompt
+    assert "Only when the task places no such bound" in prompt
+
+
 def test_terminal_report_rejects_invented_measurement_values(tmp_path, monkeypatch):
     _staged_flow(tmp_path, monkeypatch)
     run_dir = next((tmp_path / ".ai-flow" / "runs").iterdir())
@@ -1065,6 +1429,47 @@ def test_terminal_report_rejects_invented_measurement_values(tmp_path, monkeypat
         )
 
 
+#: Caps a fixture comparison is measured against. Small, explicit numbers so a
+#: fixture that drifts over a cap fails loudly instead of depending on the host.
+_FIXTURE_CAPS = {
+    "peak_rss_bytes": 10**9,
+    "active_seconds": 3600.0,
+    "disk_growth_bytes": 10**9,
+}
+
+
+def _complete_comparison(**overrides):
+    """One paired comparison that satisfies every decision-population gate.
+
+    Derived from `DECISION_POPULATION_GATES` rather than a hand-copied list of
+    flag names: the eligibility rule is shared source, so a fixture that
+    restated it would silently stop exercising the rule the moment a new gate
+    was added -- which is exactly how this fixture went stale before.
+    """
+    comparison = {
+        name: ({"valid": True}
+               if name == "exact_attempt_population_check" else True)
+        for name in DECISION_POPULATION_GATES
+    }
+    comparison.update({
+        "fixture_application": {
+            "applied": True, "arm_inputs_identical": True,
+            "restart_cancel_observed": True, "no_detour_pre_sumo_gate": True,
+        },
+        "cancellation": {
+            "performed": True, "called": True,
+            "queued_work_cancelled": True, "no_later_starter": True,
+        },
+        "peak_rss_bytes": {"cost_ordered": 1024, "ordered_exhaustive": 1024},
+        "active_elapsed_s": {"cost_ordered": 1.0, "ordered_exhaustive": 2.0},
+        "disk_growth_bytes": 16,
+        "disk_growth_bytes_by_arm": {
+            "cost_ordered": 8, "ordered_exhaustive": 8},
+    })
+    comparison.update(overrides)
+    return comparison
+
+
 def test_gate_s_truth_table_requires_eligible_bounded_phase3_when_phase6_not_allowed(
     tmp_path,
 ):
@@ -1080,6 +1485,10 @@ def test_gate_s_truth_table_requires_eligible_bounded_phase3_when_phase6_not_all
             "case_id": "case-1",
             "search_content_key": "case-content",
             "decision_population_complete": True,
+            # Eligibility is RE-DERIVED from these bytes; the flag above is
+            # not taken on trust, so an eligible fixture must carry the real
+            # comparison the rule reads.
+            "comparison": _complete_comparison(),
         }],
         "gate_s": {"population_complete": True,
                     "variants": {"q10": {}, "q50": {}, "q90": {}}},
@@ -1090,6 +1499,7 @@ def test_gate_s_truth_table_requires_eligible_bounded_phase3_when_phase6_not_all
         "selection": {"selected_ids": ["case-content"]},
         "selected_cases": [{"case_id": "case-1",
                              "search_content_key": "case-content"}],
+        "caps": dict(_FIXTURE_CAPS),
     }
     registration["content_key"] = ai_flow._canonical_digest(registration)
     registration_path = tmp_path / "registration.json"
@@ -1117,37 +1527,89 @@ def test_gate_s_truth_table_requires_eligible_bounded_phase3_when_phase6_not_all
 
 
 def test_gate_s_rejects_partial_or_unflagged_decision_population(tmp_path):
+    """The population itself must be the only reason these are rejected.
+
+    This fixture used to omit `registration` entirely, so both halves were
+    refused at the registration binding and neither ever reached the
+    population rule they are named for. Bind a real registration and give
+    every present case a complete comparison, so a future change that stopped
+    checking the population would actually turn these assertions red.
+    """
+    registration = {
+        "schema": "subhour_cost_ordered_bounded_registration_v1",
+        "evidence_id": "bounded-partial-source",
+        "selection": {"selected_ids": ["case-a", "case-b"]},
+        "selected_cases": [
+            {"case_id": "case-1", "search_content_key": "case-a"},
+            {"case_id": "case-2", "search_content_key": "case-b"},
+        ],
+        "caps": dict(_FIXTURE_CAPS),
+    }
+    registration["content_key"] = ai_flow._canonical_digest(registration)
+    registration_path = tmp_path / "partial-registration.json"
+    registration_path.write_text(json.dumps(registration), encoding="utf-8")
+    binding = {
+        "evidence_id": registration["evidence_id"],
+        "content_key": registration["content_key"],
+        "path": str(registration_path),
+        "sha256": hashlib.sha256(registration_path.read_bytes()).hexdigest(),
+    }
+
     source = {
         "schema": "subhour_cost_ordered_bounded_outcome_v1",
         "kind": "subhour_bounded_sumo_outcome",
         "release_evidence": False,
         "status": "INCONCLUSIVE_PERFORMANCE_GATE",
+        "evidence_id": registration["evidence_id"],
+        "registration": binding,
+        "decision_population_complete": True,
         "selection": {"selected_ids": ["case-a", "case-b"]},
         "case_results": [{
             "case_id": "case-1",
             "search_content_key": "case-a",
             "decision_population_complete": True,
+            "comparison": _complete_comparison(),
         }],
         "gate_s": {"population_complete": True,
                     "variants": {"q10": {}, "q50": {}, "q90": {}}},
     }
-    source["content_key"] = ai_flow._canonical_digest({
-        key: value for key, value in source.items() if key != "content_key"
-    })
+
+    def _publish():
+        source["content_key"] = ai_flow._canonical_digest({
+            key: value for key, value in source.items() if key != "content_key"
+        })
+        path.write_text(json.dumps(source), encoding="utf-8")
+
     path = tmp_path / "partial.json"
-    path.write_text(json.dumps(source), encoding="utf-8")
+    # One registered case is missing entirely: a prefix is not a population.
+    _publish()
     assert not ai_flow._phase3_gate_population_is_eligible(
         tmp_path, {"references": [{"path": str(path)}]})
 
+    # Both cases present, but the second is explicitly flagged incomplete.
     source["case_results"].append({
         "case_id": "case-2", "search_content_key": "case-b",
         "decision_population_complete": False,
+        "comparison": _complete_comparison(),
     })
-    source["content_key"] = ai_flow._canonical_digest({
-        key: value for key, value in source.items() if key != "content_key"
-    })
-    path.write_text(json.dumps(source), encoding="utf-8")
+    _publish()
     assert not ai_flow._phase3_gate_population_is_eligible(
+        tmp_path, {"references": [{"path": str(path)}]})
+
+    # Flag repaired, but a real gate in the re-derived comparison is False.
+    # The rule must read the bytes, not the flag.
+    source["case_results"][-1]["decision_population_complete"] = True
+    source["case_results"][-1]["comparison"] = _complete_comparison(
+        restart_equivalent=False)
+    _publish()
+    assert not ai_flow._phase3_gate_population_is_eligible(
+        tmp_path, {"references": [{"path": str(path)}]})
+
+    # Everything genuinely complete: the same fixture must now be eligible,
+    # which is what proves the three refusals above were about the population.
+    source["case_results"][-1]["comparison"] = _complete_comparison()
+    _publish()
+    assert ai_flow._phase3_gate_population_is_eligible(
         tmp_path, {"references": [{"path": str(path)}]})
 
 
@@ -1603,6 +2065,7 @@ def test_staged_final_review_repair_refreezes_generation_two_bytes(tmp_path, mon
         "validation/registration-phase3-2.json",
         "validation/registration-phase4-2.json",
         "validation/registration-phase5-2.json",
+        "validation/registration-phaseD-2.json",
     }
 
 
@@ -3343,3 +3806,49 @@ def test_successful_agent_cannot_leave_an_owned_tool_session_running(
 
     assert signals == [(50001, ai_flow.signal.SIGTERM)]
     assert live == set()
+
+
+def test_unsignalable_owned_tool_session_fails_closed_without_raw_permission_error(
+        tmp_path, monkeypatch):
+    """EPERM must persist an actionable FlowError, never a stale RUNNING run."""
+    from tools import process_census
+
+    class FakeProcess:
+        pid = 43210
+        returncode = None
+
+        def __init__(self):
+            self.calls = 0
+
+        def communicate(self, timeout=None):
+            self.calls += 1
+            if self.calls == 1:
+                raise ai_flow.subprocess.TimeoutExpired("claude", timeout)
+            self.returncode = 0
+            return "structured output", ""
+
+        def poll(self):
+            return self.returncode
+
+    process = FakeProcess()
+
+    def fake_killpg(group, signum):
+        if signum == 0:
+            return
+        raise PermissionError(1, "Operation not permitted", group)
+
+    monkeypatch.setattr(ai_flow.subprocess, "Popen", lambda *_a, **_k: process)
+    monkeypatch.setattr(process_census, "descendant_process_groups",
+                        lambda _pid: {50001})
+    monkeypatch.setattr(ai_flow.os, "killpg", fake_killpg)
+
+    with pytest.raises(
+            ai_flow.FlowError,
+            match=("permission denied while signaling owned process group "
+                   "50001.*refusing to claim it was reaped")):
+        ai_flow.run_process(
+            ["claude"], tmp_path, 120, tmp_path / "child.log",
+            dry_run=False, track_descendant_groups=True)
+
+    assert "structured output" in (tmp_path / "child.log").read_text(
+        encoding="utf-8")

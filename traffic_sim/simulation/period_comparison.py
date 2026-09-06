@@ -7,7 +7,7 @@ from typing import Any, Mapping, Sequence
 from traffic_sim.core.contracts import ClosureSchedule
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def _cost_key(cost: Mapping[str, Any], candidate_id: str) -> tuple:
@@ -29,6 +29,8 @@ def build_period_comparison(
     unavailable_count: int,
     objective_method: str,
     final_decision: Mapping[str, Any] | None = None,
+    deterministic_costs: Sequence[Mapping[str, Any]] | None = None,
+    execution_statuses: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Keep one best viable schedule per rolling start date.
 
@@ -56,6 +58,17 @@ def build_period_comparison(
             or item.get("hard_failures")
         )
         statistics[str(item["candidate_id"])] = normalized
+    priced = {
+        str(item.get("candidate_id")): dict(item["cost"])
+        for item in (deterministic_costs or ())
+        if isinstance(item, Mapping)
+        and item.get("candidate_id")
+        and isinstance(item.get("cost"), Mapping)
+    }
+    statuses = {
+        str(candidate_id): str(status)
+        for candidate_id, status in (execution_statuses or {}).items()
+    }
     grouped: dict[str, list[str]] = {}
     for candidate_id in shortlist_ids:
         schedule = schedules[candidate_id]
@@ -70,19 +83,53 @@ def build_period_comparison(
             for candidate_id in candidate_ids
             if candidate_id in statistics
         ]
-        viable = [
+        sumo_viable = [
             item for item in evaluated
             if item.get("eligible") is True
             and item.get("complete") is True
             and isinstance(item.get("closure_cost"), Mapping)
             and int(item["closure_cost"].get("vehicles_no_detour", 0)) == 0
         ]
-        viable.sort(key=lambda item: _cost_key(
+        sumo_viable.sort(key=lambda item: _cost_key(
             item["closure_cost"], str(item["candidate_id"])
         ))
+        # In cost-ordered mode every scoreable candidate has a deterministic
+        # closure cost before SUMO starts.  Keep those prices visible even
+        # though the valid stop proof intentionally runs SUMO only for the
+        # leading boundary set.  Verified hard failures still supersede the
+        # earlier deterministic price.
+        costed_viable = [
+            {
+                "candidate_id": candidate_id,
+                "closure_cost": priced[candidate_id],
+            }
+            for candidate_id in candidate_ids
+            if candidate_id in priced
+            and int(priced[candidate_id].get("vehicles_no_detour", 0)) == 0
+            and not bool(statistics.get(candidate_id, {}).get("hard_failures"))
+        ]
+        costed_viable.sort(key=lambda item: _cost_key(
+            item["closure_cost"], str(item["candidate_id"])
+        ))
+        viable = costed_viable if deterministic_costs is not None else sumo_viable
         best = viable[0] if viable else None
         best_schedule = (
             schedules[str(best["candidate_id"])] if best is not None else None
+        )
+        best_candidate_id = (
+            str(best["candidate_id"]) if best is not None else None
+        )
+        sumo_verified_count = sum(
+            statuses.get(candidate_id) == "verified"
+            or (not statuses and candidate_id in statistics)
+            for candidate_id in candidate_ids
+        )
+        best_sumo_verified = bool(
+            best_candidate_id
+            and (
+                statuses.get(best_candidate_id) == "verified"
+                or (not statuses and best_candidate_id in statistics)
+            )
         )
         contains_winner = winner_id in candidate_ids if winner_id else False
         contains_tie = bool(ties.intersection(candidate_ids))
@@ -90,8 +137,10 @@ def build_period_comparison(
             status = "best_period"
         elif contains_tie:
             status = "tied_best_period"
+        elif deterministic_costs is not None and best_sumo_verified:
+            status = "sumo_verified"
         elif viable:
-            status = "viable"
+            status = "costed_not_run" if deterministic_costs is not None else "viable"
         elif len(evaluated) == len(candidate_ids):
             status = "no_viable"
         else:
@@ -101,6 +150,10 @@ def build_period_comparison(
             "status": status,
             "candidate_count": len(candidate_ids),
             "evaluated_count": len(evaluated),
+            "deterministic_costed_count": sum(
+                candidate_id in priced for candidate_id in candidate_ids
+            ),
+            "sumo_verified_count": sumo_verified_count,
             "viable_count": len(viable),
             "hard_failed_count": sum(
                 bool(item.get("hard_failures")) for item in evaluated
@@ -117,6 +170,10 @@ def build_period_comparison(
                 best_schedule.day_count if best_schedule is not None else None
             ),
             "contains_final_winner": contains_winner,
+            "best_sumo_verified": best_sumo_verified,
+            "best_execution_status": (
+                statuses.get(best_candidate_id) if best_candidate_id else None
+            ),
         })
 
     best_period = next(
@@ -127,8 +184,15 @@ def build_period_comparison(
         if item["status"] in {"best_period", "tied_best_period"}
     ]
     evaluated_count = sum(item["evaluated_count"] for item in periods)
+    deterministic_costed_count = len(
+        set(shortlist_ids).intersection(priced)
+    )
+    deterministic_comparison_complete = (
+        objective_method in {"closure_cost_v1", "closure_cost_v2"}
+        and deterministic_costed_count == len(shortlist_ids)
+    )
     comparison_complete = (
-        objective_method == "closure_cost_v1"
+        objective_method in {"closure_cost_v1", "closure_cost_v2"}
         and unavailable_count == 0
         and evaluated_count == len(shortlist_ids)
         and all(
@@ -141,9 +205,14 @@ def build_period_comparison(
         "kind": "rolling_closure_period_comparison",
         "objective_method": objective_method,
         "comparison_complete": comparison_complete,
+        "deterministic_comparison_complete": deterministic_comparison_complete,
         "start_date_count": len(periods),
         "candidate_count": len(shortlist_ids),
         "evaluated_count": evaluated_count,
+        "deterministic_costed_count": deterministic_costed_count,
+        "sumo_verified_count": sum(
+            item["sumo_verified_count"] for item in periods
+        ),
         "unavailable_count": unavailable_count,
         "best_start_date": (
             best_period["start_date"] if best_period is not None else None

@@ -461,7 +461,8 @@ def validate_canonical_observation_evidence(
         try:
             closure_routing.validate_access_impact_report(
                 access_report, provenance,
-                transformed_route_path=transformed_route)
+                transformed_route_path=transformed_route,
+                network_path=rs.NET_PATH)
         except closure_routing.ClosureRoutingError as error:
             raise CanonicalObservationTampered(
                 f"canonical observation {digest.sha256} has invalid "
@@ -835,6 +836,7 @@ class ArchivedDemandSumoRunner:
         envelope_policy: EnvelopePolicy = EnvelopePolicy(),
         expected_demand_spec: DemandBuildSpec | None = None,
         include_disruption: bool = False,
+        ranking_objective_evidence: str | None = None,
         warm_execution: bool = False,
         sumo_invoker=None,
         boundary_controller=None,
@@ -947,6 +949,24 @@ class ArchivedDemandSumoRunner:
         if include_disruption is not False and include_disruption is not True:
             raise ValueError("include_disruption must be a bool")
         self.include_disruption = bool(include_disruption)
+        inferred_objective = (
+            "closure_cost_v1" if self.include_disruption
+            else "legacy_time_loss_v1"
+        )
+        self.ranking_objective_evidence = (
+            inferred_objective
+            if ranking_objective_evidence is None
+            else str(ranking_objective_evidence)
+        )
+        allowed_objectives = {
+            "legacy_time_loss_v1", "closure_cost_v1", "closure_cost_v2"
+        }
+        if self.ranking_objective_evidence not in allowed_objectives:
+            raise ValueError("ranking_objective_evidence is unsupported")
+        if self.include_disruption != self.ranking_objective_evidence.startswith(
+                "closure_cost_"):
+            raise ValueError(
+                "ranking_objective_evidence disagrees with include_disruption")
         self.recovery_timeout_s = _configured_recovery_timeout_s()
         # DEFAULT-OFF. Revision 1 exposes this only to the paired validation
         # harness; product, API and monthly-search paths never set it, so the
@@ -1210,11 +1230,7 @@ class ArchivedDemandSumoRunner:
             "baseline_trip_duration_p99_s": (
                 self.baseline_trip_duration_p99_s
             ),
-            "ranking_objective_evidence": (
-                "closure_cost_v1"
-                if self.include_disruption
-                else "legacy_time_loss_v1"
-            ),
+            "ranking_objective_evidence": self.ranking_objective_evidence,
             "timeout_recovery": {
                 "protocol": RETRY_PROTOCOL_TWO_TIER_EXACT,
                 "initial_threshold_s": float(rs.SUMO_TIMEOUT_S),
@@ -1594,6 +1610,44 @@ class ArchivedDemandSumoRunner:
         self._disruption_cache[schedule.schedule_id] = result
         return result
 
+    def _require_routing_disruption_alignment(
+        self,
+        schedule: ClosureSchedule,
+        variant: str,
+        *,
+        rerouted: int,
+        denied: int,
+    ) -> None:
+        """Fail if the SUMO input population differs from the priced one.
+
+        This is deliberately checked at the route-writer boundary for both
+        execution arms. A shared predicate should make the counts equal, but
+        the runtime invariant prevents a later semantic drift from producing
+        apparently valid simulator evidence against an unpriced population.
+        """
+        if not self.include_disruption:
+            return
+        matches = [
+            record for record in self._closure_disruption(schedule)
+            if record.get("demand_variant") == variant
+        ]
+        if len(matches) != 1:
+            raise closure_routing.ClosureRoutingError(
+                "deterministic disruption must contain exactly one record "
+                f"for {schedule.schedule_id!r}/{variant}; found "
+                f"{len(matches)}")
+        record = matches[0]
+        expected_affected = int(record["vehicles_affected"])
+        expected_denied = int(record["vehicles_no_detour"])
+        actual_affected = int(rerouted) + int(denied)
+        if actual_affected != expected_affected or denied != expected_denied:
+            raise closure_routing.ClosureRoutingError(
+                "routing/disruption population mismatch for "
+                f"{schedule.schedule_id!r}/{variant}: writer rerouted="
+                f"{rerouted}, denied={denied}, affected={actual_affected}; "
+                f"costing affected={expected_affected}, "
+                f"no_detour={expected_denied}")
+
     def deterministic_disruption_provider(self, *, cache=None):
         """A process-free cost provider bound to THIS runner's archive.
 
@@ -1621,6 +1675,8 @@ class ArchivedDemandSumoRunner:
             network.adjacency = self._disruption_adjacency
             network.edge_time = self._disruption_edge_time
             network.edge_len = self._disruption_edge_len
+            network.destination_access = rs.destination_access_resolver(
+                network.adjacency)
             provider = ArchiveDisruptionProvider(
                 self.spec,
                 archive=self.archive,
@@ -2095,9 +2151,16 @@ class ArchivedDemandSumoRunner:
                 "work_date": schedule.first_work_date,
                 "vehicle_class": closure_routing.DEFAULT_VCLASS,
             })
+        self._require_routing_disruption_alignment(
+            schedule, variant, rerouted=rerouted, denied=denied)
         truncated, dropped = 0, denied
+        access_impact_payload = json.loads(
+            access_impact_path.read_text(encoding="utf-8"))
         access_impact_sha256 = self._preserve_access_impact_evidence(
             access_impact_path)
+        access_impact_semantic_sha256 = (
+            closure_routing.access_impact_semantic_sha256(
+                access_impact_payload))
         # The route file `reroute_closure_affected_vehicles` just rewrote in
         # place is exactly what SUMO is about to run (below); its digest at
         # THIS moment is the transformed-route evidence, computed the same
@@ -2115,6 +2178,7 @@ class ArchivedDemandSumoRunner:
             seed=seed,
             execution_arm="warm",
             access_impact_sha256=access_impact_sha256,
+            access_impact_semantic_sha256=access_impact_semantic_sha256,
             transformed_route_sha256=transformed_route_sha256,
             rerouted_around_closure=rerouted,
             denied_count=denied,
@@ -2171,6 +2235,15 @@ class ArchivedDemandSumoRunner:
             truncated_unreachable=truncated, dropped_unreachable=dropped,
             summary_path=metric_paths.get("summary"),
             closed_edge_throughput=active_throughput)
+        transformed_population = (
+            int(access_impact_payload["summary"]["unaffected"])
+            + int(access_impact_payload["summary"]["rerouted"]))
+        closure_routing.require_sumo_population_identity(
+            transformed_population,
+            loaded=raw_post_metrics.loaded,
+            inserted=raw_post_metrics.inserted,
+            trip_count=raw_post_metrics.trip_count,
+            context=f"warm/{schedule.schedule_id}/{variant}/seed-{seed}")
         correction = reconcile_resumed_tripinfo(
             metric_paths["tripinfo"], prefix_evidence["active_accumulator"],
             completed_vehicle_ids=sorted(prefix_evidence["completed_records"]),
@@ -2738,6 +2811,12 @@ class ArchivedDemandSumoRunner:
                     f"({variant}/{seed}) produced no routing evidence "
                     f"despite close_edges={self.close_edges!r}; refusing to "
                     "publish a synthetic fallback")
+            self._require_routing_disruption_alignment(
+                schedule,
+                variant,
+                rerouted=cold_records[0]["rerouted_around_closure"],
+                denied=cold_records[0]["dropped_unreachable"],
+            )
             routing_provenance = closure_routing.RoutingProvenance(
                 routing_policy_version=closure_routing.POLICY_VERSION,
                 vehicle_class=closure_routing.DEFAULT_VCLASS,
@@ -2747,6 +2826,11 @@ class ArchivedDemandSumoRunner:
                 demand_variant=variant, seed=seed,
                 execution_arm="cold",
                 access_impact_sha256=cold_records[0]["access_impact_sha256"],
+                access_impact_semantic_sha256=(
+                    closure_routing.access_impact_semantic_sha256(
+                        resolve_access_impact_report(
+                            self.cache_root,
+                            cold_records[0]["access_impact_sha256"]))),
                 transformed_route_sha256=(
                     cold_records[0]["transformed_route_sha256"]),
                 rerouted_around_closure=(

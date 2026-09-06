@@ -28,6 +28,13 @@ def _invocation(tmp_path, **kwargs):
 
 
 class TestInvocation:
+    def test_transient_closure_route_errors_are_tolerated_for_post_run_gates(
+            self, tmp_path):
+        """Hard SUMO closings may raise at insertion before population and
+        closed-edge-throughput checks can evaluate the completed run."""
+        cmd = _invocation(tmp_path)
+        assert cmd[cmd.index("--ignore-route-errors") + 1] == "true"
+
     def test_omitting_the_policy_leaves_argv_untouched(self, tmp_path):
         """Every pre-existing caller passes nothing. If that emitted a flag,
         the warm/cold argv equivalence contract would break everywhere at

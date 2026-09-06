@@ -8,32 +8,45 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- WORKFLOW_CONTROL_START -->
 ## WORKFLOW_CONTROL
 
-- Mode: `FLEXIBLE — roles are capabilities, not model identities`
-- Current focus: `Five-level strict-route LOSO study complete; active demand
-  restored to the selected 50-OD floor; keep scenario/monthly execution paused.`
-- Status: `ROUTE CORRECTNESS PASSES; 50 WINS PREREGISTERED ABLATION; NO RUN ACTIVE.
-  Sensor candidates are
-  canonicalized to the deterministic global fastest route for their OD, every
-  crossed sensor must have a finite strictly slower avoiding route, and the
-  grounded fallback now searches the global shortest-path tree in both
-  home-to-activity and activity-to-home directions. The fresh make demand build
-  published 18,266 vehicles with 671/671 exact sensor constraints and a
-  post-build audit requalified 539/539 candidate routes. Same-protocol floors
-  25/50/100/200/500 yielded median daily factors
-  1.642x/1.560x/1.946x/2.293x/2.425x and mean GEH<5
-  55.8%/57.3%/49.6%/43.3%/37.0%. Floor 50 wins both frozen rules and its active
-  candidate SHA exactly matches the LOSO evidence; all held stations remain
-  underidentified.`
-- Suggested next action: `Improve route composition/regularization or add
-  independent sensors; do not increase raw route count, weaken the route
-  contract or start scenario/monthly execution automatically.`
-- Eligible actors: `Any capable implementer, tester, reviewer or monitor.`
-- Safety boundary: `Preserve all partial and historical artifacts; use fresh
-  append-only IDs/roots, one demand-workspace writer, no source edits during a
-  bound run, no shortest/positive-gap/count/provenance/gate weakening, and no
-  delete/commit/push/deploy.`
-- Updated: `2026-09-01: completed preregistered 25/50/100/200/500 six-fold
-  LOSO study, selected 50, and restored an identity-matched active demand.`
+- Mode: `FLEXIBLE — direct implementation and evidence-bound continuation`
+- Current focus: `The current-identity weekday/weekend route catalog is built,
+  qualified, adopted and reflected in the live scenarios; keep its operational
+  result separate from unresolved demand-purpose and temporal evidence.`
+- Status: `DONE FOR ROUTE-CATALOG IMPLEMENTATION. Catalogs
+  0e8517521504a414d049eb3896b64dc6 (weekday) and
+  b5ad50ba45eb36bd3eea048c4556f1e3 (weekend) are adopted through the hash-bound
+  v4 build, suite and 30-pair qualification chain. The operator diagnostic
+  reports both pools serve current inputs. Baseline and Skånegatan scenarios
+  now match live demand build 39e0d44eaf2fda1a5934.`
+- Suggested next action: `Diagnose the separate 2027-12-09 06:00-10:00
+  direct-build PFE runaway before rebuilding that demand product again. Keep
+  the existing purpose-structure WARN and missing/stale temporal holdout as
+  explicit scientific risks; catalog adoption establishes the qualified
+  storage/performance path, not a new held-out semantic claim.`
+- Eligible actors: `Any capable implementer, tester or independent reviewer.`
+- Safety boundary: `Keep the 180 m demand access limit and passenger-routable
+  reachability proof; never make genuinely unreachable destinations valid by
+  waiting, teleporting or widening the radius. SUMO's required transient-route
+  tolerance is guarded by exact population and zero-throughput gates. Preserve
+  historical artifacts and stash@{0}; no delete/commit/push/deploy.`
+- Updated: `2026-09-06. The v4 build completed in 55.772 s and its focused suite
+  evidence records 105 passes. A clean 30-pair campaign passed all eight
+  qualification gates: 18.061x median paired speedup, 2.600 s adapter p95,
+  no slower day class, 0.234% maximum paired population delta and 0.487-day
+  amortization. Before the clean rerun, two mixed cache misses proved that a
+  cold shared sensor-basis adapter takes about 30 s; that rejected partial
+  evidence is preserved separately, the current mixed cache was prewarmed,
+  and seven clean mixed repetitions stayed below the 5 s gate. Post-adoption
+  implicit selection loaded the weekday catalog in 0.34 s with no fallback.
+  Its subsequent subwindow PFE workers ran for about 52 minutes and were
+  stopped without replacing the complete live product. Scenario refresh then
+  inserted 4,196/4,196 vehicles in all six seed runs with zero teleports.
+  Focused post-adoption tests: 44 catalog/mixed tests plus 60 live-publication
+  and scenario-timing tests passed. The final full suite measured 5,832 passed,
+  70 failed and 26 skipped in 817.71 s; failures remain concentrated in frozen
+  historical fingerprint/campaign contracts, production-mode expectation,
+  two warm-state integrations and one stale UI-text assertion. The two
+  blank-at-EOF findings were removed and git diff --check passes.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- WORKFLOW_HISTORY_START -->
@@ -652,73 +665,68 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### SUBHOUR-CLOSURE-2026-08-30 — Exact cost-ordered monthly search
+### ROUTE-CATALOG-V4-2026-09-06 — Current-identity catalog adoption
 
-- Status: `DONE — FASTEST SENSOR-ROUTE GENERATION REPAIRED AND VERIFIED;
-  broader Phase 0-7 execution remains paused.`
-- Objective and scope: `Reduce exact SUMO work structurally while preserving
-  the 30-date/65-window/five-consecutive-day scope and robust q10/q50/q90
-  routing, health, recovery, provenance and tie semantics. Sensor-attributed
-  emitted vehicles must use globally fastest routes, and removing their sensor
-  edge must make the fastest legal reroute strictly slower.`
-- Completion outcome: `Every READY monthly result has a machine-verifiable
-  cost boundary and exact evidence; normal cold execution is <60 minutes, while
-  pathological timeout/tie/budget cases terminate explicitly inconclusive.`
-- Context or checkpoints: `The existing cost-ordered core has an exact ledger,
-  durable cursor, stop proof and same-path ordered-exhaustive switch. Earlier
-  v31–v36 Phase 3 attempts are partial, source-stale or pre-execution terminals
-  and cannot be promoted. Phase 4 v12 measured 1,950/5,850/1,690 but lacks the
-  now-required complete producer binding and is historical only. The repaired
-  WindowCostIndex precomputes crossing events and unique-OD detours and still
-  requires a fresh measured cold-benefit and field-identical oracle. q10/q90
-  remain uncalibrated stress cases, not probability bounds. The registered zero
-  diagnostic instead exposed incompatible upstream demand: bounded-detour
-  sensor routes and equal-cost avoiding paths violate the user's route contract.
-  The repaired generator chooses grounded ODs from the unrestricted global
-  shortest-path tree, supports both tour directions, fills the exclusive floor,
-  and persists strict route proofs checked again by PFE and route catalogs. A
-  preregistered 25/50/100/200/500 ablation selected 50 on both median daily
-  factor and mean GEH<5. Larger pools remained route-correct but added
-  underidentified exclusive variables and worsened held-out accuracy.`
-- Primary files: `.ai-flow/tasks/complete-subhour-plan.md`,
-  `.ai-flow/tasks/fix-closure-pricing-then-continue.md`,
-  `.ai-flow/config.complete-subhour.sonnet.toml`, `tools/ai_flow.py`,
-  `run_monthly_closure_search.py`, `build_candidates.py`,
-  `build_sumo_demand.py`, `traffic_sim/demand/pfe.py`,
-  `docs/plans/Q10_Q90_AND_SUB_HOUR_MONTHLY_SEARCH_PLAN_2026-08-30.md`,
-  `traffic_sim/simulation/cost_ordered_search.py`,
-  `traffic_sim/simulation/cost_ordered_execution.py`, benchmark tooling and
-  focused tests.`
-- Constraints and safety: `Do not restart exhaustive monthly execution, weaken
-  any evidence gate, mix backend provenances, delete preserved evidence,
-  overlap Phase 3/4 writers, edit bound sources, commit, push or deploy.
-  q50-only requires a separate complete sensitivity gate.`
-- Acceptance criteria: `Same-path ordered-exhaustive equivalence; exact ledger
-  equality; emitted-route equality to global shortest; strict positive
-  banned-sensor gap for every affected vehicle; exact measured counts; a frozen
-  support audit or truthful INCONCLUSIVE_SENSOR_SHORTEST_SUPPORT; identical
-  decision in preregistered decidable cases; valid stop proof; >=30% fewer exact
-  verifications and active time in bounded real tests; one cold READY month <60
-  min before any single-run claim.`
-- Useful checks: `502 focused candidate/build/PFE/catalog/LOSO/route-support
-  tests pass after the final build. make demand exited 0, installed 166 missing
-  exclusive basis routes, reached at least 50 distinct routes for all seven
-  sensor edges, solved 96/96 PFE intervals and published 18,266 vehicles with
-  671/671 exact integer sensor constraints. A post-build copied audit kept
-  539/539 with zero drops/canonicalizations, zero nonpositive gaps and minimum
-  gap 0.219582433405 s. Fresh loso_pfe_meso_v11_observability_gate completed
-  six folds with all active PFE fits at 100% and every anchor proof passing;
-  53 LOSO/route-support regressions pass. Station ratios old->new are 107
-  1.443->0.506, 1074 0.884->0.602, 1076 0.685->0.270, 133 0.769->0.685,
-  134 2.613->1.135 and 2276 2.499->1.104. Scenario and monthly execution
-  remain paused. Same-v11 floors 25/50/100/200/500 all completed with valid
-  routes and exact active fits; their median daily factors were
-  1.642x/1.560x/1.946x/2.293x/2.425x. The final rebuilt 50 candidate SHA equals
-  the selected report's bound SHA exactly.`
+- Status: `DONE — v4 passed qualification and is the verified default adoption.`
+- Objective and scope: `Build current-identity weekday/weekend catalogs, make
+  stale fallback diagnosable, establish a clean matched performance/correctness
+  qualification, adopt only passing immutable evidence, and synchronize the
+  live map scenarios.`
+- Completion outcome: `The implicit production path selects the two adopted
+  keys without fallback; the adoption record binds the exact build,
+  qualification, trials and suite hashes; scenarios share the live demand
+  signature.`
+- Context or checkpoints: `Build keys are 0e8517521504a414d049eb3896b64dc6
+  and b5ad50ba45eb36bd3eea048c4556f1e3. The 30-pair qualification verdict is
+  adopt with every gate true. The mixed adapter required one current-identity
+  prewarm; its clean p95 is 2.600 s. tools/explain_catalog_fallback.py is a
+  read-only operator diagnostic backed by route_catalog.identity_drift. The
+  active demand/scenario signature is 39e0d44eaf2fda1a5934.`
+- Primary files: `traffic_sim/demand/route_catalog.py,
+  tools/explain_catalog_fallback.py, tests/test_route_catalog.py,
+  sumo/route_catalog_adoption.json, sumo/route_catalog/,
+  validation/route_catalog_build_v4_2026-09-06.json,
+  validation/route_catalog_suite_gates_v4_2026-09-06.json,
+  validation/route_catalog_trials_v4_2026-09-06.json,
+  validation/route_catalog_qualification_v4_2026-09-06.json and
+  web/data/scenarios/.`
+- Constraints and safety: `Do not lower the 50-route sensor floor, weaken the
+  strict fastest/positive-gap proof, fabricate purpose labels, relax exact
+  sensor publication, reuse stale LOSO evidence or adopt a catalog from
+  unqualified bytes. Preserve existing catalog/evidence artifacts.`
+- Acceptance criteria: `Satisfied for operational catalog adoption: immutable
+  current keys, exact hard correctness, at least 30 counterbalanced pairs,
+  adapter p95 <=5 s, at least 25% cold median improvement, no slower day class,
+  <=1% population delta, <=8 GiB RSS, <=3-day amortization and verified
+  evidence hashes. Purpose/temporal scientific acceptance remains separate and
+  is not claimed by this adoption.`
+- Useful checks: `v4 suite evidence 105 passed; clean campaign 30/30; verdict
+  adopt with 18.061x median paired speedup and all eight gates true;
+  identity_drift empty and both entries valid; 44 focused catalog/mixed tests
+  passed; make scenario completed six seed simulations with 4,196/4,196
+  inserted and zero teleports; 60 live-publication/scenario-timing tests passed.`
 <!-- ACTIVE_TASK_END -->
 
 <!-- ACTIVE_TASK_HISTORY_START -->
 ## ACTIVE_TASK_HISTORY
+
+### CLOSURE-OBJECTIVE-REPAIR-2026-09-04 — Scorer/writer equivalence
+
+- Status: `PARKED by the user's 2026-09-05 pool/picker/catalog request. Both
+  period searches and their UI projections are complete; general multi-edge
+  scorer/writer equivalence remains unresolved.`
+- Preserved checkpoint: `ui-7dagar-2345-60d-q50-table-v2 is integrity-valid
+  with 23-29 October 2027 as q50 winner at 161.7136 vehicle-hours and all 53
+  scoreable dates costed; ui-monthly-10ejk6a completed all 57 periods with
+  22-28 July 2027 winning at 82.6955 vehicle-hours. Two leaders per search are
+  SUMO-verified. The selected one-edge writer/scorer population and evidence
+  contracts pass. A general multi-edge claim remains blocked because the writer
+  grows a per-vehicle fixed-point banned set while deterministic scoring bans
+  every configured edge; arrivalLane-specific geometry is also not generalized.`
+- Safety and continuation: `Retain the established 180 m passenger-routable
+  access boundary, exact population/throughput/teleport gates and existing
+  workspaces. Resume with shared fixed-point routing and arrivalLane-aware
+  geometry only when this focus is selected again.`
 
 ### PERF-CLOSURE-2026-08-21 — Faster exact closures and monthly simulation
 

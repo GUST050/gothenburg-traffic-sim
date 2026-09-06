@@ -315,6 +315,44 @@ def test_combine_catalogs_prefixes_ids_and_preserves_metadata(tmp_path):
     }
 
 
+def test_combine_catalogs_can_exclude_per_pool_support_routes(tmp_path):
+    sources = {}
+    for pool in ("weekday", "weekend"):
+        rou = tmp_path / f"{pool}.rou.xml"
+        meta = tmp_path / f"{pool}.meta.json"
+        rou.write_text(
+            '<routes>'
+            '<vehicle id="ordinary" depart="0"><route edges="a"/></vehicle>'
+            '<vehicle id="basis" depart="1"><route edges="a"/></vehicle>'
+            '</routes>')
+        document = _strict_metadata("ordinary", ["a"], {"a"})
+        document["candidates"]["basis"] = {
+            **document["candidates"]["ordinary"],
+            "support_only": True,
+        }
+        document["sensor_route_contract"]["qualified_candidates"] = 2
+        meta.write_text(json.dumps(document))
+        sources[pool] = (rou, meta)
+
+    out_rou = tmp_path / "combined.rou.xml"
+    out_meta = tmp_path / "combined.meta.json"
+    report = route_catalog.combine_catalogs(
+        sources, out_rou, out_meta, exclude_support_only=True)
+
+    combined = json.loads(out_meta.read_text())
+    assert report == {
+        "vehicles": 2,
+        "location_pools": 0,
+        "excluded_support_only": 2,
+    }
+    assert set(combined["candidates"]) == {
+        "weekday__ordinary", "weekend__ordinary"
+    }
+    assert {v.get("id") for v in ET.parse(out_rou).getroot().findall("vehicle")} == {
+        "weekday__ordinary", "weekend__ordinary"
+    }
+
+
 class TestCatalogSourceContract:
     """The catalog identity binds pool generation, and nothing downstream.
 
@@ -429,3 +467,60 @@ class TestCatalogSourceContract:
                                 capture_output=True, text=True, timeout=600)
         assert result.returncode == 0, result.stderr[-2000:]
         assert result.stdout.strip().endswith("[]"), result.stdout
+
+
+def test_identity_drift_names_what_changed_instead_of_only_reporting_stale(tmp_path):
+    """A stale key must say WHICH component drifted.
+
+    ``adopted_key_stale_for_current_inputs`` is true but mute: on 2026-09-06
+    the production catalog had been silently falling back to the legacy
+    builder, and finding the cause meant re-hashing the whole identity
+    inventory by hand (four of twenty-three components had moved). The
+    fallback path already holds both identities, so it can name them.
+    """
+    config, inputs, sources = _identity_inputs(tmp_path)
+    identity = route_catalog.catalog_identity_payload(
+        config, inputs, sources, pool_key="weekday")
+    key = route_catalog.catalog_key(config, inputs, sources, pool_key="weekday")
+    destinations = {
+        label: tmp_path / "dest" / label for label in route_catalog.OUTPUTS
+    }
+
+    def builder(work):
+        (work / "catalog.rou.xml").write_text(
+            '<routes><vehicle id="t0" depart="0"><route edges="sensor"/></vehicle></routes>')
+        (work / "catalog.meta.json").write_text(
+            json.dumps(_strict_metadata(
+                "t0", ["sensor"], {"sensor"}, purpose="through")))
+        (work / "catalog.validation.json").write_text(json.dumps({
+            "sensor": {"total": 1, "unique_routes": 1,
+                       "unique_od_pairs": 1, "cross_1": 0,
+                       "cross_2": 0, "cross_3plus": 0}
+        }))
+        (work / "catalog.template.json").write_text(json.dumps({
+            "schema_version": 1, "pool_key": "weekday", "templates": 1,
+            "semantic_sha256": "a" * 64,
+        }))
+        return {label: work / label for label in route_catalog.OUTPUTS}
+
+    root = tmp_path / "catalog"
+    assert route_catalog.ensure_catalog(root, key, identity, destinations, builder)
+
+    assert route_catalog.identity_drift(root, key, identity) == []
+
+    sources["build_candidates"].write_text("print('rebuilt builder')")
+    inputs["network"].write_text("network v2")
+    moved = route_catalog.catalog_identity_payload(
+        config, inputs, sources, pool_key="weekday")
+    assert route_catalog.identity_drift(root, key, moved) == [
+        "inputs.network", "source_files.build_candidates"]
+
+    changed_config = dict(config, n_total=200)
+    assert "config.n_total" in route_catalog.identity_drift(
+        root, key,
+        route_catalog.catalog_identity_payload(
+            changed_config, inputs, sources, pool_key="weekday"))
+
+    # A diagnostic on an already-failing path must never raise itself.
+    assert route_catalog.identity_drift(root, "f" * 32, identity) == [
+        "stored_identity_unavailable"]

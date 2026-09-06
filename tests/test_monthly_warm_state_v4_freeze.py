@@ -191,12 +191,14 @@ class TestStateSettingsContract:
         assert settings["save_state_precision"] == STATE_PRECISION
         assert settings["save_state_rng"] is STATE_RNG_SAVED
 
-    def test_the_recorded_argv_passes_the_production_validator(self):
+    def test_the_recorded_argv_is_preserved_but_retired(self):
         from traffic_sim.simulation.warm_state_boundary import (
-            validate_snapshot_command)
+            BoundaryLedgerError, validate_snapshot_command)
         argv = ["sumo", *_load()["state_settings"]["snapshot_arguments"]]
-        assert validate_snapshot_command(argv) == {
-            "save_state_rng": True, "save_state_precision": 16}
+        assert argv == ["sumo", "--save-state.rng", "true",
+                        "--save-state.precision", "16"]
+        with pytest.raises(BoundaryLedgerError, match="--precision"):
+            validate_snapshot_command(argv)
 
     def test_the_runner_appends_the_settings_to_its_prefix_command(self):
         """Structural: the actual snapshot command, not a claim about it."""
@@ -234,11 +236,11 @@ class TestHypothesisIsStatedAsUnproven:
 
 class TestSchemasAndSourceBinding:
 
-    def test_the_live_schemas_are_recorded(self):
+    def test_the_recorded_schema_is_frozen_and_no_longer_live(self):
         from traffic_sim.simulation.monthly_warm_state import (
             PREFIX_EVIDENCE_SCHEMA)
-        assert _load()["prefix_evidence_schema"] == PREFIX_EVIDENCE_SCHEMA
         assert _load()["prefix_evidence_schema"] == "monthly_prefix_evidence_v3"
+        assert _load()["prefix_evidence_schema"] != PREFIX_EVIDENCE_SCHEMA
 
     def test_the_accounting_advanced_beyond_the_retired_parent(self):
         assert _load()["prefix_evidence_schema"] != \

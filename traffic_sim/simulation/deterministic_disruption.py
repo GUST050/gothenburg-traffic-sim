@@ -50,12 +50,18 @@ from typing import Any, Mapping, Protocol, Sequence
 
 from traffic_sim.core.contracts import ClosureSchedule, ClosureSearchSpec
 from traffic_sim.core.fingerprint import sha256_file
-from traffic_sim.simulation.closure_ranking import ClosureCost, worst_variant_cost
+from traffic_sim.simulation.closure_ranking import (
+    ClosureCost,
+    LEGACY_WORST_COST_OBJECTIVE,
+    reduce_variant_cost,
+    worst_variant_cost,
+)
+from traffic_sim.simulation.disruption import DestinationAccessResolver
 from traffic_sim.simulation.metadata import build_metadata, load_metadata
 
 #: Version of the deterministic disruption contract. Any change to how a
 #: record is computed or shaped must bump it; it is part of every cache key.
-DISRUPTION_SCHEMA = "deterministic_closure_disruption_v2"
+DISRUPTION_SCHEMA = "deterministic_closure_disruption_v4"
 
 #: Version of the on-disk daily-cost cache.
 DAILY_COST_CACHE_SCHEMA = "deterministic_daily_cost_cache_v1"
@@ -79,6 +85,7 @@ COSTING_SOURCES = (
     "traffic_sim/simulation/disruption.py",
     "traffic_sim/simulation/deterministic_disruption.py",
     "traffic_sim/simulation/closure_ranking.py",
+    "traffic_sim/simulation/metadata.py",
 )
 
 
@@ -251,6 +258,14 @@ class NetworkCostModel:
             edge_len[edge_id] = length
         self.edge_time = edge_time
         self.edge_len = edge_len
+        permitted_edges = set(self.adjacency)
+        permitted_edges.update(
+            successor
+            for successors in self.adjacency.values()
+            for successor in successors
+        )
+        self.destination_access = DestinationAccessResolver(
+            self.network_path, permitted_edges=permitted_edges)
 
     def verify_current(self) -> None:
         """Fail if the model's parsed bytes moved after construction."""
@@ -574,14 +589,19 @@ class ArchiveDisruptionProvider:
         records: list[Mapping[str, Any]] = []
         for variant in DEMAND_VARIANTS:
             try:
+                call_kwargs = {"adj": self.network.adjacency,
+                               "timing": self._record_timing}
+                destination_access = getattr(
+                    self.network, "destination_access", None)
+                if destination_access is not None:
+                    call_kwargs["destination_access"] = destination_access
                 report = rs.closure_disruption(
                     self.inputs.variant_paths[variant],
                     closed,
                     closures,
                     self.network.edge_time,
                     self.network.edge_len,
-                    adj=self.network.adjacency,
-                    timing=self._record_timing,
+                    **call_kwargs,
                 )
             except TypeError as error:
                 # Keep compatibility with a deliberately tiny test double or
@@ -678,6 +698,21 @@ def sum_daily_disruption(
                 int(item.get("vehicles_considered", 0)) for item in records),
             "vehicles_no_detour": sum(
                 int(item["vehicles_no_detour"]) for item in records),
+            "vehicles_denied_departure": sum(
+                int(item.get("vehicles_denied_departure", 0))
+                for item in records),
+            "vehicles_severed_destination": sum(
+                int(item.get("vehicles_severed_destination", 0))
+                for item in records),
+            "vehicles_destination_relocated": sum(
+                int(item.get("vehicles_destination_relocated", 0))
+                for item in records),
+            "destination_relocation_metres_total": round(sum(
+                float(item.get("destination_relocation_metres_total", 0.0))
+                for item in records), 1),
+            "destination_relocation_metres_max": max(
+                (float(item.get("destination_relocation_metres_max", 0.0))
+                 for item in records), default=0.0),
             "added_vehicle_hours": round(sum(
                 float(item["added_vehicle_hours"]) for item in records), 4),
             "added_metres_total": round(sum(
@@ -692,10 +727,15 @@ def sum_daily_disruption(
 def parent_closure_cost(
     candidate_id: str,
     daily_records: Sequence[Sequence[Mapping[str, Any]]],
+    *,
+    objective_method: str = LEGACY_WORST_COST_OBJECTIVE,
 ) -> ClosureCost:
-    """Sum per variant, then take the field-wise worst — in that order."""
-    return worst_variant_cost(
-        candidate_id, list(sum_daily_disruption(daily_records)))
+    """Sum per variant, then apply the versioned variant reduction."""
+    return reduce_variant_cost(
+        candidate_id,
+        list(sum_daily_disruption(daily_records)),
+        objective_method,
+    )
 
 
 def disqualification_evidence(

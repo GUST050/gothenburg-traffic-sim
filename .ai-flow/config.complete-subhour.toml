@@ -1,12 +1,14 @@
 version = 1
-max_review_cycles = 3
-max_test_fix_cycles = 5
-max_blocker_repair_cycles = 4
+max_review_cycles = 8
+max_test_fix_cycles = 12
+max_blocker_repair_cycles = 8
 max_review_findings_per_repair = 50
-agent_timeout_seconds = 7200
-check_timeout_seconds = 3600
+agent_timeout_seconds = 14400
+check_timeout_seconds = 7200
 
 [evidence]
+allow_phase6 = false
+allow_gate_s = false
 source_globs = [
   "*.py",
   "tools/**/*.py",
@@ -28,6 +30,7 @@ registration_globs = [
   "validation/subhour_bounded_sumo_outcome_*.json",
   "validation/monthly_cost_ledger_profile_subhour-*.json",
   "validation/window_cost_index_subhour-*.json",
+  "validation/subhour_qualified_demand_manifest_*.json",
   "validation/subhour_full_month_registration_*.json",
   "validation/subhour_full_month_outcome_*.json",
   "validation/subhour_gate_s_registration_*.json",
@@ -42,6 +45,7 @@ phase_checkpoint_globs = [
   "validation/subhour_bounded_sumo_outcome_*.json",
   "validation/monthly_cost_ledger_profile_subhour-*.json",
   "validation/window_cost_index_subhour-*.json",
+  "validation/subhour_qualified_demand_manifest_*.json",
 ]
 phase6_registration_globs = [
   "validation/subhour_full_month_registration_*.json",
@@ -57,7 +61,7 @@ max_generations = 2
 max_new_registrations_per_glob = 2
 # One all-findings repair is allowed. A second, reserved review must approve
 # that repair or the run stops before evidence.
-max_code_repair_cycles = 1
+max_code_repair_cycles = 8
 
 [roles.planner]
 runner = "codex"
@@ -99,5 +103,8 @@ prompt = ".ai-flow/prompts/fixer.md"
 [checks]
 commands = [
   ["git", "diff", "--check"],
-  ["python3", "-m", "pytest", "-q", "tests/test_ai_flow.py", "tests/test_process_census.py", "tests/test_product_arm.py", "tests/test_profile_monthly_cost_ledger.py", "tests/test_window_cost_index.py", "tests/test_subhour_cost_ordered_contracts.py", "tests/test_cost_ordered_benchmark.py", "tests/test_cost_ordered_benchmark_discovery.py", "tests/test_cost_ordered_benchmark_provenance.py", "tests/test_cost_ordered_benchmark_run.py", "tests/test_cost_ordered_benchmark_suite.py", "tests/test_cost_ordered_search.py", "tests/test_cost_ordered_execution.py", "tests/test_cost_ordered_execution_review.py", "tests/test_monthly_demand.py", "tests/test_monthly_search.py", "tests/test_monthly_sumo.py", "tests/test_monthly_progress_contract.py", "tests/test_direction_decision_sensitivity.py", "tests/test_serve.py"],
+  ["make", "lint"],
+  ["python3", "-m", "pytest", "-q", "tests/test_ai_flow.py", "tests/test_process_census.py", "tests/test_product_arm.py", "tests/test_profile_monthly_cost_ledger.py", "tests/test_window_cost_index.py", "tests/test_subhour_cost_ordered_contracts.py", "tests/test_cost_ordered_benchmark.py", "tests/test_cost_ordered_benchmark_discovery.py", "tests/test_cost_ordered_benchmark_provenance.py", "tests/test_cost_ordered_benchmark_run.py", "tests/test_cost_ordered_benchmark_suite.py", "tests/test_cost_ordered_search.py", "tests/test_cost_ordered_execution.py", "tests/test_cost_ordered_execution_review.py", "tests/test_closure_disruption.py", "tests/test_deterministic_disruption.py", "tests/test_closure_routing.py", "tests/test_closure_access_impact.py", "tests/test_verify_closure_routing_frozen_units.py", "tests/test_build_candidates.py", "tests/test_build_sumo_demand.py", "tests/test_pfe.py", "tests/test_pfe_kernel.py", "tests/test_demand_provenance.py", "tests/test_route_catalog.py", "tests/test_catalog_qualification.py", "tests/test_candidate_cache.py", "tests/test_singleflight.py", "tests/test_day_library.py", "tests/test_q50_subset_identity.py", "tests/test_warm_state_cache.py", "tests/test_warm_state_sumo_equivalence.py", "tests/test_qualify_subhour_demand.py", "tests/test_monthly_demand.py", "tests/test_monthly_search.py", "tests/test_monthly_sumo.py", "tests/test_monthly_progress_contract.py", "tests/test_direction_decision_sensitivity.py", "tests/test_serve.py", "tests/test_serve_publish.py", "tests/test_scenario.py", "tests/test_validation_report.py"],
+  ["python3", "-m", "pytest", "-q", "tests/test_simulate_closure_return_arity.py", "tests/test_monthly_warm_state.py", "tests/test_monthly_warm_state_freeze.py", "tests/test_monthly_warm_state_residual_v2.py", "tests/test_monthly_warm_state_v2_freeze.py", "tests/test_monthly_warm_state_v4_freeze.py", "tests/test_monthly_warm_state_v5_freeze.py", "tests/test_monthly_warm_state_v6_freeze.py", "tests/test_monthly_warm_state_v7_freeze.py", "tests/test_monthly_warm_state_v8_freeze.py", "tests/test_monthly_warm_state_v9_freeze.py", "tests/test_monthly_warm_state_v10_freeze.py", "tests/test_monthly_warm_state_v11_freeze.py", "tests/test_monthly_warm_state_v12_freeze.py", "tests/test_monthly_warm_state_v13_freeze.py", "tests/test_monthly_warm_state_v14_freeze.py", "tests/test_monthly_warm_state_v15_freeze.py", "tests/test_monthly_warm_state_v16_freeze.py", "tests/test_warm_state_population_semantics.py"],
+  ["python3", "-m", "pytest", "-q", "tests"],
 ]

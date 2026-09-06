@@ -7,41 +7,342 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `FASTEST SENSOR-ROUTE GENERATION AND DEMAND PASS;
-  PREREGISTERED 25/50/100/200/500 LOSO SELECTS 50; active demand restored,
-  scenario/monthly execution paused and no process active.`
-- Summary: `The fallback bug is fixed using Claude's network finding. It no
-  longer constructs a forced-via path with other sensors removed and compares
-  that against the unrestricted optimum. It scans the deterministic global
-  shortest-path tree for grounded ODs whose canonical route already crosses
-  exactly the target sensor, checks a finite strictly slower target-avoiding
-  tree, and includes both home->activity and activity->home legs. Candidate
-  qualification, PFE and route catalogs share a versioned proof contract.`
-- Files changed: `build_candidates.py`, `build_sumo_demand.py`,
-  `traffic_sim/demand/sensor_route_contract.py`, `traffic_sim/demand/pfe.py`,
-  `demand/calibration.py`, `traffic_sim/demand/route_catalog.py`, affected tests,
-  `ARCHITECTURE.md`, `TASKS.md` and this block. New diagnostic output:
-  five LOSO reports plus validation/sensor_od_ablation_20260901_plan.json and
-  validation/sensor_od_ablation_20260901_result.json. The older
-  web/data/loso_report.json remains byte-unmodified. Unrelated dirty files and
-  all historical artifacts remain preserved.`
-- Checks: `User-authorized make demand exited 0. It installed 166 grounded
-  routes, produced 539 candidates, solved 96/96 PFE intervals with zero
-  infeasibles, and published 18,266 vehicles with 671/671 exact integer sensor
-  constraints. A post-build audit on copied outputs recomputed all routes:
-  539/539 kept, zero drops/canonicalizations, every sensor has 50-133 distinct
-  routes, zero nonpositive gaps and minimum gap 0.219582433405 s. A combined
-  502-test candidate/build/PFE/catalog/LOSO/route-support suite passes. Fresh
-  six-fold v11 LOSO exited 0; all active-sensor PFE fits and sensor-anchor
-  proofs pass and all six held stations remain underidentified. Compared with the
-  preserved v6 report, median multiplicative daily error changed 1.451x->1.560x
-  while mean GEH<5 changed 48.4%->57.3%. Same-v11 floors
-  25/50/100/200/500 yielded median daily factors
-  1.642x/1.560x/1.946x/2.293x/2.425x and mean GEH<5
-  55.8%/57.3%/49.6%/43.3%/37.0%; all six held stations remain underidentified.
-  The active 50-floor demand was rebuilt and re-audited: 539/539 proofs pass,
-  minimum positive gap 0.219582433405 s, and candidate SHA exactly matches the
-  selected LOSO report. One LibreSSL environment warning.`
+- Focus and status: `ROUTE CATALOG V4 ADOPTED. The current weekday/weekend
+  entries pass their immutable evidence contract and the live scenarios match
+  the active demand build.`
+- Summary: `Catalogs 0e8517521504a414d049eb3896b64dc6 and
+  b5ad50ba45eb36bd3eea048c4556f1e3 were built on current generator/input
+  identity, qualified through 30 clean paired trials and adopted in the schema-3
+  default record. The new read-only tools/explain_catalog_fallback.py reports
+  both adopted pools serve current inputs and names component-level drift when
+  they do not. Baseline and Skånegatan scenarios were rebuilt for demand
+  39e0d44eaf2fda1a5934.`
+- Files changed: `traffic_sim/demand/route_catalog.py and
+  tests/test_route_catalog.py contain the identity-drift and mixed-support
+  behavior; tools/explain_catalog_fallback.py is new. Generated v4 build,
+  suite, clean trials and qualification evidence plus
+  sumo/route_catalog_adoption.json and the mixed adapter cache were produced.
+  web/data/scenarios/ and web/data/validation.json were refreshed. TASKS.md
+  and this block reflect the completed adoption. Unrelated dirty files remain
+  untouched.`
+- Checks: `Build 55.772 s. Suite gates: 105 passed. Qualification: 30 pairs,
+  verdict adopt, all eight gates true, 18.061x median paired speedup,
+  adapter p95 2.600 s, no slower day class, max population delta 0.234%,
+  amortization 0.487 days and max RSS 0.862 GB. Both current manifest drift
+  lists are empty and both entries validate. Focused post-adoption tests:
+  44 catalog/mixed tests passed and 60 live-publication/scenario-timing tests
+  passed. make scenario inserted 4,196/4,196 vehicles in six seed runs with
+  zero teleports. Final full suite: 5,832 passed, 70 failed, 26 skipped and two
+  warnings in 817.71 s; git diff --check and staged JSON validation pass.`
+- Decisions and evidence: `An initial campaign became irreversibly rejectable
+  after two cold mixed adapter values near 30 s. It was stopped and preserved;
+  the current-identity mixed sensor-basis cache was prewarmed and independently
+  restored in 2.818 s before a new from-zero campaign. A competing resume had
+  reused the rejected pairs and was also stopped; its 21-pair artifact is
+  preserved separately. Only the clean from-zero 30-pair file is bound into
+  v4 qualification/adoption.`
+- Blockers or risks: `Catalog adoption is complete. The broader demand model
+  still has the previously documented purpose-structure WARN and stale/missing
+  temporal holdout; no fresh scientific claim is made from catalog adoption.
+  A post-adoption direct 2027-12-09 06:00-10:00 build proved implicit catalog
+  selection in 0.34 s, then exposed a separate PFE runaway: ten workers used
+  about 52 minutes CPU before manual interruption. The prior complete live
+  product remained intact. The final 70 full-suite failures are concentrated
+  in frozen historical fingerprint/campaign records, an exhaustive-vs-cost-
+  ordered production-mode expectation, two warm-state integrations and one
+  stale UI-label assertion; the suite is not green and this commit must not be
+  described as such.`
+- Suggested next action: `Diagnose the subwindow PFE runaway without changing
+  catalog identity or adoption evidence. Separately decide whether to expand
+  the simulation boundary/endpoints or revise the purpose contract before any
+  new held-out semantic claim.`
+- Actor notes: `No commit, push, deploy or monthly campaign launch occurred.
+  The stale v3 adoption was replaced by passing v4 evidence. One orphan temp
+  snapshot was consumed to restore the known 4,196-vehicle live release; the
+  rejected benchmark artifacts remain available under validation/.`
+<!-- CURRENT_HANDOFF_END -->
+
+<!-- CURRENT_HANDOFF_HISTORY_START -->
+## CURRENT_HANDOFF_HISTORY
+
+- Focus and status: `CODE STABILIZATION PASS: repaired the 5-finding
+  CHANGES_REQUIRED review of Phase C (strict candidate/catalog adapter, the
+  new Phase D producer/validator, and the tools/ai_flow.py controller
+  repairs — all three of which now exist in the tree, superseding the
+  "NOT STARTED" line below from an earlier pass). Findings 1
+  (tools/qualify_subhour_demand.py "does not exist"), 3
+  (validate_mixed_catalog_candidates trusting a self-consistent forged
+  proof) and 5 (no run-local impact inventory) were already resolved by
+  intervening work and were reverified fresh, not re-fixed: the Phase D
+  module (375 lines) and its 17-test suite exist and pass;
+  `independent_mixed_catalog_route_failures` independently recomputes
+  legality/cost/detour from the live graph and `TestValidateMixedCatalog
+  CandidatesRealRejection` in tests/test_build_sumo_demand.py exercises
+  forged/disconnected/mismatched-OD proofs against it; and
+  `.ai-flow/runs/20260902-124153-20764/impact_inventory.md` is a real
+  hash-cross-checked changed-file matrix. Findings 2 and 4 had genuine
+  residual gaps and were fixed this pass: (2) the `post_review_evidence`
+  stage's fixer prompt in tools/ai_flow.py unconditionally said "you may
+  now continue to Phase 6" with no reference to a bounded run, contradicting
+  this task's explicit stop-after-checkpoint instruction even though the
+  mechanical `bounded_run_authorization` report-validation gate (already
+  present) would still have rejected an actual Phase 6 attempt — reworded
+  the prompt to defer to the user task and require
+  `bounded_run_authorization` when it bounds the run, plus a new regression
+  test (`test_post_review_evidence_prompt_defers_phase6_to_the_user_task`)
+  that captures the real composed prompt via `_staged_flow`'s existing
+  `work_calls` hook and asserts the conditional wording is present; (4) the
+  configured check suite in all three sibling configs
+  (`config.complete-subhour.{sonnet,opus,}.toml` — a pre-existing test pins
+  them to identical `[checks]`) was missing the test modules for two
+  directly-changed/new files (`tests/test_route_catalog.py`,
+  `tests/test_qualify_subhour_demand.py`) and their broader transitive
+  consumers; added all of them to the three configs identically.`
+- Summary: `This is a code-stabilization repair pass responding to a
+  CHANGES_REQUIRED independent review of Phase C (5 findings). Re-audited
+  each finding against the CURRENT tree rather than trusting the review's
+  line numbers, because the tree had moved on since the review was
+  generated: tools/qualify_subhour_demand.py, tools/ai_flow.py's
+  `_derive_phase012_status`/`bounded_run_authorization` mechanism, and
+  `.ai-flow/runs/20260902-124153-20764/impact_inventory.md` already existed
+  and already did real, tested work — findings 1/3/5 were stale by the time
+  this pass started. Verified rather than assumed: ran
+  tests/test_qualify_subhour_demand.py (17 passed),
+  tests/test_build_sumo_demand.py's mixed/independent-recomputation classes
+  (12 passed, including forged-OD/disconnected-route/stale-network-hash
+  rejections raised by the real `validate_mixed_catalog_candidates`, not a
+  fixture), and tests/test_route_catalog.py (14 passed). Findings 2 and 4
+  had real residual gaps and were fixed here (see Focus and status above for
+  the exact defect and fix in each).`
+- Files changed this pass: `tools/ai_flow.py` (post_review_evidence stage
+  prompt, +~10 lines net), `tests/test_ai_flow.py` (+1 new regression test),
+  `.ai-flow/config.complete-subhour.sonnet.toml` +
+  `.ai-flow/config.complete-subhour.opus.toml` +
+  `.ai-flow/config.complete-subhour.toml` (identical `[checks]` expansion,
+  required by `test_opus_subhour_config_keeps_the_policy_and_pins_requested_routing`
+  / `test_sonnet_subhour_config_keeps_the_policy_and_pins_requested_routing`,
+  which pin all three to the same check list), and this block +
+  `.ai-flow/runs/20260902-124153-20764/impact_inventory.md`. No Phase D/3/4/5
+  evidence, no other production source, and no other already-dirty file was
+  touched; TASKS.md/AGENT_NOTES.md's other content, the append-only
+  `validation/route_catalog_*_2026-09-02.json` v1/v2/v3 chain,
+  `web/data/*`, and `ui-monthly-routing-v4-20260830` are unchanged and
+  preserved.`
+- Checks: `Targeted: tests/test_ai_flow.py (122 passed, 0 failed — the new
+  test plus the full bounded-run/Phase-0-2 suites), tests/test_build_sumo_demand.py
+  mixed/independent-recomputation classes (12 passed), tests/test_route_catalog.py
+  (14 passed), tests/test_qualify_subhour_demand.py (17 passed). The
+  configured (now-expanded, all-3-configs-synced) check suite: 1810 passed, 2
+  skipped (both pre-existing environment-conditional skips unrelated to this
+  diff — `tests/test_cost_ordered_benchmark_provenance.py:360` needs a gate
+  record not present locally, `tests/test_scenario.py:763` needs a baseline +
+  closure scenario not present locally), 0 failed. Full
+  `python3 -m pytest -q tests`: 164 failed, 5655 passed, 27 skipped
+  (798.49s) — comparable to the prior pass's 165 failed/~5609 passed
+  baseline (small run-to-run count drift on the same unaffected groups,
+  consistent with local subprocess/artifact non-determinism in those tests,
+  not a regression). `grep`-checked every one of the 19 distinct failing
+  test FILES (a superset of the 4 groups the prior pass sampled) for an
+  import of tools/ai_flow.py, traffic_sim/demand/route_catalog.py,
+  traffic_sim/simulation/monthly_demand.py, build_sumo_demand.py or
+  tools/qualify_subhour_demand.py — zero hits. Spot-checked the 4 groups not
+  previously sampled (test_closure_cost_ordering_golden.py,
+  test_independent_daily.py, test_heldout_v6_freeze.py,
+  test_benchmark_closure_search_scaling.py): all fail on frozen historical
+  source-digest comparisons against unrelated tracked files
+  (traffic_sim/simulation/closure_teleport.py, closure_preflight.py,
+  traffic_sim/core/contracts.py, run_monthly_*.py) that are not part of this
+  or any prior pass's dirty diff — the same pre-existing frozen-evidence
+  source-drift pattern this repo already documents elsewhere, not a new
+  defect. `git diff --check` clean. `make lint`: the same
+  2 pre-existing findings as the prior pass, both in
+  run_monthly_proxy_validation.py (unbalanced-tuple-unpacking against
+  suggest_closure_time.py's 5-tuple return) — reconfirmed neither file is
+  part of this or any prior pass's dirty tree (both last touched at base
+  commit 3f20d70), so both remain documented-unaffected, not repaired.`
+- Decisions and evidence: `Did not rebuild or re-verify the strict
+  candidate/catalog adapter's own correctness (route legality, cost, sensor
+  detour) from scratch — that was already independently re-audited and
+  covered by real integration tests in the prior pass recorded in
+  CURRENT_HANDOFF_HISTORY below, and findings 1/3 confirmed that work is
+  still intact rather than reopening it. The two real fixes were scoped
+  narrowly: (2) reworded only the post_review_evidence prompt text, leaving
+  the already-correct mechanical `_derive_phase012_status`/
+  `bounded_run_authorization` enforcement in `_derive_report_phase_status`
+  untouched, because that enforcement was already sound and tested; (4)
+  added test modules to the check-suite lists rather than removing or
+  loosening anything, and applied the identical edit to all three sibling
+  configs after `test_sonnet_subhour_config_keeps_the_policy_and_pins_requested_routing`
+  failed on a checks-list mismatch, confirming the three-way sync
+  requirement is itself enforced, not just conventional.`
+- Blockers or risks: `No genuine blocker. All 5 supplied findings are now
+  repaired (1/3/5 reverified intact, 2/4 fixed). Independent review of this
+  pass is the correct next step before CODE_APPROVED. Phase D's manifest has
+  still never been produced, tools/ai_flow.py's Phase 0-2/6/7 derivation has
+  still never been exercised end-to-end against a real Phase D manifest, and
+  Phase 3-5 have not run — all remain unverified evidence actions reserved
+  for the controller after CODE_APPROVED, not failures of this pass.`
+- Suggested next action: `Independent review of this repair pass. If
+  APPROVED, the controller may proceed to CODE_APPROVED and then Phase D in
+  fresh append-only roots, then (only if that passes) Phase 3's
+  outcome-blind registration and the bounded paired real-SUMO run, then the
+  cold Phase 4 ledger and conditional Phase 5. Stop at that checkpoint;
+  Phase 6/Gate S remain out of scope for this task regardless of how far the
+  chain gets. Do not touch ui-monthly-routing-v4-20260830.`
+- Actor notes: `No commit, push, deploy, evidence registration/outcome, or
+  Phase D/3/4/5 execution occurred this pass. All historical/rejected
+  validation/*.json records, the local web/data/* baseline rebuild, and
+  ui-monthly-routing-v4-20260830 are unchanged and preserved.`
+
+- Focus and status: `PHASE C REVIEW COMPLETE FOR THE STRICT MIXED-CATALOG
+  ADAPTER; Phase D producer/validator, controller repair and Phases 3-5 are
+  NOT STARTED and remain for a subsequent, separately reviewed generation.`
+- Summary: `This worker pass audited the dirty candidate/catalog diff
+  (traffic_sim/demand/route_catalog.py's exclude_support_only merge and
+  build_sumo_demand.py's prepare_mixed_catalog_candidates/
+  validate_mixed_catalog_candidates) rather than assuming the recorded
+  verdict. Static check: zero repo-wide callers of combine_catalogs or the
+  new functions outside build_sumo_demand.py/route_catalog.py themselves, so
+  the change's blast radius is contained. Independently recomputed the
+  sha256 of all three v3 evidence artifacts (build/trials/suite_gates)
+  against the digests recorded in
+  validation/route_catalog_qualification_v3_2026-09-02.json — all match —
+  and cross-checked sumo/route_catalog_adoption.json's keys/digests against
+  the same chain — consistent. Read the qualification arithmetic itself
+  (median_saving_s, amortized_days, trial day-class/order balance) and found
+  it internally consistent with real computation, not a placeholder. Traced
+  validate_mixed_catalog_candidates's proof check: it recomputes route
+  digests, OD, sensor set and network sha256 from the CURRENT files rather
+  than trusting persisted claims, and a cache hit is always independently
+  revalidated (never trusted blind) — confirmed by adding real,
+  non-mocked integration tests (below) rather than only reading the code.
+  Per the CODE STABILIZATION CONTRACT, this pass did not build the Phase D
+  demand producer/validator, did not repair tools/ai_flow.py's phase-0-2/
+  Phase-6/Gate-S derivation, and did not run any Phase D/3/4/5 evidence —
+  those require the independent review and controller freeze this pass
+  hands off to, and attempting a multi-thousand-line controller change
+  without that review would itself be the kind of deferred, unreviewed
+  defect the contract forbids.`
+- Files changed this pass: `tests/test_build_sumo_demand.py` only (+187
+  lines: 3 new real/unmocked integration tests —
+  TestMixedCatalogRealIntegration::test_cold_build_then_warm_restore_both_validate_for_real
+  and TestValidateMixedCatalogCandidatesRealRejection's two rejection tests
+  — plus their tiny real-SUMO-net/real-proof fixtures. No production source
+  was changed; the candidate implementation was verified correct as-is, not
+  repaired). Every other file already dirty at the start of this pass
+  (AGENT_NOTES.md/TASKS.md prose below, build_sumo_demand.py,
+  route_catalog.py, tests/test_route_catalog.py, the web/data/* local
+  baseline rebuild, and the validation/*.json v1/v2/v3 append-only records)
+  is unchanged by this pass and preserved as-is.`
+- Checks: `tests/test_route_catalog.py + tests/test_build_sumo_demand.py +
+  tests/test_build_candidates.py: 329 passed (up from the prior 326; +3 from
+  the new real integration tests). Full `python3 -m pytest -q tests`, run
+  TWICE — once before my test additions and once after, on the final bytes —
+  both times: 165 failed / 27 skipped, with the passed count going
+  5606->5609 (exactly my 3 additions, no new failures). Every one of the 165
+  failing tests was checked for an import/call path to
+  traffic_sim/demand/route_catalog.py, build_sumo_demand.py's new functions
+  or traffic_sim/demand/sensor_route_contract.py — zero hits across all
+  4 failing files/module groups (grep across
+  tests/test_monthly_warm_state_v2/v4-v9_freeze.py,
+  tests/test_scenario_timing.py, tests/test_subhour_cost_ordered_contracts.py,
+  tests/test_warm_state_population_semantics.py). Sampled one representative
+  failure per group to confirm the unaffected reason concretely rather than
+  by import-graph inference alone: (1) test_monthly_warm_state_v9_freeze.py
+  fails on a real pre-existing flag-name bug in
+  traffic_sim/simulation/warm_state_boundary.py (checks for `--precision`,
+  the real SUMO command uses `--save-state.precision`); (2)
+  test_scenario_timing.py fails on a real pre-existing return-arity bug in
+  run_scenario.py's prepare_closure_variants (2-tuple vs the 3-tuple the
+  test unpacks); (3) test_subhour_cost_ordered_contracts.py's two failures
+  pass individually in isolation (9.96s, both green) — full-suite-only,
+  consistent with cross-test shared-state/ordering, not this diff; (4)
+  test_warm_state_population_semantics.py fails on a stale, gitignored,
+  July-31-dated local artifact directory
+  (validation/warm_state_population_semantics_v2_outcome/) left over from an
+  unrelated earlier evidence generation, which a "no output root exists yet"
+  pre-registration check correctly refuses to see present. All four are
+  pre-existing, unrelated to and unaffected by this diff. `git diff --check`
+  clean (exit 0). Focused pylint on the two changed production files
+  (build_sumo_demand.py, traffic_sim/demand/route_catalog.py): 0 findings.
+  Full-tree `make lint` scope (*.py + traffic_sim + demand + dirsplit, which
+  does not include tests/): 2 pre-existing findings, both in
+  run_monthly_proxy_validation.py (unbalanced-tuple-unpacking), a file this
+  diff never touches.`
+- Decisions and evidence: `The candidate implementation needed no repair —
+  every claim in the dirty diff and its v3 evidence checked out against
+  independent recomputation, not just re-reading. Chose to ADD real
+  (non-mocked) integration coverage rather than only review, because the
+  planner correctly flagged that the existing new tests mock
+  install_grounded_sensor_basis_routes/report_sensor_cross_hits/
+  sensor_pool_support_failures at the adapter's own unit-test boundary;
+  those primitives already have real coverage in tests/test_build_candidates.py,
+  but nothing previously exercised prepare_mixed_catalog_candidates's own
+  combine+install+validate+cache composition end-to-end. The three new
+  tests do that for real: a genuine tiny SUMO net, real
+  sensor_route_contract.qualify_route proofs, a real cold build, a real
+  warm cache hit that independently revalidates, and two real rejections
+  (a tampered non-positive sensor penalty, a network-file change) — both
+  raised by the actual production validate_mixed_catalog_candidates, not a
+  fixture standing in for it.`
+- Blockers or risks: `No genuine blocker. What remains is scale of
+  undone work, not a stuck decision: Phase D's demand producer/validator
+  (tools/qualify_subhour_demand.py or equivalent) does not exist yet;
+  tools/ai_flow.py (4,999 lines) still needs the planner-identified repairs
+  (phase_0/1/2 unconditional PASS, missing bounded-run authorization field
+  so Phase 6/Gate S can't be granted after a green Phase 0-5); Phase 3
+  preregistration/execution, the Phase 4 cold ledger and conditional Phase 5
+  have not run. None of these were attempted this pass, on purpose — writing
+  a large, unreviewed controller/producer change in the same pass that
+  claims to review it would violate "one all-findings repair ... do not
+  defer known defects to the reviewer." They are unverified, not failed.`
+- Suggested next action: `Independent review of this pass's audit +3 tests
+  first. If APPROVED, the NEXT pass builds the Phase D producer/validator
+  and the tools/ai_flow.py controller repairs as their own reviewed
+  generation, then executes Phase D in fresh append-only roots, then (only
+  if that passes) Phase 3's outcome-blind registration and the bounded
+  paired real-SUMO run, then the cold Phase 4 ledger and conditional Phase
+  5. Stop at that checkpoint; Phase 6/Gate S remain out of scope for this
+  task regardless of how far the chain gets. Do not touch
+  ui-monthly-routing-v4-20260830.`
+- Actor notes: `No commit, push, deploy, evidence registration/outcome,
+  Phase D/3/4/5 execution, or controller/production source edit occurred
+  this pass. All historical/rejected validation/*.json records, the local
+  web/data/* baseline rebuild, and ui-monthly-routing-v4-20260830 are
+  unchanged and preserved.`
+
+- Focus and status: `AUTOMATIC SUB-HOUR CLOSURE PLAN RUN
+  20260902-125020-21411 ACTIVE IN PLANNER; strict 50-OD weekday/weekend catalog
+  is its candidate demand source.`
+- Summary: `A fresh durable ai-flow continuation was started with Sonnet High
+  worker/fixer and Codex Sol High planner/reviewer. It first audits the dirty
+  catalog implementation and v3 evidence, then may build fresh qualified
+  q10/q50/q90 demand and run bounded Phases 0-4/conditional Phase 5. It may not
+  start a full month or Gate S. The original mixed adapter blindly combined both day-type
+  support-only fills, yielding 869 candidates and a 2.883% population delta.
+  It now merges 361 ordinary candidates and installs one shared strict basis,
+  yielding 541 candidates with minimum 50 unique routes for every sensor. The
+  combined pool is cached by exact catalog bytes, network, sensor floor and
+  source bytes; warm restore is followed by proof/network/support validation.
+  Final adopted keys are weekday 46f619b93152b0f2e21cd37a1c5e4991 and weekend
+  fd92cb5c2cccf9112c4143c4eb6355ff.`
+- Files changed: `build_sumo_demand.py`,
+  `traffic_sim/demand/route_catalog.py`, `tests/test_build_sumo_demand.py`,
+  `tests/test_route_catalog.py`, `TASKS.md` and this block. New append-only
+  build/suite/trial/qualification records under `validation/` preserve the two
+  rejected diagnostic generations and the passing v3 chain. Runtime adoption
+  is written to ignored `sumo/route_catalog_adoption.json`; the validated mixed
+  artifact is under ignored `sumo/route_catalog/mixed_adapter_cache/`. Existing
+  unrelated dirty artifacts remain preserved.`
+- Checks: `Focused implementation tests: 116 passed. Final suite contract:
+  112 passed with one known LibreSSL warning. Cold/warm mixed adapter diagnostic:
+  27.65 s / 0.038 s, 541 candidates, seven sensors and minimum support 50.
+  Fresh v3 matched benchmark completed 30/30 pairs. Qualification verdict=adopt;
+  all correctness, population, performance, RSS, day-class, amortization and
+  trial-count gates pass. Adapter p95=0.439 s (limit 5 s), paired speedup median
+  20.205x (min 18.695x), maximum population delta=0.2789% (limit 1%), and no
+  trial or suite hard failures. `git diff --check` passed before the final
+  documentation refresh.`
 - Decisions and evidence: `The actual emitted geometry must equal the global
   deterministic fastest route. Every crossed measured sensor requires a finite
   legal avoiding path with a positive cost gap above 1e-6 s/1e-9 relative
@@ -51,8 +352,9 @@ which model may continue. See `AGENTS.md`.
   gates remain. The floor is explicit in cache/demand provenance and selected
   at 50 by the preregistered five-point study; this is the best tested local
   value, not a universal optimum.`
-- Blockers or risks: `All strict pools are sufficient for exact active-sensor
-  calibration, but all six held stations remain structurally underidentified.
+- Blockers or risks: `No catalog-adoption blocker remains. All strict pools are
+  sufficient for exact active-sensor calibration, but all six held stations
+  remain structurally underidentified.
   Route variables grow 390/498/834/1,534/3,634 without new independent
   measurements; larger pools mostly add routes exclusive to the held sensor
   and worsen generalization. Demand validation is WARN, not FAIL: purpose-length
@@ -61,18 +363,17 @@ which model may continue. See `AGENTS.md`.
   downstream validation. The demand build removed three stale web scenario JSON
   files as designed; scenario route files were already absent. Broad monthly
   evidence remains stale and paused.`
-- Suggested next action: `Before a scenario/release claim, improve
-  composition/regularization using OD diversity and cross-sensor overlap, or
-  add independent sensor observations. Preserve the strict route contract and
-  keep 50 until another setting beats it under a frozen out-of-sample rule.`
-- Actor notes: `No commit, push, deploy or campaign launch occurred. The only
-  deletion was make demand's documented removal of three stale web scenario
-  JSON files. Run 20260901-161639-1291 remains terminal and incompatible with
-  this source.`
-<!-- CURRENT_HANDOFF_END -->
-
-<!-- CURRENT_HANDOFF_HISTORY_START -->
-## CURRENT_HANDOFF_HISTORY
+- Suggested next action: `Monitor .ai-flow/runs/20260902-125020-21411/status.json,
+  state.json, active.lock and the durable screen session. Let checks and
+  independent review complete before treating any new demand or SUMO artifact
+  as evidence.`
+- Actor notes: `Durable screen gs-subhour-20260902-124839 owns the ai-flow run.
+  Planner-only attempt 20260902-124153-20764 was interrupted before
+  implementation so the new task could explicitly require a complete impact
+  inventory, affected/transitive focused tests, full suite, lint, post-edit
+  reruns and fresh dependent evidence. No commit, push, deploy or full monthly
+  campaign launch occurred. Historical and rejected evidence, including stale
+  ui-monthly-routing-v4-20260830, was preserved rather than overwritten.`
 
 - Focus and status: `2026-08-30 REPAIR-BATCH PASS 5 (continuation from
   review-03/review-fix-03, not a re-plan; the user confirmed PASS 4's

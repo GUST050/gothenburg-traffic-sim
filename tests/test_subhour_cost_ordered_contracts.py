@@ -62,6 +62,39 @@ from run_monthly_closure_search import (
     verify_phase6_registration,
 )
 from traffic_sim.simulation.monthly_search import ActiveBudgetExceeded, ActiveTimeController
+from traffic_sim.simulation import monthly_demand
+from traffic_sim.simulation.phase6_eligibility import (
+    phase6_prerequisites_allow,
+)
+
+
+def _qualified_demand_manifest():
+    keys = {"weekday": "a" * 32, "weekend": "b" * 32}
+    variant = {"route_file": "calibrated.rou.xml", "content_digests": {}}
+    manifest = {
+        "schema": monthly_demand._PHASE_D_QUALIFIED_MANIFEST_SCHEMA,
+        "kind": monthly_demand._PHASE_D_QUALIFIED_MANIFEST_KIND,
+        "evidence_id": "phase-d-tests", "status": "PASS",
+        "code_approved": True, "source_digest": "1" * 64,
+        "code_approval": {"status": "CODE_APPROVED", "source_digest": "1" * 64,
+                          "source_manifest_sha256": "2" * 64,
+                          "checks_sha256": "3" * 64, "checks_status": "PASS",
+                          "impact_inventory_sha256": "4" * 64},
+        "search_contract": dict(monthly_demand._PHASE_D_SEARCH_CONTRACT),
+        "sensor_route_policy_version": "test-policy", "network_sha256": "5" * 64,
+        "support_audit_pass": True, "adopted_catalog_keys": keys,
+        "adoption": {"sha256": "6" * 64, "catalog_keys": keys},
+        "catalogs": {pool: {"catalog_key": key, "manifest_sha256": "7" * 64,
+                              "routes_sha256": "8" * 64,
+                              "metadata_sha256": "9" * 64}
+                     for pool, key in keys.items()},
+        "archives": {"fixture": {"build_key": "fixture",
+                                    "archive_content_key": "a" * 64,
+                                    "variants": {name: dict(variant) for name in
+                                                 ("q10", "q50", "q90")}}},
+    }
+    manifest["content_key"] = monthly_demand._canonical_digest(manifest)
+    return manifest
 
 
 def _write_registration_binding(tmp_path, registration):
@@ -174,8 +207,8 @@ def test_phase6_gate_rejects_inconclusive_bounded_prerequisite(field):
         "review": "PASS",
     }
     statuses[field] = "INCONCLUSIVE"
-    with pytest.raises(ValueError, match="requires PASS for Phase 0-4"):
-        _require_phase6_green_prerequisites(statuses)
+    assert phase6_prerequisites_allow(
+        statuses, phase3_population_eligible=False, phase_d_pass=True) is False
 
 
 def test_phase6_ready_uses_publication_reserve_after_work_stop():
@@ -551,6 +584,10 @@ def test_real_registered_case_publishes_completeness_for_gate_s(
         / ".ai-flow" / "config.complete-subhour.toml",
         Path(__file__).resolve().parents[1],
     ).evidence_policy
+    # This test exercises the post-Phase-6/Gate-S validator, not the bounded
+    # production config's Phase-5 execution ceiling.
+    evidence_policy = replace(
+        evidence_policy, allow_phase6=False, allow_gate_s=True)
     initial_evidence_baseline = ai_flow.evidence_inventory(
         tmp_path, evidence_policy.registration_globs)
 
@@ -673,10 +710,19 @@ def test_real_registered_case_publishes_completeness_for_gate_s(
         "gates": {},
         "outcome_record": "controlled-outcome.json",
     })
+    qualified = _qualified_demand_manifest()
+    qualified_path = validation / "qualified-demand.json"
+    qualified_path.write_text(json.dumps(qualified), encoding="utf-8")
+    registration["qualified_demand_manifest"] = {
+        "path": str(qualified_path),
+        "sha256": hashlib.sha256(qualified_path.read_bytes()).hexdigest(),
+        "content_key": qualified["content_key"],
+        "evidence_id": qualified["evidence_id"],
+    }
     registration["caps"]["attempts_per_suite"] = 4000
     monkeypatch.setattr(
         benchmark_module, "select_cases",
-        lambda _runs_root: {
+            lambda _runs_root, *_args: {
             "eligible": eligible,
             "eligible_list_digest": "controlled-eligible-digest",
             "selected_ids": registration["selection"]["selected_ids"],
@@ -922,6 +968,13 @@ def test_real_registered_case_publishes_completeness_for_gate_s(
     monkeypatch.setattr(process_census, "process_group_snapshot",
                         lambda: [(1, 1, 1)])
     monkeypatch.setattr(benchmark_module.base.pa, "build_arm", fake_build_arm)
+    # This controlled integration deliberately runs both fake arms in the
+    # pytest process.  ru_maxrss would therefore include every test module
+    # imported before this case and make the result order-dependent.  Keep the
+    # registered 1 GB production cap unchanged while controlling the fake
+    # arms' own resource measurement, just as their SUMO/process census is
+    # controlled above.
+    monkeypatch.setattr(benchmark_module.base.pa, "peak_rss_bytes", lambda: 0)
     monkeypatch.setattr(benchmark_module.base,
                             "run_ordered_exhaustive_comparison", real_comparison)
 
@@ -1041,6 +1094,22 @@ def test_real_registered_case_publishes_completeness_for_gate_s(
             if key != "content_key"
         })
         profile_path.write_text(json.dumps(profile), encoding="utf-8")
+    qualified_demand_manifest = {
+        "schema": "subhour_qualified_demand_manifest_v1",
+        "kind": "subhour_qualified_demand_manifest", "release_evidence": False,
+        "evidence_id": "phase-d-real-performance-miss",
+        "adopted_catalog_keys": {
+            "weekday": "46f619b93152b0f2e21cd37a1c5e4991",
+            "weekend": "fd92cb5c2cccf9112c4143c4eb6355ff",
+        },
+        "demand_variants": ["q10", "q50", "q90"],
+    }
+    qualified_demand_manifest["content_key"] = ai_flow._canonical_digest(
+        qualified_demand_manifest)
+    qualified_demand_manifest_path = validation / (
+        "subhour_qualified_demand_manifest_real-performance-miss.json")
+    qualified_demand_manifest_path.write_text(
+        json.dumps(qualified_demand_manifest), encoding="utf-8")
     for phase, producer_path, status in (
             ("phase_3", outcome_path, phase3_report_status),
             ("phase_4", profile_path, phase4_report_status),
@@ -1051,7 +1120,9 @@ def test_real_registered_case_publishes_completeness_for_gate_s(
             "status": status, "release_evidence": False,
             "evidence_id": f"{phase}-real-performance-miss-status",
             "lineage": {}, "references": [reference(producer_path)]
-            + ([reference(registration_path)] if phase == "phase_3" else []),
+            + ([reference(registration_path),
+                reference(qualified_demand_manifest_path)]
+               if phase == "phase_3" else []),
         }
         artifact["content_key"] = ai_flow._canonical_digest(artifact)
         status_path = validation / f"{phase}-real-performance-miss-status.json"
@@ -1065,13 +1136,60 @@ def test_real_registered_case_publishes_completeness_for_gate_s(
     })
     phase5_status_path.write_text(json.dumps(phase5_status), encoding="utf-8")
     status_artifacts["phase_5"] = reference(phase5_status_path)
+    qualified_demand_manifest = _qualified_demand_manifest()
+    qualified_demand_manifest["evidence_id"] = "phaseD-real-performance-miss"
+    qualified_demand_manifest["source_digest"] = "real-performance-miss-source"
+    qualified_demand_manifest["code_approval"]["source_digest"] = (
+        "real-performance-miss-source")
+    qualified_demand_manifest["code_approval"]["phase_prerequisites"] = {
+        "phase_0": {
+            **ai_flow._FROZEN_SEARCH_CONTRACT,
+            "q_variants": ["q10", "q50", "q90"],
+            "work_budget_seconds": 3300, "publication_budget_seconds": 300,
+            "fresh_roots": True, "tie_finalist_rules_unchanged": True,
+            "timeouts_capacity_terminals_bound": True,
+        },
+        "phase_1": {
+            "shared_kernel": "run_cost_ordered_execution",
+            "only_allowed_difference": "disable_early_stop",
+            "cost_ordered": {"disable_early_stop": False},
+            "ordered_exhaustive": {"disable_early_stop": True},
+            "shared_ledger_order_verifier_attempt_health_reconciliation_cursor": True,
+        },
+        "phase_2": {"status": "PASS", "required_tests": ["deterministic"]},
+    }
+    qualified_demand_manifest["content_key"] = ai_flow._canonical_digest({
+        key: value for key, value in qualified_demand_manifest.items()
+        if key != "content_key"
+    })
+    qualified_demand_manifest_path = validation / (
+        "subhour_qualified_demand_manifest_real-performance-miss.json")
+    qualified_demand_manifest_path.write_text(
+        json.dumps(qualified_demand_manifest), encoding="utf-8")
+    # The preliminary manifest above exists only so the Phase 3 producer can
+    # be assembled before the source-bound Phase 0--2 contract is available.
+    # Refresh the Phase 3 reference after replacing those bytes; otherwise the
+    # end-to-end validator correctly rejects the fixture as drifted evidence.
+    phase3_status_path = validation / (
+        "phase_3-real-performance-miss-status.json")
+    phase3_status = json.loads(
+        phase3_status_path.read_text(encoding="utf-8"))
+    phase3_status["references"][-1] = reference(
+        qualified_demand_manifest_path)
+    phase3_status["content_key"] = ai_flow._canonical_digest({
+        key: value for key, value in phase3_status.items()
+        if key != "content_key"
+    })
+    phase3_status_path.write_text(
+        json.dumps(phase3_status), encoding="utf-8")
+    status_artifacts["phase_3"] = reference(phase3_status_path)
     for phase in ("phase_0", "phase_1", "phase_2"):
         artifact = {
             "schema": "subhour_phase_status_v1",
             "kind": "subhour_phase_status", "phase": phase,
             "status": "PASS", "release_evidence": False,
             "evidence_id": f"{phase}-real-performance-miss-status",
-            "lineage": {}, "references": [],
+            "lineage": {}, "references": [reference(qualified_demand_manifest_path)],
         }
         artifact["content_key"] = ai_flow._canonical_digest(artifact)
         status_path = validation / f"{phase}-real-performance-miss-status.json"
@@ -1106,12 +1224,15 @@ def test_real_registered_case_publishes_completeness_for_gate_s(
                     else "PASS"),
     }
     evidence_ids = {
-        phase: [f"{phase}-real-performance-miss-status"]
+        phase: [f"{phase}-real-performance-miss-status",
+                qualified_demand_manifest["evidence_id"]]
         for phase in ("phase_0", "phase_1", "phase_2")
     }
     evidence_ids.update({
-        "phase_3": ["phase_3-real-performance-miss-status",
-                    outcome["evidence_id"]],
+        "phase_3": list(dict.fromkeys([
+            "phase_3-real-performance-miss-status",
+            outcome["evidence_id"], registration["evidence_id"],
+            qualified_demand_manifest["evidence_id"]])),
         "phase_4": ["phase_4-real-performance-miss-status", profile["evidence_id"]],
         "phase_5": ["phase_5-real-performance-miss-status", profile["evidence_id"],
                     window_index["evidence_id"]],
@@ -1296,7 +1417,8 @@ def test_profile_accounts_unique_daily_units_and_never_starts_sumo(tmp_path):
                SimpleNamespace(schedule_id="parent-b")]
     record = profile_ledger(
         spec, parents, _CostSource(), output_root=tmp_path / "profile",
-        expected_daily_units=2, expected_parents=2)
+        expected_daily_units=2, expected_parents=2,
+        qualified_demand_manifest=_qualified_demand_manifest())
     assert record["sumo_started"] is False
     assert record["population"] == {
         "daily_units": 2,
@@ -1340,7 +1462,8 @@ def test_profile_cache_layers_reconcile_every_parent_unit_lookup(tmp_path):
         [SimpleNamespace(schedule_id="parent-a"),
          SimpleNamespace(schedule_id="parent-b")],
         source, output_root=tmp_path / "profile", expected_daily_units=1,
-        expected_parents=2)
+        expected_parents=2,
+        qualified_demand_manifest=_qualified_demand_manifest())
     assert record["cache"]["lookups"] == 2
     assert record["cache"]["memory_cache_hits"] == 1
     assert record["cache"]["memory_cache_misses"] == 1
@@ -1368,7 +1491,8 @@ def test_profile_phase5_trigger_does_not_require_rss_census(
          SimpleNamespace(schedule_id="parent-b")],
         _CompleteProfileSource(), output_root=tmp_path / "profile",
         expected_daily_units=2, expected_parents=2,
-        sumo_start_probe=lambda: 0)
+        sumo_start_probe=lambda: 0,
+        qualified_demand_manifest=_qualified_demand_manifest())
     assert record["population_complete"] is True
     assert record["phase_timing_complete"] is True
     assert record["process_tree_rss_complete"] is False
@@ -1385,6 +1509,7 @@ def test_profile_rejects_nonzero_inherited_sumo_launch_baseline(tmp_path):
         expected_daily_units=1, expected_parents=1,
         sumo_start_probe=lambda: 1,
         sumo_start_before=1,
+        qualified_demand_manifest=_qualified_demand_manifest(),
     )
     assert record["sumo_started"] is True
     assert record["sumo_zero_launch_gate"] is False
@@ -1398,7 +1523,8 @@ def test_profile_publishes_observed_sumo_attempt_delta(tmp_path):
         [SimpleNamespace(schedule_id="parent-a")], _CostSource(),
         output_root=tmp_path / "profile", expected_daily_units=1,
         expected_parents=1, sumo_start_probe=lambda: 2,
-        sumo_start_before=0)
+        sumo_start_before=0,
+        qualified_demand_manifest=_qualified_demand_manifest())
     assert record["sumo_attempts"] == 2
     assert record["sumo_start_observation"] == {
         "before": 0, "after": 2, "delta": 2,
@@ -1890,13 +2016,66 @@ def test_real_phase6_cli_terminals_publish_receipt_bound_producers(
         {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
         for path in lineage_files.values()
     ]
+    qualified_manifest = _qualified_demand_manifest()
+    qualified_path = prerequisite_root / "qualified-demand.json"
+    qualified_path.write_text(json.dumps(qualified_manifest), encoding="utf-8")
+
+    def qualified_reference():
+        return {
+            "path": str(qualified_path.resolve()),
+            "sha256": hashlib.sha256(qualified_path.read_bytes()).hexdigest(),
+            "content_key": qualified_manifest["content_key"],
+            "evidence_id": qualified_manifest["evidence_id"],
+        }
+
+    phase3_registration = {
+        "schema": "subhour_cost_ordered_bounded_registration_v1",
+        "evidence_id": f"phase3-{terminal}",
+        "selection": {"selected_ids": ["phase3-search"]},
+        "selected_cases": [{
+            "case_id": "controlled-case",
+            "search_content_key": "phase3-search",
+        }],
+        "caps": {
+            "peak_rss_bytes": 100,
+            "active_seconds": 100.0,
+            "disk_growth_bytes": 100,
+        },
+        "qualified_demand_manifest": qualified_reference(),
+    }
+    phase3_registration["content_key"] = benchmark_module._key({
+        key: value for key, value in phase3_registration.items()
+        if key not in {"content_key", "registered_at"}
+    })
+    phase3_registration_path = prerequisite_root / "phase3-registration.json"
+    phase3_registration_path.write_text(
+        json.dumps(phase3_registration), encoding="utf-8")
     phase3_outcome = benchmark_module._with_content_key({
         "schema": "subhour_cost_ordered_bounded_outcome_v1",
         "kind": "subhour_bounded_sumo_outcome",
         "release_evidence": False, "evidence_id": f"phase3-{terminal}",
         "status": "PASS",
-        "case_results": [{"case_id": "controlled-case", "gates_passed": True}],
-        "gate_s": {"population_complete": True},
+        "registration": {
+            **qualified_reference(),
+            "path": str(phase3_registration_path.resolve()),
+            "sha256": hashlib.sha256(
+                phase3_registration_path.read_bytes()).hexdigest(),
+            "content_key": phase3_registration["content_key"],
+            "evidence_id": phase3_registration["evidence_id"],
+        },
+        "selection": {"selected_ids": ["phase3-search"]},
+        "decision_population_complete": True,
+        "case_results": [{
+            "case_id": "controlled-case",
+            "search_content_key": "phase3-search",
+            "gates_passed": True,
+            "decision_population_complete": True,
+            "comparison": _valid_phase3_comparison(),
+        }],
+        "gate_s": {
+            "population_complete": True,
+            "variants": {variant: {} for variant in ("q10", "q50", "q90")},
+        },
     })
     phase3_path = prerequisite_root / "phase3-outcome.json"
     phase3_path.write_text(json.dumps(phase3_outcome), encoding="utf-8")
@@ -1917,11 +2096,14 @@ def test_real_phase6_cli_terminals_publish_receipt_bound_producers(
         return {"path": str(path),
                 "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
 
-    phase3_refs = [*common_references, reference(phase3_path)]
+    phase3_refs = [*common_references, reference(qualified_path),
+                   reference(phase3_path)]
     phase4_refs = [*common_references, reference(phase4_path)]
     prerequisites = {}
     for phase in ("phase_0", "phase_1", "phase_2", "phase_3", "phase_4"):
-        refs = phase3_refs if phase == "phase_3" else phase4_refs if phase == "phase_4" else common_references
+        refs = (phase3_refs if phase == "phase_3" else phase4_refs
+                if phase == "phase_4" else
+                [*common_references, reference(qualified_path)])
         artifact = build_phase_status_artifact(
             phase=phase, status="PASS", evidence_id=f"{phase}-{terminal}",
             lineage=lineage, references=refs)
@@ -1991,7 +2173,18 @@ def test_real_phase6_cli_terminals_publish_receipt_bound_producers(
         lambda **_kwargs: _screen_builder(
             spec, [item.schedule_id for item in generate_closure_schedules(spec)]),
     )
-    monkeypatch.setattr(monthly_cli, "sha256_file", lambda _path: "network")
+    # Only the NETWORK digest is stubbed. This used to be a blanket
+    # `lambda _path: "network"`, written when `sha256_file` had exactly one
+    # caller in this module. The Phase D work gave the same name two more
+    # jobs -- hashing the bound Phase 3 registration and the qualified-demand
+    # manifest -- so a path-blind stub silently answered "network" for those
+    # too and disabled the very byte-binding checks this test exists to
+    # exercise. Fall through to the real digest for every other path.
+    _real_sha256_file = monthly_cli.sha256_file
+    monkeypatch.setattr(
+        monthly_cli, "sha256_file",
+        lambda path: ("network" if Path(path).name == "net.net.xml"
+                      else _real_sha256_file(path)))
     monkeypatch.setattr(monthly_cli, "_independent_exhaustive_preflight",
                         lambda *_args, **_kwargs: {})
     monkeypatch.setattr(
@@ -2088,11 +2281,22 @@ def test_real_phase6_cli_terminals_publish_receipt_bound_producers(
         # controller validator.  The supporting Phase 3--5 records are small
         # producer-shaped fixtures; the Phase 6 bytes and receipt above are
         # never reconstructed by the test.
-        policy = ai_flow.load_config(
-            Path(__file__).resolve().parents[1]
-            / ".ai-flow" / "config.complete-subhour.toml",
-            Path(__file__).resolve().parents[1],
-        ).evidence_policy
+        # This test exercises the Phase 6 CLI's own terminal publication, so
+        # the run it validates must be one that PERMITS Phase 6. The tracked
+        # sub-hour config deliberately sets `allow_phase6 = false` because the
+        # current campaign stops at the Phase 3-5 checkpoint; inheriting that
+        # ceiling here would make the controller refuse every terminal before
+        # the CLI logic under test was reached. The ceiling itself is covered
+        # separately by
+        # `test_controller_ceiling_applies_when_producer_omits_authorization`.
+        policy = replace(
+            ai_flow.load_config(
+                Path(__file__).resolve().parents[1]
+                / ".ai-flow" / "config.complete-subhour.toml",
+                Path(__file__).resolve().parents[1],
+            ).evidence_policy,
+            allow_phase6=True, allow_gate_s=True,
+        )
         checkpoint_baseline = ai_flow.evidence_inventory(
             tmp_path, policy.registration_globs)
         phase3_registration = {
@@ -2102,6 +2306,14 @@ def test_real_phase6_cli_terminals_publish_receipt_bound_producers(
             "selected_cases": [{
                 "case_id": "case-1", "search_content_key": "phase3-search",
             }],
+            # Gate S eligibility RE-DERIVES the decision population from these
+            # bytes instead of trusting the outcome's own flag, so an eligible
+            # fixture has to carry the caps the rule measures against.
+            "caps": {
+                "peak_rss_bytes": 8 * 1024**3,
+                "active_seconds": 3600.0,
+                "disk_growth_bytes": 8 * 1024**3,
+            },
         }
         phase3_registration["content_key"] = ai_flow._canonical_digest(
             phase3_registration)
@@ -2128,6 +2340,7 @@ def test_real_phase6_cli_terminals_publish_receipt_bound_producers(
             "case_results": [{
                 "case_id": "case-1", "search_content_key": "phase3-search",
                 "decision_population_complete": True, "gates_passed": True,
+                "comparison": _valid_phase3_comparison(),
             }],
             "gate_s": {
                 "population_complete": True,
@@ -2201,6 +2414,23 @@ def test_real_phase6_cli_terminals_publish_receipt_bound_producers(
                     "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                     "content_key": value["content_key"]}
 
+        qualified_demand_manifest = {
+            "schema": "subhour_qualified_demand_manifest_v1",
+            "kind": "subhour_qualified_demand_manifest", "release_evidence": False,
+            "evidence_id": "phase-d-validator-fixture",
+            "adopted_catalog_keys": {
+                "weekday": "46f619b93152b0f2e21cd37a1c5e4991",
+                "weekend": "fd92cb5c2cccf9112c4143c4eb6355ff",
+            },
+            "demand_variants": ["q10", "q50", "q90"],
+        }
+        qualified_demand_manifest["content_key"] = ai_flow._canonical_digest(
+            qualified_demand_manifest)
+        qualified_demand_manifest_path = validation / (
+            "subhour_qualified_demand_manifest_validator.json")
+        qualified_demand_manifest_path.write_text(
+            json.dumps(qualified_demand_manifest), encoding="utf-8")
+
         status_artifacts = {}
         for phase, producer_path, producer_id, status in (
             ("phase_3", phase3_path, phase3["evidence_id"], "PASS"),
@@ -2214,7 +2444,8 @@ def test_real_phase6_cli_terminals_publish_receipt_bound_producers(
                 "evidence_id": f"{phase}-validator-status",
             "lineage": {}, "references": [
                 reference(producer_path),
-                *([reference(phase3_registration_path)]
+                *([reference(phase3_registration_path),
+                   reference(qualified_demand_manifest_path)]
                   if phase == "phase_3" else []),
             ],
             }
@@ -2233,13 +2464,58 @@ def test_real_phase6_cli_terminals_publish_receipt_bound_producers(
         phase5_status_path.write_text(
             json.dumps(phase5_status), encoding="utf-8")
         status_artifacts["phase_5"] = reference(phase5_status_path)
+        qualified_demand_manifest = _qualified_demand_manifest()
+        qualified_demand_manifest["evidence_id"] = "phaseD-validator-fixture"
+        qualified_demand_manifest["source_digest"] = "validator-source"
+        qualified_demand_manifest["code_approval"]["source_digest"] = (
+            "validator-source")
+        qualified_demand_manifest["code_approval"]["phase_prerequisites"] = {
+            "phase_0": {
+                **ai_flow._FROZEN_SEARCH_CONTRACT,
+                "q_variants": ["q10", "q50", "q90"],
+                "work_budget_seconds": 3300, "publication_budget_seconds": 300,
+                "fresh_roots": True, "tie_finalist_rules_unchanged": True,
+                "timeouts_capacity_terminals_bound": True,
+            },
+            "phase_1": {
+                "shared_kernel": "run_cost_ordered_execution",
+                "only_allowed_difference": "disable_early_stop",
+                "cost_ordered": {"disable_early_stop": False},
+                "ordered_exhaustive": {"disable_early_stop": True},
+                "shared_ledger_order_verifier_attempt_health_reconciliation_cursor": True,
+            },
+            "phase_2": {"status": "PASS", "required_tests": ["deterministic"]},
+        }
+        qualified_demand_manifest["content_key"] = ai_flow._canonical_digest({
+            key: value for key, value in qualified_demand_manifest.items()
+            if key != "content_key"
+        })
+        qualified_demand_manifest_path = validation / (
+            "subhour_qualified_demand_manifest_validator.json")
+        qualified_demand_manifest_path.write_text(
+            json.dumps(qualified_demand_manifest), encoding="utf-8")
+        # Keep the earlier Phase 3 producer reference bound to the final
+        # source-approved manifest bytes rather than the temporary stub.
+        phase3_status_path = validation / "phase_3-validator-status.json"
+        phase3_status = json.loads(
+            phase3_status_path.read_text(encoding="utf-8"))
+        phase3_status["references"][-1] = reference(
+            qualified_demand_manifest_path)
+        phase3_status["content_key"] = ai_flow._canonical_digest({
+            key: value for key, value in phase3_status.items()
+            if key != "content_key"
+        })
+        phase3_status_path.write_text(
+            json.dumps(phase3_status), encoding="utf-8")
+        status_artifacts["phase_3"] = reference(phase3_status_path)
         for phase in ("phase_0", "phase_1", "phase_2"):
             artifact = {
                 "schema": "subhour_phase_status_v1",
                 "kind": "subhour_phase_status", "phase": phase,
                 "status": "PASS", "release_evidence": False,
                 "evidence_id": f"{phase}-validator-status",
-                "lineage": {}, "references": [],
+                "lineage": {}, "references": [
+                    reference(qualified_demand_manifest_path)],
             }
             artifact["content_key"] = ai_flow._canonical_digest(artifact)
             status_path = validation / f"{phase}-validator-status.json"
@@ -2278,11 +2554,13 @@ def test_real_phase6_cli_terminals_publish_receipt_bound_producers(
         phase6_reference = reference(outcome_path)
         registration_reference = reference(registration_path)
         evidence_ids = {
-            phase: [f"{phase}-validator-status"]
+            phase: [f"{phase}-validator-status",
+                    qualified_demand_manifest["evidence_id"]]
             for phase in ("phase_0", "phase_1", "phase_2")
         }
         evidence_ids.update({
-            "phase_3": ["phase_3-validator-status", phase3["evidence_id"]],
+            "phase_3": ["phase_3-validator-status", phase3["evidence_id"],
+                        qualified_demand_manifest["evidence_id"]],
             "phase_4": ["phase_4-validator-status", profile["evidence_id"]],
             "phase_5": ["phase_5-validator-status", profile["evidence_id"],
                         window_index["evidence_id"]],

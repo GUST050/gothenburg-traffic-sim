@@ -727,6 +727,27 @@ def aggregate_daily_evidence(
                 "vehicles_no_detour": sum(
                     int(item["vehicles_no_detour"]) for item in records
                 ),
+                "vehicles_denied_departure": sum(
+                    int(item.get("vehicles_denied_departure", 0))
+                    for item in records
+                ),
+                "vehicles_severed_destination": sum(
+                    int(item.get("vehicles_severed_destination", 0))
+                    for item in records
+                ),
+                "vehicles_destination_relocated": sum(
+                    int(item.get("vehicles_destination_relocated", 0))
+                    for item in records
+                ),
+                "destination_relocation_metres_total": round(sum(
+                    float(item.get(
+                        "destination_relocation_metres_total", 0.0))
+                    for item in records
+                ), 1),
+                "destination_relocation_metres_max": max(
+                    (float(item.get(
+                        "destination_relocation_metres_max", 0.0))
+                     for item in records), default=0.0),
                 "added_vehicle_hours": round(sum(
                     float(item["added_vehicle_hours"]) for item in records
                 ), 4),

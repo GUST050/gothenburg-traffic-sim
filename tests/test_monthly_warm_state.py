@@ -356,6 +356,46 @@ class TestCrossArmComparison:
         assert "execution_arm" not in semantic_payload(cold)
         assert "warm_point_s" not in semantic_payload(cold)
 
+    def test_routing_artifact_identity_is_arm_specific_not_a_traffic_delta(self):
+        common = {
+            "candidate_id": "closure-1",
+            "unit_id": "daily-unit-1",
+            "work_date": "2026-09-03",
+            "demand_variant": "q50",
+            "seed": 1001,
+            "vehicle_class": "passenger",
+            "routing_policy_version": "closure_origin_routing_v5",
+            "transformed_route_sha256": "a" * 64,
+            "access_impact_semantic_sha256": "d" * 64,
+            "denied_count": 0,
+            "rerouted_around_closure": 3,
+        }
+        cold = _observation(provenance={
+            "demand_build_id": "d1",
+            "simulation_mode": "meso",
+            "routing_provenance": {
+                **common, "execution_arm": "cold",
+                "access_impact_sha256": "b" * 64,
+            },
+        })
+        warm = _observation(
+            execution_arm="warm", warm_point_s=25200,
+            provenance={
+                "demand_build_id": "d1",
+                "simulation_mode": "meso",
+                "routing_provenance": {
+                    **common, "execution_arm": "warm",
+                    "access_impact_sha256": "c" * 64,
+                },
+            },
+        )
+        assert semantic_payload(cold) == semantic_payload(warm)
+        assert observation_digest(cold) == observation_digest(warm)
+
+        warm["provenance"]["routing_provenance"][
+            "access_impact_semantic_sha256"] = "e" * 64
+        assert observation_digest(cold) != observation_digest(warm)
+
     @pytest.mark.parametrize("field, value", [
         ("candidate_metrics", _metrics(total_time_loss_s=1234.6)),
         ("baseline_metrics", _metrics(running_at_end=99)),

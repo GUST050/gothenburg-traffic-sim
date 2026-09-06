@@ -123,6 +123,34 @@ def test_closure_cost_objective_prevents_pilot_from_discarding_true_best():
     assert result.method == "deterministic_closure_cost_pilot_v1"
 
 
+def test_q50_cost_objective_ranks_on_central_variant():
+    def with_costs(candidate_id, q10, q50, q90):
+        candidate = _candidate(candidate_id, (1, 1, 1))
+        records = tuple({
+            "demand_variant": variant,
+            "added_vehicle_hours": hours,
+            "added_metres_total": 0,
+            "vehicles_affected": 1,
+            "vehicles_no_detour": 0,
+        } for variant, hours in (
+            ("q10", q10), ("q50", q50), ("q90", q90)))
+        return CandidateEvidence(
+            candidate_id=candidate_id,
+            observations=candidate.observations,
+            disruption=records,
+        )
+
+    result = select_pilot_finalists(
+        [with_costs("central-best", 1, 2, 9),
+         with_costs("worst-best", 1, 3, 4)],
+        _policy(retention_band_s=0, minimum_finalists=1),
+        ranking_objective="closure_cost_v2",
+    )
+
+    assert result.selected_ids == ("central-best",)
+    assert result.method == "deterministic_q50_closure_cost_pilot_v2"
+
+
 def test_explicit_closure_cost_objective_fails_closed_without_disruption():
     with pytest.raises(ValueError, match="requires disruption evidence"):
         select_pilot_finalists(

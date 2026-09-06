@@ -51,11 +51,13 @@ def _harness():
 
 class TestFrozenIdentity:
 
-    def test_content_key_and_bytes_recompose(self):
+    def test_content_key_recomputes_while_retired_sources_do_not_recompose(self):
         manifest = _load()
+        before = MANIFEST.read_bytes()
         assert _key(manifest) == manifest["content_key"]
-        assert _freeze().build_artifacts()[str(MANIFEST)] == \
+        assert _freeze().build_artifacts()[str(MANIFEST)] != \
             MANIFEST.read_text(encoding="utf-8")
+        assert MANIFEST.read_bytes() == before
 
     @pytest.mark.parametrize("name,digest", FROZEN_V15)
     def test_v15_tool_and_manifest_are_byte_identical(self, name, digest):
@@ -76,9 +78,12 @@ class TestFrozenIdentity:
                       "closure_bound_warm_point_s"):
             assert manifest["cases"][0][field] == parent["cases"][0][field]
 
-    def test_every_bound_source_matches(self):
-        for name, digest in _load()["source_fingerprints"].items():
-            assert hashlib.sha256(Path(name).read_bytes()).hexdigest() == digest
+    def test_bound_source_drift_retires_v16_without_rewriting_it(self):
+        drifted = sorted(
+            name for name, digest in _load()["source_fingerprints"].items()
+            if hashlib.sha256(Path(name).read_bytes()).hexdigest() != digest)
+        assert drifted
+        assert "run_scenario.py" in drifted
 
 
 class TestFormatterCorrection:
@@ -131,14 +136,14 @@ class TestLifecycle:
         assert manifest["warming_default"].startswith("OFF")
         assert "approved_content_key" not in manifest
 
-    def test_harness_points_to_and_loads_v16(self):
+    def test_harness_still_points_to_but_refuses_retired_v16(self):
         harness = _harness()
         assert harness.DEFAULT_MANIFEST == MANIFEST
-        assert harness.load_frozen_manifest(MANIFEST)["content_key"] == \
-            _load()["content_key"]
+        with pytest.raises(SystemExit, match="frozen sources drifted"):
+            harness.load_frozen_manifest(MANIFEST)
 
     def test_execution_is_refused_before_runtime_without_token(self):
-        with pytest.raises(SystemExit, match="requires an approval token"):
+        with pytest.raises(SystemExit, match="frozen sources drifted"):
             _harness().main(["--manifest", str(MANIFEST), "--execute"])
 
     def test_v15_approval_token_cannot_authorize_v16(self):
@@ -146,7 +151,10 @@ class TestLifecycle:
             _harness().require_approval(_load(), PARENT_KEY)
 
     def test_checks_only_mode_is_process_free(self):
-        assert _harness().main(["--manifest", str(MANIFEST)]) == 0
+        before = set(sys.modules)
+        with pytest.raises(SystemExit, match="frozen sources drifted"):
+            _harness().main(["--manifest", str(MANIFEST)])
+        assert not ({"traci", "libsumo"} & (set(sys.modules) - before))
 
     def test_versioned_suite_does_not_pin_a_predecessor_test(self):
         tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))

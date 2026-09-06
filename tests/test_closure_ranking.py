@@ -7,7 +7,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from traffic_sim.simulation.closure_ranking import (
-    ClosureCost, rank_closures, worst_variant_cost)
+    ClosureCost, q50_variant_cost, rank_closures, reduce_variant_cost,
+    worst_variant_cost)
 
 
 def rec(hours=0.0, metres=0.0, affected=0, no_detour=0):
@@ -94,6 +95,40 @@ class TestWorstVariant:
     def test_no_variants_is_refused(self):
         with pytest.raises(ValueError, match="at least one variant"):
             worst_variant_cost("x", [])
+
+
+class TestQ50Variant:
+    def test_q50_drives_cost_but_reachability_remains_all_variant(self):
+        records = [
+            {"demand_variant": "q10", **rec(
+                hours=1.0, metres=10, affected=10, no_detour=0)},
+            {"demand_variant": "q50", **rec(
+                hours=2.0, metres=20, affected=20, no_detour=0)},
+            {"demand_variant": "q90", **rec(
+                hours=9.0, metres=90, affected=90, no_detour=1)},
+        ]
+        c = q50_variant_cost("x", records)
+        assert c.added_vehicle_hours == 2.0
+        assert c.added_metres_total == 20
+        assert c.vehicles_affected == 20
+        assert c.vehicles_no_detour == 1
+        assert c.disqualified
+
+    def test_q50_must_be_present_exactly_once(self):
+        with pytest.raises(ValueError, match="exactly one q50"):
+            q50_variant_cost("x", [
+                {"demand_variant": "q10", **rec()},
+                {"demand_variant": "q90", **rec()},
+            ])
+
+    def test_versioned_reducer_keeps_v1_and_v2_distinct(self):
+        records = [
+            {"demand_variant": "q10", **rec(hours=1.0)},
+            {"demand_variant": "q50", **rec(hours=2.0)},
+            {"demand_variant": "q90", **rec(hours=3.0)},
+        ]
+        assert reduce_variant_cost("x", records, "closure_cost_v1").added_vehicle_hours == 3.0
+        assert reduce_variant_cost("x", records, "closure_cost_v2").added_vehicle_hours == 2.0
 
 
 class TestAgainstMeasuredEdges:

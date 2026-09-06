@@ -266,7 +266,7 @@
           const provEl = document.getElementById('traj-provenance');
           if (traj?.seed != null) {
             const sampled = traj.sampling?.enabled === true;
-            provEl.textContent = '🚗 Fordonsanimation';
+            provEl.textContent = 'Fordon i kartan';
             provEl.title = 'Vägfärger och sensorresultat bygger på medelvärdet '
               + 'av tre simuleringar. Animationen visar fordon från en av '
               + 'simuleringarna och är därför inte identisk med medelvärdet.'
@@ -389,6 +389,12 @@
         // Shareable URLs: ?mode=scenario&file=<name>.json&qi=6, ?mode=forecast
         const params = new URLSearchParams(location.search);
 
+        function localizedScenarioWindow(windowText) {
+          return String(windowText || '').replace(
+            /\((\d+) days\)/g,
+            (_, count) => `(${count} ${count === '1' ? 'dag' : 'dagar'})`);
+        }
+
         async function loadScenIndex(force = false) {
           if (scenIndex && !force) return;
           // no-store: re-runs overwrite index.json and scenario files in place
@@ -405,7 +411,7 @@
           scenSelect.replaceChildren(...scenIndex.scenarios.map(s => {
             const opt = document.createElement('option');
             opt.value = s.file;
-            opt.textContent = `${s.label} · ${s.window}`;
+            opt.textContent = `${s.label} · ${localizedScenarioWindow(s.window)}`;
             return opt;
           }));
           if ([...scenSelect.options].some(o => o.value === current)) {
@@ -501,7 +507,12 @@
           // discarded once it eventually lands.
           scenarioAbort?.abort();
           scenarioAbort = null;
-          if (fresh) delete scenProviders[file];   // file was overwritten on disk
+          if (fresh) {
+            // Recalibration overwrites both files under stable names. Keeping
+            // the trajectory cache here would combine the new sensor flows
+            // with the previous day's moving cars.
+            invalidateScenarioAssetCache(file, scenProviders, trajCache);
+          }
           if (!scenProviders[file]) {
             scenarioAbort = new AbortController();
             try {
@@ -524,8 +535,13 @@
           showClosureImpact(scenProviders[file]);
           setMode(btnScen, wrapForComparison(scenProviders[file]));
           updateDeltaToggleVisibility();
-          // Scenario files start at their own epoch (window start)
-          State.setQI(params.get('qi') ? Number(params.get('qi')) : 0);
+          // A shareable URL keeps its explicit position. Otherwise show the
+          // first closure while it is active, or the baseline's busiest
+          // departure quarter, instead of making a healthy scenario look
+          // empty at midnight for tens of real-time playback minutes.
+          const requestedQI = Number(params.get('qi'));
+          State.setQI(params.has('qi') && Number.isFinite(requestedQI)
+            ? requestedQI : scenarioInitialQI(scenProviders[file]));
         }
 
         // What a closure costs: how many vehicles it displaces and how far
@@ -1182,10 +1198,9 @@
         let suggestJobRunning = false;
 
         // ── Bästa arbetsperiod (Phase 4 step 7) — the resumable monthly
-        // closure search. Reuses the same edge picking (`selected`); every
-        // candidate the server ranks is SUMO-verified. A held-out-validated
-        // proxy may screen the legal calendar first; without that gate the
-        // server falls back to a bounded exhaustive search.
+        // closure search. Reuses the same edge picking (`selected`).
+        // A deterministic cost is shown for every scoreable candidate. In
+        // cost-ordered mode only the leading boundary set is SUMO-verified.
         const btnMonthly        = document.getElementById('monthly-mode-btn');
         const monthlyBanner     = document.getElementById('monthly-banner');
         const monthlyPickCount  = document.getElementById('monthly-pick-count');
@@ -1194,11 +1209,11 @@
         const monthlyDateEnd    = document.getElementById('monthly-date-end');
         const monthlyBandStart  = document.getElementById('monthly-band-start');
         const monthlyBandEnd    = document.getElementById('monthly-band-end');
+        const monthlyFullDayValue = document.getElementById('monthly-full-day-value');
         const monthlyFullday    = document.getElementById('monthly-fullday');
         const monthlyWorkHours  = document.getElementById('monthly-work-hours');
         const monthlyMinDays    = document.getElementById('monthly-min-days');
         const monthlyMaxDays    = document.getElementById('monthly-max-days');
-        const monthlyPeriodMode = document.getElementById('monthly-period-mode');
         const monthlyWeekdays   = document.getElementById('monthly-weekdays');
         const monthlyProgress   = document.getElementById('monthly-progress-hint');
         const monthlyPreflight  = document.getElementById('monthly-preflight');
@@ -1206,9 +1221,16 @@
         const btnMonthlyCancel  = document.getElementById('monthly-cancel-btn');
         const monthlyResults      = document.getElementById('monthly-results');
         const monthlyResultsTitle = document.getElementById('monthly-results-title');
+        const monthlyResultsSubtitle = document.getElementById('monthly-results-subtitle');
+        const monthlyResultsSummary = document.getElementById('monthly-results-summary');
+        const monthlyResultsNotice = document.getElementById('monthly-results-notice');
+        const monthlyResultsMethod = document.getElementById('monthly-results-method');
         const monthlyResultsMeta  = document.getElementById('monthly-results-meta');
         const monthlyResultsBody  = document.getElementById('monthly-results-tbody');
         const monthlyColPeriod    = document.getElementById('monthly-col-period');
+        const monthlyColEnd       = document.getElementById('monthly-col-end');
+        const monthlyColStartTime = document.getElementById('monthly-col-start-time');
+        const monthlyColEndTime   = document.getElementById('monthly-col-end-time');
         const monthlyColPrimary   = document.getElementById('monthly-col-primary');
         const monthlyColSecondary = document.getElementById('monthly-col-secondary');
         const btnMonthlyResultsClose = document.getElementById('monthly-results-close');
@@ -1245,6 +1267,7 @@
           dayBanner.classList.toggle('show', dayPickMode);
           suggestBanner.classList.toggle('show', closureTool === 'suggest');
           monthlyBanner.classList.toggle('show', closureTool === 'monthly');
+          simPanel.classList.toggle('monthly-tool-active', closureTool === 'monthly');
           pickCount.textContent = `${selected.size} vald${selected.size === 1 ? '' : 'a'}`;
           btnRun.disabled = selected.size === 0;
           if (closureTool === 'suggest') {
@@ -1307,7 +1330,11 @@
           closureTool = tool;
           if (!monthlyJobRunning && !suggestJobRunning) selected.clear();
           if (tool === 'suggest') suggestResults.classList.remove('show');
-          if (tool === 'monthly') monthlyResults.classList.remove('show');
+          if (tool === 'monthly') {
+            monthlyResults.classList.remove('show');
+            document.body.classList.remove('monthly-results-open');
+            document.getElementById('map').removeAttribute('aria-hidden');
+          }
           if (tool) optimizeResults.classList.remove('show');
           refreshCloseUI();
         }
@@ -2082,8 +2109,11 @@
             source: monthlySource,
             permitted_date_start: monthlyDateStart.value,
             permitted_date_end: monthlyDateEnd.value,
-            required_work_minutes:
-              Math.round((Number(monthlyWorkHours.value) || 4) * 60),
+            // Whole days derive their own work time; anything typed into
+            // the (disabled) hours field must never reach the contract.
+            required_work_minutes: monthlyFullday.checked
+              ? monthlyWholeDayCount() * 24 * 60
+              : Math.round((Number(monthlyWorkHours.value) || 4) * 60),
             max_consecutive_start_days:
               Math.min(90, Math.max(1, Number(monthlyMaxDays.value) || 1)),
             // "Heldag" gives the true full-day band 00:00–24:00 (the
@@ -2101,8 +2131,10 @@
             closure_type: 'full',
             duration_basis: 'required_work_time',
             work_to_closure_assumption: 'one_to_one',
-            objective_profile: monthlyPeriodMode.checked
-              ? 'closure_cost_v1' : 'robust_time_loss',
+            // "Bästa arbetsperiod" always compares the rolling periods. The
+            // former checkbox exposed an incompatible legacy objective when
+            // unchecked and made the main action ambiguous.
+            objective_profile: 'closure_cost_v1',
             policy_status: 'user_supplied_unverified',
             // Long searches are evaluated as exact date-specific daily SUMO
             // units. Traffic is reset between work days (the explicit fast
@@ -2113,8 +2145,7 @@
             // every selected workday. Period lengths that cannot divide the
             // requested work into equal 15-minute shifts are not candidates.
             work_allocation_policy: 'exact_equal_daily_v1',
-            period_comparison_policy: monthlyPeriodMode.checked
-              ? 'rolling_period_v1' : 'none_v1',
+            period_comparison_policy: 'rolling_period_v1',
           };
           // Preserve existing default search IDs/workspaces. The contract's
           // omitted default is one; only a real lower bound changes intent.
@@ -2144,14 +2175,11 @@
           const fullDay = band.earliest_start === '00:00' &&
             band.latest_end === '24:00';
           monthlyFullday.checked = fullDay;
-          monthlyBandStart.disabled = fullDay;
-          monthlyBandEnd.disabled = fullDay;
           if (!fullDay) {
             monthlyBandStart.value = band.earliest_start || '07:00';
             monthlyBandEnd.value = band.latest_end || '18:00';
           }
-          monthlyPeriodMode.checked =
-            spec.period_comparison_policy === 'rolling_period_v1';
+          applyFullDayMode();
           const allowed = new Set(spec.allowed_weekdays || []);
           monthlyWeekdays.querySelectorAll('button').forEach(btn =>
             btn.classList.toggle('active', allowed.has(Number(btn.dataset.day))));
@@ -2204,6 +2232,16 @@
           return parts.length ? ` · ${parts.join(' · ')}` : '';
         }
 
+        function monthlyElapsedLabel(seconds) {
+          const elapsed = Math.max(0, Math.round(Number(seconds) || 0));
+          if (elapsed < 60) return `${elapsed} s`;
+          const minutes = Math.floor(elapsed / 60);
+          if (minutes < 60) return `${minutes} min`;
+          const hours = Math.floor(minutes / 60);
+          const remainder = minutes % 60;
+          return remainder ? `${hours} h ${remainder} min` : `${hours} h`;
+        }
+
         function updateMonthlyProgress(status) {
           if (status.server_tracked === false) {
             monthlyJobServerTracked = false;
@@ -2217,11 +2255,13 @@
           const counts = progress.total
             ? ` ${progress.completed}/${progress.total}` : '';
           const detail = monthlyProgressDetail(progress.detail);
+          const wallElapsed = monthlyElapsedLabel(
+            status.wall_elapsed_s ?? status.elapsed_s);
           btnMonthlyRun.textContent =
-            `Söker… (${status.elapsed_s || 0}s aktiv tid)`;
+            `Sökning pågår · ${wallElapsed}`;
           monthlyProgress.hidden = false;
           monthlyProgress.textContent = status.status === 'cancelling'
-            ? 'Avbryter…' : `${label}${counts}${detail}`;
+            ? 'Avbryter…' : `${label}${counts}${detail} · ${wallElapsed} totalt`;
         }
 
         function scheduleLabel(schedule) {
@@ -2233,34 +2273,115 @@
             ? `${parts[0]} … (${intervals.length} dagar)` : parts.join(', ');
         }
 
+        function scheduleTableFields(schedule) {
+          const intervals = schedule?.intervals || [];
+          const first = intervals[0] || {};
+          const last = intervals[intervals.length - 1] || first;
+          return {
+            startDate: schedule?.first_work_date || first.work_date || '–',
+            endDate: last.work_date || '–',
+            startTime: schedule?.daily_start ||
+              (first.start_time ? first.start_time.slice(11, 16) : '–'),
+            endTime: schedule?.daily_end ||
+              (first.end_time ? first.end_time.slice(11, 16) : '–'),
+          };
+        }
+
+        function appendMonthlyStatus(cell, text, kind = '') {
+          const badge = document.createElement('span');
+          badge.className = `monthly-status${kind ? ` ${kind}` : ''}`;
+          badge.textContent = text;
+          cell.appendChild(badge);
+        }
+
+        function renderMonthlySummary(result, periodComparison, winner) {
+          const cards = [];
+          if (periodComparison) {
+            const winnerPeriod = (periodComparison.periods || []).find(
+              period => period.contains_final_winner);
+            cards.push(
+              ['Bästa period', winnerPeriod
+                ? `${winnerPeriod.start_date} – ${winnerPeriod.period_end}` : '–',
+               winner ? `${winner.daily_start}–${winner.daily_end} per dag` : ''],
+              ['q50-kostnad', winnerPeriod?.best_cost
+                ? `${Number(winnerPeriod.best_cost.added_vehicle_hours).toFixed(4)} ford.timmar`
+                : '–', 'Lägre är bättre'],
+              ['Beräknade scheman',
+               String(periodComparison.deterministic_costed_count ?? '–'),
+               `${periodComparison.start_date_count ?? '–'} startdatum`],
+              ['SUMO-verifierade',
+               String(periodComparison.sumo_verified_count ??
+                 periodComparison.evaluated_count ?? '–'),
+               'Endast de bästa kandidaterna'],
+            );
+          } else {
+            cards.push(
+              ['Resultat', result.status || '–', 'SUMO-baserad jämförelse'],
+              ['Valda scheman', String((result.selected_schedules || []).length), ''],
+            );
+          }
+          monthlyResultsSummary.replaceChildren(...cards.map(([label, value, detail]) => {
+            const card = document.createElement('div');
+            card.className = 'monthly-summary-card';
+            const labelEl = document.createElement('div');
+            labelEl.className = 'monthly-summary-label';
+            labelEl.textContent = label;
+            const valueEl = document.createElement('div');
+            valueEl.className = 'monthly-summary-value';
+            valueEl.textContent = value;
+            const detailEl = document.createElement('div');
+            detailEl.className = 'monthly-summary-detail';
+            detailEl.textContent = detail;
+            card.append(labelEl, valueEl, detailEl);
+            return card;
+          }));
+        }
+
         function renderMonthlyResults(result) {
           lastMonthlyResult = result;
           lastMonthlySpec = result.closure_search_spec || lastMonthlySpec;
           const screening = result.screening || {};
           const periodComparison = result.period_comparison;
-          monthlyResultsTitle.textContent =
-            periodComparison
-              ? `Bästa period · ${periodComparison.start_date_count} startdatum · ` +
-                `${periodComparison.evaluated_count} SUMO-verifierade scheman`
-              : `Bästa arbetsperiod · ${screening.candidate_count ?? '?'} lagliga ` +
-                `scheman · ${screening.shortlist_count ?? '?'} SUMO-verifierade`;
-
-          const metaLines = [];
           const boundary = result.claim_boundary || {};
           const winner = (result.selected_schedules || [])
             .find(s => s.schedule_id === result.winner_id);
+          const dayCount = winner?.intervals?.length;
+          monthlyResultsTitle.textContent =
+            periodComparison
+              ? `Resultat för ${dayCount || 'fler'}-dagarsperioder`
+              : 'Resultat för arbetsperioder';
+          const dateStart = lastMonthlySpec?.permitted_date_start;
+          const dateEnd = lastMonthlySpec?.permitted_date_end;
+          monthlyResultsSubtitle.textContent = periodComparison
+            ? `${dateStart || '–'} – ${dateEnd || '–'} · ` +
+              `${periodComparison.start_date_count ?? '–'} startdatum · ` +
+              `${periodComparison.deterministic_costed_count ?? '–'} q50-beräknade · ` +
+              `${periodComparison.sumo_verified_count ?? periodComparison.evaluated_count ?? '–'} ` +
+              `SUMO-verifierade`
+            : `${screening.candidate_count ?? '?'} lagliga scheman · ` +
+              `${screening.shortlist_count ?? '?'} SUMO-verifierade`;
+
+          const metaLines = [];
+          const noticeLines = [];
+          renderMonthlySummary(result, periodComparison, winner);
           if (periodComparison) {
-            monthlyColPeriod.textContent = 'Period';
-            monthlyColPrimary.textContent = 'Ford.timmar (värsta variant)';
+            monthlyColPeriod.textContent = 'Startdatum';
+            monthlyColEnd.textContent = 'Slutdatum';
+            monthlyColStartTime.textContent = 'Start/dag';
+            monthlyColEndTime.textContent = 'Slut/dag';
+            monthlyColPrimary.textContent = 'Ford.timmar (q50)';
             monthlyColSecondary.textContent = 'Extra km';
           } else {
-            monthlyColPeriod.textContent = 'Schema';
+            monthlyColPeriod.textContent = 'Startdatum';
+            monthlyColEnd.textContent = 'Slutdatum';
+            monthlyColStartTime.textContent = 'Start/dag';
+            monthlyColEndTime.textContent = 'Slut/dag';
             monthlyColPrimary.textContent = 'ΔTid p50 (värsta variant)';
             monthlyColSecondary.textContent = 'Övre 95 %';
           }
           if (!boundary.ui_exposure_allowed) {
-            metaLines.push('<span class="monthly-warn">Resultatet får inte visas ' +
-              'som rekommendation: ' + (boundary.reason || 'okänd orsak') + '</span>');
+            noticeLines.push('Resultatet får inte visas ' +
+              'som rekommendation: ' + (boundary.reason || 'okänd orsak'));
           } else if (result.status === 'unique_winner' && winner) {
             metaLines.push(`<b>Bäst bland SUMO-verifierade scheman inom angivna ` +
               `tider: ${scheduleLabel(winner)}</b>`);
@@ -2268,17 +2389,17 @@
             metaLines.push(`<b>Ingen ensam vinnare:</b> ${result.tie_ids.length} ` +
               `scheman är praktiskt likvärdiga.`);
           } else if (result.status === 'no_viable') {
-            metaLines.push('<span class="monthly-warn">Ingen genomförbar ' +
+            noticeLines.push('Ingen genomförbar ' +
               'arbetsperiod hittades — alla kandidater föll på hårda grindar ' +
-              '(omväg, strandade fordon, simuleringshälsa).</span>');
+              '(omväg, strandade fordon, simuleringshälsa).');
           } else {
-            metaLines.push('<span class="monthly-warn">Inget säkert svar — ' +
+            noticeLines.push('Inget säkert svar — ' +
               'resultatet är statistiskt oavgjort eller pilotgrinden kunde ' +
-              'inte gå vidare.</span>');
+              'inte gå vidare.');
           }
           metaLines.push(periodComparison
-            ? 'Alla rullande perioder jämförs med samma closure-cost-mått: värsta ' +
-              'tillagda fordonstimmar över q10/q50/q90, sedan extra sträcka ' +
+            ? 'Alla rullande perioder jämförs med samma closure-cost-mått: ' +
+              'tillagda fordonstimmar för q50, sedan extra sträcka ' +
               'och antal berörda fordon. Optimeringen väljer samma dagliga ' +
               'start/slut i 15-minuterssteg inom det tillåtna tidsfönstret. ' +
               'Perioder får korsa vecko- och månadsgränser.'
@@ -2290,21 +2411,30 @@
               'per arbetsdag. Maxgränsen är 90 arbetsdagar.');
           }
           if (result.policy_status === 'provisional') {
-            metaLines.push('<span class="monthly-warn">Periodanalysen använder ' +
+            noticeLines.push('Periodanalysen använder ' +
               'den preliminära v2-policyn. Resultatet är beslutsstöd, inte en ' +
-              'releasegodkänd global rekommendation.</span>');
+              'releasegodkänd global rekommendation.');
           }
-          if (periodComparison && !periodComparison.comparison_complete) {
+          if (periodComparison &&
+              periodComparison.deterministic_comparison_complete &&
+              !periodComparison.comparison_complete) {
+            metaLines.push('<span>Alla beräkningsbara scheman är q50-prissatta. ' +
+              'Bara toppkandidaterna SUMO-verifieras; övriga sorterades bort ' +
+              'med det bevisade kostnadsstoppet.</span>');
+          } else if (periodComparison && !periodComparison.comparison_complete) {
             metaLines.push('<span class="monthly-warn">Periodjämförelsen är ' +
               'inte komplett; minst ett schema saknar tillgängligt eller ' +
               'färdigt underlag.</span>');
           }
           if (!boundary.global_best_claim_allowed) {
-            metaLines.push('<span class="monthly-warn">Gäller de uppräknade ' +
+            noticeLines.push('Gäller de uppräknade ' +
               'kandidaterna — grinden för påståendet “globalt bäst över hela ' +
-              'sökintervallet” är ännu inte godkänd.</span>');
+              'sökintervallet” är ännu inte godkänd.');
           }
           monthlyResultsMeta.innerHTML = metaLines.join('<br>');
+          monthlyResultsNotice.textContent = noticeLines.join(' ');
+          monthlyResultsNotice.classList.toggle('show', noticeLines.length > 0);
+          monthlyResultsMethod.open = false;
 
           const statsById = Object.fromEntries(
             ((result.robust_decision || {}).candidates || [])
@@ -2312,12 +2442,19 @@
           const tieIds = new Set(result.tie_ids || []);
           const scheduleRows = () => (result.shortlisted_schedules || []).map(schedule => {
               const stats = statsById[schedule.schedule_id];
+              const fields = scheduleTableFields(schedule);
               const tr = document.createElement('tr');
               const failed = stats?.hard_failures?.length;
               if (failed) tr.classList.add('disqualified');
 
-              const schedTd = document.createElement('td');
-              schedTd.textContent = scheduleLabel(schedule);
+              const startTd = document.createElement('td');
+              startTd.textContent = fields.startDate;
+              const endTd = document.createElement('td');
+              endTd.textContent = fields.endDate;
+              const startTimeTd = document.createElement('td');
+              startTimeTd.textContent = fields.startTime;
+              const endTimeTd = document.createElement('td');
+              endTimeTd.textContent = fields.endTime;
 
               const deltaTd = document.createElement('td');
               deltaTd.textContent = stats?.robust_point_s != null
@@ -2334,19 +2471,22 @@
                 tag.textContent = stats.hard_failures.join(', ');
                 statusTd.appendChild(tag);
               } else if (schedule.schedule_id === result.winner_id) {
-                statusTd.textContent = 'Bäst';
+                appendMonthlyStatus(statusTd, 'Bäst · SUMO-verifierad', 'best');
+                tr.classList.add('best-period');
               } else if (tieIds.has(schedule.schedule_id)) {
-                statusTd.textContent = 'Likvärdig';
+                appendMonthlyStatus(statusTd, 'Likvärdig · SUMO-verifierad', 'verified');
+                tr.classList.add('sumo-verified');
               } else if (stats) {
-                statusTd.textContent = 'Finalist';
+                appendMonthlyStatus(statusTd, 'SUMO-verifierad', 'verified');
+                tr.classList.add('sumo-verified');
               } else {
-                statusTd.textContent = 'Utsållad i pilot';
+                appendMonthlyStatus(statusTd, 'Ej SUMO-körd');
               }
 
               const loadTd = document.createElement('td');
               const loadBtn = document.createElement('button');
               loadBtn.className = 'sr-load-btn';
-              loadBtn.textContent = 'Ladda';
+              loadBtn.textContent = 'Visa på karta';
               loadBtn.disabled = Boolean(failed) ||
                 !boundary.ui_exposure_allowed;
               loadBtn.title = failed
@@ -2356,16 +2496,24 @@
                 () => loadMonthlySchedule(schedule, loadBtn));
               loadTd.appendChild(loadBtn);
 
-              tr.append(schedTd, deltaTd, upperTd, statusTd, loadTd);
+              tr.append(startTd, endTd, startTimeTd, endTimeTd,
+                deltaTd, upperTd, statusTd, loadTd);
               return tr;
             });
           const periodRows = () => (periodComparison?.periods || []).map(period => {
             const tr = document.createElement('tr');
             if (period.status === 'no_viable') tr.classList.add('disqualified');
-            const periodTd = document.createElement('td');
-            periodTd.textContent = period.best_schedule
-              ? scheduleLabel(period.best_schedule)
-              : `Start ${period.start_date}`;
+            if (period.status === 'best_period') tr.classList.add('best-period');
+            else if (period.best_sumo_verified) tr.classList.add('sumo-verified');
+            const fields = scheduleTableFields(period.best_schedule);
+            const startTd = document.createElement('td');
+            startTd.textContent = period.start_date || fields.startDate;
+            const endTd = document.createElement('td');
+            endTd.textContent = period.period_end || fields.endDate;
+            const startTimeTd = document.createElement('td');
+            startTimeTd.textContent = fields.startTime;
+            const endTimeTd = document.createElement('td');
+            endTimeTd.textContent = fields.endTime;
             const hoursTd = document.createElement('td');
             hoursTd.textContent = period.best_cost
               ? Number(period.best_cost.added_vehicle_hours).toFixed(4) : '–';
@@ -2373,15 +2521,22 @@
             distanceTd.textContent = period.best_cost
               ? (Number(period.best_cost.added_metres_total) / 1000).toFixed(1) : '–';
             const statusTd = document.createElement('td');
-            statusTd.textContent = period.status === 'best_period' ? 'Bästa perioden'
-              : period.status === 'tied_best_period' ? 'Likvärdig bäst'
-              : period.status === 'viable' ? `${period.viable_count} giltiga`
-              : period.status === 'no_viable' ? 'Ingen giltig'
-              : 'Ofullständig';
+            const statusText = period.status === 'best_period'
+              ? ['Bäst · SUMO-verifierad', 'best']
+              : period.status === 'tied_best_period'
+              ? ['Likvärdig bäst · SUMO-verifierad', 'verified']
+              : period.status === 'sumo_verified'
+              ? ['SUMO-verifierad', 'verified']
+              : period.status === 'costed_not_run'
+              ? ['Beräknad med q50', '']
+              : period.status === 'viable' ? [`${period.viable_count} giltiga`, '']
+              : period.status === 'no_viable' ? ['Ingen giltig', 'failed']
+              : ['Ofullständig', 'failed'];
+            appendMonthlyStatus(statusTd, statusText[0], statusText[1]);
             const loadTd = document.createElement('td');
             const loadBtn = document.createElement('button');
             loadBtn.className = 'sr-load-btn';
-            loadBtn.textContent = 'Ladda';
+            loadBtn.textContent = 'Visa på karta';
             loadBtn.disabled = !period.best_schedule ||
               !boundary.ui_exposure_allowed;
             if (period.best_schedule) {
@@ -2390,12 +2545,16 @@
                 loadMonthlySchedule(period.best_schedule, loadBtn));
             }
             loadTd.appendChild(loadBtn);
-            tr.append(periodTd, hoursTd, distanceTd, statusTd, loadTd);
+            tr.append(startTd, endTd, startTimeTd, endTimeTd,
+              hoursTd, distanceTd, statusTd, loadTd);
             return tr;
           });
           monthlyResultsBody.replaceChildren(
             ...(periodComparison ? periodRows() : scheduleRows()));
           monthlyResults.classList.add('show');
+          document.body.classList.add('monthly-results-open');
+          document.getElementById('map').setAttribute('aria-hidden', 'true');
+          monthlyResults.focus();
         }
 
         // Exact-schedule handoff: the loaded scenario is built from the
@@ -2480,6 +2639,8 @@
             if (status.status === 'error') throw new Error(status.error);
             if (status.status === 'cancelled') return;
             monthlyResults.classList.remove('show');
+            document.body.classList.remove('monthly-results-open');
+            document.getElementById('map').removeAttribute('aria-hidden');
             setClosureTool(null);
             await activateClosedScenario(status);
           } catch (e) {
@@ -2494,13 +2655,50 @@
         }
 
         btnMonthly.addEventListener('click', () => setClosureTool('monthly'));
-        btnMonthlyResultsClose.addEventListener('click',
-          () => monthlyResults.classList.remove('show'));
-        // Full-day band overrides (and visibly disables) the time inputs.
-        monthlyFullday.addEventListener('change', () => {
-          monthlyBandStart.disabled = monthlyFullday.checked;
-          monthlyBandEnd.disabled = monthlyFullday.checked;
+        function closeMonthlyResults() {
+          monthlyResults.classList.remove('show');
+          document.body.classList.remove('monthly-results-open');
+          document.getElementById('map').removeAttribute('aria-hidden');
+          const returnTarget = monthlyBanner.classList.contains('show')
+            ? btnMonthlyRun : btnMonthly;
+          returnTarget.focus();
+        }
+        btnMonthlyResultsClose.addEventListener('click', closeMonthlyResults);
+        document.addEventListener('keydown', event => {
+          if (event.key === 'Escape' && monthlyResults.classList.contains('show')) {
+            closeMonthlyResults();
+          }
         });
+        // "Heldag" means the road is shut for whole calendar days, so the
+        // work time is NOT a free input: it is exactly days x 24 h. Leaving
+        // it editable let a person ask for 7 whole days with 1.5 work hours,
+        // which is unsatisfiable (the equal-daily split cannot make 90
+        // minutes fill seven days) and silently returned "0 perioder".
+        // Derive it, disable it, and show what it derived.
+        function applyFullDayMode() {
+          const whole = monthlyFullday.checked;
+          monthlyBandStart.closest('.monthly-field').classList.toggle(
+            'whole-day', whole);
+          monthlyBandStart.disabled = whole;
+          monthlyBandEnd.disabled = whole;
+          monthlyFullDayValue.hidden = !whole;
+          monthlyWorkHours.disabled = whole;
+          monthlyMinDays.disabled = whole;
+          if (whole) {
+            const days = monthlyWholeDayCount();
+            // A whole-day closure is N days long; a shorter period cannot
+            // also be whole days, so min follows max rather than silently
+            // contributing no candidates.
+            monthlyMinDays.value = days;
+            monthlyWorkHours.value = days * 24;
+          }
+        }
+        function monthlyWholeDayCount() {
+          return Math.min(90, Math.max(1, Number(monthlyMaxDays.value) || 1));
+        }
+        monthlyFullday.addEventListener('change', applyFullDayMode);
+        monthlyMaxDays.addEventListener('input', applyFullDayMode);
+        applyFullDayMode();
         monthlyWeekdays.querySelectorAll('button').forEach(btn =>
           btn.addEventListener('click', () => btn.classList.toggle('active')));
         monthlySourceSeg.querySelectorAll('button').forEach(btn =>
@@ -2695,8 +2893,9 @@
         // resource. This is intentionally one path for simulate/suggest/
         // monthly: after a reload or closed tab, the active job reopens the
         // unified Vägavstängning workspace and keeps polling its own status.
-        // Finished historical jobs are left in Körhistorik; only genuinely
-        // running/cancelling server state takes over a fresh page.
+        // Genuinely running/cancelling state takes priority. A completed
+        // monthly result is also restored because it is the user's requested
+        // search output; older jobs remain available separately in Körhistorik.
         (async () => {
           try {
             const states = await Promise.all(
@@ -2712,15 +2911,20 @@
               state.status === 'checking_cache' ||
               state.status === 'running' || state.status === 'cancelling');
             if (!active) {
-              const completedExternal = states.find(([kind, state]) =>
-                kind === 'monthly' && state.status === 'done' &&
-                state.server_tracked === false && state.result);
-              if (completedExternal) {
-                const [, state] = completedExternal;
+              // A completed monthly result is useful after a reload whether
+              // it was adopted from disk or is still remembered by this
+              // server. Requiring server_tracked === false hid freshly
+              // completed searches until the server was restarted, even
+              // though /api/monthly_search/status already returned the full
+              // verified result.
+              const completedMonthly = states.find(([kind, state]) =>
+                kind === 'monthly' && state.status === 'done' && state.result);
+              if (completedMonthly) {
+                const [, state] = completedMonthly;
                 await openWorkspace('closure');
                 setClosureTool('monthly');
                 monthlyJobRunning = false;
-                monthlyJobServerTracked = false;
+                monthlyJobServerTracked = state.server_tracked !== false;
                 restoreMonthlySearchSpec(state.closure_search_spec);
                 selected.clear();
                 for (const edge of state.edges ||

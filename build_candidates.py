@@ -2477,9 +2477,21 @@ def grounded_sensor_basis_routes(
                     {target: banned_costs.get(destination)}, network_sha256)
                 if reason is not None or proof is None:
                     continue
-                # Prefer representative five-minute paths within each origin,
-                # but never use this ranking as an eligibility condition.
-                score = abs(float(proof["route_cost_s"]) - 300.0)
+                # Preserve the generator's frozen P(length | purpose) signal
+                # when selecting among equally eligible grounded support ODs.
+                # A flat five-minute target made the large sensor-basis fill
+                # erase the longer-leisure/shorter-work ordering even though
+                # ordinary candidates retained it. This remains ranking only:
+                # every admitted route must still pass the unchanged global-
+                # shortest and strictly-positive avoidance-gap contract.
+                purpose_pool = (
+                    destination_pool
+                    if not destination_pool.startswith("home:") else origin_pool
+                )
+                purpose = purpose_pool.split(":", 1)[0]
+                purpose_scale = float(PURPOSE_LENGTH_SCALE.get(purpose, 1.0))
+                target_cost_s = 300.0 * purpose_scale
+                score = abs(float(proof["route_cost_s"]) - target_cost_s)
                 ranked_for_origin.append((
                     score, destination, destination_pool, route_edges, proof))
 

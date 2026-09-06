@@ -766,6 +766,33 @@ class TestClosureObjectiveRanking:
         assert result.winner_id == "b", (
             "a must be judged on its worst variant (9.0), not its best")
 
+    def test_q50_objective_can_choose_the_central_variant_winner(self):
+        def records(q10, q50, q90):
+            return [
+                {"demand_variant": variant,
+                 **_disruption(hours=hours, affected=10)}
+                for variant, hours in (
+                    ("q10", q10), ("q50", q50), ("q90", q90))
+            ]
+
+        central_best = _costed(
+            "central-best", _all_variants([1.0] * 4), records(1, 2, 9))
+        worst_best = _costed(
+            "worst-best", _all_variants([1.0] * 4), records(1, 3, 4))
+
+        result = decide_finalists(
+            [central_best, worst_best],
+            _policy(),
+            ranking_objective="closure_cost_v2",
+        )
+
+        assert result.winner_id == "central-best"
+        assert result.method == "deterministic_q50_closure_cost_v2"
+        assert result.reason == (
+            "one schedule adds fewer total vehicle-hours than every rival "
+            "beyond the declared equivalence band, on deterministic evidence"
+        )
+
     def test_exact_vehicle_hour_tie_uses_added_distance(self):
         short = _costed("short", _all_variants([1.0] * 4), [
             _disruption(hours=1.0, metres=100, affected=20)

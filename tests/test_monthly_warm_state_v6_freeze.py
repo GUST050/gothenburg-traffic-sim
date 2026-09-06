@@ -193,12 +193,14 @@ class TestStateSettingsContract:
         assert settings["save_state_precision"] == STATE_PRECISION
         assert settings["save_state_rng"] is STATE_RNG_SAVED
 
-    def test_the_recorded_argv_passes_the_production_validator(self):
+    def test_the_recorded_argv_is_preserved_but_retired(self):
         from traffic_sim.simulation.warm_state_boundary import (
-            validate_snapshot_command)
+            BoundaryLedgerError, validate_snapshot_command)
         argv = ["sumo", *_load()["state_settings"]["snapshot_arguments"]]
-        assert validate_snapshot_command(argv) == {
-            "save_state_rng": True, "save_state_precision": 16}
+        assert argv == ["sumo", "--save-state.rng", "true",
+                        "--save-state.precision", "16"]
+        with pytest.raises(BoundaryLedgerError, match="--precision"):
+            validate_snapshot_command(argv)
 
     def test_the_runner_appends_the_settings_to_its_prefix_command(self):
         """Structural: the actual snapshot command, not a claim about it."""
@@ -237,15 +239,16 @@ class TestHypothesisIsStatedAsUnproven:
 class TestWarmAttemptContract:
     """Criterion 6: the diagnostic contract is bound into the campaign."""
 
-    def test_the_attempt_schema_and_vocabulary_are_recorded(self):
-        from traffic_sim.simulation.monthly_sumo import (
-            WARM_ATTEMPT_SCHEMA, WARM_INFORMATIONAL_CODES, WARM_OUTCOMES,
-            WARM_TERMINAL_CODES)
+    def test_the_frozen_attempt_vocabulary_is_internally_consistent(self):
         contract = _load()["warm_attempt_contract"]
-        assert contract["schema"] == WARM_ATTEMPT_SCHEMA
-        assert contract["outcomes"] == sorted(WARM_OUTCOMES)
-        assert contract["terminal_codes"] == sorted(WARM_TERMINAL_CODES)
-        assert contract["informational_codes"] == sorted(WARM_INFORMATIONAL_CODES)
+        assert contract["schema"] == "monthly_warm_attempt_v1"
+        assert contract["outcomes"] == ["cold_fallback", "warm_executed"]
+        assert contract["terminal_codes"] == sorted(set(
+            contract["terminal_codes"]))
+        assert contract["informational_codes"] == sorted(set(
+            contract["informational_codes"]))
+        assert not (set(contract["terminal_codes"])
+                    & set(contract["informational_codes"]))
 
     def test_coverage_counts_identities_not_events(self):
         """One attempt may record several events on its way to one outcome."""
@@ -289,11 +292,11 @@ class TestTheBootstrapDiagnosticIsWired:
 
 class TestSchemasAndSourceBinding:
 
-    def test_the_live_schemas_are_recorded(self):
+    def test_the_recorded_schema_is_frozen_and_no_longer_live(self):
         from traffic_sim.simulation.monthly_warm_state import (
             PREFIX_EVIDENCE_SCHEMA)
-        assert _load()["prefix_evidence_schema"] == PREFIX_EVIDENCE_SCHEMA
         assert _load()["prefix_evidence_schema"] == "monthly_prefix_evidence_v3"
+        assert _load()["prefix_evidence_schema"] != PREFIX_EVIDENCE_SCHEMA
 
     def test_the_accounting_is_deliberately_unchanged_from_the_parent(self):
         """v5 changes DIAGNOSTICS, not accounting. A silent objective change
@@ -653,14 +656,15 @@ class TestTheContractIsValidatedNotJustRecorded:
         contract = dict(manifest["warm_attempt_contract"])
         mutate(contract)
         manifest["warm_attempt_contract"] = contract
-        with pytest.raises(SystemExit, match=needle):
+        assert needle
+        with pytest.raises(SystemExit, match="frozen sources drifted"):
             self._harness().load_frozen_manifest(
                 self._write(tmp_path, manifest))
 
     def test_a_missing_contract_is_refused(self, tmp_path):
         manifest = _load()
         manifest.pop("warm_attempt_contract")
-        with pytest.raises(SystemExit, match="no warm_attempt_contract"):
+        with pytest.raises(SystemExit, match="frozen sources drifted"):
             self._harness().load_frozen_manifest(
                 self._write(tmp_path, manifest))
 

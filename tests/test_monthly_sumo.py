@@ -285,6 +285,25 @@ def test_objective_aligned_runner_emits_per_variant_disruption(
     )
 
 
+def test_routing_population_must_match_deterministic_disruption():
+    runner = object.__new__(ArchivedDemandSumoRunner)
+    runner.include_disruption = True
+    runner._closure_disruption = lambda _schedule: ({
+        "demand_variant": "q90",
+        "vehicles_affected": 7,
+        "vehicles_no_detour": 1,
+    },)
+    schedule = generate_closure_schedules(_spec())[0]
+
+    runner._require_routing_disruption_alignment(
+        schedule, "q90", rerouted=6, denied=1)
+    with pytest.raises(
+            monthly_sumo.closure_routing.ClosureRoutingError,
+            match="routing/disruption population mismatch"):
+        runner._require_routing_disruption_alignment(
+            schedule, "q90", rerouted=5, denied=1)
+
+
 def test_archive_calibrated_on_another_network_is_rejected(
         tmp_path, patched_runtime):
     archive = _archive(tmp_path)
@@ -877,6 +896,9 @@ def _durable_chain(runner, *, candidate_id="candidate-a", work_date="2027-01-01"
         seed=seed,
         execution_arm=execution_arm,
         access_impact_sha256=access_impact_sha256,
+        access_impact_semantic_sha256=(
+            closure_routing.access_impact_semantic_sha256(
+                json.loads(access_impact_path.read_text(encoding="utf-8")))),
         transformed_route_sha256=transformed_route_sha256,
         rerouted_around_closure=0,
         denied_count=0,
@@ -1165,6 +1187,13 @@ def test_validate_canonical_observation_evidence_rejects_wrong_report_identity(
     (lambda report: report.__setitem__("schema_version", 2),
      "schema_version"),
     (_inject_unknown_denial_reason, "record is invalid"),
+    # `source_route_sha256` is validated for SHAPE only and is never
+    # cross-referenced against provenance or any other field, so no specific
+    # check above can catch a swap here. It therefore proves the whole-report
+    # semantic digest is a real backstop rather than a restatement of checks
+    # that already exist -- the property F8 relies on for cross-arm equality.
+    (lambda report: report.__setitem__("source_route_sha256", "e" * 64),
+     "semantic digest"),
 ])
 def test_validate_canonical_observation_evidence_rejects_semantically_invalid_report(
         tmp_path, patched_runtime, mutation, message):

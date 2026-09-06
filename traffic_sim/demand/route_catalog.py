@@ -343,6 +343,39 @@ def catalog_key(config: Mapping[str, object], inputs: Mapping[str, Path],
     return hashlib.sha256(_stable_json(payload)).hexdigest()[:32]
 
 
+def identity_drift(root: Path, key: str,
+                   payload: Mapping[str, object]) -> list[str]:
+    """Name the identity components a stored entry no longer agrees with.
+
+    ``adopted_key_stale_for_current_inputs`` is a true but mute answer: it
+    says a rebuild is needed without saying what moved.  Measured 2026-09-06,
+    that cost two sessions — production had been silently serving the legacy
+    builder, and locating the cause meant re-hashing the whole inventory by
+    hand to find the four components of twenty-three that had drifted.  Both
+    identities are already in hand on the fallback path, so name them there.
+
+    This runs only on an already-failing path and must never raise: an
+    unreadable or absent entry reports ``stored_identity_unavailable``.
+    """
+    try:
+        stored = json.loads(
+            (_entry(root, key) / "manifest.json").read_text()).get("identity")
+    except (OSError, ValueError, AttributeError):
+        return ["stored_identity_unavailable"]
+    if not isinstance(stored, Mapping):
+        return ["stored_identity_unavailable"]
+    drift: list[str] = []
+    for section in ("config", "inputs", "source_files"):
+        was = stored.get(section)
+        now = payload.get(section)
+        was = was if isinstance(was, Mapping) else {}
+        now = now if isinstance(now, Mapping) else {}
+        drift.extend(
+            f"{section}.{label}" for label in sorted(set(was) | set(now))
+            if was.get(label) != now.get(label))
+    return drift
+
+
 def _entry(root: Path, key: str) -> Path:
     if not isinstance(key, str) or len(key) != 32 or any(
             c not in "0123456789abcdef" for c in key):
@@ -668,8 +701,15 @@ def combine_catalogs(
     out_meta: Path,
     *,
     pool_order: tuple[str, ...] = ("weekday", "weekend"),
+    exclude_support_only: bool = False,
 ) -> dict:
-    """Merge day-type route XML and metadata without ID or pool collisions."""
+    """Merge day-type route XML and metadata without ID or pool collisions.
+
+    ``support_only`` routes are independently filled to the sensor floor in
+    each immutable day-type catalog.  A mixed-day consumer must omit those
+    per-pool fills and install one shared basis after merging; otherwise the
+    adapter doubles structural support and changes PFE population totals.
+    """
     root = ET.Element("routes", {
         "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
         "xsi:noNamespaceSchemaLocation":
@@ -679,6 +719,7 @@ def combine_catalogs(
     merged_contract = None
     qualified = 0
     count = 0
+    excluded_support = 0
     for pool in pool_order:
         if pool not in sources:
             continue
@@ -710,14 +751,17 @@ def combine_catalogs(
             if not old_id:
                 raise ValueError(f"catalog vehicle in {pool} has no id")
             new_id = prefix + old_id
-            vehicle.set("id", new_id)
-            root.append(vehicle)
             record = (meta.get("candidates") or {}).get(old_id)
             if record is None:
                 raise ValueError(f"catalog metadata is missing candidate {old_id}")
             if not isinstance(record, dict):
                 raise ValueError(
                     f"catalog metadata candidate {old_id} is not an object")
+            if exclude_support_only and record.get("support_only") is True:
+                excluded_support += 1
+                continue
+            vehicle.set("id", new_id)
+            root.append(vehicle)
             merged_record = dict(record)
             tour_id = merged_record.get("tour_id")
             if tour_id is not None:
@@ -736,7 +780,8 @@ def combine_catalogs(
         raise ValueError("cannot combine an empty route catalog")
     if merged_contract is not None:
         merged_contract = dict(merged_contract)
-        merged_contract["qualified_candidates"] = qualified
+        merged_contract["qualified_candidates"] = (
+            count if exclude_support_only else qualified)
     merged["sensor_route_contract"] = merged_contract
     out_rou = Path(out_rou)
     out_meta = Path(out_meta)
@@ -744,4 +789,8 @@ def combine_catalogs(
     out_meta.parent.mkdir(parents=True, exist_ok=True)
     ET.ElementTree(root).write(out_rou, encoding="utf-8", xml_declaration=False)
     out_meta.write_text(json.dumps(merged, separators=(",", ":"), sort_keys=True))
-    return {"vehicles": count, "location_pools": len(merged["location_pools"])}
+    return {
+        "vehicles": count,
+        "location_pools": len(merged["location_pools"]),
+        "excluded_support_only": excluded_support,
+    }

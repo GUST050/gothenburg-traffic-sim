@@ -352,7 +352,7 @@ def _baseline(
         prefix=f"baseline-{demand_key}-", dir=str(run_root)
     ))
     try:
-        metrics, _, _, per_seed = legacy.simulate_closure(
+        metrics, _, _, per_seed, _ = legacy.simulate_closure(
             name="baseline",
             closures=None,
             close_edges=[],
@@ -521,7 +521,8 @@ def _run_case(
         scratch: list[Path] = []
         try:
             closures = _closure_seconds(schedule, epoch, spec.directed_edges)
-            metrics, truncated, dropped, per_seed = legacy.simulate_closure(
+            metrics, truncated, dropped, per_seed, rerouted = \
+                legacy.simulate_closure(
                 name=f"candidate-{index:03}",
                 closures=closures,
                 close_edges=close_edges,
@@ -583,6 +584,7 @@ def _run_case(
                 "paired_delta_time_loss": interval,
                 "truncated_unreachable": truncated,
                 "dropped_unreachable": dropped,
+                "rerouted_around_closure": rerouted,
             }
             _atomic_json(case_path, progress)
             print(

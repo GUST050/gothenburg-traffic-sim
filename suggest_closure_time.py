@@ -55,6 +55,7 @@ import numpy as np
 from scipy import stats as scipy_stats
 
 from traffic_sim.simulation import metrics as cm
+from traffic_sim.simulation import closure_routing
 from traffic_sim.simulation import closure_teleport as ct
 import run_scenario as rs
 from traffic_sim.core.contracts import load_scenario_spec
@@ -412,6 +413,7 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
     per_variant_rerouted: list[int] = [0] * len(variants)
     per_variant_access_impact_sha256: list[str | None] = [None] * len(variants)
     per_variant_transformed_route_sha256: list[str | None] = [None] * len(variants)
+    per_variant_transformed_population: list[int | None] = [None] * len(variants)
     closure_add: list[Path] = []
     if seed_workers < 1:
         raise ValueError("seed_workers must be >= 1")
@@ -478,6 +480,11 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
             # recorded stays bound to the published result even though the
             # file itself does not outlive this run.
             per_variant_access_impact_sha256[i] = sha256_file(access_impact_fp)
+            access_report = json.loads(
+                access_impact_fp.read_text(encoding="utf-8"))
+            per_variant_transformed_population[i] = (
+                int(access_report["summary"]["unaffected"])
+                + int(access_report["summary"]["rerouted"]))
             # The transformed route file itself, digested the moment it is
             # written -- this IS the route SUMO subsequently runs (`fp`
             # feeds `run_variants`/`route_path` below), so its digest is the
@@ -497,6 +504,7 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
         seed_rerouted = per_variant_rerouted[variant_idx]
         seed_access_impact_sha256 = per_variant_access_impact_sha256[variant_idx]
         seed_transformed_route_sha256 = per_variant_transformed_route_sha256[variant_idx]
+        transformed_population = per_variant_transformed_population[variant_idx]
         seed_dir = base_dir / f"seed-{seed}" if work_dir is not None else base_dir
         if work_dir is not None:
             seed_dir.mkdir(parents=True, exist_ok=False)
@@ -514,6 +522,7 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
                      "seed_rerouted": seed_rerouted,
                      "seed_access_impact_sha256": seed_access_impact_sha256,
                      "seed_transformed_route_sha256": seed_transformed_route_sha256})
+        jobs[-1]["transformed_population"] = transformed_population
 
     # The BASELINE arm (close_edges empty) keeps SUMO's own teleport default:
     # it has no closed edge to leak onto, and its teleports are the genuine
@@ -564,6 +573,13 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
             dropped_unreachable=job["seed_dropped"],
             summary_path=metric_paths["summary"],
             closed_edge_throughput=active_throughput)
+        if job["transformed_population"] is not None:
+            closure_routing.require_sumo_population_identity(
+                job["transformed_population"],
+                loaded=metrics.loaded, inserted=metrics.inserted,
+                trip_count=metrics.trip_count,
+                context=(f"{name}/{job['demand_variant']}/"
+                         f"seed-{job['seed']}"))
         return (
             job["seed"],
             job["variant_idx"],

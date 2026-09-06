@@ -28,6 +28,12 @@ if str(ROOT) not in sys.path:
 
 import tools.cost_ordered_benchmark as base  # noqa: E402
 from traffic_sim.core.fingerprint import sha256_file  # noqa: E402
+from traffic_sim.simulation.monthly_demand import (  # noqa: E402
+    validate_qualified_demand_manifest_shape,
+)
+from traffic_sim.simulation.phase6_eligibility import (  # noqa: E402
+    decision_population_complete as _shared_decision_population_complete,
+)
 
 SCHEMA = "subhour_cost_ordered_bounded_registration_v1"
 OUTCOME_SCHEMA = "subhour_cost_ordered_bounded_outcome_v1"
@@ -42,7 +48,7 @@ DEFAULT_OUTCOME = ROOT / "validation" / (
 _ARCHIVE_INDEX_CACHE: dict[str, list[Path]] = {}
 _VALID_ARCHIVE_CACHE: set[tuple[str, str]] = set()
 _METADATA_ARCHIVE_KEYS: dict[str, set[str]] = {}
-_ARCHIVE_MATCH_CACHE: dict[tuple[str, str], tuple[dict[str, Any], ...]] = {}
+_ARCHIVE_MATCH_CACHE: dict[tuple[str, str, str], tuple[dict[str, Any], ...]] = {}
 _DEMAND_SOURCE_FINGERPRINTS: dict[str, Any] | None = None
 
 
@@ -177,7 +183,7 @@ def outcome_free_tuple(item: Mapping[str, Any]) -> tuple[str, str, str, str, str
     )
 
 
-def _metadata_inventory(runs_root: Path) -> list[dict[str, Any]]:
+def _metadata_inventory(runs_root: Path, qualified_manifest: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
     """Build the complete eligible inventory without opening outcome files."""
     # These helpers read demand_meta/routes and the topology survivability
     # screen only.  They do not import or glob validation/*outcome* records.
@@ -190,7 +196,7 @@ def _metadata_inventory(runs_root: Path) -> list[dict[str, Any]]:
         # metadata case that cannot be executed before hashing/selection, so
         # the frozen rule never needs an outcome-driven or post-selection
         # replacement.
-        if not _spec_has_metadata_archives(spec, Path(runs_root)):
+        if not _spec_has_metadata_archives(spec, Path(runs_root), qualified_manifest):
             continue
         item = {
             "search_id": spec.search_id,
@@ -208,7 +214,8 @@ def _metadata_inventory(runs_root: Path) -> list[dict[str, Any]]:
     return sorted(items, key=lambda item: item["selection_sha256"])
 
 
-def _spec_has_metadata_archives(spec: Any, runs_root: Path) -> bool:
+def _spec_has_metadata_archives(spec: Any, runs_root: Path,
+                                qualified_manifest: Mapping[str, Any] | None = None) -> bool:
     """Cheap outcome-blind availability screen; full validation happens later."""
     from traffic_sim.core.closure_calendar import iter_closure_schedules
     from traffic_sim.simulation.independent_daily import daily_unit_records
@@ -244,10 +251,13 @@ def _spec_has_metadata_archives(spec: Any, runs_root: Path) -> bool:
     for parent in iter_closure_schedules(spec):
         for _unit_id, _identity, build_schedule in daily_unit_records(spec, parent):
             required.add(resolver._required(build_schedule()).build_key)
+    if qualified_manifest is not None:
+        available = available & set(qualified_manifest["archives"])
     return required <= available
 
 
-def _metadata_archives_for_spec(spec: Any, runs_root: Path) -> dict[str, dict[str, Any]] | None:
+def _metadata_archives_for_spec(spec: Any, runs_root: Path,
+                                qualified_manifest: Mapping[str, Any]) -> dict[str, dict[str, Any]] | None:
     """Resolve candidate archives from metadata without validating outcomes."""
     from traffic_sim.core.closure_calendar import iter_closure_schedules
     from traffic_sim.simulation.independent_daily import daily_unit_records
@@ -259,7 +269,8 @@ def _metadata_archives_for_spec(spec: Any, runs_root: Path) -> dict[str, dict[st
     resolver = MonthlyDemandResolverRunner(
         spec, runs_root=Path(runs_root), build_missing=False,
         baseline_trip_duration_p99_s=3600,
-        study_provenance_key="subhour-registration-selection")
+        study_provenance_key="subhour-registration-selection",
+        qualified_demand_manifest=qualified_manifest)
     required: dict[str, Any] = {}
     for parent in iter_closure_schedules(spec):
         for _unit_id, _identity, build_schedule in daily_unit_records(spec, parent):
@@ -275,10 +286,20 @@ def _metadata_archives_for_spec(spec: Any, runs_root: Path) -> dict[str, dict[st
         # validator reads demand/archive metadata and source fingerprints, not
         # benchmark outcomes, so selection remains outcome-blind while the
         # executable registration is self-consistent.
-        match_key = (str(Path(runs_root).resolve()), demand.build_key)
+        # Archive eligibility now depends on the exact Phase D manifest as
+        # well as the build key.  Omitting the manifest identity here allowed
+        # an earlier lookup in the same process to leak across evidence
+        # generations and select an archive the current manifest did not
+        # authorize.
+        match_key = (
+            str(Path(runs_root).resolve()),
+            demand.build_key,
+            str(qualified_manifest["content_key"]),
+        )
         matches = _ARCHIVE_MATCH_CACHE.get(match_key)
         if matches is None:
-            matches = find_demand_archives(Path(runs_root), demand)
+            matches = find_demand_archives(
+                Path(runs_root), demand, qualified_manifest=qualified_manifest)
             _ARCHIVE_MATCH_CACHE[match_key] = tuple(matches)
         if not matches:
             return None
@@ -298,9 +319,14 @@ def _metadata_archives_for_spec(spec: Any, runs_root: Path) -> dict[str, dict[st
     return result
 
 
-def select_cases(runs_root: Path = base.DEFAULT_RUNS_ROOT) -> dict[str, Any]:
+def select_cases(runs_root: Path = base.DEFAULT_RUNS_ROOT,
+                 qualified_manifest: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Select eight cases with four edges and two demand periods."""
-    eligible = _metadata_inventory(Path(runs_root))
+    if qualified_manifest is not None:
+        validate_qualified_demand_manifest_shape(qualified_manifest)
+        if qualified_manifest.get("status") != "PASS":
+            raise ValueError("Phase 3 requires a passing qualified-demand manifest")
+    eligible = _metadata_inventory(Path(runs_root), qualified_manifest)
     edges = sorted({str(item["spec"]["directed_edges"][0])
                     for item in eligible})
     periods = sorted({str(item["demand_period"]) for item in eligible})
@@ -370,8 +396,14 @@ def build_registration(
     data_root: Path = ROOT,
     registration_path: Path = DEFAULT_REGISTRATION,
     evidence_id: str = "subhour-bounded-sumo-v1",
+    qualified_manifest_path: Path | None = None,
 ) -> dict[str, Any]:
-    selection = select_cases(runs_root)
+    if qualified_manifest_path is None:
+        raise ValueError("Phase 3 registration requires a qualified-demand manifest")
+    qualified_manifest_path = Path(qualified_manifest_path).resolve()
+    qualified_manifest = json.loads(qualified_manifest_path.read_text(encoding="utf-8"))
+    validate_qualified_demand_manifest_shape(qualified_manifest)
+    selection = select_cases(runs_root, qualified_manifest)
     selected: list[dict[str, Any]] = []
     archives: dict[str, Any] = {}
     # `select_cases` is the only selector.  Archive resolution is an input
@@ -383,7 +415,8 @@ def build_registration(
         raise ValueError("frozen selection did not produce the required cases")
     for item in selected_items:
         resolved = _metadata_archives_for_spec(
-            base.ClosureSearchSpec.from_dict(item["spec"]), Path(runs_root))
+            base.ClosureSearchSpec.from_dict(item["spec"]), Path(runs_root),
+            qualified_manifest)
         if resolved is None:
             raise ValueError(
                 "the deterministic selected case has no complete metadata "
@@ -413,6 +446,12 @@ def build_registration(
         "registered_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "release_evidence": False,
         "reads_outcomes": False,
+        "qualified_demand_manifest": {
+            "path": str(qualified_manifest_path),
+            "sha256": sha256_file(qualified_manifest_path),
+            "content_key": qualified_manifest["content_key"],
+            "evidence_id": qualified_manifest["evidence_id"],
+        },
         "selection": {
             "rule": selection["rule"],
             "eligible_list_digest": selection["eligible_list_digest"],
@@ -509,7 +548,20 @@ def verify_registration(record: Mapping[str, Any], *, root: Path = ROOT,
         raise ValueError("registration selected IDs are not canonical")
     data_root = Path(record.get("data_root", root)).resolve()
     runs_root = Path(record.get("runs_root", data_root / "runs")).resolve()
-    recomputed_selection = select_cases(runs_root)
+    qualified_ref = record.get("qualified_demand_manifest") or {}
+    qualified_path = Path(str(qualified_ref.get("path", "")))
+    if not qualified_path.is_absolute():
+        qualified_path = Path(root) / qualified_path
+    try:
+        qualified_manifest = json.loads(qualified_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("qualified-demand manifest binding is unreadable") from error
+    validate_qualified_demand_manifest_shape(qualified_manifest)
+    if (sha256_file(qualified_path) != qualified_ref.get("sha256")
+            or qualified_manifest.get("content_key") != qualified_ref.get("content_key")
+            or qualified_manifest.get("evidence_id") != qualified_ref.get("evidence_id")):
+        raise ValueError("qualified-demand manifest binding drift")
+    recomputed_selection = select_cases(runs_root, qualified_manifest)
     if selected_ids != [str(item) for item in recomputed_selection["selected_ids"]]:
         raise ValueError("registration selected IDs do not follow the frozen rule")
     if selection.get("eligible_list_digest") != recomputed_selection["eligible_list_digest"]:
@@ -561,7 +613,7 @@ def verify_registration(record: Mapping[str, Any], *, root: Path = ROOT,
         raise ValueError("registration reuses a historical v1-v5 root")
     if runs_root != Path(record.get("runs_root", runs_root)).resolve():
         raise ValueError("registration runs root is not canonical")
-    recomputed = select_cases(runs_root)
+    recomputed = select_cases(runs_root, qualified_manifest)
     if recomputed["eligible_list_digest"] != selection.get("eligible_list_digest"):
         raise ValueError("eligible metadata inventory drift")
     if [str(item) for item in selection["selected_ids"]] != [
@@ -717,95 +769,11 @@ def _fixture_application(registration: Mapping[str, Any], case: Mapping[str, Any
     }
 
 
-_DECISION_POPULATION_GATES = (
-    "semantic_comparison_complete",
-    "candidate_costs_field_identical",
-    "hard_failures_identical",
-    "health_classifications_identical",
-    "timeout_outcomes_identical",
-    "terminal_status_identical",
-    "selected_ids_identical",
-    "execution_contract_valid",
-    "final_decision_identical",
-    "restart_equivalent",
-    "restart_cursor_identical",
-    "restart_evidence_identical",
-    "restart_attempt_identity_identical",
-    "both_stop_proofs_valid",
-    "stop_proof_valid",
-    "cache_hits_consistent",
-    "daily_results_cache_events_valid",
-    "exact_attempt_population_check",
-    "active_elapsed_basis_consistent",
-    "resource_measurements_complete",
-)
-
-
 def _decision_population_complete(
     comparison: Mapping[str, Any], caps: Mapping[str, Any]
 ) -> bool:
-    """Return whether paired decisions are trustworthy independent of speed.
-
-    The 30-percent reductions are a Phase 3 performance result, not a
-    prerequisite for extracting a complete q10/q50/q90 decision population.
-    Resource caps and all correctness/restart/provenance checks remain hard
-    requirements here; a cap violation must never become Gate S input.
-    """
-    required_true = (
-        *_DECISION_POPULATION_GATES,
-    )
-    for name in required_true:
-        value = comparison.get(name)
-        if name == "exact_attempt_population_check":
-            if not isinstance(value, Mapping) or value.get("valid") is not True:
-                return False
-        elif value is not True:
-            return False
-    fixture = comparison.get("fixture_application") or {}
-    if fixture.get("applied") is not True or fixture.get(
-            "arm_inputs_identical") is not True or fixture.get(
-                "restart_cancel_observed") is not True or fixture.get(
-                    "no_detour_pre_sumo_gate") is not True:
-        return False
-    cancellation = comparison.get("cancellation") or {}
-    if (cancellation.get("performed") is not True
-            or cancellation.get("called") is not True
-            or cancellation.get("queued_work_cancelled") is not True
-            or cancellation.get("no_later_starter") is not True):
-        return False
-    rss = comparison.get("peak_rss_bytes")
-    rss_cap = int(caps["peak_rss_bytes"])
-    if (not isinstance(rss, Mapping)
-            or set(rss) != {"cost_ordered", "ordered_exhaustive"}
-            or not all(isinstance(value, (int, float))
-                       and not isinstance(value, bool)
-                       and int(value) >= 0 and int(value) <= rss_cap
-                       for value in rss.values())):
-        return False
-    active = comparison.get("active_elapsed_s")
-    active_cap = float(caps["active_seconds"])
-    if (not isinstance(active, Mapping)
-            or set(active) != {"cost_ordered", "ordered_exhaustive"}
-            or not all(isinstance(value, (int, float))
-                       and not isinstance(value, bool)
-                       and 0 <= float(value) <= active_cap
-                       for value in active.values())):
-        return False
-    disk = comparison.get("disk_growth_bytes")
-    if (not isinstance(disk, (int, float)) or isinstance(disk, bool)
-            or int(disk) < 0
-            or int(disk) > int(caps["disk_growth_bytes"])):
-        return False
-    per_arm_disk = comparison.get("disk_growth_bytes_by_arm")
-    if (not isinstance(per_arm_disk, Mapping)
-            or set(per_arm_disk) != {"cost_ordered", "ordered_exhaustive"}
-            or not all(isinstance(value, (int, float))
-                       and not isinstance(value, bool)
-                       and int(value) >= 0
-                       and int(value) <= int(caps["disk_growth_bytes"])
-                       for value in per_arm_disk.values())):
-        return False
-    return True
+    """Use the predicate shared with controller and full-month admission."""
+    return _shared_decision_population_complete(comparison, caps)
 
 
 def _resource_gates_pass(comparison: Mapping[str, Any], caps: Mapping[str, Any]) -> bool:
@@ -838,6 +806,9 @@ def _run_case(registration: Mapping[str, Any], case: Mapping[str, Any], *,
     case_root = Path(workspace_root) / str(case["case_id"])
     size_before = _tree_size(case_root)
     fixture_application = _fixture_application(registration, case)
+    qualified_ref = registration["qualified_demand_manifest"]
+    qualified_manifest = json.loads(
+        Path(qualified_ref["path"]).read_text(encoding="utf-8"))
     result = base.run_ordered_exhaustive_comparison(
         spec, policy, runs_root=runs_root,
         release_root=data_root / registration["fresh_roots"][
@@ -851,7 +822,8 @@ def _run_case(registration: Mapping[str, Any], case: Mapping[str, Any], *,
         arm_timeout_s=(active_seconds - restart_timeout) / 2.0,
         max_verifications=None,
         max_exact_launches=attempts_per_case,
-        fixture_controls=fixture_application)
+        fixture_controls=fixture_application,
+        qualified_demand_manifest=qualified_manifest)
     comparison = dict(result["comparison"])
     launch_counts = {
         arm_name: len((result["arms"].get(arm_name) or {}).get(
@@ -880,7 +852,8 @@ def _run_case(registration: Mapping[str, Any], case: Mapping[str, Any], *,
         fixture_controls=fixture_application,
         require_attempt_identity=True,
         max_exact_launches=attempts_per_case,
-        timeout_s=restart_timeout)
+        timeout_s=restart_timeout,
+        qualified_demand_manifest=qualified_manifest)
     comparison["restart"] = restart
     comparison["restart_equivalent"] = bool(restart.get("equivalent"))
     comparison["restart_active_elapsed_s"] = float(
@@ -1909,11 +1882,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUTCOME)
     parser.add_argument("--workspace-root", type=Path, default=ROOT / "runs")
     parser.add_argument("--evidence-id", default="subhour-bounded-sumo-v1")
+    parser.add_argument("--qualified-demand-manifest", type=Path)
     args = parser.parse_args(argv)
     if args.preregister:
         record = build_registration(args.runs_root, data_root=args.data_root,
                                     registration_path=args.registration,
-                                    evidence_id=args.evidence_id)
+                                    evidence_id=args.evidence_id,
+                                    qualified_manifest_path=args.qualified_demand_manifest)
         write_registration(args.registration, record)
         print(f"wrote {args.registration} ({record['content_key']})")
         return 0

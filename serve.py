@@ -250,7 +250,7 @@ def __getattr__(name: str):
 # browser cannot vary what was frozen against the golden benchmark.
 MONTHLY_POLICY_PATH = ROOT / "validation" / "monthly_search_policy_v1.json"
 MONTHLY_PERIOD_ANALYSIS_POLICY_PATH = (
-    ROOT / "validation" / "monthly_search_policy_v2.json"
+    ROOT / "validation" / "monthly_search_policy_v4_q50.json"
 )
 MONTHLY_SEARCH_ROOT = ROOT / "runs" / "closure-search"
 CLOSURE_SEARCH_SPEC_DIR = ROOT / "runs" / "closure_search_specs"
@@ -553,8 +553,20 @@ def _record_exact_scenario_cache(
 def monthly_screening_cli_args(spec: ClosureSearchSpec) -> list[str]:
     """Choose the safe server-side screening path for one search contract."""
     if spec.interday_policy == "independent_daily_reset_v1":
+        # Cost-ordered EXECUTION, operational mode (user decision 2026-09-04).
+        # Candidates are priced exactly from the calibrated routes before any
+        # SUMO starts, and only the prefix the boundary proof requires is
+        # simulated. Enumeration, ordering, routing, health, recovery and
+        # provenance semantics are the exhaustive mode's, unchanged.
+        #
+        # `--operational-no-evidence` is REQUIRED here and is not a shortcut
+        # past a scientific gate: the Phase 6 evidence path still demands a
+        # verified registration, and this server never passes one. The honest
+        # boundary is that a UI search is an operational answer, not release
+        # evidence — the run says so itself and publishes no Phase 6 outcome.
         return [
-            "--screening-mode", "independent-exhaustive",
+            "--screening-mode", "independent-cost-ordered-exact",
+            "--operational-no-evidence",
             "--daily-workers", str(MONTHLY_DAILY_WORKERS),
             "--seed-workers", str(MONTHLY_SEED_WORKERS),
             "--max-active-sumo-slots", str(MONTHLY_MAX_ACTIVE_SUMO_SLOTS),
@@ -2788,11 +2800,11 @@ class Handler(SimpleHTTPRequestHandler):
                 "månadspolicyn kunde inte läsas — se serverloggen",
                 "detail": str(exc)[:200]})
         if period_analysis and (
-            policy.objective_method != "closure_cost_v1"
+            policy.objective_method not in {"closure_cost_v1", "closure_cost_v2"}
             or policy.status not in {"provisional", "golden_frozen"}
         ):
             return self._json(500, {"error":
-                "periodjämförelsen saknar en giltig closure_cost_v1-policy"})
+                "periodjämförelsen saknar en giltig closure-cost-policy"})
         if not period_analysis and policy.status != "golden_frozen":
             return self._json(500, {"error":
                 "månadspolicyn är inte golden_frozen — sökning vägras"})

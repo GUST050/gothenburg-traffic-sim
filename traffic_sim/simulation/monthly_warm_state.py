@@ -81,8 +81,26 @@ def semantic_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     """The part of an observation two arms must agree on exactly."""
     if not isinstance(payload, Mapping):
         raise WarmStateContractError("observation must be a mapping")
-    return {key: value for key, value in payload.items()
-            if key not in _EXECUTION_ONLY}
+    semantic = {
+        key: value for key, value in payload.items()
+        if key not in _EXECUTION_ONLY
+    }
+    # Routing provenance remains semantic: the transformed route, routing
+    # policy, trip identity, denial count and reroute count must agree across
+    # arms. The raw access-impact artifact deliberately records its arm, so
+    # that raw digest differs. Its required semantic companion digest retains
+    # every report fact except the arm label and remains compared below.
+    provenance = semantic.get("provenance")
+    if isinstance(provenance, Mapping):
+        normalized_provenance = dict(provenance)
+        routing = normalized_provenance.get("routing_provenance")
+        if isinstance(routing, Mapping):
+            normalized_routing = dict(routing)
+            normalized_routing.pop("execution_arm", None)
+            normalized_routing.pop("access_impact_sha256", None)
+            normalized_provenance["routing_provenance"] = normalized_routing
+        semantic["provenance"] = normalized_provenance
+    return semantic
 
 
 def _metrics_dict(metrics: Any, label: str) -> dict[str, Any]:

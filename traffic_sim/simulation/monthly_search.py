@@ -42,6 +42,7 @@ from traffic_sim.simulation.pilot_selection import (
     PilotPolicy,
     select_pilot_finalists,
 )
+from traffic_sim.simulation.closure_ranking import CLOSURE_COST_OBJECTIVES
 from traffic_sim.simulation.monthly_proxy import (
     HELD_OUT_VALIDATED_SHORTLIST_POLICY,
     SHORTLIST_VERSION,
@@ -79,7 +80,10 @@ SCHEMA_VERSION = 1
 EVIDENCE_SCHEMA_VERSION = 4
 CANONICAL_EVIDENCE_STORE_SCHEMA = "canonical_evidence_store_v1"
 POLICY_STATUSES = frozenset({"provisional", "golden_frozen"})
-RANKING_OBJECTIVES = frozenset({"legacy_time_loss_v1", "closure_cost_v1"})
+RANKING_OBJECTIVES = frozenset({
+    "legacy_time_loss_v1",
+    *CLOSURE_COST_OBJECTIVES,
+})
 # PR C.  The streaming enumeration lives in a workspace-owned directory OUTSIDE
 # ``artifacts/``: workspace verification requires every file under
 # ``artifacts/`` to be individually ledgered, but the three NDJSON files are one
@@ -1366,6 +1370,7 @@ def _final_result(
     decision: Mapping[str, Any] | None,
     backend_provenance: Mapping[str, Any],
     cost_ordered_execution: Mapping[str, Any] | None = None,
+    deterministic_costs: Sequence[Mapping[str, Any]] | None = None,
     execution_telemetry: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     terminal_status = str(
@@ -1410,6 +1415,10 @@ def _final_result(
             ),
             objective_method=policy.objective_method,
             final_decision=decision,
+            deterministic_costs=deterministic_costs,
+            execution_statuses=(cost_ordered_execution or {}).get(
+                "candidate_statuses"
+            ),
         )
         if spec.period_comparison_policy == "rolling_period_v1"
         else None
@@ -1529,7 +1538,7 @@ def _claim_boundary(
     )
     release_policy_ready = (
         policy_status == "golden_frozen"
-        or objective_method != "closure_cost_v1"
+        or objective_method not in CLOSURE_COST_OBJECTIVES
     )
     validated_proxy = (
         release_policy_ready
@@ -1801,7 +1810,7 @@ def _cost_ordered_pilot(
     max_verifications: int | None = None,
     max_exact_launches: int | None = None,
     active_controller: ActiveTimeController | None = None,
-) -> tuple[list[CandidateEvidence], Any]:
+) -> tuple[list[CandidateEvidence], Any, list[dict[str, Any]]]:
     """Price every candidate, then simulate only the boundary set.
 
     This is the real cost-first execution: no exhaustive SUMO pass happens
@@ -2002,7 +2011,11 @@ def _cost_ordered_pilot(
                 "release_evidence": False,
             },
         )
-    return list(result.evidence), record
+    return (
+        list(result.evidence),
+        record,
+        [item.to_dict() for item in ledger.costs],
+    )
 
 
 def run_monthly_search(
@@ -2183,13 +2196,16 @@ def run_monthly_search(
             for variant in DEMAND_VARIANTS
         }
         cost_ordered_result: Any = None
+        deterministic_costs: list[dict[str, Any]] | None = None
         if cost_source is not None:
-            if policy.objective_method != "closure_cost_v1":
+            if policy.objective_method not in CLOSURE_COST_OBJECTIVES:
                 raise ValueError(
-                    "cost-ordered execution requires the closure_cost_v1 "
-                    "objective; the legacy time-loss key is not deterministic "
+                    "cost-ordered execution requires closure_cost_v1 or "
+                    "closure_cost_v2; the legacy time-loss key is not deterministic "
                     "and cannot order candidates before simulation")
-            pilot_evidence, cost_ordered_result = _cost_ordered_pilot(
+            (pilot_evidence,
+             cost_ordered_result,
+             deterministic_costs) = _cost_ordered_pilot(
                 workspace,
                 spec,
                 policy,
@@ -2400,6 +2416,7 @@ def run_monthly_search(
             decision=decision_payload,
             backend_provenance=backend_provenance,
             cost_ordered_execution=cost_ordered_result,
+            deterministic_costs=deterministic_costs,
             execution_telemetry=_runner_timing_snapshot(runner),
         )
         # Return the exact JSON representation that is persisted so an

@@ -53,6 +53,7 @@ def _student_t_ppf(probability: float, degrees_of_freedom: int) -> float:
 SCHEMA_VERSION = 1
 DECISION_METHOD = "paired_worst_variant_ucb_v1"
 CLOSURE_COST_DECISION_METHOD = "deterministic_worst_variant_closure_cost_v1"
+Q50_CLOSURE_COST_DECISION_METHOD = "deterministic_q50_closure_cost_v2"
 
 #: Versioned schema tag for `TimeoutIdentity` records. v1/v2 (retired, never
 #: emitted by any released code) were bare colon-encoded strings — first a
@@ -282,6 +283,7 @@ RANKING_OBJECTIVES = frozenset({
     "auto",
     "legacy_time_loss_v1",
     "closure_cost_v1",
+    "closure_cost_v2",
 })
 DEMAND_VARIANTS = ("q10", "q50", "q90")
 _DECISION_STATUSES = frozenset(
@@ -421,7 +423,13 @@ class PairedObservation:
 # retained, not deleted, because candidates WITHOUT disruption evidence still
 # fall back to the time-loss path.
 from traffic_sim.simulation.closure_ranking import (  # noqa: E402
-    ClosureCost, rank_closures, worst_variant_cost)
+    CLOSURE_COST_OBJECTIVES,
+    ClosureCost,
+    LEGACY_WORST_COST_OBJECTIVE,
+    Q50_COST_OBJECTIVE,
+    rank_closures,
+    reduce_variant_cost,
+)
 
 
 @dataclass(frozen=True, order=True)
@@ -720,7 +728,10 @@ class DecisionResult:
         return asdict(self)
 
 
-def _closure_cost_for(candidate: CandidateEvidence) -> ClosureCost | None:
+def _closure_cost_for(
+    candidate: CandidateEvidence,
+    objective_method: str = LEGACY_WORST_COST_OBJECTIVE,
+) -> ClosureCost | None:
     """Reduce a candidate's per-variant disruption records to one cost.
 
     Returns None when the candidate has no disruption evidence, which keeps
@@ -729,7 +740,11 @@ def _closure_cost_for(candidate: CandidateEvidence) -> ClosureCost | None:
     """
     if not getattr(candidate, "disruption", ()):
         return None
-    return worst_variant_cost(candidate.candidate_id, list(candidate.disruption))
+    return reduce_variant_cost(
+        candidate.candidate_id,
+        list(candidate.disruption),
+        objective_method,
+    )
 
 
 def _validate_candidate_observations(
@@ -894,6 +909,7 @@ def _candidate_statistics(
     policy: FinalistPolicy,
     *,
     simultaneous_comparisons: int,
+    ranking_objective: str = LEGACY_WORST_COST_OBJECTIVE,
 ) -> CandidateStatistics:
     if not candidate.eligible:
         return CandidateStatistics(
@@ -908,7 +924,7 @@ def _candidate_statistics(
             all_variants_ready=False,
             precision_met=False,
             provenance_key=None,
-            closure_cost=_closure_cost_for(candidate),
+            closure_cost=_closure_cost_for(candidate, ranking_objective),
             timeout_undecided=tuple(sorted(set(candidate.timeout_undecided))),
         )
     grouped = _validate_candidate_observations(candidate, policy)
@@ -946,7 +962,7 @@ def _candidate_statistics(
         robust_lower_95_s=robust_lower,
         robust_upper_95_s=robust_upper,
         worst_variant=worst_variant,
-        closure_cost=_closure_cost_for(candidate),
+        closure_cost=_closure_cost_for(candidate, ranking_objective),
         all_variants_ready=ready,
         precision_met=ready and all(item.precision_met for item in variants),
         provenance_key=(
@@ -1001,12 +1017,13 @@ def decide_finalists(
     if len(ids) != len(set(ids)):
         raise ValueError("candidate IDs must be unique")
     eligible = [candidate for candidate in evidence if candidate.eligible]
-    declared_method = (
-        CLOSURE_COST_DECISION_METHOD
-        if ranking_objective == "closure_cost_v1"
-        else DECISION_METHOD
-    )
-    if ranking_objective == "closure_cost_v1":
+    if ranking_objective == Q50_COST_OBJECTIVE:
+        declared_method = Q50_CLOSURE_COST_DECISION_METHOD
+    elif ranking_objective in CLOSURE_COST_OBJECTIVES:
+        declared_method = CLOSURE_COST_DECISION_METHOD
+    else:
+        declared_method = DECISION_METHOD
+    if ranking_objective in CLOSURE_COST_OBJECTIVES:
         missing = sorted(
             candidate.candidate_id
             for candidate in eligible
@@ -1014,7 +1031,7 @@ def decide_finalists(
         )
         if missing:
             raise ValueError(
-                "closure_cost_v1 requires disruption evidence for every "
+                f"{ranking_objective} requires disruption evidence for every "
                 f"viable candidate: missing={missing}"
             )
     comparisons = max(1, len(eligible) * len(policy.variants))
@@ -1024,6 +1041,11 @@ def decide_finalists(
             candidate,
             policy,
             simultaneous_comparisons=comparisons,
+            ranking_objective=(
+                ranking_objective
+                if ranking_objective in CLOSURE_COST_OBJECTIVES
+                else LEGACY_WORST_COST_OBJECTIVE
+            ),
         )
         for candidate in evidence
     )
@@ -1098,22 +1120,26 @@ def decide_finalists(
     # time-loss bound so pre-objective campaigns still decide.
     costed = [c for c in viable if c.closure_cost is not None]
     use_closure_cost = (
-        ranking_objective == "closure_cost_v1"
+        ranking_objective in CLOSURE_COST_OBJECTIVES
         or (ranking_objective == "auto" and costed and len(costed) == len(viable))
     )
-    if ranking_objective == "closure_cost_v1" and len(costed) != len(viable):
+    if (ranking_objective in CLOSURE_COST_OBJECTIVES
+            and len(costed) != len(viable)):
         missing = sorted(
             candidate.candidate_id
             for candidate in viable
             if candidate.closure_cost is None
         )
         raise ValueError(
-            "closure_cost_v1 requires disruption evidence for every viable "
+            f"{ranking_objective} requires disruption evidence for every viable "
             f"candidate: missing={missing}"
         )
-    decision_method = (
-        CLOSURE_COST_DECISION_METHOD if use_closure_cost else DECISION_METHOD
-    )
+    if not use_closure_cost:
+        decision_method = DECISION_METHOD
+    elif ranking_objective == Q50_COST_OBJECTIVE:
+        decision_method = Q50_CLOSURE_COST_DECISION_METHOD
+    else:
+        decision_method = CLOSURE_COST_DECISION_METHOD
     if use_closure_cost:
         ordered, refused = rank_closures(c.closure_cost for c in costed)
         by_id = {c.candidate_id: c for c in costed}
@@ -1199,8 +1225,9 @@ def decide_finalists(
                 winner_id=best.candidate_id,
                 tie_ids=(),
                 reason=(
-                    "one schedule displaces fewer vehicles and adds less "
-                    "driving than every rival, on deterministic evidence"
+                    "one schedule adds fewer total vehicle-hours than every "
+                    "rival beyond the declared equivalence band, on "
+                    "deterministic evidence"
                 ),
                 candidates=statistics,
                 next_runs=(),

@@ -146,6 +146,92 @@ class TestPurposeMarginAfterRouteFiltering:
 
 
 class TestB1DateRangeContract:
+    def test_mixed_catalog_rebuilds_one_shared_strict_sensor_basis(
+            self, tmp_path, monkeypatch):
+        source = tmp_path / "source.rou.xml"
+        metadata = tmp_path / "source.meta.json"
+        out_rou = tmp_path / "candidates.rou.xml"
+        out_meta = tmp_path / "candidates.meta.json"
+        calls = []
+
+        monkeypatch.setattr(
+            bsd.route_catalog, "combine_catalogs",
+            lambda sources, rou, meta, **kwargs: (
+                calls.append(("combine", kwargs)),
+                rou.write_text("<routes/>"),
+                meta.write_text(json.dumps({
+                    "candidates": {},
+                    "location_pools": {},
+                    "sensor_route_contract": {"qualified_candidates": 0},
+                })),
+                {"vehicles": 0, "excluded_support_only": 2},
+            )[-1])
+
+        import build_candidates
+        monkeypatch.setattr(bsd.candidate_cache, "restore", lambda *a, **k: False)
+        monkeypatch.setattr(bsd.candidate_cache, "store", lambda *a, **k: None)
+        monkeypatch.setattr(
+            bsd, "validate_mixed_catalog_candidates",
+            lambda *a, **k: {"vehicles": 1})
+        monkeypatch.setattr(
+            build_candidates, "install_grounded_sensor_basis_routes",
+            lambda *args, **kwargs: calls.append(("install", kwargs)) or {
+                "installed": ["basis"]})
+        monkeypatch.setattr(
+            build_candidates, "report_sensor_cross_hits",
+            lambda *args, **kwargs: {"sensor": {"unique_routes": 50}})
+        monkeypatch.setattr(
+            build_candidates, "sensor_pool_support_failures",
+            lambda report, floor: {})
+
+        report = bsd.prepare_mixed_catalog_candidates(
+            {"weekday": (source, metadata),
+             "weekend": (source, metadata)},
+            out_rou, out_meta, {"sensor"}, min_per_sensor=50,
+            net_path=tmp_path / "net.xml")
+
+        assert calls[0] == ("combine", {"exclude_support_only": True})
+        assert calls[1][0] == "install"
+        assert calls[1][1]["min_per_sensor"] == 50
+        assert report["basis"] == {"installed": ["basis"]}
+
+    def test_mixed_catalog_fails_closed_when_shared_basis_is_under_floor(
+            self, tmp_path, monkeypatch):
+        out_rou = tmp_path / "candidates.rou.xml"
+        out_meta = tmp_path / "candidates.meta.json"
+        monkeypatch.setattr(
+            bsd.route_catalog, "combine_catalogs",
+            lambda sources, rou, meta, **kwargs: (
+                rou.write_text("<routes/>"),
+                meta.write_text(json.dumps({
+                    "candidates": {},
+                    "location_pools": {},
+                    "sensor_route_contract": {"qualified_candidates": 0},
+                })),
+                {"vehicles": 0},
+            )[-1])
+        import build_candidates
+        monkeypatch.setattr(bsd.candidate_cache, "restore", lambda *a, **k: False)
+        monkeypatch.setattr(bsd.candidate_cache, "store", lambda *a, **k: None)
+        monkeypatch.setattr(
+            build_candidates, "install_grounded_sensor_basis_routes",
+            lambda *args, **kwargs: {})
+        monkeypatch.setattr(
+            build_candidates, "report_sensor_cross_hits",
+            lambda *args, **kwargs: {"sensor": {"unique_routes": 49}})
+        monkeypatch.setattr(
+            build_candidates, "sensor_pool_support_failures",
+            lambda report, floor: {"sensor": 49})
+        def reject_under_floor(*args, **kwargs):
+            raise ValueError(
+                "mixed route catalog does not satisfy the strict sensor floor")
+        monkeypatch.setattr(
+            bsd, "validate_mixed_catalog_candidates", reject_under_floor)
+
+        with pytest.raises(ValueError, match="strict sensor floor"):
+            bsd.prepare_mixed_catalog_candidates(
+                {}, out_rou, out_meta, {"sensor"}, min_per_sensor=50)
+
     def test_run_products_ignore_stale_closure_routes(self, tmp_path):
         for name in (
             "demand_meta.json", "demand_build_spec.json",
@@ -582,6 +668,476 @@ def test_clear_stale_scenarios_leaves_a_valid_empty_manifest(monkeypatch, tmp_pa
     index_path = scen_dir / "index.json"
     assert index_path.exists()
     assert json.loads(index_path.read_text()) == {"scenarios": []}
+
+
+def _write_mixed_test_net(path):
+    """A tiny real SUMO net: home->target->activity, plus a target-avoiding
+    bypass, so the strict sensor-route contract's shortest-path and
+    strictly-slower-detour checks both have a real graph to run against.
+    Mirrors tests/test_build_candidates.py's write_sumo_net fixture."""
+    edges = {
+        "home": "0_1_0", "target": "1_2_0", "activity": "2_3_0",
+        "bypass_a": "0_4_0", "bypass_b": "4_3_0",
+        # A second, geometrically distinct origin feeding the same sensor
+        # edge -- exists only so a "swapped proof between two real routes"
+        # corruption test has two genuinely different route_sha256 values to
+        # swap between, rather than reusing one candidate's own proof.
+        "home2": "5_1_0",
+    }
+    connections = [
+        (edges["home"], edges["target"]), (edges["target"], edges["activity"]),
+        (edges["home"], edges["bypass_a"]),
+        (edges["bypass_a"], edges["bypass_b"]),
+        (edges["bypass_b"], edges["activity"]),
+        (edges["home2"], edges["target"]),
+    ]
+    # Node ids are arbitrary per-edge placeholders: real adjacency for
+    # routing (metadata.build_metadata's `successors`) comes entirely from
+    # the explicit <connection> elements below, not from these node ids —
+    # see tests/test_build_candidates.py's write_sumo_net, which this mirrors.
+    root = ET.Element("net")
+    for index, edge_id in enumerate(edges.values()):
+        edge = ET.SubElement(root, "edge", id=edge_id,
+                             **{"from": str(index), "to": str(index + 1)})
+        ET.SubElement(edge, "lane", id=f"{edge_id}_0", index="0",
+                      speed="10", length="100")
+    for source, dest in connections:
+        ET.SubElement(root, "connection", **{"from": source, "to": dest})
+    ET.ElementTree(root).write(path)
+    return edges
+
+
+def _write_mixed_pool_source(rou_path, meta_path, edges, net_path,
+                              network_sha256, *, ordinary_id, basis_id):
+    """One day-type source catalog: an 'ordinary' candidate that already
+    crosses ``target`` with a REAL strict proof, plus a 'support_only'
+    duplicate of the same route (as build_candidates.py's per-pool floor
+    fill produces) that ``exclude_support_only`` must strip on merge."""
+    from traffic_sim.demand.sensor_route_contract import (
+        load_network_contract, qualify_route)
+
+    _, costs, actual_network_sha256 = load_network_contract(net_path)
+    assert actual_network_sha256 == network_sha256
+
+    route = [edges["home"], edges["target"], edges["activity"]]
+    free_cost = costs[edges["target"]] + costs[edges["activity"]]
+    banned_cost = (costs[edges["bypass_a"]] + costs[edges["bypass_b"]]
+                   + costs[edges["activity"]])
+    proof, reason = qualify_route(
+        route, {edges["target"]}, costs, free_cost,
+        {edges["target"]: banned_cost}, network_sha256)
+    assert reason is None, reason
+
+    root = ET.Element("routes")
+    for vehicle_id in (ordinary_id, basis_id):
+        vehicle = ET.SubElement(root, "vehicle", id=vehicle_id, depart="0.0")
+        ET.SubElement(vehicle, "route", edges=" ".join(route))
+    ET.ElementTree(root).write(rou_path)
+
+    from traffic_sim.demand.sensor_route_contract import (
+        ABS_TOLERANCE_S, POLICY_VERSION, REL_TOLERANCE)
+    meta_path.write_text(json.dumps({
+        "schema_version": 3,
+        "location_pools": {},
+        "sensor_route_contract": {
+            "policy_version": POLICY_VERSION,
+            "network_sha256": network_sha256,
+            "absolute_tolerance_s": ABS_TOLERANCE_S,
+            "relative_tolerance": REL_TOLERANCE,
+            "qualified_candidates": 2,
+        },
+        "candidates": {
+            ordinary_id: {"purpose": "fritid", "sensor_route_contract": proof},
+            basis_id: {"purpose": "fritid", "sensor_route_contract": proof,
+                       "support_only": True},
+        },
+    }))
+    return proof
+
+
+class TestMixedCatalogRealIntegration:
+    """Real (unmocked) exercise of prepare_mixed_catalog_candidates: a tiny
+    genuine SUMO net, real strict-contract proofs, real combine/install/
+    validate/cache code. The mocked unit tests above pin the adapter's
+    control flow; these pin that the real pieces actually compose, per the
+    gap the planner flagged (mocked producer/validation boundaries could
+    hide a cache or proof failure)."""
+
+    def test_cold_build_then_warm_restore_both_validate_for_real(
+            self, tmp_path):
+        net_path = tmp_path / "net.net.xml"
+        edges = _write_mixed_test_net(net_path)
+        from traffic_sim.demand.sensor_route_contract import (
+            load_network_contract)
+        _, _, network_sha256 = load_network_contract(net_path)
+
+        sources = {}
+        for pool, prefix in (("weekday", "wd"), ("weekend", "we")):
+            rou = tmp_path / f"{pool}.rou.xml"
+            meta = tmp_path / f"{pool}.meta.json"
+            _write_mixed_pool_source(
+                rou, meta, edges, net_path, network_sha256,
+                ordinary_id=f"{prefix}_ordinary", basis_id=f"{prefix}_basis")
+            sources[pool] = (rou, meta)
+
+        out_rou = tmp_path / "candidates.rou.xml"
+        out_meta = tmp_path / "candidates.meta.json"
+        cache_root = tmp_path / "mixed_adapter_cache"
+
+        cold = bsd.prepare_mixed_catalog_candidates(
+            sources, out_rou, out_meta, {edges["target"]},
+            min_per_sensor=1, net_path=net_path, cache_root=cache_root)
+
+        assert cold["cache_event"] == "miss"
+        assert cold["merge"]["excluded_support_only"] == 2
+        assert cold["basis"]["missing_before"] == []
+        assert cold["validation"]["vehicles"] == 2
+        assert cold["validation"]["network_sha256"] == network_sha256
+        assert cold["validation"]["min_unique_routes"] >= 1
+        document = json.loads(out_meta.read_text())
+        assert set(document["candidates"]) == {
+            "weekday__wd_ordinary", "weekend__we_ordinary"}
+        assert document["sensor_route_contract"]["qualified_candidates"] == 2
+
+        warm = bsd.prepare_mixed_catalog_candidates(
+            sources, out_rou, out_meta, {edges["target"]},
+            min_per_sensor=1, net_path=net_path, cache_root=cache_root)
+
+        assert warm["cache_event"] == "hit"
+        assert warm["validation"]["vehicles"] == 2
+        assert warm["validation"]["network_sha256"] == network_sha256
+
+    def test_a_corrupted_but_self_consistent_warm_cache_entry_is_rejected(
+            self, tmp_path):
+        """`candidate_cache.restore` only proves the restored bytes match
+        what `store` once wrote -- it says nothing about whether those
+        bytes were ever valid. Simulate a compromised cache directory (the
+        stored metadata AND its manifest digest edited together, so the
+        cache layer's own sha256 check is satisfied) and confirm the warm
+        `prepare_mixed_catalog_candidates` hit path still independently
+        revalidates and rejects it, exactly like the cold path -- through
+        the real cache restore call, not a direct
+        `validate_mixed_catalog_candidates` call."""
+        from traffic_sim.demand import cache as candidate_cache
+
+        net_path = tmp_path / "net.net.xml"
+        edges = _write_mixed_test_net(net_path)
+        from traffic_sim.demand.sensor_route_contract import (
+            load_network_contract)
+        _, _, network_sha256 = load_network_contract(net_path)
+
+        sources = {}
+        for pool, prefix in (("weekday", "wd"), ("weekend", "we")):
+            rou = tmp_path / f"{pool}.rou.xml"
+            meta = tmp_path / f"{pool}.meta.json"
+            _write_mixed_pool_source(
+                rou, meta, edges, net_path, network_sha256,
+                ordinary_id=f"{prefix}_ordinary", basis_id=f"{prefix}_basis")
+            sources[pool] = (rou, meta)
+
+        out_rou = tmp_path / "candidates.rou.xml"
+        out_meta = tmp_path / "candidates.meta.json"
+        cache_root = tmp_path / "mixed_adapter_cache"
+
+        cold = bsd.prepare_mixed_catalog_candidates(
+            sources, out_rou, out_meta, {edges["target"]},
+            min_per_sensor=1, net_path=net_path, cache_root=cache_root)
+        cache_key = cold["cache_key"]
+
+        # Corrupt the STORED metadata entry in place (a zeroed sensor
+        # penalty -- the same forged-cost shape the cold-path test above
+        # exercises) and republish the cache manifest's digest so
+        # `candidate_cache.restore`'s own integrity check still passes.
+        entry_dir = cache_root / cache_key
+        stored_meta = entry_dir / "candidates.meta.json"
+        document = json.loads(stored_meta.read_text())
+        for record in document["candidates"].values():
+            record["sensor_route_contract"]["sensor_penalty_s"][
+                edges["target"]] = 0.0
+        stored_meta.write_text(json.dumps(document))
+        manifest_path = entry_dir / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        from traffic_sim.core.fingerprint import sha256_file
+        manifest["outputs"]["candidates.meta.json"]["sha256"] = sha256_file(
+            stored_meta)
+        manifest["outputs"]["candidates.meta.json"]["bytes"] = (
+            stored_meta.stat().st_size)
+        manifest_path.write_text(json.dumps(manifest, indent=1, sort_keys=True))
+
+        # Confirm the cache layer's own integrity check is genuinely
+        # satisfied by the tamper (i.e. this is a corrupted-but-internally-
+        # consistent cache entry, not merely a digest mismatch the cache
+        # itself would already refuse).
+        probe_rou = tmp_path / "probe.rou.xml"
+        probe_meta = tmp_path / "probe.meta.json"
+        probe_coverage = tmp_path / "probe_coverage.json"
+        assert candidate_cache.restore(cache_root, cache_key, {
+            "candidates.rou.xml": probe_rou,
+            "candidates.meta.json": probe_meta,
+            "sensor_coverage_report.json": probe_coverage,
+        })
+
+        with pytest.raises(ValueError, match="strict sensor-route contract"):
+            bsd.prepare_mixed_catalog_candidates(
+                sources, out_rou, out_meta, {edges["target"]},
+                min_per_sensor=1, net_path=net_path, cache_root=cache_root)
+
+
+class TestValidateMixedCatalogCandidatesRealRejection:
+    """`validate_mixed_catalog_candidates` must independently recompute and
+    reject a self-inconsistent or stale artifact, not just trust it —
+    exercised on the real artifact a cold build actually produces."""
+
+    def _build_once(self, tmp_path):
+        net_path = tmp_path / "net.net.xml"
+        edges = _write_mixed_test_net(net_path)
+        from traffic_sim.demand.sensor_route_contract import (
+            load_network_contract)
+        _, _, network_sha256 = load_network_contract(net_path)
+        sources = {}
+        for pool, prefix in (("weekday", "wd"), ("weekend", "we")):
+            rou = tmp_path / f"{pool}.rou.xml"
+            meta = tmp_path / f"{pool}.meta.json"
+            _write_mixed_pool_source(
+                rou, meta, edges, net_path, network_sha256,
+                ordinary_id=f"{prefix}_ordinary", basis_id=f"{prefix}_basis")
+            sources[pool] = (rou, meta)
+        out_rou = tmp_path / "candidates.rou.xml"
+        out_meta = tmp_path / "candidates.meta.json"
+        bsd.prepare_mixed_catalog_candidates(
+            sources, out_rou, out_meta, {edges["target"]},
+            min_per_sensor=1, net_path=net_path,
+            cache_root=tmp_path / "mixed_adapter_cache")
+        return net_path, out_rou, out_meta, edges
+
+    def test_a_tampered_nonpositive_sensor_penalty_is_rejected(self, tmp_path):
+        net_path, out_rou, out_meta, edges = self._build_once(tmp_path)
+        document = json.loads(out_meta.read_text())
+        for record in document["candidates"].values():
+            record["sensor_route_contract"]["sensor_penalty_s"][
+                edges["target"]] = 0.0
+        out_meta.write_text(json.dumps(document))
+
+        with pytest.raises(ValueError, match="strict sensor-route contract"):
+            bsd.validate_mixed_catalog_candidates(
+                out_rou, out_meta, {edges["target"]},
+                min_per_sensor=1, net_path=net_path)
+
+    def test_a_stale_network_is_rejected(self, tmp_path):
+        net_path, out_rou, out_meta, edges = self._build_once(tmp_path)
+        # A network change (even a harmless-looking one) changes its sha256;
+        # a candidate proved against the OLD network must not silently pass.
+        tree = ET.parse(net_path)
+        for lane in tree.getroot().iter("lane"):
+            lane.set("length", "150")
+        tree.write(net_path)
+
+        with pytest.raises(ValueError, match="stale"):
+            bsd.validate_mixed_catalog_candidates(
+                out_rou, out_meta, {edges["target"]},
+                min_per_sensor=1, net_path=net_path)
+
+    def test_a_self_consistent_but_disconnected_forged_route_is_rejected(
+            self, tmp_path):
+        """`proof_error` only checks that a persisted proof's fields agree
+        with EACH OTHER and with the route bytes — never that the route is a
+        real connected walk in the current graph. Forge a route that is not
+        an actual `<connection>` walk (home->activity->target skips the only
+        real edges, home->target and target->activity) but whose total
+        free-flow cost happens to equal the genuine shortest route's cost
+        (10 + 10 == 10 + 10), so every self-consistency check in
+        `proof_error` still holds. Only independent graph recomputation can
+        catch this."""
+        net_path, out_rou, out_meta, edges = self._build_once(tmp_path)
+        from traffic_sim.demand.sensor_route_contract import (
+            POLICY_VERSION, load_network_contract, proof_error, route_digest)
+        _, _, network_sha256 = load_network_contract(net_path)
+
+        forged_route = [edges["home"], edges["activity"], edges["target"]]
+        forged_proof = {
+            "policy_version": POLICY_VERSION,
+            "pass": True,
+            "network_sha256": network_sha256,
+            "route_sha256": route_digest(forged_route),
+            "origin_edge": forged_route[0],
+            "destination_edge": forged_route[-1],
+            "route_cost_s": 20.0,
+            "shortest_free_cost_s": 20.0,
+            "sensor_penalty_s": {edges["target"]: 5.0},
+            "sensor_edges": [edges["target"]],
+            "absolute_tolerance_s": 1e-6,
+            "relative_tolerance": 1e-9,
+        }
+        # Confirm the forgery really is self-consistent before proving the
+        # real fix (not the cheap self-check) is what rejects it.
+        assert proof_error(forged_route, forged_proof,
+                            {edges["target"]}) is None
+
+        tree = ET.parse(out_rou)
+        root = tree.getroot()
+        for vehicle in root.findall("vehicle"):
+            if vehicle.get("id") == "weekday__wd_ordinary":
+                vehicle.find("route").set("edges", " ".join(forged_route))
+        tree.write(out_rou)
+
+        document = json.loads(out_meta.read_text())
+        document["candidates"]["weekday__wd_ordinary"][
+            "sensor_route_contract"] = forged_proof
+        out_meta.write_text(json.dumps(document))
+
+        with pytest.raises(ValueError, match="independent recomputation"):
+            bsd.validate_mixed_catalog_candidates(
+                out_rou, out_meta, {edges["target"]},
+                min_per_sensor=1, net_path=net_path)
+
+    def test_a_self_consistent_but_untrue_sensor_penalty_is_rejected(
+            self, tmp_path):
+        """A forged proof can claim a positive sensor penalty on a real,
+        legally-connected route while lying about its size — `proof_error`
+        only checks the claimed penalty against the claimed shortest cost,
+        both attacker-controlled. Retime the bypass so removing the sensor
+        edge no longer actually costs anything extra (a true
+        `no_strict_sensor_penalty` case), keep the genuine route's edges and
+        real cost untouched, but forge a positive penalty. Only independent
+        recomputation of the *banned* shortest path catches the lie."""
+        net_path, out_rou, out_meta, edges = self._build_once(tmp_path)
+        tree = ET.parse(net_path)
+        for edge in tree.getroot().iter("edge"):
+            if edge.get("id") in (edges["bypass_a"], edges["bypass_b"]):
+                for lane in edge.iter("lane"):
+                    lane.set("length", "50")  # 5s each at speed 10
+        tree.write(net_path)
+        # Detour now costs 5 + 5 + 10 (activity) == 20, tying the direct
+        # route's 10 (target) + 10 (activity) == 20: genuinely no strict
+        # sensor penalty any more.
+
+        from traffic_sim.demand.sensor_route_contract import (
+            load_network_contract, proof_error)
+        _, _, network_sha256 = load_network_contract(net_path)
+
+        document = json.loads(out_meta.read_text())
+        document["sensor_route_contract"]["network_sha256"] = network_sha256
+        # Every candidate's proof needs the recomputed hash too, matching
+        # what a real attacker who legitimately edited the network (and
+        # updated every self-consistency field) would produce — only the
+        # weekday candidate's penalty is actually forged/lied about below.
+        for record in document["candidates"].values():
+            record["sensor_route_contract"]["network_sha256"] = network_sha256
+        record = document["candidates"]["weekday__wd_ordinary"]
+        proof = record["sensor_route_contract"]
+        proof["sensor_penalty_s"][edges["target"]] = 10.0  # forged: lie
+        assert proof_error(
+            [edges["home"], edges["target"], edges["activity"]], proof,
+            {edges["target"]}) is None
+        out_meta.write_text(json.dumps(document))
+
+        with pytest.raises(ValueError, match="independent recomputation"):
+            bsd.validate_mixed_catalog_candidates(
+                out_rou, out_meta, {edges["target"]},
+                min_per_sensor=1, net_path=net_path)
+
+    def test_a_forged_origin_destination_is_rejected(self, tmp_path):
+        """A proof whose route bytes are genuine but whose claimed OD
+        endpoints have been rewritten (e.g. to make a route look like it
+        started/ended somewhere it did not) must fail closed. Caught by
+        `proof_error`'s od_mismatch check, exercised here through the real
+        `validate_mixed_catalog_candidates` boundary, not the bare function,
+        so a regression in how the boundary wires that check through would
+        also be caught."""
+        net_path, out_rou, out_meta, edges = self._build_once(tmp_path)
+        document = json.loads(out_meta.read_text())
+        proof = document["candidates"]["weekday__wd_ordinary"][
+            "sensor_route_contract"]
+        proof["destination_edge"] = edges["bypass_b"]  # real edge, wrong OD
+        out_meta.write_text(json.dumps(document))
+
+        with pytest.raises(ValueError, match="strict sensor-route contract"):
+            bsd.validate_mixed_catalog_candidates(
+                out_rou, out_meta, {edges["target"]},
+                min_per_sensor=1, net_path=net_path)
+
+    def test_a_stale_policy_version_on_one_candidate_is_rejected(
+            self, tmp_path):
+        """A candidate proved under an earlier (or foreign) sensor-route
+        policy must not be admitted just because its other fields are
+        internally consistent -- `proof_error`'s wrong_policy check, again
+        exercised through the real validation boundary."""
+        net_path, out_rou, out_meta, edges = self._build_once(tmp_path)
+        document = json.loads(out_meta.read_text())
+        proof = document["candidates"]["weekend__we_ordinary"][
+            "sensor_route_contract"]
+        proof["policy_version"] = "sensor_shortest_positive_gap_v0_retired"
+        out_meta.write_text(json.dumps(document))
+
+        with pytest.raises(ValueError, match="strict sensor-route contract"):
+            bsd.validate_mixed_catalog_candidates(
+                out_rou, out_meta, {edges["target"]},
+                min_per_sensor=1, net_path=net_path)
+
+    def test_a_stale_contract_source_network_hash_is_rejected(self, tmp_path):
+        """The catalog's own top-level `sensor_route_contract.network_sha256`
+        (the declared *source* network the whole pool was proved against) can
+        drift from the current network independently of any per-candidate
+        proof -- e.g. a stale merge that forgot to reprice. Must fail closed
+        even though every individual candidate proof still looks internally
+        fine."""
+        net_path, out_rou, out_meta, edges = self._build_once(tmp_path)
+        document = json.loads(out_meta.read_text())
+        document["sensor_route_contract"]["network_sha256"] = "0" * 64
+        out_meta.write_text(json.dumps(document))
+
+        with pytest.raises(ValueError, match="stale"):
+            bsd.validate_mixed_catalog_candidates(
+                out_rou, out_meta, {edges["target"]},
+                min_per_sensor=1, net_path=net_path)
+
+    def test_a_proof_swapped_between_two_genuinely_different_routes_is_rejected(
+            self, tmp_path):
+        """Not a self-referential tamper: build a SECOND real, independently
+        qualifying candidate through a geometrically distinct origin
+        (`home2`), then swap the two candidates' whole persisted proofs.
+        Each proof remains internally self-consistent in isolation (it was a
+        real proof for its own route) -- only comparing it against the route
+        it now claims to describe catches the swap, so this specifically
+        exercises `route_sha256`/OD identity across two real, differently-
+        routed candidates rather than one candidate lying about itself."""
+        net_path, out_rou, out_meta, edges = self._build_once(tmp_path)
+        from traffic_sim.demand.sensor_route_contract import (
+            load_network_contract, qualify_route)
+
+        _, costs, network_sha256 = load_network_contract(net_path)
+        second_route = [edges["home2"], edges["target"], edges["activity"]]
+        free_cost = costs[edges["target"]] + costs[edges["activity"]]
+        banned_cost = (costs[edges["bypass_a"]] + costs[edges["bypass_b"]]
+                       + costs[edges["activity"]])
+        second_proof, reason = qualify_route(
+            second_route, {edges["target"]}, costs, free_cost,
+            {edges["target"]: banned_cost}, network_sha256)
+        assert reason is None, reason
+
+        tree = ET.parse(out_rou)
+        root = tree.getroot()
+        second_id = "weekday__wd_second"
+        vehicle = ET.SubElement(root, "vehicle", id=second_id, depart="0.0")
+        ET.SubElement(vehicle, "route", edges=" ".join(second_route))
+        tree.write(out_rou)
+
+        document = json.loads(out_meta.read_text())
+        first_proof = document["candidates"]["weekday__wd_ordinary"][
+            "sensor_route_contract"]
+        assert first_proof["route_sha256"] != second_proof["route_sha256"]
+        document["candidates"][second_id] = {
+            "purpose": "fritid", "sensor_route_contract": dict(first_proof)}
+        document["candidates"]["weekday__wd_ordinary"][
+            "sensor_route_contract"] = second_proof  # swapped in
+        document["sensor_route_contract"]["qualified_candidates"] = len(
+            document["candidates"])
+        out_meta.write_text(json.dumps(document))
+
+        with pytest.raises(ValueError, match="strict sensor-route contract"):
+            bsd.validate_mixed_catalog_candidates(
+                out_rou, out_meta, {edges["target"]},
+                min_per_sensor=1, net_path=net_path)
 
 
 class TestClassifyDay:

@@ -1,18 +1,18 @@
 {
  "schema_version": 1,
- "generated_at": "2026-09-01T19:30:32Z",
- "demand_window": "2027-09-23",
+ "generated_at": "2026-09-06T12:36:12Z",
+ "demand_window": "2027-12-09",
  "demand_source": "forecast",
- "demand_build_id": "3baf230e652e3907ed4f",
+ "demand_build_id": "39e0d44eaf2fda1a5934",
  "overall": "warn",
  "sections": {
   "counts_fit": {
    "status": "pass",
    "geh_pct": 100.0,
    "infeasible_intervals": 0,
-   "vehicles": 19442,
-   "integer_sensor_constraints": 672,
-   "integer_sensor_exact": 672,
+   "vehicles": 4196,
+   "integer_sensor_constraints": 112,
+   "integer_sensor_exact": 112,
    "integer_sensor_exact_pct": 100.0,
    "integer_sensor_max_abs_error": 0.0,
    "integer_sensor_target_rule": "int(round(target))",
@@ -21,59 +21,59 @@
   "structure": {
    "status": "warn",
    "flags": [
-    "purpose_length_ordering: fritid median 1.77 km < arbete median 2.4 km \u2014 RVU (Trafikanalys Tabell 3) orders fritid longest; P(length|purpose) decohered in calibration"
+    "purpose_length_ordering: fritid median 2.03 km < arbete median 2.19 km \u2014 RVU (Trafikanalys Tabell 3) orders fritid longest; P(length|purpose) decohered in calibration"
    ],
-   "dest_within_200m_pct": 11.2,
+   "dest_within_200m_pct": 14.9,
    "dest_baseline_pct": 1.9,
    "trip_length_shares": [
-    0.0786,
-    0.9099,
-    0.0115
+    0.1189,
+    0.8491,
+    0.0319
    ],
-   "trip_length_l1_vs_rvu": 0.1008,
+   "trip_length_l1_vs_rvu": 0.1814,
    "trip_length_l1_maximum": 0.2,
    "trip_length_l1_gate_defined": true,
    "trip_length_l1_gate_passed": true,
    "onward_after_sensor_median_m": 1329.5,
-   "onward_under_200m_pct": 8.7,
+   "onward_under_200m_pct": 10.4,
    "trip_length_l1_gate_source": "frozen_project_limit_v1",
    "gate": "kalibrerad struktur f\u00e5r inte driva >2.5x fr\u00e5n poolen; trip-length L1 m\u00e5ste dessutom klara den frysta absoluta gr\u00e4nsen 0.2 mot den deklarerade externa m\u00e5lf\u00f6rdelningen (hogst 10% av fordonen far ligga i fel RVU-langdklass mot den tillganglighetskorrigerade malfordelningen (L1 = 2 x total variation))",
-   "reason": "purpose_length_ordering: fritid median 1.77 km < arbete median 2.4 km \u2014 RVU (Trafikanalys Tabell 3) orders fritid longest; P(length|purpose) decohered in calibration"
+   "reason": "purpose_length_ordering: fritid median 2.03 km < arbete median 2.19 km \u2014 RVU (Trafikanalys Tabell 3) orders fritid longest; P(length|purpose) decohered in calibration"
   },
   "purposes": {
    "status": "warn",
    "purpose_counts": {
-    "arbete": 8777,
-    "external": 1635,
-    "fritid": 4208,
-    "service": 4652,
-    "through": 170
+    "arbete": 2177,
+    "external": 293,
+    "fritid": 856,
+    "service": 736,
+    "through": 134
    },
    "purpose_length_km": {
     "arbete": {
-     "n": 8777,
-     "mean_km": 2.41,
-     "median_km": 2.4
+     "n": 2177,
+     "mean_km": 2.01,
+     "median_km": 2.19
     },
     "external": {
-     "n": 1635,
-     "mean_km": 3.26,
+     "n": 293,
+     "mean_km": 3.15,
      "median_km": 3.3
     },
     "fritid": {
-     "n": 4208,
-     "mean_km": 2.03,
-     "median_km": 1.77
+     "n": 856,
+     "mean_km": 2.23,
+     "median_km": 2.03
     },
     "service": {
-     "n": 4652,
-     "mean_km": 2.7,
-     "median_km": 2.66
+     "n": 736,
+     "mean_km": 2.52,
+     "median_km": 2.4
     },
     "through": {
-     "n": 170,
-     "mean_km": 5.25,
-     "median_km": 5.25
+     "n": 134,
+     "mean_km": 5.35,
+     "median_km": 5.41
     }
    },
    "ordering_violated": true,
@@ -84,10 +84,10 @@
     "edge_shares": 0
    },
    "purpose_mix_relaxed_quarters_by_variant": {
-    "edge_shares": 74
+    "edge_shares": 13
    },
    "purpose_mix_reallocation_vehicles_by_variant": {
-    "edge_shares": 7351
+    "edge_shares": 1200
    },
    "purpose_claims_allowed": true,
    "purpose_mix_matches_generated_prior": false,
@@ -99,22 +99,22 @@
    "seeds": [
     {
      "seed": 1000,
-     "inserted": 19442,
-     "loaded": 19442,
+     "inserted": 4196,
+     "loaded": 4196,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1001,
-     "inserted": 19442,
-     "loaded": 19442,
+     "inserted": 4196,
+     "loaded": 4196,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1002,
-     "inserted": 19442,
-     "loaded": 19442,
+     "inserted": 4196,
+     "loaded": 4196,
      "unfinished": 0,
      "teleports": 0
     }
@@ -126,12 +126,12 @@
    "contract": "raw_edgeData_hourly_ensemble_vs_frozen_15min_targets",
    "uses_raw_ensemble_mean": true,
    "aggregation_minutes": 60,
-   "edge_quarters": 168,
+   "edge_quarters": 28,
    "geh_lt_5_pct": 100.0,
-   "mean_abs_error": 2.65772,
-   "max_abs_error": 15.0,
-   "station_edge_quarters": 144,
-   "station_max_abs_error": 14.999999,
+   "mean_abs_error": 4.309238,
+   "max_abs_error": 10.333333,
+   "station_edge_quarters": 24,
+   "station_max_abs_error": 10.333333,
    "gate": "r\u00e5 SUMO edgeData m\u00e5ste t\u00e4cka varje fryst sensor-target och ha GEH<5"
   },
   "sensor_output_exact": {
@@ -139,51 +139,51 @@
    "contract": "raw_edgedata_15min_exact_integer_targets_v1",
    "aggregation_minutes": 15,
    "target_rule": "int(round(target))",
-   "constraints": 672,
-   "exact": 81,
-   "exact_pct": 12.053571,
-   "max_abs_error": 11.0,
-   "sum_abs_error": 1567.666666667,
-   "mismatch_count": 591,
-   "representative_exact": 131,
-   "representative_constraints": 672,
+   "constraints": 112,
+   "exact": 10,
+   "exact_pct": 8.928571,
+   "max_abs_error": 9.0,
+   "sum_abs_error": 285.666666667,
+   "mismatch_count": 102,
+   "representative_exact": 14,
+   "representative_constraints": 112,
    "per_seed": [
     {
      "seed": 1000,
      "variant": "edge_shares",
      "available": true,
-     "constraints": 672,
-     "exact": 131,
-     "exact_pct": 19.494048,
-     "max_abs_error": 12.0,
-     "sum_abs_error": 1596.0,
+     "constraints": 112,
+     "exact": 14,
+     "exact_pct": 12.5,
+     "max_abs_error": 11.0,
+     "sum_abs_error": 303.0,
      "target_rule": "int(round(target))"
     },
     {
      "seed": 1001,
      "variant": "edge_shares",
      "available": true,
-     "constraints": 672,
-     "exact": 126,
-     "exact_pct": 18.75,
-     "max_abs_error": 12.0,
-     "sum_abs_error": 1587.0,
+     "constraints": 112,
+     "exact": 17,
+     "exact_pct": 15.178571,
+     "max_abs_error": 10.0,
+     "sum_abs_error": 285.0,
      "target_rule": "int(round(target))"
     },
     {
      "seed": 1002,
      "variant": "edge_shares",
      "available": true,
-     "constraints": 672,
-     "exact": 121,
-     "exact_pct": 18.005952,
-     "max_abs_error": 11.0,
-     "sum_abs_error": 1590.0,
+     "constraints": 112,
+     "exact": 18,
+     "exact_pct": 16.071429,
+     "max_abs_error": 9.0,
+     "sum_abs_error": 279.0,
      "target_rule": "int(round(target))"
     }
    ],
    "gate": "r\u00e5 SUMO-passage m\u00e5ste matcha varje riktad sensor \u00d7 15-minuters heltalsm\u00e5l exakt; testet \u00e4ndrar inga fordon",
-   "reason": "exakt sensor-output-fit ensemble matchar bara 81/672; exakt sensor-output-fit representativ k\u00f6rning matchar bara 131/672; exakt sensor-output-fit seed 1000 matchar bara 131/672; exakt sensor-output-fit seed 1001 matchar bara 126/672; exakt sensor-output-fit seed 1002 matchar bara 121/672"
+   "reason": "exakt sensor-output-fit ensemble matchar bara 10/112; exakt sensor-output-fit representativ k\u00f6rning matchar bara 14/112; exakt sensor-output-fit seed 1000 matchar bara 14/112; exakt sensor-output-fit seed 1001 matchar bara 17/112; exakt sensor-output-fit seed 1002 matchar bara 18/112"
   },
   "multi_day": {
    "status": "pass",
@@ -207,7 +207,7 @@
   },
   "temporal_holdout": {
    "status": "missing",
-   "reason": "temporal holdout \u00e4r inaktuellt f\u00f6r nuvarande release: candidate pool: report='dbfaf49ab04a157095cf0a24edc7132b2f8c679ad2a5b94d521dba5ccf393f26', current='6f54781a5b82223da981e0ecf71583d39d650dd48dbe22b48953582c939d74b2'; reference window: report='2025-09-16T00:00:00', current='2027-09-23T00:00:00'; source: report='historical', current='forecast'"
+   "reason": "temporal holdout \u00e4r inaktuellt f\u00f6r nuvarande release: candidate pool: report='dbfaf49ab04a157095cf0a24edc7132b2f8c679ad2a5b94d521dba5ccf393f26', current='075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653'; reference window: report='2025-09-16T00:00:00', current='2027-12-09T06:00:00'; source: report='historical', current='forecast'"
   }
  }
 }

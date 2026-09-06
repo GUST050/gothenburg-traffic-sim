@@ -621,6 +621,77 @@ converge correctly, not circular reasoning. `POLICY_VERSION` bumped
 `closure_origin_routing_v1` -> `v2`, since this can change which trips are
 unaffected/rerouted/denied for the same input relative to v1.
 
+WINDOW-POPULATION ALIGNMENT 2026-09-04: deterministic costing previously
+used exact `begin <= free_flow_occupancy < end` membership while the pre-SUMO
+writer used the conservative proof above. In a three-day closure envelope this
+made the writer reroute warm-up-day traffic for a day-1 closure but assigned
+that traffic zero deterministic cost. Timing applicability now has one
+implementation, `disruption.applicable_closed_edges`, called by ordinary
+costing, the structural window index and `closure_routing`. Both warm and cold
+monthly observation paths also fail closed before publishing evidence unless
+`writer rerouted + denied == costing vehicles_affected` and
+`writer denied == costing vehicles_no_detour` for the exact schedule/variant.
+The deterministic disruption schema is v4, so the incompatible v3 daily costs
+cannot be reused. A real q90 replay for 27 September changed deterministic
+affected traffic from 3,227 to 6,223, exactly matching the preserved writer
+report's 6,223 reroutes. Therefore the earlier
+`ui-5dagar-v6-2027-09` ordering and SUMO comparison are superseded and must not
+be cited as a current winner; a fresh search is required after the remaining
+objective repairs.
+
+DESTINATION-ACCESS FIX 2026-09-04 (supersedes the destination-denial rule
+below): a closed final route edge no longer implies that the physical
+destination is unreachable. The calibrated vehicle's `arrivalPos` locates
+the physical endpoint on that edge. `DestinationAccessResolver` projects
+that point onto passenger-routable open edge geometry within 180 m (the same
+maximum access distance used by `demand/locations.py`), rejects candidates
+that are not reachable from the original origin with the applicable closures
+removed, then selects the nearest physical access; equal-distance candidates
+use route cost and stable edge/position order as tie breakers. Both the
+deterministic monthly cost path and `closure_routing.rewrite_route_file` use
+this resolver. The latter replaces the final edge and `arrivalPos` before
+SUMO starts and records the original/replacement endpoint and access distance
+in the access-impact report. No nearby reachable open access still fails
+closed as `destination_closed`; a genuinely severed non-destination route
+still fails as `no_legal_path`.
+
+This is a semantic routing change. `closure_origin_routing_v7`, deterministic
+disruption schema v4 and access-impact schema version 5 prevent older denial,
+centre-line geometry and partial-edge cost decisions from satisfying current
+lookups. Existing demand archives remain valid inputs because their route
+endpoint and `arrivalPos` are source facts; no destination is rewritten in the
+demand artifact itself. The derived route and evidence are newly bound outputs.
+Access geometry uses the selected SUMO lane polyline, measures distance to the
+final two-metre-inset endpoint actually written, and validation recomputes both
+the position bound and distance against the report-bound network. Deterministic
+cost removes the unused tail of the replacement edge and restores the unused
+tail of the original edge with each edge's own length/speed; it does not assume
+the two edges are geometrically identical. For the selected one-lane road and
+its one-lane reverse edge, the corrected access distance is at most 3.2 m, not
+the structurally blind 0.0 m previously obtained from a shared centre line.
+
+SUMO's hard temporary permissions require transient route-error handling. The
+production invocation retains `--ignore-route-errors`, but it is no longer a
+silent escape hatch: before publication every closure observation requires the
+transformed route population to equal SUMO `loaded`, `inserted` and completed
+`trip_count`, in addition to the existing zero-teleport, zero-unfinished and
+zero-active-closed-edge-throughput gates. `metadata.py` is part of the
+deterministic costing-source identity, and non-additive endpoint changes clip
+seconds and metres as one movement rather than independently.
+
+Operational rerun `ui-5dagar-v7b-corrected-2027-09` completed on 4 September:
+all 36 one-edge candidates were deterministically reachable, 72/72 exact SUMO
+launches succeeded, and the workspace passed integrity verification. The
+winner is 20-24 September, 00:00-23:45 daily. Its q90 deterministic cost is
+154.7706 vehicle-hours versus 158.9508 for the worst ledger entry, a 4.1802 h
+(2.63%) spread. This remains operational analysis, not release evidence:
+`global_best_claim_allowed` is false because the policy is provisional and no
+held-out release gate was consumed. The result also does not generalize to
+multiple configured closure edges: the writer grows an edge-specific
+per-vehicle fixed-point banned set, while deterministic detour pricing still
+excludes every configured edge. That route-plan equivalence is the next
+required semantic change before a multi-edge claim.
+
 SAME PASS, second real fix: `destination_closed` used to deny a trip the
 instant its destination edge appeared anywhere in the closed-edge set,
 without checking whether THAT destination's own closure window actually
@@ -930,6 +1001,19 @@ Mixed weekday/weekend materialization prefixes both vehicle IDs and embedded
 use wider continuous feasibility rungs internally, but the publication worker
 retries at the exact no-bounds rung and fails closed unless every rounded
 sensor-edge/quarter target is met exactly.
+
+The sub-hour workflow may consume that adopted pool only through the Phase D
+`subhour_qualified_demand_manifest_v1` contract. Its sole producer,
+`tools/qualify_subhour_demand.py`, binds the controller-owned `CODE_APPROVED`
+source and checks, the adoption record and immutable weekday/weekend catalog
+bytes, a freshly recomputed shared-support audit, the frozen 30-date/65-window/
+five-day search shape, and fresh q10/q50/q90 demand archives. Each archive is
+validated back to its exact catalog candidate and emitted sensor incidence;
+missing support or any byte drift fails closed. Phase 3, the cold Phase 4
+ledger and conditional Phase 5 must all resolve the same manifest and variant
+digests rather than inferring sibling artifacts. The bounded controller derives
+Phases 0-2 mechanically from this manifest and cannot authorize Phase 6 or
+trigger Phase 7.
 
 Randomised duarouter costs can produce a loop or excessive detour from an
 otherwise grounded OD/via request. After the ordinary physical filters, v13
@@ -1902,6 +1986,15 @@ the policy's same `objective_method`. The v1 policy remains the legacy
 time-loss path until v2 receives a named benchmark and new validation evidence;
 the production/UI gate is therefore unchanged.
 
+The later user-selected `closure_cost_v2` policy changes only the
+cross-variant reduction used for ranking: q50 supplies vehicle-hours, distance
+and affected-vehicle count, while q10/q90 remain published sensitivity
+evidence. Reachability remains fail-closed across all three variants, so a
+non-q50 `vehicles_no_detour` result still disqualifies the schedule. The new
+policy is bound into the deterministic cost-source identity; historical
+`closure_cost_v1` workspaces retain their field-wise-worst interpretation. The
+operational policy file is `validation/monthly_search_policy_v4_q50.json`.
+
 `validation/monthly_search_v2_benchmark_v1.json` records the first isolated
 v2 execution checkpoint. Its tracked plan pins the original golden spec,
 policy, archive routes, network and runner by SHA-256; the runner bypasses the
@@ -2862,6 +2955,14 @@ horizon; trimmed warm execution requires a new paired equivalence campaign.
 Because the guard changes a cost-interpreting source, the process-free golden
 was re-frozen as `closure_cost_ordering_golden_v4.json`; v1-v3 remain
 immutable history.
+
+Cross-arm observation equality retains routing provenance as semantic evidence:
+candidate identity, date, variant, seed, vehicle class, policy, transformed
+route digest and rerouted/denied counts must match. Only the nested
+`execution_arm` label and `access_impact_sha256` are normalized away, because
+the per-arm access-impact artifact necessarily records a different arm and
+therefore has a different digest even when the validated routing result is
+identical. This normalization does not relax route or outcome equality.
 
 ### Monthly API workspace-lock handoff (2026-08-13)
 

@@ -1,0 +1,44 @@
+{
+ "environment": {
+  "date": "2026-09-06",
+  "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+  "sumo_version": "1.27.1"
+ },
+ "gates": {
+  "day_library_restore": {"status": "pass", "tests": ["tests/test_day_library.py"]},
+  "deterministic_repeat": {
+   "status": "pass",
+   "tests": [
+    "tests/test_route_catalog.py::test_catalog_identity_excludes_date_but_keeps_structure",
+    "tests/test_route_catalog.py::TestCatalogSourceContract"
+   ]
+  },
+  "malformed_catalog_rejected": {
+   "status": "pass",
+   "tests": [
+    "tests/test_route_catalog.py::test_ensure_catalog_is_single_complete_manifest",
+    "tests/test_route_catalog.py::test_adoption_default_is_fail_safe_and_explicit"
+   ]
+  },
+  "purpose_route_compatibility": {
+   "status": "pass",
+   "tests": [
+    "tests/test_pfe.py::TestPurposeStratifiedCalibration",
+    "tests/test_demand_provenance.py"
+   ]
+  },
+  "singleflight_recovery": {"status": "pass", "tests": ["tests/test_singleflight.py"]},
+  "sumo_runtime_no_regression": {"status": "pass", "tests": ["tests/test_warm_state_sumo_equivalence.py"]},
+  "warm_state_identity": {
+   "status": "pass",
+   "tests": ["tests/test_warm_state_cache.py", "tests/test_q50_subset_identity.py"]
+  }
+ },
+ "kind": "route_catalog_suite_gate_evidence",
+ "note": "Re-established for the v4 campaign after the adopted v3 key went stale: build_candidates.py, build_sumo_demand.py, traffic_sim/simulation/disruption.py and sumo/assignment_priors.json drifted, so the catalogs were rebuilt at the current source identity (weekday 0e8517521504a414d049eb3896b64dc6, weekend b5ad50ba45eb36bd3eea048c4556f1e3).",
+ "schema_version": 2,
+ "verification": {
+  "command_scope": "catalog source contract, cached mixed adapter regression, purpose/provenance, singleflight, day library, warm-state identity and SUMO equivalence focused tests",
+  "result": "105 passed on 2026-09-06 against the rebuilt current-identity catalogs"
+ }
+}

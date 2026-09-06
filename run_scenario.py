@@ -373,6 +373,32 @@ def free_flow_edge_cost() -> tuple[dict[str, float], dict[str, float]]:
 
 
 _FREE_FLOW_EDGE_TIME: tuple[dict, dict] | None = None
+_DESTINATION_ACCESS_CACHE: dict[
+    tuple[str, int, int, str], disruption_analysis.DestinationAccessResolver
+] = {}
+
+
+def destination_access_resolver(
+        adj: dict[str, list[str]] | None = None,
+) -> disruption_analysis.DestinationAccessResolver:
+    """Return the network-bound nearby-arrival resolver used by both paths."""
+    path = Path(NET_PATH).resolve()
+    state = path.stat()
+    graph = adj if adj is not None else build_edge_graph(set())
+    permitted = set(graph)
+    permitted.update(
+        successor for successors in graph.values() for successor in successors)
+    permitted_digest = hashlib.sha256(
+        "\n".join(sorted(permitted)).encode("utf-8")).hexdigest()
+    key = (str(path), state.st_mtime_ns, state.st_size, permitted_digest)
+    remembered = _DESTINATION_ACCESS_CACHE.get(key)
+    if remembered is not None:
+        return remembered
+    resolver = disruption_analysis.DestinationAccessResolver(
+        path, permitted_edges=permitted)
+    _DESTINATION_ACCESS_CACHE.clear()
+    _DESTINATION_ACCESS_CACHE[key] = resolver
+    return resolver
 
 
 def _cheapest(adj: dict, cost: dict, src: str, dst: str,
@@ -384,7 +410,11 @@ def _cheapest(adj: dict, cost: dict, src: str, dst: str,
 
 def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
                        edge_time: dict, edge_len: dict,
-                       adj: dict | None = None, timing=None) -> dict | None:
+                       adj: dict | None = None, timing=None,
+                       destination_access=None,
+                       max_assumed_delay_s: float = (
+                           disruption_analysis.MAX_ASSUMED_CONGESTION_DELAY_S),
+                       ) -> dict | None:
     """How many vehicles a closure displaces, and how far it pushes them.
 
     Deliberately demand-side and congestion-independent: the detour is a
@@ -394,13 +424,19 @@ def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
     carries almost no signal, while displaced-vehicle count is exactly what
     the sensors constrain and the confidence map qualifies.
 
-    A vehicle is AFFECTED when its calibrated baseline route would enter a
-    closed edge while that edge is shut (arrival accumulated at free-flow
-    cost, the basis the router used). Severity compares like with like — the
-    cheapest legal path with the closure against the cheapest without it, for
-    that vehicle's own origin and destination. Using the vehicle's realised
-    route as the "before" understates it badly: realised routes run ~1.16x
-    optimal, so an optimal detour can look free.
+    A vehicle is AFFECTED under the same timing predicate used by the
+    pre-SUMO route writer, and by the same shared decision object
+    (`disruption.ClosureRouteResolver`), so the ledger prices the journey
+    SUMO will actually run. Free-flow occupancy is a lower bound and
+    `disruption.MAX_ASSUMED_CONGESTION_DELAY_S` the declared upper bound, so
+    a window applies exactly when that interval overlaps [begin_s, end_s) —
+    a vehicle provably past the closure, or provably ahead of it, is not
+    charged. Severity compares like with like — the cheapest legal path with
+    the closure against the cheapest without it, for that vehicle's own
+    origin and destination — and BOTH the seconds and the metres are read off
+    that one route, never off two separate searches. Using the vehicle's
+    realised route as the "before" understates it badly: realised routes run
+    ~1.16x optimal, so an optimal detour can look free.
 
     `added_*_total` is the honest headline. The MEDIAN is often zero even for
     a heavily used edge, because a dense grid gives most drivers a free
@@ -410,29 +446,41 @@ def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
         return None
     if adj is None:
         adj = build_edge_graph(set())
+    if destination_access is None:
+        destination_access = destination_access_resolver(adj)
     return disruption_analysis.closure_disruption(
         route_path, closed_edges, closures, edge_time, edge_len,
-        adjacency=adj, timing=timing)
+        adjacency=adj, destination_access=destination_access, timing=timing,
+        max_assumed_delay_s=max_assumed_delay_s)
 
 
 def reference_closure_disruption(
         route_path: Path, closed_edges: set[str], closures: list,
         edge_time: dict, edge_len: dict,
-        adj: dict | None = None) -> dict | None:
+        adj: dict | None = None, destination_access=None,
+        max_assumed_delay_s: float = (
+            disruption_analysis.MAX_ASSUMED_CONGESTION_DELAY_S),
+) -> dict | None:
     """Former per-OD implementation retained as a test oracle."""
     if not closed_edges or not Path(route_path).exists():
         return None
     if adj is None:
         adj = build_edge_graph(set())
+    if destination_access is None:
+        destination_access = destination_access_resolver(adj)
     return disruption_analysis.reference_closure_disruption(
         route_path, closed_edges, closures, edge_time, edge_len,
-        adjacency=adj)
+        adjacency=adj, destination_access=destination_access,
+        max_assumed_delay_s=max_assumed_delay_s)
 
 
 def closure_disruption_across_variants(
         variant_paths, closed_edges: set[str], closures: list,
         edge_time: dict, edge_len: dict,
-        adj: dict | None = None) -> dict | None:
+        adj: dict | None = None, destination_access=None,
+        max_assumed_delay_s: float = (
+            disruption_analysis.MAX_ASSUMED_CONGESTION_DELAY_S),
+) -> dict | None:
     """Measure the closure on EVERY direction-split variant, worst case first.
 
     q10/q50/q90 are three plausible directional assignments of the same
@@ -452,10 +500,14 @@ def closure_disruption_across_variants(
     # each time.
     if adj is None:
         adj = build_edge_graph(set())
+    if destination_access is None:
+        destination_access = destination_access_resolver(adj)
     per_variant = {}
     for path in paths:
         report = closure_disruption(
-            Path(path), closed_edges, closures, edge_time, edge_len, adj=adj)
+            Path(path), closed_edges, closures, edge_time, edge_len, adj=adj,
+            destination_access=destination_access,
+            max_assumed_delay_s=max_assumed_delay_s)
         if report is not None:
             per_variant[Path(path).name] = report
     if not per_variant:
@@ -469,11 +521,20 @@ def closure_disruption_across_variants(
                                          for r in records),
         "vehicles_severed_destination": max(r["vehicles_severed_destination"]
                                             for r in records),
+        "vehicles_destination_relocated": max(
+            r["vehicles_destination_relocated"] for r in records),
+        "destination_relocation_metres_total": max(
+            r["destination_relocation_metres_total"] for r in records),
+        "destination_relocation_metres_max": max(
+            r["destination_relocation_metres_max"] for r in records),
         "added_vehicle_hours": max(r["added_vehicle_hours"] for r in records),
         "added_metres_total": max(r["added_metres_total"] for r in records),
         "added_seconds_median": max(r["added_seconds_median"] for r in records),
         "added_metres_median": max(r["added_metres_median"] for r in records),
         "basis": records[0]["basis"],
+        # Not a field-wise worst: every variant is costed under the same
+        # declared bound, so this is carried through, not maximised.
+        "assumed_congestion_delay_s": records[0]["assumed_congestion_delay_s"],
     }
     worst["reduction"] = "field-wise worst across direction-split variants"
     worst["by_variant"] = per_variant
@@ -1802,9 +1863,10 @@ def truncate_stranded_vehicles(route_path: Path, close_edges: list[str],
 #: test_truncate_stranded_vehicles_is_unreachable_from_production` asserts no
 #: production entry point calls it any more. The replacement,
 #: `reroute_closure_affected_vehicles` below, rewrites every affected
-#: vehicle's FULL route from its original origin to its original
-#: destination — never just truncating short of the closure — and denies
-#: departure (never truncates) when no such route exists. See
+#: vehicle's FULL route from its original origin to its original destination,
+#: or to the nearest reachable open road position beside a closed destination
+#: — never just truncating short of the closure — and denies departure (never
+#: truncates) only when no legal destination access exists. See
 #: `traffic_sim.simulation.closure_routing` for the full root-cause analysis
 #: and the routing/access-impact contract.
 def reroute_closure_affected_vehicles(
@@ -1812,7 +1874,8 @@ def reroute_closure_affected_vehicles(
         adj: dict[str, list[str]], closures: list[dict] | None = None,
         edge_travel_s: dict[str, float] | None = None,
         access_impact_path: Path | None = None,
-        identity: dict | None = None) -> tuple[int, int]:
+        identity: dict | None = None,
+        destination_access=None) -> tuple[int, int]:
     """Production closure routing entry point.
 
     `adj` MUST be the FULL, un-banned edge graph (`build_edge_graph(set())`)
@@ -1824,17 +1887,20 @@ def reroute_closure_affected_vehicles(
 
     Returns `(n_rerouted, n_denied)` — `n_rerouted` counts vehicles whose
     route was rewritten to a full closure-avoiding detour ending at their
-    original destination; `n_denied` counts vehicles held outside the
-    network (never simulated) because their destination sits on a closed
-    edge or no legal detour exists at all. Denied vehicles are recorded in
+    original destination or a provenance-recorded nearby access point;
+    `n_denied` counts vehicles held outside the network (never simulated)
+    because no legal detour or nearby reachable destination access exists.
+    Denied vehicles are recorded in
     `access_impact_path` (when given) with stable per-trip provenance; see
     `closure_routing.write_access_impact_report`.
     """
+    if destination_access is None:
+        destination_access = destination_access_resolver(adj)
     result = closure_routing.prepare_route_file(
         route_path, close_edges, out_path, adj,
         edge_travel_s=edge_travel_s or {}, closures=closures,
         access_impact_path=access_impact_path, network_path=NET_PATH,
-        identity=identity)
+        identity=identity, destination_access=destination_access)
     return result.rerouted, result.denied
 
 
@@ -1974,8 +2040,11 @@ def build_sumo_invocation(seed: int, route_path: Path, add_paths: list[Path],
         "--end", str(duration_s + flush_s),
         "--no-step-log", "true",
         *(["--no-warnings", "true"] if suppress_warnings else []),
-        # Vehicles whose destination IS the closed edge have no valid route —
-        # drop them instead of aborting (standard for closure studies).
+        # SUMO's runtime fail-safe rerouter can report a route error even
+        # though the preprocessor supplied a complete closure-safe route.
+        # Keep execution tolerant here, but never accept a reduced
+        # population: closure callers enforce expected == loaded == inserted
+        # == trip_count before publishing an observation.
         "--ignore-route-errors", "true",
         *(["--device.rerouting.threads", str(rerouting_threads)]
           if rerouting_threads is not None else []),

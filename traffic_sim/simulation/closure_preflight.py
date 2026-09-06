@@ -218,9 +218,16 @@ def _daily_duration(spec: ClosureSearchSpec, day_count: int) -> int | None:
     """Per-day closure minutes for one day count, or None when illegal.
 
     Reproduces the allocation arithmetic of `generate_closure_schedules`
-    exactly, including the two rejections it performs: a non-integral equal
-    split, and a multi-day schedule whose daily shift would fill a whole day
-    and leave no opening between passes.
+    exactly, including the rejections it performs: a non-integral equal split,
+    and a shift longer than a single day.
+
+    A shift of EXACTLY one day is legal for any day count: a whole day means
+    the road is shut for that entire calendar day, so consecutive whole days
+    are one continuous closure and the absence of an opening between them is
+    the request. This mirror must be changed in step with the calendar --
+    when the two disagreed, the calendar produced "seven whole days" while
+    this function reported "0 perioder (inga giltiga dagantal)" for the same
+    spec, and the UI showed the refusal.
     """
     if spec.work_allocation_policy == "exact_equal_daily_v1":
         total_blocks = spec.required_work_minutes // spec.resolution_minutes
@@ -234,7 +241,7 @@ def _daily_duration(spec: ClosureSearchSpec, day_count: int) -> int | None:
         duration = quarters * spec.resolution_minutes
     if duration <= 0:
         return None
-    if day_count > 1 and duration >= MINUTES_PER_DAY:
+    if duration > MINUTES_PER_DAY:
         return None
     return duration
 

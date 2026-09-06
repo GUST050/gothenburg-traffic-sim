@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>Göteborg Trafikflöde</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interaktiv trafikmodell för analys, prognos och simulering i Göteborgs innerstad.">
   <!-- Inline icon: silences the browser's automatic /favicon.ico request,
        which otherwise logs a 404 on every load (no server file needed). -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%231f9d55'/%3E%3Ccircle cx='8' cy='8' r='3' fill='%23dc2626'/%3E%3C/svg%3E">
@@ -29,7 +30,7 @@
       height: 100%;
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       background: #111820;
-      min-width: 1180px;
+      min-width: 0;
     }
     /* Flex column so #controls can grow (Simulering panel adds a row)
        without ever overlapping or leaving a gap under the map — no
@@ -49,7 +50,7 @@
     }
     #workspace-nav button {
       border: 0; background: transparent; color: var(--ink); font-size: 1rem;
-      width: 28px; height: 28px; cursor: pointer;
+      width: 36px; height: 36px; cursor: pointer;
     }
     #workspace-task-title { color: var(--ink); font-size: 0.76rem; font-weight: 700; }
     body[data-task="home"] #workspace-nav { display: none; }
@@ -58,7 +59,7 @@
       place-items: center; padding: 40px; background: #eef1f4;
     }
     #task-home[hidden] { display: none; }
-    .task-home-inner { width: 1100px; }
+    .task-home-inner { width: min(1100px, 100%); }
     .task-home-title { color: #17212b; font-size: 1.6rem; font-weight: 650; letter-spacing: -0.02em; }
     .task-home-subtitle { color: #66727e; font-size: 0.82rem; margin-top: 7px; }
     #task-grid {
@@ -87,9 +88,9 @@
     #history-body { margin-top: 10px; font-size: 0.72rem; }
     #history-body table { width: 100%; border-collapse: collapse; }
     #history-body td { padding: 7px 8px; border-top: 1px solid #e4e8ec; color: #56616c; }
-    #history-body .history-running { color: #f59e0b; font-weight: 700; }
-    #history-body .history-succeeded { color: #4ade80; font-weight: 700; }
-    #history-body .history-failed, #history-body .history-orphaned { color: #f87171; font-weight: 700; }
+    #history-body .history-running { color: #92560a; font-weight: 700; }
+    #history-body .history-succeeded { color: #23734a; font-weight: 700; }
+    #history-body .history-failed, #history-body .history-orphaned { color: #a63d3d; font-weight: 700; }
     /* Phase 6: a result must be traceable to the exact spec/build/job that
        produced it, without hand-querying the API. */
     #history-body tr.history-row { cursor: pointer; }
@@ -112,7 +113,7 @@
 
     /* ── Title chip ─────────────────────────────────────────────────────── */
     #brand {
-      position: absolute; top: 14px; left: 56px; z-index: 1000;
+      position: absolute; top: 14px; left: 210px; z-index: 1000;
       background: var(--panel);
       border: 1px solid var(--panel-line); border-radius: 5px;
       padding: 9px 14px; pointer-events: none;
@@ -264,33 +265,93 @@
       color-scheme: dark;
     }
 
-    /* ── Monthly search banner (Phase 4 step 7) — a two-row form, so it
-         wraps instead of the single-row layout the other banners use. ── */
+    /* ── Monthly search banner (Phase 4 step 7). The search has enough
+         inputs to need a small form of its own; keeping them in labelled
+         groups is much easier to scan than one wrapping toolbar. ───────── */
     #monthly-banner {
-      display: none; align-items: center; gap: 10px; flex: 1; flex-wrap: wrap;
+      display: none; flex: 1 1 100%; min-width: 0; flex-direction: column;
+      align-items: stretch; gap: 10px;
     }
     #monthly-banner.show { display: flex; }
-    #monthly-banner .hint { font-size: 0.74rem; color: var(--sim-2); font-weight: 600; }
+    #sim-panel.monthly-tool-active > :not(#monthly-banner) { display: none !important; }
+    .monthly-banner-head, .monthly-banner-footer {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .monthly-banner-head { min-height: 28px; }
+    .monthly-banner-title {
+      color: var(--ink); font-size: 0.78rem; font-weight: 700;
+    }
+    .monthly-banner-help {
+      color: var(--ink-3); font-size: 0.68rem; line-height: 1.35;
+    }
+    #monthly-pick-count {
+      background: #2b3d4b; color: var(--sim-2); border-radius: 3px;
+      padding: 2px 8px; font-size: 0.7rem; font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .monthly-fields {
+      display: grid;
+      grid-template-columns: max-content minmax(260px, 1.3fr)
+        minmax(300px, 1.35fr) minmax(245px, 1fr) max-content;
+      align-items: end; gap: 9px;
+    }
+    .monthly-field {
+      min-width: 0; display: flex; flex-direction: column; gap: 5px;
+    }
+    .monthly-field-label {
+      color: var(--ink-3); font-size: 0.59rem; font-weight: 700;
+      letter-spacing: 0.055em; text-transform: uppercase; white-space: nowrap;
+    }
+    .monthly-field-controls {
+      min-height: 28px; display: flex; align-items: center; gap: 6px;
+    }
+    .monthly-field-controls .range-separator { color: var(--ink-3); }
+    .monthly-field-date .monthly-field-controls,
+    .monthly-field-time .monthly-field-controls { white-space: nowrap; }
+    .monthly-field-duration .monthly-field-controls { flex-wrap: nowrap; }
+    .monthly-field-duration .compact-label {
+      color: var(--ink-3); font-size: 0.66rem; white-space: nowrap;
+    }
+    .monthly-check {
+      display: inline-flex; align-items: center; gap: 4px; color: var(--ink-2);
+      font-size: 0.69rem; font-weight: 600; white-space: nowrap;
+    }
+    #monthly-banner .seg { align-self: flex-start; }
+    #monthly-banner .hint { font-size: 0.72rem; color: var(--ink-3); font-weight: 600; }
     #monthly-banner input[type="date"], #monthly-banner input[type="time"],
     #monthly-banner input[type="number"] {
       background: rgba(15, 23, 42, 0.85); color: var(--ink);
       border: 1px solid var(--panel-line); border-radius: 4px;
-      padding: 4px 7px; font-size: 0.72rem; color-scheme: dark;
+      height: 28px; padding: 4px 7px; font-size: 0.72rem; color-scheme: dark;
     }
+    #monthly-banner input:disabled { opacity: 0.5; cursor: not-allowed; }
     #monthly-banner input[type="number"] { width: 3.4em; }
+    #monthly-work-hours { width: 4.8em !important; }
+    #monthly-min-days, #monthly-max-days { width: 4em !important; }
+    .monthly-field-time.whole-day input,
+    .monthly-field-time.whole-day .range-separator { display: none; }
+    #monthly-full-day-value {
+      color: var(--ink); font-variant-numeric: tabular-nums;
+    }
+    #monthly-full-day-value[hidden] { display: none; }
     #monthly-weekdays button {
       min-width: 30px; padding: 4px 6px; font-size: 0.68rem;
     }
-    #monthly-progress-hint { font-size: 0.72rem; color: var(--ink-3); }
-    #monthly-preflight { font-size: 0.72rem; color: var(--ink-3); }
+    .monthly-run-state {
+      min-width: 0; flex: 1; display: flex; align-items: center; gap: 8px;
+      overflow: hidden;
+    }
+    #monthly-progress-hint, #monthly-preflight {
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 0.7rem; color: var(--ink-3);
+    }
     #monthly-preflight.normal { color: var(--ink-3); }
     #monthly-preflight.large_but_runnable { color: #f59e0b; }
     #monthly-preflight.over_resource_budget { color: #f87171; font-weight: 600; }
+    .monthly-banner-actions { display: flex; align-items: center; gap: 8px; }
 
-    /* ── Suggest-closure-time results — a floating panel, distinct from
-         the horizontal sim-panel because it needs real table space.
-         The monthly-search results panel shares the exact layout. ──── */
-    #suggest-results, #monthly-results {
+    /* ── Suggest-closure-time results — a compact floating panel. ───── */
+    #suggest-results {
       display: none;
       position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%);
       z-index: 1000; width: min(720px, 92vw); max-height: 55vh;
@@ -299,31 +360,181 @@
       box-shadow: 0 8px 22px rgba(0,0,0,0.28);
       flex-direction: column; overflow: hidden;
     }
-    #suggest-results.show, #monthly-results.show { display: flex; }
-    #suggest-results-header, #monthly-results-header {
+    #suggest-results.show { display: flex; }
+    #suggest-results-header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 12px 16px; border-bottom: 1px solid var(--panel-line);
     }
-    #suggest-results-title, #monthly-results-title { font-size: 0.82rem; font-weight: 700; color: var(--ink); }
-    #suggest-results-meta, #monthly-results-meta {
+    #suggest-results-title { font-size: 0.82rem; font-weight: 700; color: var(--ink); }
+    #suggest-results-meta {
       padding: 8px 16px; font-size: 0.7rem; color: var(--ink-3); line-height: 1.6;
     }
-    #suggest-results-meta b, #monthly-results-meta b { color: var(--ink-2); }
+    #suggest-results-meta b { color: var(--ink-2); }
     #suggest-results-warn, .opt-warn, .monthly-warn { color: #f59e0b; }
-    #suggest-results-body-wrap, #monthly-results-body-wrap { overflow-y: auto; padding: 0 8px 8px; }
-    #suggest-results-table, #monthly-results-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
-    #suggest-results-table th, #monthly-results-table th {
+    #suggest-results-body-wrap { overflow-y: auto; padding: 0 8px 8px; }
+    #suggest-results-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+    #suggest-results-table th {
       text-align: left; padding: 6px 8px; color: var(--ink-3);
       font-weight: 600; text-transform: uppercase; font-size: 0.62rem;
       letter-spacing: 0.04em; position: sticky; top: 0; background: var(--panel);
     }
-    #suggest-results-table td, #monthly-results-table td { padding: 6px 8px; color: var(--ink-2); border-top: 1px solid var(--panel-line); }
-    #suggest-results-table tr.disqualified td, #monthly-results-table tr.disqualified td { opacity: 0.5; }
+    #suggest-results-table td { padding: 6px 8px; color: var(--ink-2); border-top: 1px solid var(--panel-line); }
+    #suggest-results-table tr.disqualified td { opacity: 0.5; }
     #suggest-results-table tr.outside-topk td:first-child { color: var(--ink-3); }
-    .sr-load-btn {
-      background: var(--sim); color: #fff; border: none; border-radius: 3px;
-      padding: 3px 9px; font-size: 0.68rem; font-weight: 600; cursor: pointer;
+
+    /* ── Monthly search result — a dedicated report, not a map popup. ── */
+    body.monthly-results-open { overflow: hidden; }
+    body.monthly-results-open #workspace-nav,
+    body.monthly-results-open #brand,
+    body.monthly-results-open #legend,
+    body.monthly-results-open #controls,
+    body.monthly-results-open .leaflet-control-container { visibility: hidden; }
+    #monthly-results {
+      --result-bg: #f3f5f7;
+      --result-surface: #ffffff;
+      --result-ink: #18232d;
+      --result-muted: #64717d;
+      --result-line: #dce2e7;
+      --result-accent: #2d698f;
+      display: none; position: fixed; inset: 0; z-index: 10000;
+      width: 100vw; height: 100vh; height: 100dvh;
+      background: var(--result-bg); color: var(--result-ink); flex-direction: column;
+      overflow: hidden;
     }
+    #monthly-results.show { display: flex; }
+    #monthly-results-header {
+      flex: 0 0 auto; background: var(--result-surface);
+      border-bottom: 1px solid var(--result-line);
+    }
+    #monthly-results-header-inner {
+      width: min(1500px, calc(100% - 64px)); min-height: 76px; margin: 0 auto;
+      display: flex; align-items: center; gap: 20px;
+    }
+    #monthly-results-heading { min-width: 0; }
+    #monthly-results-kicker {
+      color: var(--result-muted); font-size: 0.64rem; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    #monthly-results-title {
+      margin-top: 3px; color: var(--result-ink); font-size: 1.22rem;
+      line-height: 1.25; font-weight: 680; letter-spacing: -0.015em;
+    }
+    #monthly-results-subtitle {
+      margin-top: 3px; color: var(--result-muted); font-size: 0.72rem;
+      font-variant-numeric: tabular-nums;
+    }
+    #monthly-results-close {
+      flex: 0 0 auto; align-self: center; padding: 8px 12px; color: #40515f;
+      background: transparent; border: 1px solid #cfd7de; border-radius: 5px;
+      font-size: 0.74rem; font-weight: 650; cursor: pointer;
+    }
+    #monthly-results-close:hover { background: #f3f6f8; border-color: #aebbc5; }
+    #monthly-results-main {
+      width: min(1500px, calc(100% - 64px)); margin: 0 auto;
+      flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+    }
+    #monthly-results-summary {
+      flex: 0 0 auto; display: grid;
+      grid-template-columns: minmax(310px, 1.7fr) repeat(3, minmax(170px, 1fr));
+      margin-top: 22px; background: var(--result-surface);
+      border: 1px solid var(--result-line); border-radius: 7px; overflow: hidden;
+    }
+    .monthly-summary-card {
+      min-width: 0; padding: 15px 18px; border-left: 1px solid var(--result-line);
+    }
+    .monthly-summary-card:first-child {
+      border-left: 0; box-shadow: inset 4px 0 0 #3b8464;
+      background: #f5faf7; padding-left: 21px;
+    }
+    .monthly-summary-label {
+      color: var(--result-muted); font-size: 0.61rem; font-weight: 700;
+      letter-spacing: 0.07em; text-transform: uppercase;
+    }
+    .monthly-summary-value {
+      margin-top: 5px; color: var(--result-ink); font-size: 1.02rem;
+      font-weight: 690; font-variant-numeric: tabular-nums;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .monthly-summary-detail {
+      margin-top: 3px; color: var(--result-muted); font-size: 0.67rem;
+    }
+    #monthly-results-notice {
+      display: none; flex: 0 0 auto; margin-top: 12px; padding: 9px 12px;
+      color: #79551e; background: #fff8e9; border: 1px solid #ead8ad;
+      border-radius: 5px; font-size: 0.7rem; line-height: 1.45;
+    }
+    #monthly-results-notice.show { display: block; }
+    #monthly-results-method {
+      flex: 0 0 auto; margin: 10px 0 12px; color: var(--result-muted);
+      font-size: 0.69rem;
+    }
+    #monthly-results-method summary {
+      display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+      color: #52616e; font-weight: 650; user-select: none;
+    }
+    #monthly-results-method summary:hover { color: var(--result-ink); }
+    #monthly-results-method[open] summary { margin-bottom: 8px; }
+    #monthly-results-method summary::marker { color: #80909d; }
+    #monthly-results-meta {
+      padding: 10px 12px; max-height: 14vh; overflow: auto;
+      background: var(--result-surface); border: 1px solid var(--result-line);
+      border-radius: 5px; color: var(--result-muted); line-height: 1.55;
+    }
+    #monthly-results-meta b { color: var(--result-ink); }
+    #monthly-results-body-wrap {
+      flex: 1 1 auto; min-height: 0; overflow: auto;
+      padding: 0 0 24px;
+    }
+    #monthly-results-table {
+      width: 100%; min-width: 1040px; border-collapse: separate;
+      border-spacing: 0; background: var(--result-surface);
+      border: 1px solid var(--result-line); border-radius: 7px;
+      overflow: hidden; font-size: 0.77rem;
+      font-variant-numeric: tabular-nums;
+    }
+    #monthly-results-table th {
+      position: sticky; top: 0; z-index: 1; text-align: left;
+      padding: 10px 14px; background: #f7f9fa; color: #65727d;
+      border-bottom: 1px solid var(--result-line); font-size: 0.61rem;
+      font-weight: 700; letter-spacing: 0.055em; text-transform: uppercase;
+      white-space: nowrap;
+    }
+    #monthly-results-table td {
+      padding: 9px 14px; color: #34434f;
+      border-top: 1px solid #e7ebee; white-space: nowrap;
+    }
+    #monthly-results-table th:nth-child(5),
+    #monthly-results-table th:nth-child(6),
+    #monthly-results-table td:nth-child(5),
+    #monthly-results-table td:nth-child(6) { text-align: right; }
+    #monthly-results-table tbody tr:first-child td { border-top: 0; }
+    #monthly-results-table tbody tr:hover td { background: #f7fafc; }
+    #monthly-results-table tr.sumo-verified td { background: #f4f8fb; }
+    #monthly-results-table tr.best-period td { background: #eef7f2; }
+    #monthly-results-table tr.best-period td:first-child {
+      box-shadow: inset 3px 0 0 #3b8464; font-weight: 700;
+    }
+    #monthly-results-table tr.disqualified td { opacity: 0.55; }
+    .monthly-status {
+      display: inline-flex; align-items: center; gap: 7px; color: #65727d;
+      font-size: 0.68rem; font-weight: 600;
+    }
+    .monthly-status::before {
+      content: ''; width: 7px; height: 7px; border-radius: 50%;
+      background: #aeb8c0; flex: 0 0 auto;
+    }
+    .monthly-status.verified { color: #2d698f; }
+    .monthly-status.verified::before { background: #3984b2; }
+    .monthly-status.best { color: #2e7654; font-weight: 700; }
+    .monthly-status.best::before { background: #3b9568; }
+    .monthly-status.failed { color: #a04c4c; }
+    .monthly-status.failed::before { background: #bd5c5c; }
+    .sr-load-btn {
+      background: transparent; color: var(--result-accent);
+      border: 1px solid #b9cedb; border-radius: 4px;
+      padding: 4px 9px; font-size: 0.67rem; font-weight: 650; cursor: pointer;
+    }
+    .sr-load-btn:hover { background: #edf5f9; border-color: #84aabd; }
     .sr-load-btn:disabled { opacity: 0.5; cursor: wait; }
     .sr-tag {
       display: inline-block; font-size: 0.62rem; font-weight: 700;
@@ -331,7 +542,6 @@
     }
     .sr-tag.rank { background: #2b3d4b; color: var(--sim-2); }
     .sr-tag.disq { background: rgba(220,38,38,0.2); color: #f87171; }
-
     /* ── Signal-optimization results (IMPROVEMENT_PLAN.md D5) — same floating-panel
          pattern as #suggest-results, own id since the content shape
          (metric card + plan-diff table, not a ranked-window table) differs. */
@@ -482,6 +692,7 @@
       background: var(--panel) !important; color: var(--ink-2) !important;
       border-color: var(--panel-line) !important;
     }
+    .leaflet-top.leaflet-left { top: 58px; }
     .leaflet-control-attribution { background: rgba(11,14,26,0.7) !important; color: var(--ink-3) !important; }
     .leaflet-control-attribution a { color: var(--ink-2) !important; }
     #validation-panel {
@@ -551,10 +762,153 @@
     #sensor-audit-table .audit-station td { background: #f8fafc; }
     #sensor-audit-table .audit-child td:first-child { padding-left: 20px; color: #6b7280; }
     #sensor-audit-table td.audit-source-kind { text-align: right; }
+
+    :where(button, input, select, summary, [tabindex]):focus-visible {
+      outline: 3px solid #76b7e3;
+      outline-offset: 2px;
+    }
+
+    /* Tablet: keep the map primary while allowing dense analysis controls to
+       reflow instead of forcing the entire document wider than the viewport. */
+    @media (max-width: 1100px) {
+      #task-home { padding: 32px; }
+      #task-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      #controls { padding-inline: 16px; }
+      #playback-row { flex-wrap: wrap; }
+      #mode-toggle { margin-left: 0; }
+      .monthly-fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .monthly-field-weekdays { grid-column: 1 / -1; }
+      #monthly-results-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .monthly-summary-card:nth-child(3) { border-left: 0; }
+    }
+
+    /* Phone: the controls become a bounded bottom sheet, the landing page is
+       a single readable list, and wide evidence tables scroll inside their
+       own container rather than clipping the whole application. */
+    @media (max-width: 720px) {
+      body { overflow: hidden; }
+      #map { min-height: 42dvh; }
+      #workspace-nav { top: 10px; left: 10px; padding: 4px 7px; }
+      #workspace-nav button { width: 40px; height: 40px; }
+      #workspace-task-title { font-size: 0.72rem; }
+      #brand { top: 62px; left: 10px; padding: 7px 10px; }
+      #brand h1 { font-size: 0.8rem; }
+      #brand p { display: none; }
+      .leaflet-top.leaflet-left { top: 102px; }
+      .leaflet-control-attribution {
+        max-width: 78vw; font-size: 0.55rem !important; line-height: 1.25;
+      }
+      #legend {
+        top: 10px; right: 10px; width: 154px; padding: 9px 10px;
+        font-size: 0.66rem;
+      }
+      .legend-sub { margin-bottom: 7px; font-size: 0.58rem; }
+      .legend-row { gap: 7px; line-height: 1.45; font-size: 0.62rem; }
+      .legend-divider { margin: 7px 0; }
+      .legend-note { display: none; }
+
+      #task-home {
+        place-items: start stretch; overflow-y: auto; padding: 28px 18px;
+      }
+      .task-home-inner { margin: auto 0; }
+      .task-home-title { font-size: 1.45rem; }
+      .task-home-subtitle { font-size: 0.78rem; }
+      #task-grid { grid-template-columns: 1fr; gap: 9px; margin-top: 22px; }
+      .task-card { min-height: 88px; padding: 14px 16px; }
+      .task-card strong { margin-top: 11px; font-size: 0.9rem; }
+      .task-card span:not(.task-card-icon) { font-size: 0.72rem; }
+      #history-panel { max-height: none; }
+      #history-body { overflow-x: auto; }
+
+      #controls {
+        max-height: 58dvh; overflow-y: auto; overscroll-behavior: contain;
+        gap: 9px; padding: 10px 12px 12px;
+      }
+      #playback-row { gap: 9px; }
+      #play-btn { width: 44px; height: 44px; }
+      #time-display { min-width: 132px; flex: 1; }
+      #td-clock { font-size: 1.22rem; }
+      #playback-row > .v-divider { display: none; }
+      #playback-row > .label { flex: 0 0 auto; }
+      #speed-seg { flex: 1 1 auto; }
+      #speed-seg button { flex: 1; padding-inline: 7px; }
+      #mode-toggle { flex: 1 1 100%; }
+      #mode-toggle button { flex: 1; }
+      .seg button, .action-btn { min-height: 40px; }
+
+      #sim-panel { align-items: stretch; gap: 9px; padding: 10px; }
+      #sim-panel > .v-divider { display: none; }
+      #scen-select { flex: 1 1 100%; max-width: none; min-height: 42px; }
+      #pick-banner, #day-banner, #suggest-banner {
+        align-items: stretch; flex-wrap: wrap;
+      }
+      #day-banner input[type="date"] { flex: 1 1 180px; min-height: 40px; }
+      #suggest-banner .hint:first-child { flex: 1 1 100%; }
+
+      .monthly-banner-head { flex-wrap: wrap; align-items: baseline; }
+      .monthly-banner-title { font-size: 0.84rem; }
+      .monthly-banner-help { flex: 1 1 100%; }
+      .monthly-fields { grid-template-columns: 1fr; gap: 12px; }
+      .monthly-field-weekdays { grid-column: auto; }
+      .monthly-field-controls { min-height: 40px; flex-wrap: wrap; }
+      .monthly-field-date .monthly-field-controls,
+      .monthly-field-time .monthly-field-controls { white-space: normal; }
+      #monthly-banner input[type="date"],
+      #monthly-banner input[type="time"],
+      #monthly-banner input[type="number"] { min-height: 40px; font-size: 0.78rem; }
+      #monthly-banner input[type="date"],
+      #monthly-banner input[type="time"] { flex: 1 1 120px; min-width: 0; }
+      #monthly-weekdays { width: 100%; }
+      #monthly-weekdays button { flex: 1; min-width: 36px; }
+      .monthly-banner-footer { align-items: stretch; flex-direction: column; }
+      .monthly-run-state { overflow: visible; }
+      #monthly-progress-hint, #monthly-preflight {
+        overflow: visible; text-overflow: clip; white-space: normal;
+      }
+      .monthly-banner-actions { width: 100%; }
+      .monthly-banner-actions button { flex: 1; }
+      #sliders { flex-direction: column; gap: 13px; }
+
+      #suggest-results, #optimize-results {
+        bottom: 12px; width: calc(100vw - 24px); max-height: calc(100dvh - 24px);
+      }
+      #optimize-results-card { align-items: stretch; flex-direction: column; gap: 9px; }
+
+      #monthly-results-header-inner,
+      #monthly-results-main { width: calc(100% - 32px); }
+      #monthly-results-header-inner {
+        min-height: 0; padding: 14px 0; align-items: stretch;
+        flex-direction: column; gap: 10px;
+      }
+      #monthly-results-close { align-self: flex-start; min-height: 44px; }
+      #monthly-results-title { font-size: 1.12rem; }
+      #monthly-results-subtitle { line-height: 1.4; }
+      #monthly-results-summary {
+        display: flex; grid-template-columns: none; overflow-x: auto;
+        scroll-snap-type: x proximity; margin-top: 14px;
+      }
+      .monthly-summary-card {
+        flex: 0 0 220px; scroll-snap-align: start; border-left: 1px solid var(--result-line);
+      }
+      .monthly-summary-card:first-child { flex-basis: 270px; }
+      .monthly-summary-value { overflow: visible; text-overflow: clip; }
+      #monthly-results-notice { font-size: 0.72rem; }
+      #monthly-results-method { margin-block: 9px; }
+      #monthly-results-body-wrap {
+        overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 16px;
+      }
+      #monthly-results-table { min-width: 880px; font-size: 0.73rem; }
+      #monthly-results-table th { padding: 9px 10px; }
+      #monthly-results-table td { padding: 9px 10px; }
+    }
   </style>
 </head>
 <body data-task="home">
-  <div id="map"></div>
+  <div id="map" role="main" aria-label="Interaktiv trafikkarta över Göteborg"></div>
 
   <nav id="workspace-nav" aria-label="Arbetsyta">
     <button id="workspace-menu-btn" title="Öppna arbetsytor" aria-label="Öppna arbetsytor">☰</button>
@@ -632,7 +986,7 @@
         <div class="legend-dot" style="background:#1d4ed8"></div>
         <div class="legend-dot" style="background:#1d4ed8"></div>
       </div>
-      <span>Varje prick = en simulerad bil</span>
+      <span>Varje prick = en bil på vägen just nu · sensorn räknar passager under 15 min</span>
     </div>
     <div class="legend-row">
       <div class="legend-swatch"><div class="legend-line" style="background:#94a3b8"></div></div>
@@ -706,7 +1060,7 @@
       <button id="suggest-mode-btn" class="action-btn"
               title="Klicka på en väg för att hitta den bästa tiden att stänga den">Optimera aktiv dag</button>
       <button id="monthly-mode-btn" class="action-btn"
-              title="Sök den minst störande arbetsperioden över ett datumintervall — varje kandidat verifieras i SUMO">Bästa arbetsperiod</button>
+              title="Jämför alla rullande arbetsperioder med q50-kostnad och SUMO-verifiera toppkandidaterna">Bästa arbetsperiod</button>
       <button id="optimize-signals-btn" class="action-btn"
               title="Optimera trafikljusen för det valda scenariot (~2-5 min, syntetiska ljusprogram)">Optimera signaler</button>
       <!-- G3: assembled validation report (web/data/validation.json) —
@@ -747,55 +1101,89 @@
       </div>
 
       <div id="monthly-banner">
-        <span class="hint">Klicka på väg(ar) att stänga</span>
-        <span id="monthly-pick-count">0 valda</span>
-        <div class="seg" id="monthly-source-seg">
-          <button data-source="historical">Historik 2025</button>
-          <button data-source="forecast" class="active">Prognos 2027</button>
+        <div class="monthly-banner-head">
+          <span class="monthly-banner-title">Hitta bästa arbetsperiod</span>
+          <span class="monthly-banner-help">Välj väg i kartan. Alla möjliga rullande perioder i intervallet jämförs automatiskt.</span>
+          <span id="monthly-pick-count">0 valda</span>
         </div>
-        <input type="date" id="monthly-date-start" value="2027-07-15"
-               title="Första tillåtna datum">
-        <span class="hint">–</span>
-        <input type="date" id="monthly-date-end" value="2027-07-22"
-               title="Sista tillåtna datum">
-        <span class="hint"
-              title="Optimeringen väljer samma dagliga start- och sluttid inom detta tillåtna fönster">tillåtet/dag</span>
-        <input type="time" id="monthly-band-start" value="06:00" step="900"
-               title="Tidigast tillåtna start per arbetsdag; sökningen provar 15-minuterssteg">
-        <span class="hint">–</span>
-        <input type="time" id="monthly-band-end" value="18:00" step="900"
-               title="Senast tillåtna slut per arbetsdag; den valda tiden blir samma varje dag">
-        <label class="hint" id="monthly-fullday-label" for="monthly-fullday"
-               title="Tillåt stängning när som helst på dygnet (00:00–24:00)">
-          <input type="checkbox" id="monthly-fullday"> heldag</label>
-        <label class="hint" for="monthly-work-hours">arbetstimmar</label>
-        <input type="number" id="monthly-work-hours" value="4" min="0.25" max="2160" step="0.25"
-               title="Totalt begärd arbets-/avstängningstid. Tiden delas exakt lika så att start- och sluttid är samma varje arbetsdag.">
-        <label class="hint" for="monthly-min-days">arbetsdagar min</label>
-        <input type="number" id="monthly-min-days" value="1" min="1" max="90"
-               title="Sätt samma värde som max för att söka en exakt stängningslängd, till exempel 5–5 arbetsdagar.">
-        <label class="hint" for="monthly-max-days">max</label>
-        <input type="number" id="monthly-max-days" value="1" min="1" max="90"
-               title="Högst 90 arbetsdagar. Perioder kan korsa vecko- och månadsgränser och använder samma start- och sluttid varje arbetsdag.">
-        <label class="hint" for="monthly-period-mode"
-               title="Jämför rullande arbetsperioder över hela datumintervallet; de får korsa både vecko- och månadsgränser.">
-          <input type="checkbox" id="monthly-period-mode" checked> jämför perioder</label>
-        <div class="seg" id="monthly-weekdays"
-             title="Tillåtna veckodagar (arbetsdagar markerade)">
-          <button data-day="0" class="active">Må</button>
-          <button data-day="1" class="active">Ti</button>
-          <button data-day="2" class="active">On</button>
-          <button data-day="3" class="active">To</button>
-          <button data-day="4" class="active">Fr</button>
-          <button data-day="5">Lö</button>
-          <button data-day="6">Sö</button>
+        <div class="monthly-fields">
+          <div class="monthly-field monthly-field-source">
+            <span class="monthly-field-label">Trafikunderlag</span>
+            <div class="seg" id="monthly-source-seg">
+              <button data-source="historical">Historik 2025</button>
+              <button data-source="forecast" class="active">Prognos 2027</button>
+            </div>
+          </div>
+          <div class="monthly-field monthly-field-date">
+            <label class="monthly-field-label" for="monthly-date-start">Sök mellan datum</label>
+            <div class="monthly-field-controls">
+              <input type="date" id="monthly-date-start" value="2027-07-15"
+                     title="Första tillåtna datum">
+              <span class="range-separator">–</span>
+              <input type="date" id="monthly-date-end" value="2027-07-22"
+                     title="Sista tillåtna datum">
+            </div>
+          </div>
+          <div class="monthly-field monthly-field-time">
+            <span class="monthly-field-label"
+                  title="Optimeringen väljer samma dagliga start- och sluttid inom detta tillåtna fönster">Tillåten tid per dag</span>
+            <div class="monthly-field-controls">
+              <input type="time" id="monthly-band-start" value="06:00" step="900"
+                     aria-describedby="monthly-full-day-value"
+                     title="Tidigast tillåtna start per arbetsdag; sökningen provar 15-minuterssteg">
+              <span class="range-separator">–</span>
+              <input type="time" id="monthly-band-end" value="18:00" step="900"
+                     aria-describedby="monthly-full-day-value"
+                     title="Senast tillåtna slut per arbetsdag; den valda tiden blir samma varje dag">
+              <span id="monthly-full-day-value" class="hint" hidden>00:00–24:00</span>
+              <label class="monthly-check" id="monthly-fullday-label" for="monthly-fullday"
+                     title="Vägen är avstängd hela dygnet, 00:00–24:00. Arbetstiden följer då av antalet dagar (dagar × 24 h) och behöver inte anges.">
+                <input type="checkbox" id="monthly-fullday"> Heldag</label>
+            </div>
+          </div>
+          <div class="monthly-field monthly-field-duration">
+            <span class="monthly-field-label">Arbetets längd</span>
+            <div class="monthly-field-controls">
+              <input type="number" id="monthly-work-hours" value="4" min="0.25" max="2160" step="0.25"
+                     aria-label="Arbetstimmar"
+                     title="Totalt begärd arbets-/avstängningstid. Tiden delas exakt lika så att start- och sluttid är samma varje arbetsdag. Vid Heldag räknas den ut åt dig.">
+              <span class="compact-label">timmar</span>
+              <input type="number" id="monthly-min-days" value="1" min="1" max="90"
+                     aria-label="Minsta antal arbetsdagar"
+                     title="Sätt samma värde som max för att söka en exakt stängningslängd, till exempel 5–5 arbetsdagar.">
+              <span class="range-separator">–</span>
+              <input type="number" id="monthly-max-days" value="1" min="1" max="90"
+                     aria-label="Högsta antal arbetsdagar"
+                     title="Högst 90 arbetsdagar. Perioder kan korsa vecko- och månadsgränser och använder samma start- och sluttid varje arbetsdag.">
+              <span class="compact-label">dagar</span>
+            </div>
+          </div>
+          <div class="monthly-field monthly-field-weekdays">
+            <span class="monthly-field-label">Tillåtna veckodagar</span>
+            <div class="seg" id="monthly-weekdays"
+                 title="Tillåtna veckodagar (arbetsdagar markerade)">
+              <button data-day="0" class="active">Må</button>
+              <button data-day="1" class="active">Ti</button>
+              <button data-day="2" class="active">On</button>
+              <button data-day="3" class="active">To</button>
+              <button data-day="4" class="active">Fr</button>
+              <button data-day="5">Lö</button>
+              <button data-day="6">Sö</button>
+            </div>
+          </div>
         </div>
-        <span id="monthly-progress-hint" hidden></span>
-        <!-- PR B: the exact read-only size estimate, shown before a job can
-             start so the range, work hours or workday cap can still change. -->
-        <span id="monthly-preflight" hidden></span>
-        <button id="monthly-run-btn" class="action-btn primary" disabled>Sök arbetsperiod</button>
-        <button id="monthly-cancel-btn" class="action-btn">Avbryt</button>
+        <div class="monthly-banner-footer">
+          <div class="monthly-run-state" role="status" aria-live="polite">
+            <span id="monthly-progress-hint" hidden></span>
+            <!-- The exact read-only size estimate is shown before a job can
+                 start so the form can still be adjusted. -->
+            <span id="monthly-preflight" hidden></span>
+          </div>
+          <div class="monthly-banner-actions">
+            <button id="monthly-run-btn" class="action-btn primary" disabled>Sök arbetsperiod</button>
+            <button id="monthly-cancel-btn" class="action-btn">Avbryt</button>
+          </div>
+        </div>
       </div>
 
       <div id="recal-progress" role="status" aria-live="polite">
@@ -852,27 +1240,6 @@
       </div>
     </div>
 
-    <div id="monthly-results">
-      <div id="monthly-results-header">
-        <span id="monthly-results-title"></span>
-        <button id="monthly-results-close" class="action-btn">Stäng</button>
-      </div>
-      <div id="monthly-results-meta"></div>
-      <div id="monthly-results-body-wrap">
-        <table id="monthly-results-table">
-          <thead>
-            <tr>
-              <th id="monthly-col-period">Schema</th>
-              <th id="monthly-col-primary">ΔTid p50 (värsta variant)</th>
-              <th id="monthly-col-secondary">Övre 95 %</th>
-              <th>Status</th><th></th>
-            </tr>
-          </thead>
-          <tbody id="monthly-results-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-
     <div id="optimize-results">
       <div id="optimize-results-header">
         <span id="optimize-results-title"></span>
@@ -900,27 +1267,69 @@
           <span class="label">Dag</span>
           <span class="hint" id="day-hint">1 jan — 31 dec</span>
         </div>
-        <input type="range" id="day-slider" min="0" max="364" value="0">
+        <input type="range" id="day-slider" min="0" max="364" value="0"
+               aria-label="Välj dag">
       </div>
       <div class="slider-group">
         <div class="slider-head">
           <span class="label">Tid på dygnet</span>
           <span class="hint">00:00 — 23:45</span>
         </div>
-        <input type="range" id="tod-slider" min="0" max="95" value="0">
+        <input type="range" id="tod-slider" min="0" max="95" value="0"
+               aria-label="Välj tid på dygnet">
       </div>
     </div>
   </div>
+
+  <!-- Top-level on purpose: map controls create their own stacking contexts.
+       Keeping the report outside #controls makes it a genuine separate view. -->
+  <section id="monthly-results" role="dialog" aria-modal="true"
+           aria-labelledby="monthly-results-title" tabindex="-1">
+    <header id="monthly-results-header">
+      <div id="monthly-results-header-inner">
+        <button id="monthly-results-close" type="button">← Tillbaka till kartan</button>
+        <div id="monthly-results-heading">
+          <div id="monthly-results-kicker">Vägavstängning</div>
+          <h1 id="monthly-results-title"></h1>
+          <p id="monthly-results-subtitle"></p>
+        </div>
+      </div>
+    </header>
+    <main id="monthly-results-main">
+      <section id="monthly-results-summary" aria-label="Sammanfattning"></section>
+      <div id="monthly-results-notice" role="status"></div>
+      <details id="monthly-results-method">
+        <summary>Metod och begränsningar</summary>
+        <div id="monthly-results-meta"></div>
+      </details>
+      <div id="monthly-results-body-wrap">
+        <table id="monthly-results-table">
+          <thead>
+            <tr>
+              <th id="monthly-col-period" scope="col">Startdatum</th>
+              <th id="monthly-col-end" scope="col">Slutdatum</th>
+              <th id="monthly-col-start-time" scope="col">Start/dag</th>
+              <th id="monthly-col-end-time" scope="col">Slut/dag</th>
+              <th id="monthly-col-primary" scope="col">ΔTid p50 (värsta variant)</th>
+              <th id="monthly-col-secondary" scope="col">Övre 95 %</th>
+              <th scope="col">Verifiering</th><th scope="col">Karta</th>
+            </tr>
+          </thead>
+          <tbody id="monthly-results-tbody"></tbody>
+        </table>
+      </div>
+    </main>
+  </section>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <!-- ?v= forces the browser to fetch fresh JS when the HTML updates —
        bump the number whenever the JS files change, or stale cached JS
        can run against new HTML and crash on missing elements -->
   <script src="state.js?v=11"></script>
-  <script src="provider.js?v=14"></script>
+  <script src="provider.js?v=16"></script>
   <script src="render.js?v=15"></script>
   <script src="controls.js?v=12"></script>
   <script src="clock.js?v=11"></script>
-  <script src="app.js?v=24"></script>
+  <script src="app.js?v=31"></script>
 </body>
 </html>

@@ -322,19 +322,31 @@ class TestSourceFingerprintsAndReproduction:
                   (str(POLICY), str(SELECTION), str(MANIFEST))}
         generated = build_artifacts()
         assert Path(POLICY).read_text() == generated[str(POLICY)]
-        assert Path(SELECTION).read_text() == generated[str(SELECTION)]
+        recorded_selection = _load(SELECTION)
+        preview_selection = json.loads(generated[str(SELECTION)])
+        assert {
+            key for key in recorded_selection
+            if recorded_selection[key] != preview_selection[key]
+        } == {"content_key", "exclusion_proof", "source_fingerprints"}
+        assert {
+            path for path in recorded_selection["source_fingerprints"]
+            if recorded_selection["source_fingerprints"][path]
+            != preview_selection["source_fingerprints"][path]
+        } == {"web/data/network.geojson"}
         recorded = _load(MANIFEST)
         preview = json.loads(generated[str(MANIFEST)])
         differing = {
             key for key in recorded if recorded[key] != preview[key]
         }
-        assert differing == {"content_key", "source_fingerprints"}
+        assert differing == {
+            "content_key", "selection_content_key", "source_fingerprints"}
         fingerprint_drift = {
             path for path in recorded["source_fingerprints"]
             if recorded["source_fingerprints"][path]
             != preview["source_fingerprints"][path]
         }
-        assert fingerprint_drift == self.EXPECTED_DRIFT
+        assert fingerprint_drift == self.EXPECTED_DRIFT | {
+            "validation/heldout_v6_selection.json"}
         for path, raw in before.items():
             assert Path(path).read_bytes() == raw, path
 

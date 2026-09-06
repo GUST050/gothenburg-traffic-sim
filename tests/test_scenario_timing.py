@@ -559,6 +559,8 @@ class TestSerialClosurePreparation:
         ("a_b", "b_e"), ("b_e", "e_c"), ("e_c", "c_d"),
         ("w_x", "x_y"), ("x_y", "y_z"),
     ]
+    NET_EDGES = ("a_b", "b_c", "c_d", "b_e", "e_c", "w_x", "x_y", "y_z")
+    EDGE_TRAVEL_S = {edge: 1.0 for edge in NET_EDGES}
 
     def _write_net(self, path):
         with open(path, "w") as handle:
@@ -588,7 +590,11 @@ class TestSerialClosurePreparation:
         self._write_net(net)
         monkeypatch.setattr(rs, "NET_PATH", net)
         close = ["b_c", "y_z"]
-        adj = rs.build_edge_graph(set(close))
+        # `adj` MUST be the full, un-banned edge graph — the reroute planner
+        # derives its own per-vehicle banned set (see
+        # closure_routing.rewrite_route_file's docstring); every production
+        # caller passes build_edge_graph(set()), not the closed edges.
+        adj = rs.build_edge_graph(set())
         jobs = []
         for index, extra in enumerate((0, 2, 1)):        # three "q50/q10/q90"
             src = tmp_path / f"variant_{index}.rou.xml"
@@ -596,7 +602,8 @@ class TestSerialClosurePreparation:
             jobs.append({
                 "index": index, "route_path": src, "close_edges": close,
                 "out_path": tmp_path / f"variant_{index}_{tag}.rou.xml",
-                "adj": adj, "closures": None, "edge_travel_s": {}})
+                "adj": adj, "closures": None,
+                "edge_travel_s": dict(self.EDGE_TRAVEL_S)})
         return jobs
 
     @staticmethod
@@ -606,16 +613,19 @@ class TestSerialClosurePreparation:
     def test_serial_preparation_is_ordered_and_totals_are_summed(
             self, tmp_path, monkeypatch):
         jobs = self._jobs(tmp_path, monkeypatch, "serial")
-        paths, truncated, dropped = rs.prepare_closure_variants(jobs)
+        paths, rerouted, denied, access_paths = rs.prepare_closure_variants(jobs)
         # Ordered variant positions (index 0,1,2), non-trivial totals.
         assert [p.name for p in paths] == [f"variant_{i}_serial.rou.xml"
                                            for i in range(3)]
-        assert truncated > 0                             # the fixture truncates
+        assert [p.name for p in access_paths] == [
+            f"variant_{i}_serial.rou.access_impact.json" for i in range(3)]
+        assert rerouted > 0             # "detourable" reroutes in every variant
+        assert denied > 0               # the isolated w_x/x_y/y_z branch denies
         # Totals equal the sum of each variant's own filtering.
         per_variant = [rs.prepare_variant_job(dict(job, out_path=tmp_path
                        / f"ref_{job['index']}.rou.xml")) for job in jobs]
-        assert truncated == sum(r["truncated"] for r in per_variant)
-        assert dropped == sum(r["dropped"] for r in per_variant)
+        assert rerouted == sum(r["rerouted"] for r in per_variant)
+        assert denied == sum(r["denied"] for r in per_variant)
 
     def test_no_executor_is_ever_constructed(self, tmp_path, monkeypatch):
         """The rollback: preparation must never build a thread pool, whatever
@@ -628,7 +638,7 @@ class TestSerialClosurePreparation:
                 raise AssertionError("closure preparation must stay serial")
 
         monkeypatch.setattr(rs, "ThreadPoolExecutor", Spy)
-        paths, _, _ = rs.prepare_closure_variants(jobs)
+        paths, _, _, _ = rs.prepare_closure_variants(jobs)
         assert len(paths) == 3
 
     def test_serial_preparation_calls_variants_in_index_order(
@@ -642,7 +652,7 @@ class TestSerialClosurePreparation:
             return real(job)
 
         monkeypatch.setattr(rs, "prepare_variant_job", spy)
-        paths, _, _ = rs.prepare_closure_variants(jobs)
+        paths, _, _, _ = rs.prepare_closure_variants(jobs)
         assert seen == [0, 1, 2]                          # exact serial order
         assert [p.name for p in paths] == [f"variant_{i}_ord.rou.xml"
                                            for i in range(3)]
@@ -667,11 +677,16 @@ class TestSerialClosurePreparation:
                                                              monkeypatch):
         [job] = self._jobs(tmp_path, monkeypatch, "unit")[:1]
         direct_out = tmp_path / "direct.rou.xml"
-        t, d = rs.truncate_stranded_vehicles(
+        direct_access = tmp_path / "direct.access_impact.json"
+        r, d = rs.reroute_closure_affected_vehicles(
             job["route_path"], job["close_edges"], direct_out, job["adj"],
-            closures=None, edge_travel_s={})
+            closures=None, edge_travel_s=job["edge_travel_s"],
+            access_impact_path=direct_access)
         result = rs.prepare_variant_job(job)
-        assert (result["truncated"], result["dropped"]) == (t, d)
+        assert (result["rerouted"], result["denied"]) == (r, d)
         assert result["index"] == 0 and result["out_path"] == job["out_path"]
         assert (hashlib.sha256(result["out_path"].read_bytes()).hexdigest()
                 == hashlib.sha256(direct_out.read_bytes()).hexdigest())
+        assert (hashlib.sha256(result["access_impact_path"].read_bytes())
+                .hexdigest()
+                == hashlib.sha256(direct_access.read_bytes()).hexdigest())

@@ -1,3 +1,56 @@
+// A saved simulation is useful when it opens where its subject is visible.
+// Starting every scenario at midnight made a healthy one-day run look empty:
+// at the default 10x playback speed the user had to wait 48 real minutes to
+// reach 08:00. Closures therefore open at their first active quarter; a
+// baseline opens at the busiest departure quarter recorded in its calibrated
+// agent summary. Old artifacts without either signal retain the old 00:00
+// start. This chooses a view only; it never changes simulation data.
+function scenarioInitialQI(provider) {
+  const nQuarters = Number(provider?.numQuarters);
+  const maxQI = Number.isFinite(nQuarters) && nQuarters > 0
+    ? Math.floor(nQuarters) - 1 : 0;
+  const clamp = value => Math.max(0, Math.min(maxQI, Math.floor(value)));
+
+  const secondsPerQuarter = Number(provider?.intervalMinutes) * 60;
+  const closureStarts = Array.isArray(provider?.closures)
+    ? provider.closures
+        .map(closure => Number(closure?.begin_s))
+        .filter(value => Number.isFinite(value) && value >= 0)
+    : [];
+  if (closureStarts.length && Number.isFinite(secondsPerQuarter)
+      && secondsPerQuarter > 0) {
+    return clamp(Math.min(...closureStarts) / secondsPerQuarter);
+  }
+
+  const counts = provider?.agentDemand?.purpose_counts_by_quarter;
+  if (!Array.isArray(counts) || !counts.length) return 0;
+  let busiestQI = 0;
+  let busiestCount = -1;
+  for (let qi = 0; qi < counts.length; qi++) {
+    const total = Object.values(counts[qi] || {}).reduce((sum, value) => {
+      const count = Number(value);
+      return sum + (Number.isFinite(count) ? count : 0);
+    }, 0);
+    if (total > busiestCount) {
+      busiestCount = total;
+      busiestQI = qi;
+    }
+  }
+  return clamp(busiestQI);
+}
+
+
+// Scenario JSON and its moving-vehicle sidecar are cached separately in the
+// browser. A recalibration overwrites both while retaining their filenames,
+// so refreshing only the provider would pair new sensor flows with yesterday's
+// cached trajectories. Invalidate the pair as one logical asset.
+function invalidateScenarioAssetCache(file, providers, trajectories) {
+  const trajectory = providers[file]?.trajectories;
+  if (trajectory) delete trajectories[trajectory];
+  delete providers[file];
+}
+
+
 // HistoricalProvider — the only implementation of the flowAt seam today.
 // Later, ModelProvider and ScenarioProvider will plug in behind the same interface.
 class HistoricalProvider {

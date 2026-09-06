@@ -30,9 +30,12 @@ who can no longer reach their destination is not "delayed by N seconds", and
 averaging that into a score hides it.
 
 The inputs are deterministic (demand-side, no seeds), so unlike the time-loss
-key there is no Monte Carlo spread to average. Variation across the q10/q50/q90
-direction-split variants is handled by ranking on the WORST variant, which is
-the same conservative choice the previous key made.
+key there is no Monte Carlo spread to average.  ``closure_cost_v1`` retained
+the historical field-wise worst reduction.  Product policy
+``closure_cost_v2`` instead ranks the central q50 directional assignment;
+q10/q90 remain sensitivity evidence.  Reachability is deliberately still
+checked across every variant, because changing the cost estimate must not make
+it permissible to strand a driver in another plausible assignment.
 """
 
 from __future__ import annotations
@@ -47,6 +50,13 @@ REQUIRED_FIELDS = (
     "added_metres_total",
     "vehicles_no_detour",
 )
+
+LEGACY_WORST_COST_OBJECTIVE = "closure_cost_v1"
+Q50_COST_OBJECTIVE = "closure_cost_v2"
+CLOSURE_COST_OBJECTIVES = frozenset({
+    LEGACY_WORST_COST_OBJECTIVE,
+    Q50_COST_OBJECTIVE,
+})
 
 
 @dataclass(frozen=True)
@@ -111,6 +121,47 @@ def worst_variant_cost(candidate_id: str,
         vehicles_no_detour=max(int(r["vehicles_no_detour"])
                                for r in variant_records),
     )
+
+
+def q50_variant_cost(candidate_id: str,
+                     variant_records: Sequence[Mapping]) -> ClosureCost:
+    """Use q50 for ranking fields while retaining all-variant reachability.
+
+    The q50 record is the central directional assignment and therefore the
+    product's point estimate.  ``vehicles_no_detour`` is not a cost estimate:
+    it is a hard safety/feasibility condition, so its maximum is retained over
+    q10/q50/q90.
+    """
+    if not variant_records:
+        raise ValueError("at least one variant record is required")
+    for record in variant_records:
+        _validate(record)
+    q50_records = [record for record in variant_records
+                   if record.get("demand_variant") == "q50"]
+    if len(q50_records) != 1:
+        raise ValueError(
+            "q50 cost requires exactly one q50 demand-variant record")
+    q50 = q50_records[0]
+    return ClosureCost(
+        candidate_id=candidate_id,
+        added_vehicle_hours=float(q50["added_vehicle_hours"]),
+        added_metres_total=float(q50["added_metres_total"]),
+        vehicles_affected=int(q50["vehicles_affected"]),
+        vehicles_no_detour=max(int(r["vehicles_no_detour"])
+                               for r in variant_records),
+    )
+
+
+def reduce_variant_cost(candidate_id: str,
+                        variant_records: Sequence[Mapping],
+                        objective_method: str) -> ClosureCost:
+    """Apply the explicitly versioned cross-variant cost policy."""
+    if objective_method == LEGACY_WORST_COST_OBJECTIVE:
+        return worst_variant_cost(candidate_id, variant_records)
+    if objective_method == Q50_COST_OBJECTIVE:
+        return q50_variant_cost(candidate_id, variant_records)
+    raise ValueError(
+        f"unsupported closure-cost objective {objective_method!r}")
 
 
 def rank_closures(costs: Iterable[ClosureCost]) -> tuple[

@@ -321,7 +321,8 @@ def _observation_record(
             resolved.cache_root, routing_record.transformed_route_sha256)
         closure_routing.validate_access_impact_report(
             access_impact, routing_record,
-            transformed_route_path=transformed_route_path)
+            transformed_route_path=transformed_route_path,
+            network_path=resolved.network.network_path)
     reason_counts: dict[str, int] = {}
     unaffected_route_check = None
     if access_impact is not None:

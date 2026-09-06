@@ -50,10 +50,13 @@ from its ORIGINAL origin to its ORIGINAL destination, along the deterministic
 fastest legal path with every applicable closed edge excluded — using the
 same shortest-path engine (`disruption.shortest_path_edges`) that also
 prices closure severity, so routing and ranking can never disagree about
-reachability. A vehicle is only ever left undecided at the network boundary
-(never simulated, never waited, never teleported) when its ORIGINAL
-destination itself sits on a closed edge, or when no legal path exists at
-all once the closure(s) are excluded — see `AccessImpactRecord`. Because
+reachability. If the original destination edge itself is closed, its
+`arrivalPos` is treated as the physical destination: the route is instead
+ended at the nearest reachable open road position within the same 180-metre
+access radius used by demand generation, with both the replacement edge and
+walking/access distance recorded. A vehicle is only left at the network
+boundary (never simulated, waited or teleported) when no such nearby access
+or no legal path exists — see `AccessImpactRecord`. Because
 every affected vehicle's route is closure-free before SUMO ever starts,
 `write_closure_additional`'s runtime `<rerouter>` is no longer load-bearing:
 it is retained (see `run_scenario.py`) purely as a fail-closed structural
@@ -70,6 +73,7 @@ begins rather than suppressed during it.
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import math
 import re
@@ -123,35 +127,72 @@ from traffic_sim.simulation.metadata import DEFAULT_VCLASS
 #: SHA-256 (`_HEX64`), not merely checked for length. A v3 provenance dict
 #: has neither new field and a possibly-null `access_impact_sha256`, so it
 #: must never satisfy a v4 lookup.
-POLICY_VERSION = "closure_origin_routing_v4"
+#:
+#: v5 -> v6 (2026-09-04): a trip whose physical destination lies on a closed
+#: final edge is routed to the nearest reachable open road position within
+#: the demand model's existing 180 m access radius. The transformed route's
+#: final edge/arrivalPos and the physical access distance are bound into the
+#: access-impact evidence. A v5 result denied these trips outright, so its
+#: decisions and evidence are incompatible with v6.
+#:
+#: v6 -> v7 (2026-09-04): destination access now uses the selected lane's
+#: geometry rather than an edge centre line, measures after the two-metre
+#: endpoint inset, and validates the written position/distance against the
+#: bound network. v6 reports can therefore understate access distance.
+#: v7 -> v8 (2026-09-05, review findings 1-3 and the follow-up review):
+#: three changes, each of which can move a trip between
+#: unaffected/rerouted/relocated/denied for the SAME input.
+#:  * The overlap rule reads `begin_s` and bounds occupancy above by the
+#:    DECLARED `disruption.MAX_ASSUMED_CONGESTION_DELAY_S` instead of
+#:    treating every window before `end_s` as reachable, so a vehicle
+#:    provably ahead of the roadworks is no longer rerouted. That bound is a
+#:    modelling assumption, not a measurement: it is a parameter of this
+#:    function, and a study that varies it is varying the routing policy.
+#:  * The whole per-vehicle decision -- applicability, the detour fixed
+#:    point AND the destination-access choice -- moved into
+#:    `disruption.ClosureRouteResolver`, which the deterministic cost shares.
+#:    This function no longer holds a second copy of any of it.
+#:  * A destination whose own window is discovered only DURING replanning
+#:    (the detour arrives later than the original route would have) is now
+#:    offered the same nearby-access remedy as one closed from the outset,
+#:    instead of being denied `no_legal_path`.
+#: v7 evidence, caches and provenance are therefore incompatible with v8.
+POLICY_VERSION = "closure_origin_routing_v8"
 
 #: Reasons `AccessImpactRecord.reason` is allowed to take. Nothing else may
 #: ever be written; a caller adding a new denial path must extend this set
 #: explicitly rather than let an ad-hoc string drift into evidence.
-DESTINATION_CLOSED = "destination_closed"
-NO_LEGAL_PATH = "no_legal_path"
+DESTINATION_CLOSED = disruption_analysis.DESTINATION_CLOSED
+NO_LEGAL_PATH = disruption_analysis.NO_LEGAL_PATH
 ACCESS_IMPACT_REASONS = frozenset({DESTINATION_CLOSED, NO_LEGAL_PATH})
 
 ACCESS_IMPACT_SCHEMA = "closure_access_impact_v1"
-ACCESS_IMPACT_SCHEMA_VERSION = 3
+ACCESS_IMPACT_SCHEMA_VERSION = 5
 ACCESS_IMPACT_DIAGNOSTIC_SCHEMA = "closure_access_impact_diagnostic_v1"
 ACCESS_IMPACT_DIAGNOSTIC_SCHEMA_VERSION = 1
 
 _ACCESS_IMPACT_REPORT_FIELDS = frozenset({
     "schema_version", "kind", "policy_version", "identity", "windowed",
     "close_edges", "closures", "source_route_sha256", "output_route_sha256",
-    "network_sha256", "summary", "access_impact", "rerouted_vehicle_ids",
+    "network_sha256", "summary", "access_impact", "destination_relocations",
+    "rerouted_vehicle_ids",
 })
 _ACCESS_IMPACT_IDENTITY_FIELDS = frozenset({
     "unit_id", "candidate_id", "work_date", "demand_variant", "seed",
     "execution_arm", "vehicle_class",
 })
 _ACCESS_IMPACT_SUMMARY_FIELDS = frozenset({
-    "unaffected", "rerouted", "denied",
+    "unaffected", "rerouted", "destination_relocated", "denied",
 })
 _ACCESS_IMPACT_RECORD_FIELDS = frozenset({
     "vehicle_id", "reason", "original_origin", "original_destination",
     "original_depart_s", "applicable_closed_edges",
+})
+_DESTINATION_RELOCATION_RECORD_FIELDS = frozenset({
+    "vehicle_id", "original_origin", "original_destination",
+    "replacement_destination", "original_depart_s", "original_arrival_pos",
+    "replacement_arrival_pos", "access_distance_m",
+    "applicable_closed_edges",
 })
 _ACCESS_IMPACT_CLOSURE_FIELDS = frozenset({"edge_id", "begin_s", "end_s"})
 
@@ -166,7 +207,8 @@ _ACCESS_IMPACT_CLOSURE_FIELDS = frozenset({"edge_id", "begin_s", "end_s"})
 #: closure-crossing route, exactly the failure mode this module exists to
 #: remove.
 #:
-#: The rule below replaces the margin with the one interval fact that IS
+#: The shared rule in `disruption.applicable_closed_edges` replaces the margin
+#: with the one interval fact that IS
 #: provable without bounding congestion at all: real transit is never
 #: faster than free-flow transit (SUMO's mesoscopic/microscopic models only
 #: ever add delay relative to free speed; they cannot subtract it), so
@@ -183,17 +225,32 @@ _ACCESS_IMPACT_CLOSURE_FIELDS = frozenset({"edge_id", "begin_s", "end_s"})
 #: delayed, which does not exist. A trip that cannot be proven safe this way
 #: is therefore always classified as APPLICABLE (affected), never given the
 #: benefit of an unproven margin -- this can only widen who is treated as
-#: affected relative to the old rule, never narrow it.
-def _edge_occupancy_lower_bound(depart_s: float, elapsed_free_flow_s: float) -> float:
-    """Earliest possible instant a vehicle can occupy an edge; a true lower
-    bound because real transit time is never less than free-flow transit
-    time. See the module-level note above this function for the proof this
-    supports and the one it deliberately does not attempt."""
-    return depart_s + elapsed_free_flow_s
+#: affected relative to the old rule, never narrow it. Both pre-SUMO routing
+#: and deterministic costing call that exact function.
 
 
 class ClosureRoutingError(ValueError):
     """Raised when a route cannot be classified or rewritten deterministically."""
+
+
+def require_sumo_population_identity(
+    expected: int,
+    *,
+    loaded: int,
+    inserted: int,
+    trip_count: int,
+    context: str,
+) -> None:
+    """Reject a SUMO run that did not execute its transformed population."""
+    values = (expected, loaded, inserted, trip_count)
+    if any(isinstance(value, bool) or not isinstance(value, int) or value < 0
+           for value in values):
+        raise ClosureRoutingError(
+            f"{context}: SUMO population counters must be non-negative ints")
+    if not expected == loaded == inserted == trip_count:
+        raise ClosureRoutingError(
+            f"{context}: transformed route population={expected}, "
+            f"loaded={loaded}, inserted={inserted}, trip_count={trip_count}")
 
 
 def _read_route_text(route_path: Path) -> str:
@@ -213,11 +270,23 @@ _VEHICLE_FRAGMENT_RE = re.compile(r"<vehicle\b.*?</vehicle>", re.DOTALL)
 _OPEN_TAG_RE = re.compile(r"<vehicle\b[^>]*>")
 _ID_ATTR_RE = re.compile(r'\bid="([^"]*)"')
 _DEPART_ATTR_RE = re.compile(r'\bdepart="([^"]*)"')
+_ARRIVAL_POS_ATTR_RE = re.compile(r'\barrivalPos="([^"]*)"')
 _TYPE_ATTR_RE = re.compile(r'\btype="([^"]*)"')
 _ROUTE_TAG_RE = re.compile(r"<route\b[^>]*/>|<route\b[^>]*>.*?</route>", re.DOTALL)
 _EDGES_ATTR_RE = re.compile(r'\bedges="([^"]*)"')
 _VTYPE_TAG_RE = re.compile(r"<vType\b[^>]*/>|<vType\b[^>]*>")
 _VCLASS_ATTR_RE = re.compile(r'\bvClass="([^"]*)"')
+
+
+def _set_xml_attribute(tag: str, name: str, value: str) -> str:
+    """Replace or append one double-quoted attribute in an opening tag."""
+    pattern = re.compile(rf'\b{re.escape(name)}="[^"]*"')
+    replacement = f'{name}="{value}"'
+    if pattern.search(tag):
+        return pattern.sub(replacement, tag, count=1)
+    if not tag.endswith(">"):
+        raise ClosureRoutingError(f"cannot set {name} on malformed XML tag")
+    return tag[:-1] + f" {replacement}>"
 
 
 def _compatible_vtype_ids(text: str) -> frozenset[str]:
@@ -309,6 +378,34 @@ class AccessImpactRecord:
 
 
 @dataclass(frozen=True)
+class DestinationRelocationRecord:
+    """One completed trip moved to a legal road point near the same place."""
+
+    vehicle_id: str
+    original_origin: str
+    original_destination: str
+    replacement_destination: str
+    original_depart_s: float
+    original_arrival_pos: str | None
+    replacement_arrival_pos: float
+    access_distance_m: float
+    applicable_closed_edges: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "vehicle_id": self.vehicle_id,
+            "original_origin": self.original_origin,
+            "original_destination": self.original_destination,
+            "replacement_destination": self.replacement_destination,
+            "original_depart_s": self.original_depart_s,
+            "original_arrival_pos": self.original_arrival_pos,
+            "replacement_arrival_pos": self.replacement_arrival_pos,
+            "access_distance_m": self.access_distance_m,
+            "applicable_closed_edges": list(self.applicable_closed_edges),
+        }
+
+
+@dataclass(frozen=True)
 class ClosureRoutingResult:
     """Outcome of rewriting one route file for one closure."""
 
@@ -316,6 +413,7 @@ class ClosureRoutingResult:
     rerouted: int
     denied: int
     access_impact: tuple[AccessImpactRecord, ...]
+    destination_relocations: tuple[DestinationRelocationRecord, ...] = ()
     #: Vehicle ids whose route WAS rewritten (a completed, successful
     #: detour -- never a denial). Needed alongside `access_impact` (denied
     #: ids only) so an independent reader can classify every vehicle in the
@@ -334,6 +432,12 @@ class ClosureRoutingResult:
         if self.rerouted != len(self.rerouted_vehicle_ids):
             raise ClosureRoutingError(
                 "rerouted count disagrees with the rerouted-vehicle-id count")
+        relocation_ids = {
+            record.vehicle_id for record in self.destination_relocations
+        }
+        if not relocation_ids <= set(self.rerouted_vehicle_ids):
+            raise ClosureRoutingError(
+                "destination relocation is not a completed rerouted vehicle")
 
 
 def _closures_overlapping(
@@ -343,42 +447,14 @@ def _closures_overlapping(
     close_edges_set: frozenset[str],
     edge_travel_s: Mapping[str, float],
 ) -> frozenset[str]:
-    """Closed edges this edge sequence's transit cannot be PROVEN to miss.
+    """Delegate to the timing predicate shared with deterministic costing.
 
-    For each edge with a declared window, this asks one question only: has
-    the free-flow lower bound on this vehicle's occupancy already reached or
-    passed the window's `end_s`? If yes, the edge is provably safe (real,
-    slower-than-free-flow transit only pushes the true arrival later, i.e.
-    further past `end_s`, never back into the window) and is left out of the
-    result. If no -- including every case where the window is still in the
-    future relative to the free-flow estimate, no matter how far -- there is
-    no available proof of safety (that would require an upper bound on
-    congestion delay, which does not exist), so the edge is APPLICABLE. This
-    can only ever classify MORE trips as affected than a margin-based guess
-    would, never fewer, which is the required direction of error.
-
-    `closures is None` is the legacy whole-run form (`--close` with no
-    explicit window): every edge in `close_edges_set` that appears in
-    `edges` applies unconditionally, with no timing computed at all.
+    Keeping the predicate in one place is an evidence invariant: the route
+    population actually presented to SUMO must be the population the ledger
+    prices, including conservative treatment of future windows.
     """
-    if closures is None:
-        return frozenset(edge for edge in edges if edge in close_edges_set)
-    windows_by_edge: dict[str, list[tuple[int, int]]] = {}
-    for closure in closures:
-        windows_by_edge.setdefault(closure["edge_id"], []).append(
-            (closure["begin_s"], closure["end_s"]))
-    applicable: set[str] = set()
-    elapsed = 0.0
-    for edge in edges:
-        windows = windows_by_edge.get(edge)
-        if windows:
-            occupancy_lower_bound = _edge_occupancy_lower_bound(depart_s, elapsed)
-            for _begin_s, end_s in windows:
-                if occupancy_lower_bound < end_s:
-                    applicable.add(edge)
-                    break
-        elapsed += edge_travel_s.get(edge, 0.0)
-    return frozenset(applicable)
+    return disruption_analysis.applicable_closed_edges(
+        edges, depart_s, closures, close_edges_set, edge_travel_s)
 
 
 def _plan_detour(
@@ -393,32 +469,18 @@ def _plan_detour(
     edge_travel_s: Mapping[str, float],
     initial_banned: frozenset[str],
 ) -> tuple[list[str] | None, frozenset[str], str | None]:
-    """Fixed point: reroute, re-check which closures the new path crosses,
-    repeat until the banned set stops growing.
+    """Delegate the detour fixed point to the shared closure decision.
 
-    `banned` only ever grows (set union), which makes termination provable
-    rather than merely likely: each non-terminal iteration adds at least one
-    new edge to `banned`, and `banned` is bounded above by
-    `close_edges_set`, so at most `len(close_edges_set)` growth steps can
-    occur before the loop must stabilize. The `+ 1` iteration budget is that
-    bound plus one final stability check — not an arbitrary cutoff. If a
-    caller-supplied graph ever violated the bound (it cannot, given a finite
-    `close_edges_set`), this fails closed to `no_legal_path` rather than
-    publish an unstable route.
+    Retained as a thin seam so existing tests keep addressing the rule by
+    this name; the rule itself now lives in `disruption.ClosureRouteResolver`
+    so the deterministic cost runs the identical fixed point instead of
+    banning the whole closed-edge set for every vehicle.
     """
-    banned = initial_banned
-    for _ in range(len(close_edges_set) + 1):
-        path = disruption_analysis.shortest_path_edges(
-            adjacency, costs, origin, destination, banned)
-        if path is None:
-            return None, banned, NO_LEGAL_PATH
-        newly_applicable = _closures_overlapping(
-            path, depart_s, closures, close_edges_set, edge_travel_s)
-        combined = banned | newly_applicable
-        if combined == banned:
-            return path, banned, None
-        banned = combined
-    return None, banned, NO_LEGAL_PATH
+    resolver = disruption_analysis.ClosureRouteResolver(
+        adjacency, costs, None, close_edges_set)
+    route, banned, reason = resolver.plan(
+        origin, destination, depart_s, closures, initial_banned)
+    return (list(route) if route is not None else None), banned, reason
 
 
 def rewrite_route_file(
@@ -429,22 +491,32 @@ def rewrite_route_file(
     *,
     edge_travel_s: Mapping[str, float],
     closures: Sequence[Mapping[str, Any]] | None = None,
+    destination_access: (
+        disruption_analysis.DestinationAccessResolver | None) = None,
+    max_assumed_delay_s: float = (
+        disruption_analysis.MAX_ASSUMED_CONGESTION_DELAY_S),
 ) -> ClosureRoutingResult:
     """Rewrite every affected vehicle's route around a closure, in place.
 
     `adjacency` MUST be the full, un-banned edge graph (e.g.
-    `run_scenario.build_edge_graph(set())`) — this function evaluates a
-    per-vehicle banned set itself (`_plan_detour`), so a caller-pre-banned
-    graph would silently apply the wrong exclusion set to every vehicle.
+    `run_scenario.build_edge_graph(set())`) — the shared decision object
+    evaluates a per-vehicle banned set itself, so a caller-pre-banned graph
+    would silently apply the wrong exclusion set to every vehicle.
+
+    `max_assumed_delay_s` is the DECLARED congestion-delay bound documented on
+    `disruption.MAX_ASSUMED_CONGESTION_DELAY_S`. It changes which vehicles a
+    window reaches, so a study that varies it is varying the routing policy,
+    not a tuning knob; the value in force is recorded beside every cost this
+    same decision produces.
 
     Unaffected vehicles (their route never touches `close_edges` at all, or
     it does but the closure's declared window never overlaps their transit)
     are copied BYTE-FOR-BYTE from the source file — this function only ever
     substitutes the `edges="..."` attribute VALUE of an affected vehicle's
-    `<route>` child, so every other byte of every vehicle element (id,
-    depart, departPos/arrivalPos, any other attribute, and all inter-vehicle
-    whitespace) is preserved exactly, matching the requirement that a
-    rewrite never touches origin/destination positions or vehicle identity.
+    `<route>` child. The sole additional mutation is a destination relocation:
+    when the original final edge is closed but the same physical arrival point
+    has a nearby reachable open access, `arrivalPos` is replaced with that
+    access point's position. Every other byte and vehicle identity is retained.
 
     Fails closed (`ClosureRoutingError`) on any vehicle fragment shape this
     parser does not recognise (missing id/depart, zero or multiple `<route>`
@@ -458,12 +530,17 @@ def rewrite_route_file(
     text = _read_route_text(Path(route_path))
     matches = list(_VEHICLE_FRAGMENT_RE.finditer(text))
     compatible_vtype_ids = _compatible_vtype_ids(text)
+    resolver = disruption_analysis.ClosureRouteResolver(
+        adjacency, edge_travel_s, None, close_edges_set,
+        destination_access=destination_access,
+        max_assumed_delay_s=max_assumed_delay_s)
 
     out_parts: list[str] = []
     last_end = 0
     n_unaffected = 0
     n_rerouted = 0
     records: list[AccessImpactRecord] = []
+    relocations: list[DestinationRelocationRecord] = []
     rerouted_vehicle_ids: list[str] = []
 
     for match in matches:
@@ -509,17 +586,18 @@ def rewrite_route_file(
             n_unaffected += 1
             continue
 
-        # Evaluate applicability ONCE, up front, and reuse it both for the
-        # destination-closed decision and as the detour planner's starting
-        # banned set. Deciding destination_closed from bare membership in
-        # close_edges_set (the old behaviour) denied every trip whose
-        # destination ever appears in the closed-edge list, even one that
-        # arrives long before the closure begins or well after it has
-        # reopened -- see review finding on windowed destination denial.
         destination = edges[-1]
-        initial_applicable = _closures_overlapping(
-            edges, depart_s, closures, close_edges_set, edge_travel_s)
-        if not initial_applicable:
+        arrival_match = _ARRIVAL_POS_ATTR_RE.search(open_tag)
+        original_arrival_pos = (
+            arrival_match.group(1) if arrival_match is not None else None)
+        # ONE decision, shared with the deterministic cost. This function used
+        # to keep its own destination-access loop beside the shared fixed
+        # point, which is exactly the divergence risk the shared object exists
+        # to remove: a later change to how a closed destination is handled
+        # would have had to be made twice, correctly, in both places.
+        outcome = resolver.resolve(
+            edges, depart_s, original_arrival_pos, closures)
+        if outcome is None:
             # Raw route touches a member of close_edges_set, but (windowed
             # mode only) the closure's declared window never overlaps this
             # vehicle's own transit -- not actually affected. Leaving it
@@ -530,21 +608,22 @@ def rewrite_route_file(
             n_unaffected += 1
             continue
 
-        if destination in initial_applicable:
-            records.append(AccessImpactRecord(
-                vehicle_id=vehicle_id, reason=DESTINATION_CLOSED,
-                original_origin=edges[0], original_destination=destination,
+        new_edges = list(outcome.route) if outcome.route is not None else None
+        banned = outcome.banned
+        reason = outcome.reason
+        replacement_arrival_pos: float | None = None
+        if outcome.access is not None:
+            replacement_arrival_pos = outcome.access.position_m
+            relocations.append(DestinationRelocationRecord(
+                vehicle_id=vehicle_id,
+                original_origin=edges[0],
+                original_destination=destination,
+                replacement_destination=outcome.access.edge_id,
                 original_depart_s=depart_s,
-                applicable_closed_edges=tuple(sorted(initial_applicable))))
-            continue
-
-        initial_banned = initial_applicable
-
-        new_edges, banned, reason = _plan_detour(
-            edges[0], destination, depart_s,
-            adjacency=adjacency, costs=edge_travel_s, closures=closures,
-            close_edges_set=close_edges_set, edge_travel_s=edge_travel_s,
-            initial_banned=initial_banned)
+                original_arrival_pos=original_arrival_pos,
+                replacement_arrival_pos=replacement_arrival_pos,
+                access_distance_m=outcome.access.distance_m,
+                applicable_closed_edges=tuple(sorted(banned))))
 
         if reason is not None:
             records.append(AccessImpactRecord(
@@ -561,17 +640,14 @@ def rewrite_route_file(
 
         # Independently confirm the route this vehicle is about to be handed
         # cannot itself encounter an active closure, rather than trust the
-        # fixed point's own termination condition implicitly. This calls the
-        # SAME predicate as the planner, which is legitimate here (not the
-        # circular "prove safety with an unproven margin" the old 900s
-        # constant did): `_closures_overlapping` is now a one-directional,
-        # evidence-backed proof rule (see its docstring), not a heuristic
-        # guess, so re-evaluating it on the FINAL route is a real second
-        # check that the fixed point actually converged on a safe path, not
-        # a repetition of an unsound estimate. A vehicle must never reach
-        # SUMO on a route this function itself would flag as affected.
-        residual = _closures_overlapping(
-            new_edges, depart_s, closures, close_edges_set, edge_travel_s)
+        # fixed point's own termination condition implicitly. Re-evaluating
+        # the predicate on the FINAL route is a real second check: the fixed
+        # point stops when `applicable_on(route)` is contained in `banned`,
+        # while the route by construction avoids `banned` entirely, so a
+        # converged plan must leave NOTHING here. Anything residual means the
+        # plan did not converge, and a vehicle must never reach SUMO on a
+        # route this function itself would flag as affected.
+        residual = resolver.applicable_on(new_edges, depart_s, closures)
         if residual:
             raise ClosureRoutingError(
                 f"vehicle {vehicle_id!r} in {route_path}: rewritten route "
@@ -583,6 +659,10 @@ def rewrite_route_file(
                          + route_tag[edges_match.end():])
         new_fragment = (fragment[:route_match.start()] + new_route_tag
                         + fragment[route_match.end():])
+        if replacement_arrival_pos is not None:
+            new_open_tag = _set_xml_attribute(
+                open_tag, "arrivalPos", f"{replacement_arrival_pos:.2f}")
+            new_fragment = new_fragment.replace(open_tag, new_open_tag, 1)
         out_parts.append(new_fragment)
         n_rerouted += 1
         rerouted_vehicle_ids.append(vehicle_id)
@@ -593,6 +673,7 @@ def rewrite_route_file(
     return ClosureRoutingResult(
         unaffected=n_unaffected, rerouted=n_rerouted, denied=len(records),
         access_impact=tuple(records),
+        destination_relocations=tuple(relocations),
         rerouted_vehicle_ids=tuple(rerouted_vehicle_ids))
 
 
@@ -607,7 +688,8 @@ def rewrite_route_file(
 _ROUTING_PROVENANCE_FIELDS = frozenset({
     "routing_policy_version", "vehicle_class", "unit_id", "candidate_id",
     "work_date", "demand_variant", "seed", "execution_arm",
-    "access_impact_sha256", "transformed_route_sha256",
+    "access_impact_sha256", "access_impact_semantic_sha256",
+    "transformed_route_sha256",
     "rerouted_around_closure", "denied_count",
 })
 
@@ -655,6 +737,7 @@ class RoutingProvenance:
     seed: int
     execution_arm: str
     access_impact_sha256: str
+    access_impact_semantic_sha256: str
     transformed_route_sha256: str
     rerouted_around_closure: int
     denied_count: int
@@ -703,6 +786,9 @@ class RoutingProvenance:
             raise ClosureRoutingError(
                 "routing provenance denied_count must be a non-negative int")
         _require_hex64(self.access_impact_sha256, "access_impact_sha256")
+        _require_hex64(
+            self.access_impact_semantic_sha256,
+            "access_impact_semantic_sha256")
         _require_hex64(self.transformed_route_sha256, "transformed_route_sha256")
 
     def to_dict(self) -> dict[str, Any]:
@@ -716,6 +802,8 @@ class RoutingProvenance:
             "seed": self.seed,
             "execution_arm": self.execution_arm,
             "access_impact_sha256": self.access_impact_sha256,
+            "access_impact_semantic_sha256": (
+                self.access_impact_semantic_sha256),
             "transformed_route_sha256": self.transformed_route_sha256,
             "rerouted_around_closure": self.rerouted_around_closure,
             "denied_count": self.denied_count,
@@ -730,9 +818,25 @@ class RoutingProvenance:
         return cls(**dict(raw))
 
 
+def access_impact_semantic_sha256(raw: Mapping[str, Any]) -> str:
+    """Digest all access-impact facts after removing only the arm label."""
+    if not isinstance(raw, Mapping):
+        raise ClosureRoutingError("access-impact semantic payload is not an object")
+    normalized = dict(raw)
+    identity = normalized.get("identity")
+    if not isinstance(identity, Mapping):
+        raise ClosureRoutingError("access-impact semantic payload lacks identity")
+    normalized_identity = dict(identity)
+    normalized_identity.pop("execution_arm", None)
+    normalized["identity"] = normalized_identity
+    canonical = json.dumps(
+        normalized, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def validate_access_impact_report(
     raw: Mapping[str, Any], provenance: RoutingProvenance,
-    *, transformed_route_path: Path,
+    *, transformed_route_path: Path, network_path: Path | None = None,
 ) -> dict[str, Any]:
     """Strictly bind one durable access-impact report to its observation.
 
@@ -774,7 +878,6 @@ def validate_access_impact_report(
     if dict(identity) != expected_identity:
         raise ClosureRoutingError(
             "access-impact report identity does not match routing provenance")
-
     if not isinstance(report["windowed"], bool):
         raise ClosureRoutingError("access-impact report windowed must be boolean")
     close_edges = report["close_edges"]
@@ -853,6 +956,83 @@ def validate_access_impact_report(
     if len(denied_ids) != len(set(denied_ids)):
         raise ClosureRoutingError("access-impact denied vehicle ids are duplicated")
 
+    raw_relocations = report["destination_relocations"]
+    if not isinstance(raw_relocations, list):
+        raise ClosureRoutingError(
+            "access-impact destination relocations must be a list")
+    relocation_ids: list[str] = []
+    geometry_validator = None
+    if raw_relocations:
+        if network_path is None:
+            raise ClosureRoutingError(
+                "destination relocation validation requires the SUMO network")
+        resolved_network_path = Path(network_path).resolve()
+        if (report["network_sha256"] is None
+                or sha256_file(resolved_network_path)
+                != report["network_sha256"]):
+            raise ClosureRoutingError(
+                "destination relocation network does not match report")
+        geometry_validator = disruption_analysis.DestinationAccessResolver(
+            resolved_network_path, permitted_edges=())
+    for relocation in raw_relocations:
+        if (not isinstance(relocation, Mapping)
+                or set(relocation) != _DESTINATION_RELOCATION_RECORD_FIELDS):
+            raise ClosureRoutingError(
+                "destination relocation fields do not match the current schema")
+        vehicle_id = relocation["vehicle_id"]
+        origin = relocation["original_origin"]
+        original = relocation["original_destination"]
+        replacement = relocation["replacement_destination"]
+        depart_s = relocation["original_depart_s"]
+        original_pos = relocation["original_arrival_pos"]
+        replacement_pos = relocation["replacement_arrival_pos"]
+        distance_m = relocation["access_distance_m"]
+        applicable = relocation["applicable_closed_edges"]
+        try:
+            numeric_original_pos = (
+                None if original_pos in (None, "", "max")
+                else float(original_pos))
+        except (TypeError, ValueError):
+            numeric_original_pos = float("nan")
+        if (not isinstance(vehicle_id, str) or not vehicle_id
+                or not isinstance(origin, str) or not origin
+                or not isinstance(original, str) or original not in close_edges
+                or not isinstance(replacement, str) or not replacement
+                or replacement in close_edges
+                or isinstance(depart_s, bool)
+                or not isinstance(depart_s, (int, float))
+                or not math.isfinite(depart_s) or depart_s < 0
+                or (numeric_original_pos is not None
+                    and not math.isfinite(numeric_original_pos))
+                or isinstance(replacement_pos, bool)
+                or not isinstance(replacement_pos, (int, float))
+                or not math.isfinite(replacement_pos) or replacement_pos < 0
+                or isinstance(distance_m, bool)
+                or not isinstance(distance_m, (int, float))
+                or not math.isfinite(distance_m) or distance_m < 0
+                or distance_m > disruption_analysis.DESTINATION_ACCESS_RADIUS_M
+                or not isinstance(applicable, list)
+                or original not in applicable
+                or any(not isinstance(edge, str) or edge not in close_edges
+                       for edge in applicable)
+                or applicable != sorted(set(applicable))):
+            raise ClosureRoutingError("destination relocation record is invalid")
+        replacement_length = geometry_validator.edge_length_m(replacement)
+        recomputed_distance = geometry_validator.access_distance_m(
+            original, original_pos, replacement, replacement_pos)
+        if (replacement_length is None
+                or replacement_pos > replacement_length + 1e-9):
+            raise ClosureRoutingError(
+                "destination replacement arrivalPos is outside its edge")
+        if (recomputed_distance is None
+                or abs(recomputed_distance - float(distance_m)) > 0.011):
+            raise ClosureRoutingError(
+                "destination relocation access distance disagrees with network")
+        relocation_ids.append(vehicle_id)
+    if len(relocation_ids) != len(set(relocation_ids)):
+        raise ClosureRoutingError(
+            "destination relocation vehicle ids are duplicated")
+
     rerouted_ids = report["rerouted_vehicle_ids"]
     if (not isinstance(rerouted_ids, list)
             or any(not isinstance(vehicle_id, str) or not vehicle_id
@@ -863,6 +1043,9 @@ def validate_access_impact_report(
     if set(denied_ids) & set(rerouted_ids):
         raise ClosureRoutingError(
             "access-impact vehicle cannot be both rerouted and denied")
+    if not set(relocation_ids) <= set(rerouted_ids):
+        raise ClosureRoutingError(
+            "destination relocation is not included among rerouted vehicles")
     if (summary["denied"] != len(raw_records)
             or summary["denied"] != provenance.denied_count):
         raise ClosureRoutingError(
@@ -871,9 +1054,13 @@ def validate_access_impact_report(
             or summary["rerouted"] != provenance.rerouted_around_closure):
         raise ClosureRoutingError(
             "access-impact rerouted counts disagree with routing provenance")
+    if summary["destination_relocated"] != len(raw_relocations):
+        raise ClosureRoutingError(
+            "destination relocation count disagrees with report records")
 
     transformed_text = _read_route_text(Path(transformed_route_path))
     transformed_ids: list[str] = []
+    transformed_endpoints: dict[str, tuple[str, str | None]] = {}
     for match in _VEHICLE_FRAGMENT_RE.finditer(transformed_text):
         open_tag = _OPEN_TAG_RE.match(match.group())
         vehicle_match = (
@@ -881,7 +1068,20 @@ def validate_access_impact_report(
         if vehicle_match is None or not vehicle_match.group(1):
             raise ClosureRoutingError(
                 "transformed route contains a vehicle without an id")
-        transformed_ids.append(vehicle_match.group(1))
+        vehicle_id = vehicle_match.group(1)
+        transformed_ids.append(vehicle_id)
+        route_match = _ROUTE_TAG_RE.search(match.group())
+        edges_match = (
+            _EDGES_ATTR_RE.search(route_match.group())
+            if route_match is not None else None)
+        if edges_match is None or not edges_match.group(1).split():
+            raise ClosureRoutingError(
+                "transformed route contains a vehicle without route edges")
+        arrival_match = _ARRIVAL_POS_ATTR_RE.search(open_tag.group())
+        transformed_endpoints[vehicle_id] = (
+            edges_match.group(1).split()[-1],
+            arrival_match.group(1) if arrival_match is not None else None,
+        )
     if len(transformed_ids) != len(set(transformed_ids)):
         raise ClosureRoutingError("transformed route vehicle ids are duplicated")
     transformed_id_set = set(transformed_ids)
@@ -895,6 +1095,24 @@ def validate_access_impact_report(
     if set(denied_ids) & transformed_id_set:
         raise ClosureRoutingError(
             "access-impact denied vehicle is present in transformed route")
+    for relocation in raw_relocations:
+        endpoint = transformed_endpoints.get(relocation["vehicle_id"])
+        expected_pos = f'{float(relocation["replacement_arrival_pos"]):.2f}'
+        if endpoint != (relocation["replacement_destination"], expected_pos):
+            raise ClosureRoutingError(
+                "destination relocation disagrees with transformed endpoint")
+
+    # Deliberately LAST. The checks above each name the exact fact that is
+    # wrong, which is what a person debugging real evidence needs; running the
+    # whole-report digest first collapsed every distinct tampering into one
+    # generic "digest" message. This stays a hard gate -- the function cannot
+    # return without it -- and it is the only check that covers report facts
+    # nothing above cross-references, such as `source_route_sha256` and
+    # `network_sha256`, which are otherwise validated for shape alone.
+    if access_impact_semantic_sha256(report) != (
+            provenance.access_impact_semantic_sha256):
+        raise ClosureRoutingError(
+            "access-impact semantic digest does not match routing provenance")
     return report
 
 
@@ -930,8 +1148,8 @@ def write_access_impact_report(
         and set(identity_payload) == _ACCESS_IMPACT_IDENTITY_FIELDS
     )
     payload = {
-        # 1->2 added rerouted ids; 2->3 makes the monthly identity complete
-        # and is strictly validated by `validate_access_impact_report`.
+        # 1->2 added rerouted ids; 2->3 made monthly identity complete;
+        # 3->4 records successful nearby destination relocations.
         "schema_version": (
             ACCESS_IMPACT_SCHEMA_VERSION if durable_identity
             else ACCESS_IMPACT_DIAGNOSTIC_SCHEMA_VERSION),
@@ -953,9 +1171,13 @@ def write_access_impact_report(
         "summary": {
             "unaffected": result.unaffected,
             "rerouted": result.rerouted,
+            "destination_relocated": len(result.destination_relocations),
             "denied": result.denied,
         },
         "access_impact": [record.to_dict() for record in result.access_impact],
+        "destination_relocations": [
+            record.to_dict() for record in result.destination_relocations
+        ],
         "rerouted_vehicle_ids": sorted(result.rerouted_vehicle_ids),
     }
     Path(path).write_text(
@@ -974,12 +1196,15 @@ def prepare_route_file(
     access_impact_path: Path | None = None,
     network_path: Path | None = None,
     identity: Mapping[str, Any] | None = None,
+    destination_access: (
+        disruption_analysis.DestinationAccessResolver | None) = None,
 ) -> ClosureRoutingResult:
     """`rewrite_route_file` plus, when requested, the access-impact evidence
     file alongside it. The single entry point production callers use."""
     result = rewrite_route_file(
         route_path, close_edges, out_path, adjacency,
-        edge_travel_s=edge_travel_s, closures=closures)
+        edge_travel_s=edge_travel_s, closures=closures,
+        destination_access=destination_access)
     if access_impact_path is not None:
         write_access_impact_report(
             access_impact_path, result=result, close_edges=close_edges,

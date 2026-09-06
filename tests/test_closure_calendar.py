@@ -532,29 +532,77 @@ def test_early_morning_start_is_valid_inside_overnight_band():
     assert schedule.intervals[0].end_time == "2027-05-03T06:00:00"
 
 
-def test_full_day_is_allowed_once_but_not_as_back_to_back_shifts():
-    one_day = _spec(
-        permitted_date_start="2027-05-03",
-        permitted_date_end="2027-05-03",
-        required_work_minutes=24 * 60,
-        max_consecutive_start_days=1,
-        permitted_daily_band=DailyTimeBand("00:00", "24:00"),
-        allowed_weekdays=(0, 1, 2, 3, 4, 5, 6),
-    )
-    two_days = _spec(
-        permitted_date_start="2027-05-03",
-        permitted_date_end="2027-05-04",
-        required_work_minutes=48 * 60,
-        max_consecutive_start_days=2,
+def _whole_days(first: str, last: str, day_count: int):
+    """A spec whose total work exactly fills `day_count` calendar days."""
+    return _spec(
+        permitted_date_start=first,
+        permitted_date_end=last,
+        required_work_minutes=day_count * 24 * 60,
+        min_consecutive_start_days=day_count,
+        max_consecutive_start_days=day_count,
         permitted_daily_band=DailyTimeBand("00:00", "24:00"),
         allowed_weekdays=(0, 1, 2, 3, 4, 5, 6),
     )
 
-    schedule = generate_closure_schedules(one_day)[0]
+
+def test_a_single_whole_day_closes_the_whole_calendar_day():
+    schedule = generate_closure_schedules(
+        _whole_days("2027-05-03", "2027-05-03", 1))[0]
+
     assert schedule.daily_start == "00:00"
     assert schedule.daily_end == "24:00"
     assert schedule.actual_closed_minutes == 24 * 60
-    assert generate_closure_schedules(two_days) == ()
+
+
+def test_whole_days_run_back_to_back_as_one_continuous_closure():
+    """A whole day means the road is shut for that entire calendar day, so
+    consecutive whole days are ONE continuous closure. The absence of an
+    opening between them is the request, not a contract breach -- the old
+    rule refused these outright, leaving 'seven whole days' expressible only
+    as seven 23:45 shifts, which is a different closure with six openings."""
+    schedules = generate_closure_schedules(
+        _whole_days("2027-05-03", "2027-05-09", 7))
+
+    assert len(schedules) == 1
+    schedule = schedules[0]
+    assert schedule.day_count == 7
+    assert schedule.actual_closed_minutes == 7 * 24 * 60
+    assert len(schedule.intervals) == 7
+    # Each interval covers one whole calendar day...
+    assert [item.work_date for item in schedule.intervals] == [
+        f"2027-05-{day:02d}" for day in range(3, 10)]
+    # ...and every day's end is the next day's start: no gap, no overlap.
+    ends = [item.end_time for item in schedule.intervals[:-1]]
+    starts = [item.start_time for item in schedule.intervals[1:]]
+    assert ends == starts
+    assert schedule.intervals[0].start_time == "2027-05-03T00:00:00"
+    assert schedule.intervals[-1].end_time == "2027-05-10T00:00:00"
+
+
+def test_a_whole_day_closure_has_no_start_time_to_choose():
+    """The hours inside a fully closed day carry no decision, so the search
+    must not spend candidates enumerating them."""
+    schedules = generate_closure_schedules(
+        _whole_days("2027-05-03", "2027-05-09", 7))
+
+    assert {(item.daily_start, item.daily_end) for item in schedules} == {
+        ("00:00", "24:00")}
+
+
+def test_a_shift_longer_than_a_day_is_still_impossible():
+    # 30 h of work that must fit in ONE day cannot be scheduled at all; the
+    # guard states this rather than leaving it to band arithmetic.
+    impossible = _spec(
+        permitted_date_start="2027-05-03",
+        permitted_date_end="2027-05-03",
+        required_work_minutes=30 * 60,
+        min_consecutive_start_days=1,
+        max_consecutive_start_days=1,
+        permitted_daily_band=DailyTimeBand("00:00", "24:00"),
+        allowed_weekdays=(0, 1, 2, 3, 4, 5, 6),
+    )
+
+    assert generate_closure_schedules(impossible) == ()
 
 
 @pytest.mark.parametrize(

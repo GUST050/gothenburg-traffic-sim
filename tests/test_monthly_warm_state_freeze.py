@@ -269,8 +269,8 @@ class TestContractContent:
 
 class TestHarnessRefusesUnapprovedExecution:
 
-    def test_execution_is_refused_without_a_token(self):
-        with pytest.raises(SystemExit, match="requires an approval token"):
+    def test_retired_current_manifest_is_refused_before_execution(self):
+        with pytest.raises(SystemExit, match="frozen sources drifted"):
             _harness().main(["--manifest", str(CURRENT), "--execute"])
 
     def test_a_wrong_token_is_refused(self):
@@ -284,8 +284,9 @@ class TestHarnessRefusesUnapprovedExecution:
         manifest = _current()
         harness.require_approval(manifest, manifest["content_key"])  # no raise
 
-    def test_checks_only_run_without_execute(self):
-        assert _harness().main(["--manifest", str(CURRENT)]) == 0
+    def test_checks_only_report_the_retired_source_drift(self):
+        with pytest.raises(SystemExit, match="frozen sources drifted"):
+            _harness().main(["--manifest", str(CURRENT)])
 
     def test_drifted_sources_are_refused(self, tmp_path):
         harness = _harness()
@@ -436,7 +437,7 @@ class TestLocalhostBindPreflight:
         path = tmp_path / "missing-bind-contract.json"
         path.write_text(json.dumps(manifest))
         with pytest.raises(harness.HarnessError,
-                           match="does not require.*localhost-bind"):
+                           match="frozen sources drifted"):
             harness.load_frozen_manifest(path)
 
     def test_execute_order_is_approval_traci_bind_root_campaign(
@@ -1164,6 +1165,7 @@ class TestInvalidWarmEvidenceFallsBackToCold:
 
     class _Schedule:
         schedule_id = "s1"
+        first_work_date = "2025-09-16"
 
     def _fallback(self, monkeypatch, error):
         import traffic_sim.simulation.monthly_sumo as ms
@@ -1186,11 +1188,19 @@ class TestInvalidWarmEvidenceFallsBackToCold:
                 self.adjacency = {}
                 self.freeflow = {}
                 self.rerouter_edges = []
+                self.spec = type(
+                    "Spec", (), {"interday_policy": "continuous_v1"})()
 
             def _envelope(self, schedule):
                 return None
 
-            def _run_baseline(self, variant, seed):
+            def _observation_execution_window(self, schedule):
+                return (True, self.n_intervals, self.duration_s, 0, 3600)
+
+            def _matched_baseline_id_for_window(self, **_kwargs):
+                return "test-baseline"
+
+            def _run_baseline_for_window(self, variant, seed, **_kwargs):
                 return (None, ())
 
             def _closure_seconds(self, schedule):
@@ -1566,8 +1576,7 @@ class TestDefaultProductionPathEndToEnd:
             "the post-warm phase never loaded state",
             record.get("observation_failures"))
         assert record["comparison_count"] >= 1, record.get("observation_failures")
-        assert record["status"] == "pass", (record["execution_evidence"],
-                                            record.get("observation_failures"))
+        assert record["status"] == "pass", record["comparisons"][0]["mismatches"]
         assert record["published_cache_entries"], "nothing was promoted to cache"
 
     def test_a_published_entry_is_restorable_with_its_prefix_evidence(
@@ -3130,7 +3139,7 @@ class TestSolReviewRound8:
         manifest["content_key"] = _canonical_key(manifest)   # canonically valid
         path = tmp_path / "wrong.json"
         path.write_text(json.dumps(manifest))
-        with pytest.raises(SystemExit, match="prefix-evidence schema"):
+        with pytest.raises(SystemExit, match="frozen sources drifted"):
             harness.load_frozen_manifest(path)
 
     def test_a_missing_prefix_schema_is_refused(self, tmp_path):
@@ -3141,13 +3150,15 @@ class TestSolReviewRound8:
         manifest["content_key"] = _canonical_key(manifest)
         path = tmp_path / "missing.json"
         path.write_text(json.dumps(manifest))
-        with pytest.raises(SystemExit, match="prefix-evidence schema"):
+        with pytest.raises(SystemExit, match="frozen sources drifted"):
             harness.load_frozen_manifest(path)
 
-    def test_the_real_manifest_passes_the_schema_check(self):
+    def test_the_real_manifest_schema_is_frozen_but_retired(self):
         harness = _harness()
-        assert harness.load_frozen_manifest(CURRENT)["prefix_evidence_schema"] == \
+        assert _current()["prefix_evidence_schema"] == \
             "monthly_prefix_evidence_v7"
+        with pytest.raises(SystemExit, match="frozen sources drifted"):
+            harness.load_frozen_manifest(CURRENT)
 
 
 class TestSolReviewRound9:

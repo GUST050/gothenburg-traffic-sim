@@ -51,7 +51,7 @@ import time
 import warnings
 from typing import Iterable, Mapping, Sequence
 import xml.etree.ElementTree as ET
-from collections import Counter
+from collections import Counter, deque
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -1340,6 +1340,226 @@ def purpose_mix_is_exact(
                for members, lo, hi in groups)
 
 
+def reconcile_groups_by_protected_signature(
+    counts: np.ndarray,
+    shapes: list[Candidate],
+    groups: list[tuple[list[int], float, float]],
+    protected_edges: Iterable[str],
+) -> np.ndarray | None:
+    """Meet exact integer groups without changing any protected edge total.
+
+    Shapes with the same incidence on every measured/bounded edge are
+    interchangeable for the hard publication contract.  Purpose-stratified
+    pools often contain several genuine purposes in one such signature.  A
+    small integral max-flow reallocates the signature's already-published
+    vehicle total among those real shapes.  This replaces a dense route-level
+    MILP for the common case and never relabels a route or changes a protected
+    count.  ``None`` means the available signatures cannot realise the exact
+    lower-priority group margin.
+    """
+    if not groups:
+        return counts.copy()
+    if any(abs(lo - hi) > 0.25 or abs(lo - round(lo)) > 0.25
+           for _members, lo, hi in groups):
+        return None
+
+    shape_group: dict[int, int] = {}
+    demands: list[int] = []
+    for group_index, (members, lo, _hi) in enumerate(groups):
+        demands.append(int(round(lo)))
+        for member in members:
+            if member in shape_group:
+                return None
+            shape_group[member] = group_index
+    if set(shape_group) != set(range(len(shapes))):
+        return None
+
+    protected = set(protected_edges)
+    signature_members: dict[tuple[str, ...], list[int]] = {}
+    for index, shape in enumerate(shapes):
+        signature = tuple(sorted(set(shape.edges) & protected))
+        signature_members.setdefault(signature, []).append(index)
+    signatures = sorted(signature_members)
+    supplies = [int(counts[signature_members[key]].sum())
+                for key in signatures]
+    if sum(supplies) != sum(demands) or any(value < 0 for value in demands):
+        return None
+
+    # Edmonds-Karp on source -> signature -> group -> sink. All capacities are
+    # integers, so the resulting transportation allocation is integral.
+    n_signatures = len(signatures)
+    n_groups = len(groups)
+    source = 0
+    signature_offset = 1
+    group_offset = signature_offset + n_signatures
+    sink = group_offset + n_groups
+    residual: list[dict[int, int]] = [dict() for _ in range(sink + 1)]
+
+    def add_edge(left: int, right: int, capacity: int) -> None:
+        residual[left][right] = residual[left].get(right, 0) + capacity
+        residual[right].setdefault(left, 0)
+
+    for signature_index, (key, supply) in enumerate(zip(signatures, supplies)):
+        node = signature_offset + signature_index
+        add_edge(source, node, supply)
+        available_groups = sorted({
+            shape_group[index] for index in signature_members[key]
+        })
+        for group_index in available_groups:
+            add_edge(node, group_offset + group_index, supply)
+    for group_index, demand in enumerate(demands):
+        add_edge(group_offset + group_index, sink, demand)
+
+    target_flow = sum(demands)
+    flow = 0
+    fixed_signature_feasible = True
+    while flow < target_flow:
+        parent = {source: -1}
+        queue = deque([source])
+        while queue and sink not in parent:
+            node = queue.popleft()
+            for neighbour in sorted(residual[node]):
+                if residual[node][neighbour] > 0 and neighbour not in parent:
+                    parent[neighbour] = node
+                    queue.append(neighbour)
+        if sink not in parent:
+            fixed_signature_feasible = False
+            break
+        increment = target_flow - flow
+        node = sink
+        while node != source:
+            previous = parent[node]
+            increment = min(increment, residual[previous][node])
+            node = previous
+        node = sink
+        while node != source:
+            previous = parent[node]
+            residual[previous][node] -= increment
+            residual[node][previous] = residual[node].get(previous, 0) + increment
+            node = previous
+        flow += increment
+
+    allocation = [[0] * n_groups for _ in range(n_signatures)]
+    if fixed_signature_feasible:
+        for signature_index in range(n_signatures):
+            signature_node = signature_offset + signature_index
+            for group_index in range(n_groups):
+                group_node = group_offset + group_index
+                allocation[signature_index][group_index] = residual[
+                    group_node].get(signature_node, 0)
+    else:
+        # A fixed signature total can be unnecessarily restrictive.  Routes
+        # with signatures A+B and none can, for example, be exchanged for A
+        # and B while leaving both protected edge totals unchanged. Solve that
+        # small nullspace problem over one variable per available
+        # signature×group pair. This is normally tens of integer variables,
+        # not hundreds of route variables, and has a strict short budget.
+        pairs = [
+            (signature_index, group_index)
+            for signature_index, key in enumerate(signatures)
+            for group_index in sorted({
+                shape_group[index] for index in signature_members[key]
+            })
+        ]
+        pair_index = {pair: index for index, pair in enumerate(pairs)}
+        n_pairs = len(pairs)
+        current_pair = np.zeros(n_pairs, dtype=float)
+        for signature_index, key in enumerate(signatures):
+            for index in signature_members[key]:
+                current_pair[pair_index[
+                    (signature_index, shape_group[index])]] += counts[index]
+
+        n_vars = 3 * n_pairs
+        rows = [hstack((identity(n_pairs, format="csr"),
+                        -identity(n_pairs, format="csr"),
+                        identity(n_pairs, format="csr")), format="csr")]
+        lower = list(current_pair)
+        upper = list(current_pair)
+
+        def add_pair_constraint(indices: list[int], target: int) -> None:
+            row = lil_matrix((1, n_vars), dtype=float)
+            for index in indices:
+                row[0, index] = 1.0
+            rows.append(row.tocsr())
+            lower.append(float(target))
+            upper.append(float(target))
+
+        for group_index, demand in enumerate(demands):
+            add_pair_constraint(
+                [index for index, (_signature, group) in enumerate(pairs)
+                 if group == group_index], demand)
+        for edge in sorted(protected):
+            protected_total = int(sum(
+                counts[index] for index, shape in enumerate(shapes)
+                if edge in shape.edges))
+            add_pair_constraint(
+                [index for index, (signature_index, _group) in enumerate(pairs)
+                 if edge in signatures[signature_index]],
+                protected_total,
+            )
+        add_pair_constraint(list(range(n_pairs)), target_flow)
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"Unrecognized options detected: .*'threads'.*",
+                category=RuntimeWarning,
+            )
+            solved = milp(
+                c=np.r_[np.zeros(n_pairs), np.ones(2 * n_pairs)],
+                integrality=np.r_[np.ones(n_pairs), np.zeros(2 * n_pairs)],
+                bounds=Bounds(
+                    np.zeros(n_vars),
+                    np.r_[np.full(n_pairs, target_flow),
+                          np.full(2 * n_pairs, np.inf)]),
+                constraints=LinearConstraint(
+                    vstack(rows, format="csr"), lower, upper),
+                options={"time_limit": 5.0, "threads": 1},
+            )
+        if not solved.success or solved.x is None:
+            return None
+        for pair, index in pair_index.items():
+            signature_index, group_index = pair
+            allocation[signature_index][group_index] = int(round(
+                float(solved.x[index])))
+
+    out = np.zeros_like(counts)
+    for signature_index, key in enumerate(signatures):
+        members = signature_members[key]
+        for group_index in range(n_groups):
+            allocated = allocation[signature_index][group_index]
+            if allocated <= 0:
+                continue
+            compatible = [index for index in members
+                          if shape_group[index] == group_index]
+            remaining = allocated
+            for index in compatible:
+                retained = min(int(counts[index]), remaining)
+                out[index] += retained
+                remaining -= retained
+            if remaining:
+                # New mass has no route-level evidence in ``counts``. Spread
+                # it by the genuine source-candidate multiplicity instead of
+                # silently concentrating the whole signature on whichever
+                # compatible shape happened to appear first.
+                weights = [max(1, len(shapes[index].source_candidates))
+                           for index in compatible]
+                total_weight = sum(weights)
+                raw = [remaining * weight / total_weight for weight in weights]
+                additions = [int(np.floor(value)) for value in raw]
+                left = remaining - sum(additions)
+                order = sorted(
+                    range(len(compatible)),
+                    key=lambda offset: (-(raw[offset] - additions[offset]),
+                                        compatible[offset]),
+                )
+                for offset in order[:left]:
+                    additions[offset] += 1
+                for index, addition in zip(compatible, additions):
+                    out[index] += addition
+    return out
+
+
 def solve_interval_with_structure_guard(
     shapes: list[Candidate],
     targets: dict[str, float],
@@ -2261,18 +2481,16 @@ def quarter_publish_counts(
     # continuous solution below; no sensor receives a fold/order-dependent
     # first claim on routes shared with another sensor.
     counts = largest_remainder_round(sol)
-    purpose_groups: list[tuple[list[int], float, float]] = []
-    # Only enforce an exact margin during integer repair when the
-    # continuous solver actually found one.  Otherwise this is the
-    # deliberate counts-first fallback: the routes keep their true
-    # source purposes and the resulting prior deviation is disclosed
-    # below, instead of rejecting a valid measured-count solution.
-    purpose_margin_enforced = (
-        strict_purpose and purpose_mix_is_exact(shapes, sol, purpose_mix))
-    if purpose_margin_enforced:
-        _purpose_target, purpose_groups = purpose_quota_groups(
+    requested_purpose_groups: list[tuple[list[int], float, float]] = []
+    if strict_purpose and purpose_mix:
+        _purpose_target, requested_purpose_groups = purpose_quota_groups(
             shapes, purpose_mix, int(counts.sum()))
-    requested_purpose_groups = list(purpose_groups)
+    # First publish the non-negotiable measured/bounded counts without making
+    # every route variable participate in a dense purpose-constrained MILP.
+    # Exact purpose recovery is attempted immediately afterwards by moving
+    # only inside identical protected-edge signatures.
+    purpose_groups: list[tuple[list[int], float, float]] = []
+    purpose_margin_enforced = False
     repair_bounds = (
         bounds
         if (bounds is not None and enforce_integer_bounds
@@ -2367,16 +2585,22 @@ def quarter_publish_counts(
                 return result
         return None
 
-    projected = project_from_continuous(purpose_groups)
-    if projected is None and purpose_groups:
-        purpose_groups = []
-        purpose_margin_enforced = False
-        projected = project_from_continuous([])
+    projected = project_from_continuous([])
     if projected is None:
         raise RuntimeError(
             "joint integer publication is infeasible inside the solver rung's "
             "measurement/bound contract; no route file was published")
     counts = projected
+
+    if requested_purpose_groups:
+        purpose_reconciled = reconcile_groups_by_protected_signature(
+            counts, shapes, requested_purpose_groups,
+            set(projection_targets) | set(repair_bounds)
+            | set(stability_targets))
+        if purpose_reconciled is not None:
+            counts = purpose_reconciled
+            purpose_groups = requested_purpose_groups
+            purpose_margin_enforced = True
 
     # Optional structure caps are attempted jointly from the continuous
     # reference, but never outrank sensors, retained hard bounds or an exact

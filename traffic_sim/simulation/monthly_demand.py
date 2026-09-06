@@ -290,6 +290,191 @@ def _require_one_demand_generation(
         )
 
 
+_PHASE_D_QUALIFIED_MANIFEST_SCHEMA = "subhour_qualified_demand_manifest_v1"
+_PHASE_D_QUALIFIED_MANIFEST_KIND = "subhour_qualified_demand_manifest"
+_PHASE_D_VARIANT_FILES = {
+    "q50": ("calibrated.rou.xml", "calibrated.agents.json"),
+    "q10": ("calibrated_v1.rou.xml", "calibrated_v1.agents.json"),
+    "q90": ("calibrated_v2.rou.xml", "calibrated_v2.agents.json"),
+}
+_PHASE_D_DEFAULT_NET_PATH = _PROJECT_ROOT / "sumo" / "net.net.xml"
+_PHASE_D_SEARCH_CONTRACT = {
+    "dates": 30,
+    "windows": 65,
+    "consecutive_days": 5,
+    "closure_cost_policy": "closure_cost_v1",
+}
+
+
+def _valid_hex_digest(value: Any, length: int = 64) -> bool:
+    return (isinstance(value, str) and len(value) == length
+            and all(char in "0123456789abcdef" for char in value))
+
+
+def validate_qualified_demand_manifest_shape(manifest: Mapping[str, Any]) -> None:
+    """Fail closed immediately on a malformed Phase D manifest object.
+
+    Deep per-archive content checks live in
+    ``qualified_manifest_archive_mismatch``; this only asserts the manifest
+    itself is well-formed enough to be used as a gate at all, so a resolver
+    given a garbled manifest fails at construction rather than deep inside
+    demand resolution.
+    """
+    if not isinstance(manifest, Mapping) \
+            or manifest.get("schema") != _PHASE_D_QUALIFIED_MANIFEST_SCHEMA \
+            or manifest.get("kind") != _PHASE_D_QUALIFIED_MANIFEST_KIND:
+        raise ValueError("qualified-demand manifest has an invalid schema/kind")
+    status = manifest.get("status")
+    if status not in {"PASS", "INCONCLUSIVE_SENSOR_SHORTEST_SUPPORT",
+                      "INCONCLUSIVE_DEMAND_QUALIFICATION"}:
+        raise ValueError("qualified-demand manifest has no legal terminal status")
+    evidence_id = manifest.get("evidence_id")
+    if not isinstance(evidence_id, str) or not evidence_id.strip():
+        raise ValueError("qualified-demand manifest lacks an evidence identity")
+    body = {key: value for key, value in manifest.items() if key != "content_key"}
+    if manifest.get("content_key") != _canonical_digest(body):
+        raise ValueError("qualified-demand manifest content key is invalid")
+    if manifest.get("code_approved") is not True \
+            or not _valid_hex_digest(manifest.get("source_digest")):
+        raise ValueError("qualified-demand manifest is not source-bound CODE_APPROVED")
+    approval = manifest.get("code_approval")
+    if (not isinstance(approval, Mapping)
+            or approval.get("status") != "CODE_APPROVED"
+            or approval.get("source_digest") != manifest.get("source_digest")
+            or not _valid_hex_digest(approval.get("source_manifest_sha256"))
+            or not _valid_hex_digest(approval.get("checks_sha256"))
+            or approval.get("checks_status") != "PASS"
+            or not _valid_hex_digest(approval.get("impact_inventory_sha256"))):
+        raise ValueError("qualified-demand manifest has an invalid approval/check binding")
+    if manifest.get("search_contract") != _PHASE_D_SEARCH_CONTRACT:
+        raise ValueError("qualified-demand manifest violates the frozen search contract")
+    if manifest.get("sensor_route_policy_version") is None:
+        raise ValueError("qualified-demand manifest lacks the routing policy identity")
+    keys = manifest.get("adopted_catalog_keys")
+    if not isinstance(keys, Mapping) or set(keys) != {"weekday", "weekend"}:
+        raise ValueError(
+            "qualified-demand manifest lacks adopted weekday/weekend catalog keys")
+    adoption = manifest.get("adoption")
+    if (not isinstance(adoption, Mapping)
+            or not _valid_hex_digest(adoption.get("sha256"))
+            or adoption.get("catalog_keys") != dict(keys)):
+        raise ValueError("qualified-demand manifest lacks an exact adoption binding")
+    catalogs = manifest.get("catalogs")
+    if not isinstance(catalogs, Mapping) or set(catalogs) != {"weekday", "weekend"}:
+        raise ValueError("qualified-demand manifest lacks catalog artifact bindings")
+    for pool, key in keys.items():
+        entry = catalogs.get(pool)
+        if (not isinstance(entry, Mapping) or entry.get("catalog_key") != key
+                or not _valid_hex_digest(entry.get("manifest_sha256"))
+                or not _valid_hex_digest(entry.get("routes_sha256"))
+                or not _valid_hex_digest(entry.get("metadata_sha256"))):
+            raise ValueError(f"qualified-demand manifest has invalid {pool} catalog binding")
+    archives = manifest.get("archives")
+    if status != "PASS":
+        terminal = manifest.get("terminal")
+        if (not isinstance(archives, Mapping) or archives
+                or not isinstance(terminal, Mapping)
+                or set(terminal) != {"stage", "code", "error_type", "message"}
+                or any(not isinstance(terminal.get(key), str)
+                       or not terminal[key].strip() for key in terminal)):
+            raise ValueError(
+                "inconclusive qualified-demand manifest has an invalid terminal")
+        return
+    if not isinstance(archives, Mapping) or not archives:
+        raise ValueError("qualified-demand manifest has no qualified archives")
+    for build_key, entry in archives.items():
+        if not isinstance(build_key, str) or not build_key \
+                or not isinstance(entry, Mapping) or entry.get("build_key") != build_key:
+            raise ValueError("qualified-demand manifest has an invalid archive entry")
+        if not _valid_hex_digest(entry.get("archive_content_key")):
+            raise ValueError("qualified-demand manifest archive content key is invalid")
+        variants = entry.get("variants")
+        if not isinstance(variants, Mapping) or set(variants) != set(_PHASE_D_VARIANT_FILES):
+            raise ValueError("qualified-demand manifest archive lacks q10/q50/q90")
+    if not isinstance(manifest.get("network_sha256"), str) or not manifest["network_sha256"]:
+        raise ValueError("qualified-demand manifest lacks a network identity")
+
+
+def qualified_manifest_archive_mismatch(
+    record: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+    *,
+    net_path: Path | None = None,
+) -> str | None:
+    """Return a reason string if ``record`` does not match a Phase D manifest.
+
+    ``record`` is an already-independently-validated ``validate_demand_archive``
+    result. This never trusts the manifest's own claims alone: every route,
+    metadata and calibrated-output digest the manifest names is compared
+    against the archive's OWN validated output digests (never re-read from
+    the manifest's self-report), and the manifest's frozen network identity
+    is compared against the network this process would actually simulate
+    against. Returns ``None`` only when every check agrees.
+    """
+    try:
+        validate_qualified_demand_manifest_shape(manifest)
+    except ValueError as error:
+        return str(error)
+    if manifest.get("status") != "PASS" or manifest.get("support_audit_pass") is not True:
+        return "qualified-demand manifest did not pass its support audit"
+    resolved_net_path = Path(net_path) if net_path is not None else _PHASE_D_DEFAULT_NET_PATH
+    current_network_sha256 = sha256_file(resolved_net_path)
+    if current_network_sha256 is None or manifest.get("network_sha256") != current_network_sha256:
+        return "qualified-demand manifest was proved against a different network"
+
+    build_key = str(record.get("build_key", ""))
+    archive_entry = manifest["archives"].get(build_key)
+    if not isinstance(archive_entry, Mapping):
+        return "demand archive build key is not listed in the qualified manifest"
+    if archive_entry.get("archive_content_key") != record.get("archive_content_key"):
+        return "demand archive content identity does not match the qualified manifest"
+    if archive_entry.get("archive_manifest_sha256") != record.get("archive_manifest_sha256"):
+        return "demand archive manifest bytes do not match the qualified manifest"
+    outputs = {
+        str(item.get("name")): item
+        for item in record.get("outputs", ())
+        if isinstance(item, Mapping)
+    }
+    variants = archive_entry["variants"]
+    for variant, (route_file, agents_file) in sorted(_PHASE_D_VARIANT_FILES.items()):
+        entry = variants.get(variant)
+        if not isinstance(entry, Mapping):
+            return f"qualified-demand manifest is missing variant {variant}"
+        if entry.get("route_file") != route_file:
+            return (
+                f"qualified-demand manifest names an unexpected route file "
+                f"for {variant}")
+        digests = entry.get("content_digests")
+        if not isinstance(digests, Mapping):
+            return f"qualified-demand manifest variant {variant} lacks content digests"
+        archive_files = {
+            "candidate_routes": outputs.get("candidates.rou.xml"),
+            "candidate_metadata": outputs.get("candidates.meta.json"),
+            "calibrated_routes": outputs.get(route_file),
+            "calibrated_agents": outputs.get(agents_file),
+        }
+        if any(value is None for value in archive_files.values()):
+            return f"demand archive is missing outputs required by variant {variant}"
+        for label, archived in archive_files.items():
+            if digests.get(label) != archived.get("sha256"):
+                return (
+                    "demand archive content digests do not match the "
+                    f"qualified-demand manifest for {variant}:{label}")
+
+    try:
+        archive = Path(str(record.get("archive", "")))
+        metadata = _read(archive / "demand_meta.json")
+    except (OSError, ValueError):
+        return "demand archive metadata could not be re-read for catalog identity"
+    catalog = metadata.get("candidate_catalog")
+    if not isinstance(catalog, Mapping) or catalog.get("keys") != dict(
+            manifest["adopted_catalog_keys"]):
+        return "demand archive catalog keys do not match the qualified-demand manifest"
+    if sha256_file(archive / "demand_meta.json") != archive_entry.get("demand_meta_sha256"):
+        return "demand archive metadata bytes do not match the qualified manifest"
+    return None
+
+
 def validate_demand_archive(
     archive: Path,
     required: DemandBuildSpec,
@@ -475,6 +660,7 @@ def validate_demand_archive(
         "run_id": str(manifest.get("run_id", archive.name)),
         "archive": str(archive),
         "finished_at": str(manifest.get("finished_at", "")),
+        "build_key": required.build_key,
         "demand_build_spec": required.to_dict(),
         "archive_manifest_sha256": sha256_file(archive / "manifest.json"),
         "outputs": records,
@@ -485,8 +671,22 @@ def validate_demand_archive(
 def find_demand_archives(
     runs_root: Path,
     required: DemandBuildSpec,
+    *,
+    qualified_manifest: Mapping[str, Any] | None = None,
+    qualified_manifest_net_path: Path | None = None,
 ) -> tuple[dict[str, Any], ...]:
-    """Return all valid succeeded archives for ``required``, newest first."""
+    """Return all valid succeeded archives for ``required``, newest first.
+
+    When ``qualified_manifest`` is given (a Phase D
+    ``subhour_qualified_demand_manifest_v1`` artifact), an archive that is
+    otherwise structurally valid but does not match the manifest's bound
+    catalog keys, network identity or content digests
+    (`qualified_manifest_archive_mismatch`) is excluded — an unlisted, stale,
+    wrong-catalog, wrong-network or wrong-policy archive can never be
+    silently selected just because it satisfies the generic contract.
+    """
+    if qualified_manifest is not None:
+        validate_qualified_demand_manifest_shape(qualified_manifest)
     matches: list[dict[str, Any]] = []
     candidates = _archives_for_build_key(Path(runs_root)).get(
         required.build_key, ())
@@ -498,20 +698,28 @@ def find_demand_archives(
                          required.build_key, state)
             cached = _VALIDATED_ARCHIVE_CACHE.get(cache_key)
             if cached is not None:
-                matches.append(cached)
+                record = cached
+            else:
+                record = None
+        else:
+            record = None
+        if record is None:
+            try:
+                record = validate_demand_archive(archive, required)
+            except (
+                FileNotFoundError,
+                json.JSONDecodeError,
+                KeyError,
+                TypeError,
+                ValueError,
+            ):
                 continue
-        try:
-            record = validate_demand_archive(archive, required)
-        except (
-            FileNotFoundError,
-            json.JSONDecodeError,
-            KeyError,
-            TypeError,
-            ValueError,
-        ):
+            if cache_key is not None:
+                _VALIDATED_ARCHIVE_CACHE[cache_key] = record
+        if qualified_manifest is not None and qualified_manifest_archive_mismatch(
+                record, qualified_manifest,
+                net_path=qualified_manifest_net_path) is not None:
             continue
-        if cache_key is not None:
-            _VALIDATED_ARCHIVE_CACHE[cache_key] = record
         matches.append(record)
     matches.sort(
         key=lambda item: (str(item["finished_at"]), str(item["run_id"])),
@@ -654,12 +862,26 @@ def recover_live_demand_release(
     return record
 
 
-def build_demand_archive(required: DemandBuildSpec) -> None:
+def build_demand_archive(required: DemandBuildSpec, *, runs_root: Path | None = None) -> None:
     """Run the tracked demand builder for one missing envelope."""
     with demand_build_lock():
         with tempfile.TemporaryDirectory(prefix="monthly-demand-spec-") as raw:
             spec_path = Path(raw) / f"{required.build_key}.json"
             write_demand_build_spec(spec_path, required)
+            environment = child_environment()
+            if runs_root is not None:
+                environment["TRAFFIC_SIM_RUNS_DIR"] = str(Path(runs_root).resolve())
+            # An OPERATIONAL run may ask for the content-addressed route
+            # catalog explicitly. Its key binds the network, generator sources,
+            # sensor registry and route counts of THIS build, so it is not a
+            # provenance shortcut -- but it does bypass the adoption record,
+            # whose 30-pair campaign is a separate equivalence CLAIM. Evidence
+            # runs never set this and keep resolving the source from the
+            # adoption record alone.
+            candidate_source = os.environ.get(
+                "TRAFFIC_SIM_DEMAND_CANDIDATE_SOURCE")
+            extra_args = ([] if candidate_source not in {"catalog", "legacy"}
+                          else ["--candidate-source", candidate_source])
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -667,11 +889,12 @@ def build_demand_archive(required: DemandBuildSpec) -> None:
                     "--demand-spec",
                     str(spec_path),
                     "--keep-scenarios",
+                    *extra_args,
                     "--direction-stress-variants",
                 ],
                 check=False,
                 cwd=_PROJECT_ROOT,
-                env=child_environment(),
+                env=environment,
             )
     if completed.returncode != 0:
         raise RuntimeError(
@@ -700,14 +923,27 @@ class MonthlyDemandResolverRunner:
         envelope_policy: EnvelopePolicy = EnvelopePolicy(),
         build_missing: bool = True,
         include_disruption: bool = False,
+        ranking_objective_evidence: str | None = None,
         warm_execution: bool = False,
         boundary_controller=None,
         demand_builder: DemandBuilder = build_demand_archive,
         runner_factory: RunnerFactory = ArchivedDemandSumoRunner,
         live_release_root: Path = _PROJECT_ROOT,
         live_release_products: Sequence[Path] = LIVE_DEMAND_RELEASE_PRODUCTS,
+        qualified_demand_manifest: Mapping[str, Any] | None = None,
+        qualified_demand_net_path: Path | None = None,
     ) -> None:
         self.spec = ClosureSearchSpec.from_dict(spec.to_dict())
+        if qualified_demand_manifest is not None:
+            # Fail closed at construction, not deep inside resolution: a
+            # malformed Phase D manifest must never silently degrade into
+            # "no manifest was supplied" behaviour.
+            validate_qualified_demand_manifest_shape(qualified_demand_manifest)
+        self.qualified_demand_manifest = qualified_demand_manifest
+        self.qualified_demand_net_path = (
+            Path(qualified_demand_net_path)
+            if qualified_demand_net_path is not None else None
+        )
         if (
             isinstance(baseline_trip_duration_p99_s, bool)
             or not isinstance(baseline_trip_duration_p99_s, int)
@@ -727,6 +963,7 @@ class MonthlyDemandResolverRunner:
         if include_disruption is not False and include_disruption is not True:
             raise ValueError("include_disruption must be a bool")
         self.include_disruption = bool(include_disruption)
+        self.ranking_objective_evidence = ranking_objective_evidence
         if warm_execution is not False and warm_execution is not True:
             raise ValueError("warm_execution must be a bool")
         if warm_execution and boundary_controller is None:
@@ -818,7 +1055,10 @@ class MonthlyDemandResolverRunner:
                 # completed the same immutable archive while this one waited.
                 for key in sorted(required_by_key):
                     required = required_by_key[key]
-                    matches = find_demand_archives(self.runs_root, required)
+                    matches = find_demand_archives(
+                        self.runs_root, required,
+                        qualified_manifest=self.qualified_demand_manifest,
+                        qualified_manifest_net_path=self.qualified_demand_net_path)
                     if not matches and self.build_missing:
                         if live_snapshot is None:
                             live_snapshot = snapshot_live_demand_release(
@@ -826,10 +1066,17 @@ class MonthlyDemandResolverRunner:
                                 products=self.live_release_products,
                             )
                         self.demand_builder(required)
-                        matches = find_demand_archives(self.runs_root, required)
+                        matches = find_demand_archives(
+                            self.runs_root, required,
+                            qualified_manifest=self.qualified_demand_manifest,
+                            qualified_manifest_net_path=self.qualified_demand_net_path)
                     if not matches:
+                        manifest_note = (
+                            " matching the bound qualified-demand manifest"
+                            if self.qualified_demand_manifest is not None else ""
+                        )
                         raise FileNotFoundError(
-                            f"no succeeded immutable demand archive for "
+                            f"no succeeded immutable demand archive{manifest_note} for "
                             f"{required.build_key} ({required.start_date}, "
                             f"{required.days} day(s), {required.source}); run "
                             f"build_sumo_demand.py with this closure-envelope "
@@ -919,6 +1166,7 @@ class MonthlyDemandResolverRunner:
                 envelope_policy=self.envelope_policy,
                 expected_demand_spec=required,
                 include_disruption=self.include_disruption,
+                ranking_objective_evidence=self.ranking_objective_evidence,
                 warm_execution=self.warm_execution,
                 boundary_controller=self.boundary_controller,
             )
@@ -1040,6 +1288,8 @@ class MonthlyDemandResolverRunner:
             "expected_demand_spec": expected.to_dict(),
             "warm_execution": child.warm_execution,
             "include_disruption": child.include_disruption,
+            "ranking_objective_evidence": (
+                child.ranking_objective_evidence),
         }
 
     def cleanup(self) -> None:

@@ -28,7 +28,7 @@ Writes (sumo/):
 from __future__ import annotations
 
 import argparse
-from collections import Counter
+from collections import Counter, defaultdict
 from importlib import metadata as importlib_metadata
 import json
 import multiprocessing as mp
@@ -54,6 +54,13 @@ from traffic_sim.core.contracts import (DemandBuildSpec, load_demand_build_spec,
 from traffic_sim.demand import cache as candidate_cache
 from traffic_sim.demand import route_catalog
 from traffic_sim.demand.build_lock import demand_build_lock, parent_holds_lock
+from traffic_sim.demand.sensor_route_contract import (
+    POLICY_VERSION as SENSOR_ROUTE_POLICY_VERSION,
+    load_network_contract as sensor_route_load_network_contract,
+    proof_error as sensor_route_proof_error,
+    qualify_route as sensor_route_qualify_route,
+)
+from traffic_sim.simulation.disruption import grouped_path_costs
 from traffic_sim.demand.provenance import (DAY_PROVENANCE_NAME,
                                            validate_assembled_provenance,
                                            validate_calibrated_provenance)
@@ -751,6 +758,257 @@ def implicit_catalog_fallback_reason(
     return None
 
 
+def prepare_mixed_catalog_candidates(
+    sources: dict[str, tuple[Path, Path]],
+    out_rou: Path,
+    out_meta: Path,
+    measured_edges: set[str],
+    *,
+    min_per_sensor: int,
+    net_path: Path = NET_PATH,
+    cache_root: Path | None = None,
+) -> dict:
+    """Merge structural pools and install their strict sensor basis once.
+
+    Each immutable weekday/weekend catalog carries enough ``support_only``
+    routes to satisfy the sensor floor on its own.  Keeping both fills in a
+    mixed pool inflated the candidate population relative to the legacy
+    builder, whose day-type geometries are merged before one common fill.
+    Rebuilding the basis here preserves that contract without weakening the
+    floor or route qualification.
+    """
+    import build_candidates
+
+    coverage_path = out_rou.with_name("sensor_coverage_report.json")
+    cache_root = (Path(cache_root) if cache_root is not None
+                  else route_catalog.DEFAULT_ROOT / "mixed_adapter_cache")
+    cache_outputs = {
+        "candidates.rou.xml": out_rou,
+        "candidates.meta.json": out_meta,
+        "sensor_coverage_report.json": coverage_path,
+    }
+    cache_inputs = {"network": net_path}
+    for pool, (rou_path, meta_path) in sorted(sources.items()):
+        cache_inputs[f"{pool}_routes"] = rou_path
+        cache_inputs[f"{pool}_metadata"] = meta_path
+    cache_sources = {
+        "build_sumo_demand": Path(__file__),
+        "build_candidates": Path(build_candidates.__file__),
+        "route_catalog": Path(route_catalog.__file__),
+        "sensor_route_contract": (
+            route_catalog.PROJECT_ROOT / "traffic_sim" / "demand"
+            / "sensor_route_contract.py"),
+    }
+    cache_key = candidate_cache.cache_key({
+        "kind": "mixed_route_catalog_adapter",
+        "policy_version": "shared_sensor_basis_v1",
+        "min_per_sensor": int(min_per_sensor),
+        "measured_edges": sorted(measured_edges),
+    }, cache_inputs, cache_sources)
+    if candidate_cache.restore(cache_root, cache_key, cache_outputs):
+        validation = validate_mixed_catalog_candidates(
+            out_rou, out_meta, measured_edges,
+            min_per_sensor=min_per_sensor, net_path=net_path)
+        return {
+            "cache_event": "hit",
+            "cache_key": cache_key,
+            "validation": validation,
+        }
+
+    merge = route_catalog.combine_catalogs(
+        sources, out_rou, out_meta, exclude_support_only=True)
+    basis = build_candidates.install_grounded_sensor_basis_routes(
+        out_rou, out_meta, measured_edges, net_path,
+        min_per_sensor=min_per_sensor)
+    document = json.loads(out_meta.read_text())
+    candidates = document.get("candidates")
+    contract = document.get("sensor_route_contract")
+    if not isinstance(candidates, dict) or not isinstance(contract, dict):
+        raise ValueError("mixed route catalog metadata is incomplete")
+    contract["qualified_candidates"] = len(candidates)
+    out_meta.write_text(json.dumps(document, separators=(",", ":")))
+    coverage = build_candidates.report_sensor_cross_hits(
+        out_rou, sorted(measured_edges), coverage_path)
+    validation = validate_mixed_catalog_candidates(
+        out_rou, out_meta, measured_edges,
+        min_per_sensor=min_per_sensor, net_path=net_path,
+        coverage=coverage)
+    candidate_cache.store(cache_root, cache_key, cache_outputs)
+    return {
+        "cache_event": "miss",
+        "cache_key": cache_key,
+        "merge": merge,
+        "basis": basis,
+        "validation": validation,
+        "coverage": coverage,
+    }
+
+
+def independent_mixed_catalog_route_failures(
+    route_by_id: dict[str, list[str]],
+    required: set[str],
+    net_path: Path,
+) -> tuple[dict[str, str], str]:
+    """Recompute legality, cost and every sensor detour from the live graph.
+
+    ``proof_error`` only checks that a persisted proof is internally
+    self-consistent (its own claimed cost/penalty/digest fields agree with
+    each other and with the route bytes) — it never asks the current network
+    whether those numbers are TRUE. A self-consistent but forged proof (a
+    swapped route whose total cost happens to equal the free-flow shortest
+    cost, an inflated sensor penalty, a route that isn't even a connected
+    walk in the graph) would pass it. This independently re-derives, from
+    ``load_network_contract`` and the same Dijkstra/grouping convention
+    ``qualify_sensor_candidate_routes`` uses at generation time, whether each
+    route is (a) an actual connected legal walk, (b) globally shortest for
+    its OD pair, and (c) strictly slower once each of its sensor edges is
+    banned — independent of anything the persisted proof claims.
+
+    Returns ``(failures, network_sha256)`` where ``failures`` maps a
+    vehicle id to a stable reason string for every candidate that fails
+    independent re-verification; an empty mapping means every route the
+    caller is currently trusting is genuinely legal, genuinely shortest and
+    genuinely sensor-strict, not merely internally consistent.
+    """
+    adjacency, costs, network_sha256 = sensor_route_load_network_contract(net_path)
+
+    failures: dict[str, str] = {}
+    hits_by_id: dict[str, tuple[str, ...]] = {}
+    pairs: set[tuple[str, str]] = set()
+    for vehicle_id, edges in route_by_id.items():
+        route = tuple(str(edge) for edge in edges)
+        if not route or any(edge not in costs for edge in route):
+            failures[vehicle_id] = "unknown_or_unpriced_edge"
+            continue
+        disconnected = any(
+            right not in adjacency.get(left, ())
+            for left, right in zip(route, route[1:])
+        )
+        if disconnected:
+            failures[vehicle_id] = "illegal_or_disconnected_route"
+            continue
+        hits = tuple(sorted(required.intersection(route)))
+        if not hits:
+            failures[vehicle_id] = "no_measured_sensor"
+            continue
+        hits_by_id[vehicle_id] = hits
+        pairs.add((route[0], route[-1]))
+
+    free_costs = grouped_path_costs(pairs, adjacency, costs, frozenset())
+    pairs_by_sensor: dict[str, set[tuple[str, str]]] = defaultdict(set)
+    for vehicle_id, hits in hits_by_id.items():
+        pair = (route_by_id[vehicle_id][0], route_by_id[vehicle_id][-1])
+        for sensor in hits:
+            pairs_by_sensor[sensor].add(pair)
+    banned_costs = {
+        sensor: grouped_path_costs(sensor_pairs, adjacency, costs, frozenset({sensor}))
+        for sensor, sensor_pairs in sorted(pairs_by_sensor.items())
+    }
+
+    for vehicle_id, hits in hits_by_id.items():
+        route = tuple(str(edge) for edge in route_by_id[vehicle_id])
+        pair = (route[0], route[-1])
+        _, reason = sensor_route_qualify_route(
+            route, required, costs, free_costs.get(pair),
+            {sensor: banned_costs[sensor].get(pair) for sensor in hits},
+            network_sha256)
+        if reason is not None:
+            failures[vehicle_id] = reason
+    return failures, network_sha256
+
+
+def validate_mixed_catalog_candidates(
+    routed_path: Path,
+    metadata_path: Path,
+    measured_edges: set[str],
+    *,
+    min_per_sensor: int,
+    net_path: Path = NET_PATH,
+    coverage: dict | None = None,
+) -> dict:
+    """Validate a composed catalog's strict proofs against the live graph.
+
+    Prefixing IDs on merge does not change geometry, so this does not
+    RE-ROUTE anything. It does, however, independently recompute every
+    route's legality, cost and sensor detour from the current network graph
+    (`independent_mixed_catalog_route_failures`) rather than trusting a
+    persisted proof's self-consistency alone — a corrupted cache entry or a
+    hand-edited artifact could otherwise present numbers that agree with
+    each other but not with reality. This boundary verifies every route
+    digest, OD, sensor set, positive penalty, current network hash and true
+    graph cost, then recomputes the final sensor support floor.
+    """
+    from build_candidates import (report_sensor_cross_hits,
+                                  sensor_pool_support_failures)
+
+    required = {str(edge) for edge in measured_edges}
+    if not required:
+        raise ValueError("mixed route catalog sensor set is empty")
+    network_sha256 = sha256_file(net_path)
+    document = json.loads(Path(metadata_path).read_text())
+    candidates = document.get("candidates")
+    contract = document.get("sensor_route_contract")
+    if not isinstance(candidates, dict) or not isinstance(contract, dict):
+        raise ValueError("mixed route catalog metadata is incomplete")
+    if (contract.get("policy_version") != SENSOR_ROUTE_POLICY_VERSION
+            or contract.get("network_sha256") != network_sha256):
+        raise ValueError("mixed route catalog has a stale sensor-route contract")
+
+    route_by_id = {}
+    for vehicle in ET.parse(routed_path).getroot().findall("vehicle"):
+        vehicle_id = vehicle.get("id")
+        route = vehicle.find("route")
+        edges = (route.get("edges") or "").split() if route is not None else []
+        if not vehicle_id or not edges or vehicle_id in route_by_id:
+            raise ValueError("mixed route catalog contains malformed candidates")
+        route_by_id[vehicle_id] = edges
+    if set(route_by_id) != set(candidates):
+        raise ValueError("mixed route catalog route/metadata identities disagree")
+    if contract.get("qualified_candidates") != len(route_by_id):
+        raise ValueError("mixed route catalog qualification count is stale")
+    for vehicle_id, edges in route_by_id.items():
+        record = candidates[vehicle_id]
+        proof = (record.get("sensor_route_contract")
+                 if isinstance(record, dict) else None)
+        error = sensor_route_proof_error(edges, proof, required)
+        if error is not None:
+            raise ValueError(
+                "mixed route catalog candidate violates the strict "
+                f"sensor-route contract: {vehicle_id}:{error}")
+        if proof.get("network_sha256") != network_sha256:
+            raise ValueError(
+                f"mixed route catalog candidate uses a stale network: {vehicle_id}")
+
+    independent_failures, independent_network_sha256 = (
+        independent_mixed_catalog_route_failures(
+            route_by_id, required, net_path))
+    if independent_network_sha256 != network_sha256:
+        raise ValueError("mixed route catalog has a stale sensor-route contract")
+    if independent_failures:
+        raise ValueError(
+            "mixed route catalog candidate failed independent recomputation "
+            "against the live network: "
+            + json.dumps(dict(sorted(independent_failures.items())), sort_keys=True))
+
+    if coverage is None:
+        coverage = report_sensor_cross_hits(
+            routed_path, sorted(required),
+            routed_path.with_name("sensor_coverage_report.json"))
+    support_failures = sensor_pool_support_failures(
+        coverage, min_per_sensor)
+    if support_failures:
+        raise ValueError(
+            "mixed route catalog does not satisfy the strict sensor floor: "
+            + json.dumps(support_failures, sort_keys=True))
+    return {
+        "vehicles": len(route_by_id),
+        "sensors": len(coverage),
+        "min_unique_routes": min(
+            int(item.get("unique_routes", 0)) for item in coverage.values()),
+        "network_sha256": network_sha256,
+    }
+
+
 def main() -> None:
     args = parse_args()
     demand_spec: DemandBuildSpec = args.demand_contract
@@ -1027,9 +1285,14 @@ def main() -> None:
                         + time.perf_counter() - catalog_storage_started)
                     adapter_started = time.perf_counter()
                     if catalog_pool_keys == ("weekday", "weekend"):
-                        route_catalog.combine_catalogs(
+                        prepare_mixed_catalog_candidates(
                             catalog_destinations, cand_path,
-                            cand_path.with_name("candidates.meta.json"))
+                            cand_path.with_name("candidates.meta.json"),
+                            {edge for edges in sensor_edges.values()
+                             for edge in edges},
+                            min_per_sensor=args.candidate_min_per_sensor,
+                            cache_root=(Path(args.route_catalog_root)
+                                        / "mixed_adapter_cache"))
                     else:
                         pool = catalog_pool_keys[0]
                         shutil.copy2(catalog_destinations[pool][0], cand_path)

@@ -216,6 +216,38 @@ class TestMeasuredIncidenceBasis:
         assert basis["destination_location_pool"] == f"home:{home}"
         assert basis["purpose"] == "arbete"
 
+    def test_basis_ranking_retains_purpose_length_signal(self, tmp_path):
+        home, target = "home", "target"
+        short, long = "short", "long"
+        short_alt, long_alt = "short_alt", "long_alt"
+        net = tmp_path / "net.net.xml"
+        write_sumo_net(
+            net, [home, target, short, long, short_alt, long_alt],
+            [(home, target), (target, short), (target, long),
+             (home, short_alt), (short_alt, short),
+             (home, long_alt), (long_alt, long)])
+        tree = ET.parse(net)
+        lengths = {
+            target: 1000, short: 2000, long: 3090,
+            short_alt: 3100, long_alt: 2100,
+        }
+        for edge in tree.getroot().findall("edge"):
+            if edge.get("id") in lengths:
+                edge.find("lane").set("length", str(lengths[edge.get("id")]))
+        tree.write(net)
+        pools = {
+            f"home:{home}": [{"id": "home-1"}],
+            f"fritid:{short}": [{"id": "short-poi"}],
+            f"fritid:{long}": [{"id": "long-poi"}],
+        }
+
+        basis = bc.grounded_sensor_basis_route(target, {target}, pools, net)
+
+        assert basis is not None
+        assert basis["destination_edge"] == long
+        assert basis["purpose"] == "fritid"
+        assert basis["route_cost_s"] == pytest.approx(409.0)
+
     def test_fails_early_when_no_grounded_basis_route_exists(self, tmp_path):
         home, target, activity = "0_1_0", "1_2_0", "2_3_0"
         net = tmp_path / "net.net.xml"

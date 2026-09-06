@@ -48,9 +48,12 @@ def test_real_sumo_closes_reopens_and_closes_same_edge_again(tmp_path):
             "--vehroute-output", str(vehroute.resolve()),
             "--vehroute-output.exit-times", "true",
             "--end", "500",
-            "--ignore-route-errors", "true",
             "--no-step-log", "true",
             "--no-warnings", "true",
+            # This isolated probe deliberately feeds a route that becomes
+            # invalid under the runtime rerouter. Production invocations do
+            # not carry this parser escape hatch.
+            "--ignore-route-errors", "true",
         ],
         cwd=tmp_path,
         capture_output=True,

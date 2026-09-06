@@ -157,6 +157,12 @@ SEMANTIC_SOURCES = (
     "traffic_sim/simulation/monthly_warm_state.py",
     "traffic_sim/simulation/multiday.py",
     "traffic_sim/simulation/period_comparison.py",
+    # The shared Phase 6 eligibility predicate. `_run_case` calls
+    # `decision_population_complete` on every paired comparison, so this
+    # module decides whether a bounded population may become Gate S input
+    # at all. Leaving it unsealed would let the rule that admits evidence
+    # change without registering as drift.
+    "traffic_sim/simulation/phase6_eligibility.py",
     "traffic_sim/simulation/pilot_selection.py",
     "traffic_sim/simulation/proxy_projection.py",
     "traffic_sim/simulation/proxy_validation.py",
@@ -2411,7 +2417,8 @@ def _restart_probe(spec, policy, *, workspace_root: Path, runs_root: Path,
                    fixture_controls: Mapping[str, Any] | None = None,
                    require_attempt_identity: bool = False,
                    max_exact_launches: int | None = None,
-                   timeout_s: float | None = None) -> dict[str, Any]:
+                   timeout_s: float | None = None,
+                   qualified_demand_manifest: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Interrupt a cost-ordered run, resume it, and compare the outcome.
 
     A durable cursor nobody ever crashes into is a claim, not a property. The
@@ -2487,7 +2494,8 @@ def _restart_probe(spec, policy, *, workspace_root: Path, runs_root: Path,
         release_root=release_root, daily_cost_cache=daily_cost_cache,
         daily_results_cache_root=probe_cache_root,
         study_provenance_key="cost-ordered-benchmark-restart",
-        objective_method=policy.objective_method)
+        objective_method=policy.objective_method,
+        qualified_demand_manifest=qualified_demand_manifest)
     fixture_state: dict[str, Any] = {}
     if fixture_controls:
         runner = pa._FixtureRunner(runner, fixture_controls, fixture_state)
@@ -2568,7 +2576,8 @@ def _restart_probe(spec, policy, *, workspace_root: Path, runs_root: Path,
             daily_results_cache_root=probe_cache_root,
             study_provenance_key="cost-ordered-benchmark-restart",
             fixture_controls=fixture_controls,
-            max_exact_launches=max_exact_launches))
+            max_exact_launches=max_exact_launches,
+            qualified_demand_manifest=qualified_demand_manifest))
     except _RestartTimeout as error:
         result = timeout_result(error)
         result["active_elapsed_s"] = time.monotonic() - active_started
@@ -3591,6 +3600,7 @@ def run_ordered_exhaustive_comparison(
     max_verifications: int | None = None,
     max_exact_launches: int | None = None,
     fixture_controls: Mapping[str, Any] | None = None,
+    qualified_demand_manifest: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the cost-ordered exact arm against the ordered-exhaustive reference.
 
@@ -3654,6 +3664,7 @@ def run_ordered_exhaustive_comparison(
                     max_verifications=max_verifications,
                     disable_early_stop=disable_early_stop,
                     fixture_controls=fixture_controls,
+                    qualified_demand_manifest=qualified_demand_manifest,
                 )
             else:
                 arms[arm] = pa.run_arm(
@@ -3672,6 +3683,7 @@ def run_ordered_exhaustive_comparison(
                     max_verifications=max_verifications,
                     disable_early_stop=disable_early_stop,
                     fixture_controls=fixture_controls,
+                    qualified_demand_manifest=qualified_demand_manifest,
                 )
         if cache_snapshots["cost_ordered"]["root"] == (
                 cache_snapshots["ordered_exhaustive"]["root"]):

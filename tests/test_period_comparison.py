@@ -88,6 +88,48 @@ def test_incomplete_period_evidence_is_explicit():
     ]
 
 
+def test_cost_ordered_periods_show_all_prices_but_only_verified_prefix():
+    schedules = _schedules()
+    ordered = sorted(schedules.values(), key=lambda item: item.first_work_date)
+    costs = [
+        {
+            "candidate_id": schedule.schedule_id,
+            "cost": _stat(schedule, hours)["closure_cost"],
+        }
+        for schedule, hours in zip(ordered, (3.0, 1.0, 2.0))
+    ]
+    winner = ordered[1]
+    runner_up = ordered[2]
+    result = build_period_comparison(
+        schedules,
+        [item.schedule_id for item in ordered],
+        {"candidates": [
+            _stat(winner, 1.0),
+            _stat(runner_up, 2.0),
+        ]},
+        winner_id=winner.schedule_id,
+        tie_ids=(),
+        unavailable_count=0,
+        objective_method="closure_cost_v2",
+        deterministic_costs=costs,
+        execution_statuses={
+            ordered[0].schedule_id: "not_run_decision_irrelevant",
+            winner.schedule_id: "verified",
+            runner_up.schedule_id: "verified",
+        },
+    )
+
+    assert result["comparison_complete"] is False
+    assert result["deterministic_comparison_complete"] is True
+    assert result["deterministic_costed_count"] == 3
+    assert result["sumo_verified_count"] == 2
+    assert [item["best_cost"]["added_vehicle_hours"]
+            for item in result["periods"]] == [3.0, 1.0, 2.0]
+    assert [item["status"] for item in result["periods"]] == [
+        "costed_not_run", "best_period", "sumo_verified"
+    ]
+
+
 def test_final_hard_failure_supersedes_earlier_viable_pilot():
     schedules = _schedules()
     first = sorted(schedules.values(), key=lambda item: item.first_work_date)[0]

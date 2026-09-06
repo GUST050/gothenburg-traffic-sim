@@ -110,6 +110,48 @@ def assert_exact(spec: ClosureSearchSpec) -> dict:
     return report
 
 
+class TestWholeDayEquivalence:
+    """Whole-day closures must count the same in both enumerations.
+
+    Preflight is a SECOND implementation of the calendar's allocation
+    arithmetic, written to size a search without building schedules. When the
+    calendar learned that consecutive whole days are one continuous closure
+    and this mirror did not, the generator produced "seven whole days" while
+    preflight reported "0 perioder (inga giltiga dagantal)" -- and the UI
+    showed the refusal, so the feature looked broken while working. The
+    random property cases cannot reach this: they cap the band below 24:00,
+    so a full-day duration never arises there.
+    """
+
+    @staticmethod
+    def _whole_days(day_count):
+        return make_spec(
+            band=("00:00", "24:00"),
+            required_work_minutes=day_count * 24 * 60,
+            min_consecutive_start_days=day_count,
+            max_consecutive_start_days=day_count,
+            allowed_weekdays=[0, 1, 2, 3, 4, 5, 6],
+        )
+
+    @pytest.mark.parametrize("day_count", [1, 2, 3, 7, 14])
+    def test_preflight_matches_the_generator_for_whole_days(self, day_count):
+        report = assert_exact(self._whole_days(day_count))
+
+        assert report.parent_schedule_count > 0, (
+            "consecutive whole days must be schedulable")
+        assert list(report.valid_workday_counts) == [day_count]
+
+    def test_a_shift_longer_than_a_day_is_refused_by_both(self):
+        # 25 h of work in ONE day fits no calendar day and no band.
+        assert_exact(make_spec(
+            band=("00:00", "24:00"),
+            required_work_minutes=25 * 60,
+            min_consecutive_start_days=1,
+            max_consecutive_start_days=1,
+            allowed_weekdays=[0, 1, 2, 3, 4, 5, 6],
+        ))
+
+
 class TestDifferentialAgainstTheRealGenerator:
     def test_a_plain_weekday_month(self):
         assert_exact(make_spec())

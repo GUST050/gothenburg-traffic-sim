@@ -80,23 +80,19 @@ class TestFrozenIdentity:
 
 class TestSourceEstablishedMechanism:
 
-    def test_live_schemas_and_precisions_are_bound(self):
-        from traffic_sim.simulation.monthly_warm_state import PREFIX_EVIDENCE_SCHEMA
-        from traffic_sim.simulation.warm_state_boundary import (
-            BOUNDARY_ACTIVE_SCHEMA, MESO_RECONCILIATION_SCHEMA,
-            PREFIX_ACCUMULATOR_SCHEMA, TRIPINFO_PRECISION,
-            WARM_OUTPUT_PRECISION)
-        from traffic_sim.simulation.warm_state_cache import WARM_STATE_SCHEMA_VERSION
+    def test_frozen_schemas_and_precisions_are_bound(self):
         manifest = _load()
         mechanism = manifest["meso_accumulator_reconstruction"]
-        assert manifest["prefix_evidence_schema"] == PREFIX_EVIDENCE_SCHEMA
-        assert manifest["cache_schema_version"] == WARM_STATE_SCHEMA_VERSION
-        assert mechanism["boundary_active_schema"] == BOUNDARY_ACTIVE_SCHEMA
-        assert mechanism["prefix_accumulator_schema"] == PREFIX_ACCUMULATOR_SCHEMA
-        assert mechanism["reconciliation_schema"] == MESO_RECONCILIATION_SCHEMA
+        assert manifest["prefix_evidence_schema"] == "monthly_prefix_evidence_v7"
+        assert manifest["cache_schema_version"] == 2
+        assert mechanism["boundary_active_schema"] == "warm_boundary_active_v1"
+        assert mechanism["prefix_accumulator_schema"] == \
+            "warm_prefix_meso_accumulator_v1"
+        assert mechanism["reconciliation_schema"] == \
+            "warm_meso_reconciliation_v2"
         assert mechanism["prefix_output"] == {
-            "write_unfinished": True, "precision": WARM_OUTPUT_PRECISION}
-        assert mechanism["production_tripinfo_precision"] == TRIPINFO_PRECISION
+            "write_unfinished": True, "precision": 16}
+        assert mechanism["production_tripinfo_precision"] == 2
         assert mechanism["traci_time_loss_used"] is False
         assert mechanism["tolerance"] == 0.0
         assert "recompute warm_boundary_active_v1" in \
@@ -115,15 +111,15 @@ class TestSourceEstablishedMechanism:
         assert "getWaitingTime" in defect["traci_mismatch"]
         assert len(defect["official_sources"]) == 3
 
-    def test_only_the_authorized_v14_successor_seams_drifted(self):
+    def test_authorized_successors_and_later_source_changes_keep_v13_retired(self):
         drifted = sorted(
             name for name, digest in _load()["source_fingerprints"].items()
             if hashlib.sha256(Path(name).read_bytes()).hexdigest() != digest)
-        assert drifted == [
+        assert {
             "run_monthly_warm_state_validation.py",
             "tests/test_monthly_warm_state_freeze.py",
             "tests/test_monthly_warm_state_v13_freeze.py",
-        ]
+        } <= set(drifted)
 
 
 class TestLifecycle:

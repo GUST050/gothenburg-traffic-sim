@@ -925,3 +925,335 @@ def test_archive_rejects_an_unknown_edge_support_status(tmp_path):
 
     with pytest.raises(ValueError, match="unknown edge-support status"):
         validate_demand_archive(archive, required)
+
+
+# ── Phase D qualified-demand manifest gating ─────────────────────────────────
+# `qualified_manifest_archive_mismatch`/`find_demand_archives`/
+# `MonthlyDemandResolverRunner` must reject an unlisted, stale, wrong-catalog,
+# wrong-network or wrong-policy archive instead of silently accepting any
+# archive that merely satisfies the generic `validate_demand_archive`
+# contract (code review finding: Phase D was not integrated into monthly
+# demand resolution at all).
+
+def _qualified_manifest_for(record, *, network_sha256,
+                             catalog_keys=None, status="PASS",
+                             support_audit_pass=True):
+    catalog_keys = dict(catalog_keys or {
+        "weekday": "46f619b93152b0f2e21cd37a1c5e4991",
+        "weekend": "fd92cb5c2cccf9112c4143c4eb6355ff",
+    })
+    outputs = {item["name"]: item for item in record["outputs"]}
+    variants = {}
+    for variant, (route_file, agents_file) in (
+            monthly_demand._PHASE_D_VARIANT_FILES.items()):
+        variants[variant] = {
+            "route_file": route_file,
+            "content_digests": {
+                "candidate_routes": outputs["candidates.rou.xml"]["sha256"],
+                "candidate_metadata": outputs["candidates.meta.json"]["sha256"],
+                "calibrated_routes": outputs[route_file]["sha256"],
+                "calibrated_agents": outputs[agents_file]["sha256"],
+            },
+        }
+    archive_entry = {
+        "build_key": record["build_key"],
+        "archive_content_key": record["archive_content_key"],
+        "archive_manifest_sha256": record["archive_manifest_sha256"],
+        "demand_meta_sha256": next(
+            item["sha256"] for item in record["outputs"]
+            if item["name"] == "demand_meta.json"),
+        "variants": variants,
+    }
+    manifest = {
+        "schema": "subhour_qualified_demand_manifest_v1",
+        "kind": "subhour_qualified_demand_manifest",
+        "evidence_id": "phase-d-test",
+        "status": status,
+        "code_approved": True,
+        "source_digest": "a" * 64,
+        "code_approval": {
+            "status": "CODE_APPROVED", "source_digest": "a" * 64,
+            "source_manifest_sha256": "b" * 64, "checks_sha256": "c" * 64,
+            "checks_status": "PASS", "impact_inventory_sha256": "d" * 64,
+        },
+        "support_audit_pass": support_audit_pass,
+        "network_sha256": network_sha256,
+        "sensor_route_policy_version": "sensor_shortest_positive_gap_v1",
+        "search_contract": dict(monthly_demand._PHASE_D_SEARCH_CONTRACT),
+        "adopted_catalog_keys": catalog_keys,
+        "adoption": {"sha256": "e" * 64, "catalog_keys": catalog_keys},
+        "catalogs": {
+            pool: {"catalog_key": key, "manifest_sha256": "1" * 64,
+                   "routes_sha256": "2" * 64, "metadata_sha256": "3" * 64}
+            for pool, key in catalog_keys.items()
+        },
+        "archives": {record["build_key"]: archive_entry},
+    }
+    manifest["content_key"] = monthly_demand._canonical_digest(manifest)
+    return manifest
+
+
+def _with_catalog_keys(archive, catalog_keys):
+    metadata = json.loads((archive / "demand_meta.json").read_text())
+    metadata["candidate_catalog"] = {"keys": dict(catalog_keys)}
+    _rewrite_metadata(archive, metadata)
+
+
+def _phase_d_net_path(tmp_path, contents=b"<net/>"):
+    net_path = tmp_path / "phase-d-net.net.xml"
+    net_path.write_bytes(contents)
+    return net_path, hashlib.sha256(contents).hexdigest()
+
+
+def test_qualified_manifest_matching_archive_validates(tmp_path):
+    schedules = generate_closure_schedules(_spec(end_date="2027-07-15"))
+    resolver = MonthlyDemandResolverRunner(
+        _spec(end_date="2027-07-15"),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        build_missing=False,
+        runner_factory=FakeChildRunner,
+    )
+    required = resolver._required(schedules[0])
+    archive = _archive(
+        tmp_path, required, "demand-manifest-ok",
+        finished_at="2027-01-01T00:00:00Z")
+    catalog_keys = {"weekday": "wd-key", "weekend": "we-key"}
+    _with_catalog_keys(archive, catalog_keys)
+    record = validate_demand_archive(archive, required)
+    net_path, net_sha256 = _phase_d_net_path(tmp_path)
+    manifest = _qualified_manifest_for(
+        record, network_sha256=net_sha256, catalog_keys=catalog_keys)
+
+    assert monthly_demand.qualified_manifest_archive_mismatch(
+        record, manifest, net_path=net_path) is None
+    matches = find_demand_archives(
+        tmp_path, required, qualified_manifest=manifest,
+        qualified_manifest_net_path=net_path)
+    assert matches and matches[0]["archive"] == str(archive)
+
+
+def test_qualified_manifest_rejects_forged_positive_digest(tmp_path):
+    """A manifest whose variant digest was hand-edited to match nothing real
+    must be rejected -- this exercises the same self-attestation trap as the
+    sensor-route contract's forged-proof tests, one layer up: the archive's
+    OWN validated output digests are the source of truth, never a manifest's
+    self-reported claim."""
+    schedules = generate_closure_schedules(_spec(end_date="2027-07-15"))
+    resolver = MonthlyDemandResolverRunner(
+        _spec(end_date="2027-07-15"),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        build_missing=False,
+        runner_factory=FakeChildRunner,
+    )
+    required = resolver._required(schedules[0])
+    archive = _archive(
+        tmp_path, required, "demand-manifest-forged",
+        finished_at="2027-01-01T00:00:00Z")
+    catalog_keys = {"weekday": "wd-key", "weekend": "we-key"}
+    _with_catalog_keys(archive, catalog_keys)
+    record = validate_demand_archive(archive, required)
+    net_path, net_sha256 = _phase_d_net_path(tmp_path)
+    manifest = _qualified_manifest_for(
+        record, network_sha256=net_sha256, catalog_keys=catalog_keys)
+    manifest["archives"][record["build_key"]]["variants"]["q50"][
+        "content_digests"]["calibrated_routes"] = "f" * 64
+    manifest["content_key"] = monthly_demand._canonical_digest({
+        key: value for key, value in manifest.items() if key != "content_key"})
+
+    reason = monthly_demand.qualified_manifest_archive_mismatch(
+        record, manifest, net_path=net_path)
+    assert reason is not None and "content digests" in reason
+    matches = find_demand_archives(
+        tmp_path, required, qualified_manifest=manifest,
+        qualified_manifest_net_path=net_path)
+    assert matches == ()
+
+
+def test_qualified_manifest_rejects_stale_network(tmp_path):
+    schedules = generate_closure_schedules(_spec(end_date="2027-07-15"))
+    resolver = MonthlyDemandResolverRunner(
+        _spec(end_date="2027-07-15"),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        build_missing=False,
+        runner_factory=FakeChildRunner,
+    )
+    required = resolver._required(schedules[0])
+    archive = _archive(
+        tmp_path, required, "demand-manifest-stale-net",
+        finished_at="2027-01-01T00:00:00Z")
+    catalog_keys = {"weekday": "wd-key", "weekend": "we-key"}
+    _with_catalog_keys(archive, catalog_keys)
+    record = validate_demand_archive(archive, required)
+    net_path, net_sha256 = _phase_d_net_path(tmp_path)
+    manifest = _qualified_manifest_for(
+        record, network_sha256=net_sha256, catalog_keys=catalog_keys)
+    # The live network has since changed; the manifest still names the old one.
+    net_path.write_bytes(b"<net changed='true'/>")
+
+    reason = monthly_demand.qualified_manifest_archive_mismatch(
+        record, manifest, net_path=net_path)
+    assert reason is not None and "different network" in reason
+
+
+def test_qualified_manifest_rejects_wrong_catalog_keys(tmp_path):
+    schedules = generate_closure_schedules(_spec(end_date="2027-07-15"))
+    resolver = MonthlyDemandResolverRunner(
+        _spec(end_date="2027-07-15"),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        build_missing=False,
+        runner_factory=FakeChildRunner,
+    )
+    required = resolver._required(schedules[0])
+    archive = _archive(
+        tmp_path, required, "demand-manifest-wrong-catalog",
+        finished_at="2027-01-01T00:00:00Z")
+    _with_catalog_keys(archive, {"weekday": "wd-key", "weekend": "we-key"})
+    record = validate_demand_archive(archive, required)
+    net_path, net_sha256 = _phase_d_net_path(tmp_path)
+    manifest = _qualified_manifest_for(
+        record, network_sha256=net_sha256,
+        catalog_keys={"weekday": "different-key", "weekend": "we-key"})
+
+    reason = monthly_demand.qualified_manifest_archive_mismatch(
+        record, manifest, net_path=net_path)
+    assert reason is not None and "catalog keys" in reason
+
+
+def test_qualified_manifest_rejects_archive_with_no_catalog_record(tmp_path):
+    """An archive built without the strict catalog at all (no
+    `candidate_catalog` in its metadata) can never satisfy a manifest that
+    names adopted catalog keys -- absence must fail closed, not be treated
+    as an implicit match."""
+    schedules = generate_closure_schedules(_spec(end_date="2027-07-15"))
+    resolver = MonthlyDemandResolverRunner(
+        _spec(end_date="2027-07-15"),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        build_missing=False,
+        runner_factory=FakeChildRunner,
+    )
+    required = resolver._required(schedules[0])
+    archive = _archive(
+        tmp_path, required, "demand-manifest-no-catalog",
+        finished_at="2027-01-01T00:00:00Z")
+    record = validate_demand_archive(archive, required)
+    net_path, net_sha256 = _phase_d_net_path(tmp_path)
+    manifest = _qualified_manifest_for(record, network_sha256=net_sha256)
+
+    reason = monthly_demand.qualified_manifest_archive_mismatch(
+        record, manifest, net_path=net_path)
+    assert reason is not None and "catalog keys" in reason
+
+
+@pytest.mark.parametrize("mutation,expected", [
+    (lambda m: m.update(schema="wrong"), "schema/kind"),
+    (lambda m: m.update(status="RUNNING"), "terminal status"),
+    (lambda m: m.pop("adopted_catalog_keys"), "adopted weekday/weekend"),
+    (lambda m: next(iter(m["archives"].values()))["variants"].pop("q90"),
+     "archive lacks q10/q50/q90"),
+    (lambda m: m.update(network_sha256=""), "network identity"),
+])
+def test_malformed_qualified_manifest_fails_closed(
+        tmp_path, mutation, expected):
+    schedules = generate_closure_schedules(_spec(end_date="2027-07-15"))
+    resolver = MonthlyDemandResolverRunner(
+        _spec(end_date="2027-07-15"),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        build_missing=False,
+        runner_factory=FakeChildRunner,
+    )
+    required = resolver._required(schedules[0])
+    archive = _archive(
+        tmp_path, required, "demand-manifest-malformed",
+        finished_at="2027-01-01T00:00:00Z")
+    _with_catalog_keys(archive, {"weekday": "wd-key", "weekend": "we-key"})
+    record = validate_demand_archive(archive, required)
+    net_path, net_sha256 = _phase_d_net_path(tmp_path)
+    manifest = _qualified_manifest_for(
+        record, network_sha256=net_sha256,
+        catalog_keys={"weekday": "wd-key", "weekend": "we-key"})
+    mutation(manifest)
+    manifest["content_key"] = monthly_demand._canonical_digest({
+        key: value for key, value in manifest.items() if key != "content_key"})
+
+    with pytest.raises(ValueError, match=expected):
+        monthly_demand.validate_qualified_demand_manifest_shape(manifest)
+    # The archive-level check must also fail closed on the same malformed
+    # manifest, not only the standalone shape validator.
+    reason = monthly_demand.qualified_manifest_archive_mismatch(
+        record, manifest, net_path=net_path)
+    assert reason is not None
+
+
+def test_resolver_construction_rejects_a_malformed_manifest_immediately(
+        tmp_path):
+    with pytest.raises(ValueError, match="schema/kind"):
+        MonthlyDemandResolverRunner(
+            _spec(end_date="2027-07-15"),
+            baseline_trip_duration_p99_s=1800,
+            study_provenance_key="study",
+            runs_root=tmp_path,
+            release_root=tmp_path / "releases",
+            build_missing=False,
+            runner_factory=FakeChildRunner,
+            qualified_demand_manifest={"schema": "not-it"},
+        )
+
+
+def test_resolver_prepare_rejects_when_no_archive_matches_the_manifest(
+        tmp_path):
+    """`prepare` must fail closed, naming the manifest constraint, rather than
+    silently falling back to an unqualified archive that otherwise satisfies
+    the generic contract."""
+    schedules = generate_closure_schedules(_spec(end_date="2027-07-15"))
+    resolver = MonthlyDemandResolverRunner(
+        _spec(end_date="2027-07-15"),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        build_missing=False,
+        runner_factory=FakeChildRunner,
+    )
+    required = resolver._required(schedules[0])
+    archive = _archive(
+        tmp_path, required, "demand-manifest-unmatched",
+        finished_at="2027-01-01T00:00:00Z")
+    _with_catalog_keys(archive, {"weekday": "wd-key", "weekend": "we-key"})
+    record = validate_demand_archive(archive, required)
+    net_path, net_sha256 = _phase_d_net_path(tmp_path)
+    manifest = _qualified_manifest_for(
+        record, network_sha256=net_sha256,
+        # A catalog key that does not match the archive's own recorded keys.
+        catalog_keys={"weekday": "some-other-key", "weekend": "we-key"})
+
+    gated_resolver = MonthlyDemandResolverRunner(
+        _spec(end_date="2027-07-15"),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        build_missing=False,
+        runner_factory=FakeChildRunner,
+        qualified_demand_manifest=manifest,
+        qualified_demand_net_path=net_path,
+    )
+    with pytest.raises(FileNotFoundError, match="qualified-demand manifest"):
+        gated_resolver.prepare(schedules[:1])

@@ -92,7 +92,6 @@ def _run(work: Path, label: str, time_to_teleport_s) -> dict:
          "-a", f"{edgedata},{closure}",
          "--seed", "1000", "--begin", "0", "--end", str(SIM_END_S),
          "--no-step-log", "true", "--no-warnings", "true",
-         "--ignore-route-errors", "true",
          "--mesosim", "true", "--meso-junction-control", "true",
          "--meso-junction-control.limited", "true",
          "--statistic-output", str(stats),

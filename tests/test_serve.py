@@ -72,14 +72,24 @@ def test_web_has_one_road_closure_workspace_and_orchestrator():
         assert endpoint in app
 
 
-def test_web_shell_is_desktop_only_and_uses_the_professional_palette():
+def test_web_shell_is_responsive_accessible_and_uses_the_professional_palette():
     root = Path(__file__).parent.parent
     html = (root / "web" / "index.html").read_text()
     controls = (root / "web" / "controls.js").read_text()
+    app = (root / "web" / "app.js").read_text()
 
-    assert "min-width: 1180px" in html
+    assert "min-width: 1180px" not in html
     assert "grid-template-columns: repeat(4" in html
-    assert "@media (max-width" not in html
+    assert "@media (max-width: 1100px)" in html
+    assert "@media (max-width: 720px)" in html
+    assert 'name="description"' in html
+    assert 'id="map" role="main"' in html
+    assert 'id="day-slider"' in html and 'aria-label="Välj dag"' in html
+    assert 'id="tod-slider"' in html and 'aria-label="Välj tid på dygnet"' in html
+    assert ".leaflet-top.leaflet-left" in html
+    assert ":focus-visible" in html
+    assert "function localizedScenarioWindow(" in app
+    assert "🚗 Fordonsanimation" not in app
     assert "--sim:        #39749e" in html
     assert "#39749e 0%" in controls
     for decorative_token in (
@@ -90,10 +100,10 @@ def test_web_shell_is_desktop_only_and_uses_the_professional_palette():
     for decorative_icon in ("🛡", "📅", "🕐", "📆", "⚡"):
         assert decorative_icon not in html
     assert 'controls.js?v=12' in html
-    # Bumped with the step-4 progress phases and their detail line so a cached
-    # bundle cannot hide them; the pin exists to force exactly this deliberate
-    # edit.
-    assert 'app.js?v=24' in html
+    # Pin the current UI bundle so a cached copy cannot retain an older search
+    # form or results view after a deliberate frontend change.
+    assert 'provider.js?v=16' in html
+    assert 'app.js?v=31' in html
 
 
 def _signal_scenario_spec(*, closure=False, simulation_mode="micro",
@@ -1476,9 +1486,16 @@ class TestMonthlySearch:
             f"{base_url}/api/monthly_search/status")[1]["status"] == "error")
         cmd = seen["cmd"]
         assert str(serve.MONTHLY_PERIOD_ANALYSIS_POLICY_PATH.resolve()) in cmd
+        # The UI runs cost-ordered EXECUTION in operational mode. Pin both
+        # halves of that boundary: the fast path is selected, and it can never
+        # masquerade as release evidence. A server that ever passed a Phase 6
+        # registration would be publishing evidence from a UI click.
         assert cmd[cmd.index("--screening-mode") + 1] == (
-            "independent-exhaustive"
+            "independent-cost-ordered-exact"
         )
+        assert "--operational-no-evidence" in cmd
+        assert "--phase6-registration" not in cmd
+        assert "--phase6-outcome" not in cmd
         assert cmd[cmd.index("--daily-unit-budget") + 1] == str(
             serve.MONTHLY_DAILY_UNIT_BUDGET)
         assert cmd[cmd.index("--daily-unit-total-cap") + 1] == str(

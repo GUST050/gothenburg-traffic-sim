@@ -235,9 +235,21 @@ def _iter_closure_schedules(
                 )
             if daily_duration <= 0:
                 continue
-            # More than one 24-hour shift would leave no opening between
-            # consecutive work passes, contrary to the version-1 contract.
-            if day_count > 1 and daily_duration >= 24 * 60:
+            # A WHOLE DAY means the road is shut for the entire calendar day,
+            # so consecutive whole days are one continuous closure and the
+            # absence of an opening between them is the point, not a contract
+            # breach. `required_work_minutes` remains the total work; when
+            # that total fills a day, the day is closed, and the hours within
+            # it carry no choice to make. The band arithmetic supplies the
+            # start: a 1440-minute duration only fits a 00:00-24:00 band, for
+            # which `_start_offsets` yields exactly one start, 00:00. Each
+            # interval is half-open [day 00:00, next day 00:00), so successive
+            # days abut exactly, with no gap and no overlap.
+            #
+            # Longer than a day remains impossible: a permitted band spans at
+            # most 24 h, so `_start_offsets` already returns nothing. Stated
+            # here as a guard rather than left to be inferred from that.
+            if daily_duration > 24 * 60:
                 continue
 
             for durations in durations_by_pattern:

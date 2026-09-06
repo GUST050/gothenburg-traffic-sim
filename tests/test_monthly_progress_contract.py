@@ -23,6 +23,7 @@ from traffic_sim.simulation.search_workspace import (
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_JS = ROOT / "web" / "app.js"
+INDEX_HTML = ROOT / "web" / "index.html"
 
 
 def _labels() -> dict[str, str]:
@@ -141,6 +142,13 @@ class TestTheUiRendersTheDetail:
         source = APP_JS.read_text(encoding="utf-8")
         assert "${label}${counts}${detail}" in source
 
+    def test_running_ui_uses_wall_time_during_backend_preparation(self):
+        source = APP_JS.read_text(encoding="utf-8")
+        assert "function monthlyElapsedLabel(" in source
+        assert "status.wall_elapsed_s ?? status.elapsed_s" in source
+        assert "${wallElapsed} totalt" in source
+        assert "s aktiv tid" not in source
+
     def test_a_reloaded_paused_search_restores_the_exact_form(self):
         source = APP_JS.read_text(encoding="utf-8")
         assert "function restoreMonthlySearchSpec(" in source
@@ -156,16 +164,68 @@ class TestTheUiRendersTheDetail:
         assert "btnMonthlyCancel.hidden = unownedMonthlyJob" in source
         assert "if (!monthlyJobServerTracked) return" in source
 
-    def test_an_observed_external_result_is_restored_without_a_running_job(self):
+    def test_a_completed_result_is_restored_without_a_running_job(self):
         source = APP_JS.read_text(encoding="utf-8")
-        assert "const completedExternal = states.find" in source
-        assert "state.server_tracked === false && state.result" in source
-        completed = source[source.index("if (completedExternal) {"):]
+        assert "const completedMonthly = states.find" in source
+        assert "state.status === 'done' && state.result" in source
+        completed = source[source.index("if (completedMonthly) {"):]
         completed = completed[:completed.index("const paused =")]
         assert "monthlyJobRunning = false" in completed
+        assert "monthlyJobServerTracked = state.server_tracked !== false" in completed
         assert "restoreMonthlySearchSpec(state.closure_search_spec)" in completed
         assert "state.closure_search_spec?.directed_edges" in completed
         assert "renderMonthlyResults(state.result)" in completed
+
+    def test_period_table_separates_q50_prices_from_sumo_verification(self):
+        source = APP_JS.read_text(encoding="utf-8")
+        assert "Ford.timmar (q50)" in source
+        assert "Beräknad med q50" in source
+        assert "Bäst · SUMO-verifierad" in source
+        assert "deterministic_comparison_complete" in source
+
+    def test_period_search_has_one_unambiguous_objective(self):
+        html = INDEX_HTML.read_text(encoding="utf-8")
+        source = APP_JS.read_text(encoding="utf-8")
+        assert 'id="monthly-period-mode"' not in html
+        assert "jämförs automatiskt" in html
+        assert "objective_profile: 'closure_cost_v1'" in source
+        assert "period_comparison_policy: 'rolling_period_v1'" in source
+        assert "monthlyPeriodMode" not in source
+        assert "monthly-tool-active" in source
+
+    def test_period_result_is_a_full_screen_with_explicit_time_columns(self):
+        html = INDEX_HTML.read_text(encoding="utf-8")
+        source = APP_JS.read_text(encoding="utf-8")
+        assert "#monthly-results {" in html
+        assert "position: fixed; inset: 0" in html
+        assert 'id="monthly-col-start-time"' in html
+        assert 'id="monthly-col-end-time"' in html
+        assert 'id="monthly-results-summary"' in html
+        assert 'id="monthly-results-subtitle"' in html
+        assert 'id="monthly-results-notice"' in html
+        assert '<details id="monthly-results-method">' in html
+        assert "body.monthly-results-open #workspace-nav" in html
+        assert "body.monthly-results-open #legend" in html
+        assert "body.monthly-results-open .leaflet-control-container" in html
+        assert html.index('<section id="monthly-results"') > html.index(
+            '<div id="sliders">')
+        assert "scheduleTableFields(period.best_schedule)" in source
+        assert "document.body.classList.add('monthly-results-open')" in source
+        assert "monthlyResultsNotice.textContent" in source
+        assert "monthlyResultsMethod.open = false" in source
+        assert "monthlyResults.focus()" in source
+
+    def test_monthly_views_fit_small_screens_and_explain_whole_days(self):
+        html = INDEX_HTML.read_text(encoding="utf-8")
+        source = APP_JS.read_text(encoding="utf-8")
+        assert 'id="monthly-full-day-value"' in html
+        assert 'aria-describedby="monthly-full-day-value"' in html
+        assert "monthlyFullDayValue.hidden = !whole" in source
+        assert "monthlyBanner.classList.contains('show')" in source
+        assert "? btnMonthlyRun : btnMonthly" in source
+        assert "@media (max-width: 720px)" in html
+        assert "#monthly-results-summary" in html
+        assert "overflow-x: auto" in html
 
     def test_polling_has_bounded_failures_and_exponential_backoff(self):
         source = APP_JS.read_text(encoding="utf-8")
