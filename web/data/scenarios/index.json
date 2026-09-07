@@ -1,5 +1,5 @@
 {
-  "demand_signature": "39e0d44eaf2fda1a5934",
+  "demand_signature": "1205047b9b74fb224a54",
   "scenarios": [
     {
       "name": "baseline",
@@ -10,10 +10,10 @@
       "closure_integrity": null,
       "scenario_spec": {
         "scenario_id": "baseline",
-        "demand_build_id": "39e0d44eaf2fda1a5934",
+        "demand_build_id": "1205047b9b74fb224a54",
         "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
-        "start_time": "2027-12-09T06:00:00",
-        "end_time": "2027-12-09T10:00:00",
+        "start_time": "2027-08-12T00:00:00",
+        "end_time": "2027-08-13T00:00:00",
         "closures": [],
         "simulation_mode": "meso",
         "seed_set": [
@@ -31,10 +31,48 @@
         "analysis_window": null,
         "schema_version": 1
       },
-      "demand_signature": "39e0d44eaf2fda1a5934",
-      "build_id": "39e0d44eaf2fda1a5934",
-      "demand_build_key": "5f2c0c74ee5fdd09",
-      "window": "2027-12-09 06:00\u201310:00 \u00b7 Prognos"
+      "demand_signature": "1205047b9b74fb224a54",
+      "build_id": "1205047b9b74fb224a54",
+      "demand_build_key": "3fe855dd2c5d0125",
+      "uncertainty": {
+        "method": "spatial_prior_x_exp_negative_mean_cv",
+        "standard_deviation": "sample",
+        "seed_count": 3,
+        "demand_variants": [
+          "q50"
+        ],
+        "direction_uncertainty_included": false,
+        "low_flow_policy": "confidence_zero_without_interval_mean_above_2"
+      },
+      "network_coverage": {
+        "map_edge_count": 7147,
+        "simulated_map_edge_count": 7125,
+        "excluded_map_only_edges": [
+          "13015469430_13015469430_0",
+          "13015469430_13015469430_1",
+          "130929198_130929198_0",
+          "130929198_130929198_1",
+          "1332459640_1332459640_0",
+          "1332459640_1332459640_1",
+          "1452525556_1452525556_0",
+          "1577473501_1577473501_0",
+          "1577473501_1577473501_1",
+          "25732553_25732553_0",
+          "292565211_292565211_0",
+          "292565211_292565211_1",
+          "30133658_30133658_0",
+          "309366848_309366848_0",
+          "456040014_456040014_0",
+          "456040014_456040014_1",
+          "5993064850_5993064850_0",
+          "6565796308_6565796308_0",
+          "90683892_90683892_0",
+          "90683892_90683892_1",
+          "982996377_982996377_0",
+          "982996377_982996377_1"
+        ]
+      },
+      "window": "2027-08-12 00:00\u201324:00 \u00b7 Prognos"
     },
     {
       "name": "close_60786979_3575001205_0+1455801464_18241874_0",
@@ -48,12 +86,12 @@
         {
           "edge_id": "60786979_3575001205_0",
           "begin_s": 0,
-          "end_s": 18000
+          "end_s": 90000
         },
         {
           "edge_id": "1455801464_18241874_0",
           "begin_s": 0,
-          "end_s": 18000
+          "end_s": 90000
         }
       ],
       "closure_integrity": "verified_clean",
@@ -67,22 +105,22 @@
       },
       "scenario_spec": {
         "scenario_id": "close_60786979_3575001205_0+1455801464_18241874_0",
-        "demand_build_id": "39e0d44eaf2fda1a5934",
+        "demand_build_id": "1205047b9b74fb224a54",
         "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
-        "start_time": "2027-12-09T06:00:00",
-        "end_time": "2027-12-09T10:00:00",
+        "start_time": "2027-08-12T00:00:00",
+        "end_time": "2027-08-13T00:00:00",
         "closures": [
           {
             "edge_id": "60786979_3575001205_0",
-            "start_time": "2027-12-09T06:00:00",
-            "end_time": "2027-12-09T10:00:00",
+            "start_time": "2027-08-12T00:00:00",
+            "end_time": "2027-08-13T00:00:00",
             "closure_type": "full",
             "permitted_access_exceptions": []
           },
           {
             "edge_id": "1455801464_18241874_0",
-            "start_time": "2027-12-09T06:00:00",
-            "end_time": "2027-12-09T10:00:00",
+            "start_time": "2027-08-12T00:00:00",
+            "end_time": "2027-08-13T00:00:00",
             "closure_type": "full",
             "permitted_access_exceptions": []
           }
@@ -103,10 +141,48 @@
         "analysis_window": null,
         "schema_version": 1
       },
-      "demand_signature": "39e0d44eaf2fda1a5934",
-      "build_id": "39e0d44eaf2fda1a5934",
-      "demand_build_key": "5f2c0c74ee5fdd09",
-      "window": "2027-12-09 06:00\u201310:00 \u00b7 Prognos"
+      "demand_signature": "1205047b9b74fb224a54",
+      "build_id": "1205047b9b74fb224a54",
+      "demand_build_key": "3fe855dd2c5d0125",
+      "uncertainty": {
+        "method": "spatial_prior_x_exp_negative_mean_cv",
+        "standard_deviation": "sample",
+        "seed_count": 3,
+        "demand_variants": [
+          "q50"
+        ],
+        "direction_uncertainty_included": false,
+        "low_flow_policy": "confidence_zero_without_interval_mean_above_2"
+      },
+      "network_coverage": {
+        "map_edge_count": 7147,
+        "simulated_map_edge_count": 7125,
+        "excluded_map_only_edges": [
+          "13015469430_13015469430_0",
+          "13015469430_13015469430_1",
+          "130929198_130929198_0",
+          "130929198_130929198_1",
+          "1332459640_1332459640_0",
+          "1332459640_1332459640_1",
+          "1452525556_1452525556_0",
+          "1577473501_1577473501_0",
+          "1577473501_1577473501_1",
+          "25732553_25732553_0",
+          "292565211_292565211_0",
+          "292565211_292565211_1",
+          "30133658_30133658_0",
+          "309366848_309366848_0",
+          "456040014_456040014_0",
+          "456040014_456040014_1",
+          "5993064850_5993064850_0",
+          "6565796308_6565796308_0",
+          "90683892_90683892_0",
+          "90683892_90683892_1",
+          "982996377_982996377_0",
+          "982996377_982996377_1"
+        ]
+      },
+      "window": "2027-08-12 00:00\u201324:00 \u00b7 Prognos"
     }
   ]
 }
