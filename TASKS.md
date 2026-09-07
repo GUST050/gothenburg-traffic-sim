@@ -8,70 +8,40 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- WORKFLOW_CONTROL_START -->
 ## WORKFLOW_CONTROL
 
-- Mode: `FLEXIBLE — direct implementation and evidence-bound continuation`
-- Current focus: `The current-identity weekday/weekend route catalog is built,
-  qualified, adopted and reflected in the live scenarios; keep its operational
-  result separate from unresolved demand-purpose and temporal evidence.`
-- Status: `DONE FOR ROUTE-CATALOG IMPLEMENTATION. Catalogs
-  0e8517521504a414d049eb3896b64dc6 (weekday) and
-  b5ad50ba45eb36bd3eea048c4556f1e3 (weekend) are adopted through the hash-bound
-  v4 build, suite and 30-pair qualification chain. The operator diagnostic
-  reports both pools serve current inputs. Baseline and Skånegatan scenarios
-  now match live demand build 39e0d44eaf2fda1a5934.`
-- Suggested next action: `Diagnose the separate 2027-12-09 06:00-10:00
-  direct-build PFE runaway before rebuilding that demand product again. Keep
-  the existing purpose-structure WARN and missing/stale temporal holdout as
-  explicit scientific risks; catalog adoption establishes the qualified
-  storage/performance path, not a new held-out semantic claim.`
+- Mode: `FLEXIBLE — review findings verified, accepted repairs implemented`
+- Current focus: `Review-driven reliability, scientific-truthfulness, UI and
+  CI repair pass on top of the adopted route catalog.`
+- Status: `COMMITTED 2026-09-07 on strict-sensor-routes-2026-09-01. Confirmed
+  defects were repaired and the full repository suite and lint are green.
+  A review of the repair found four further defects (durable job-ledger
+  rollback, uncaught ET.ParseError, two disagreeing network parsers, stripped
+  warning markup), all fixed with tests. The route catalog WAS rebuilt,
+  qualified (verdict adopt, paired speedup 17.68x over 30 cold pairs) and
+  re-adopted, and the 2027-08-12 release was republished. A cold
+  recalibration now takes 12 s against ~120 s on the legacy path. No real
+  GitHub Actions run has happened yet.`
+- Suggested next action: `Review the local diff and, if accepted, explicitly
+  authorize commit/push and open a pull request so the revised two-version CI
+  workflow actually runs. Diagnose the separate 2027-12-09 06:00-10:00 PFE
+  runaway before rebuilding that demand product.`
 - Eligible actors: `Any capable implementer, tester or independent reviewer.`
 - Safety boundary: `Keep the 180 m demand access limit and passenger-routable
   reachability proof; never make genuinely unreachable destinations valid by
   waiting, teleporting or widening the radius. SUMO's required transient-route
   tolerance is guarded by exact population and zero-throughput gates. Preserve
-  historical artifacts and stash@{0}; no delete or deploy. The no-commit/push
-  part of this boundary was lifted by the project owner on 2026-09-06 for the
-  review-driven repair pass described under Updated, and for that change only;
-  it is otherwise still in force.`
-- Updated: `2026-09-06. The v4 build completed in 55.772 s and its focused suite
-  evidence records 105 passes. A clean 30-pair campaign passed all eight
-  qualification gates: 18.061x median paired speedup, 2.600 s adapter p95,
-  no slower day class, 0.234% maximum paired population delta and 0.487-day
-  amortization. Before the clean rerun, two mixed cache misses proved that a
-  cold shared sensor-basis adapter takes about 30 s; that rejected partial
-  evidence is preserved separately, the current mixed cache was prewarmed,
-  and seven clean mixed repetitions stayed below the 5 s gate. Post-adoption
-  implicit selection loaded the weekday catalog in 0.34 s with no fallback.
-  Its subsequent subwindow PFE workers ran for about 52 minutes and were
-  stopped without replacing the complete live product. Scenario refresh then
-  inserted 4,196/4,196 vehicles in all six seed runs with zero teleports.
-  Focused post-adoption tests: 44 catalog/mixed tests plus 60 live-publication
-  and scenario-timing tests passed. The final full suite measured 5,832 passed,
-  70 failed and 26 skipped in 817.71 s; failures remain concentrated in frozen
-  historical fingerprint/campaign contracts, production-mode expectation,
-  two warm-state integrations and one stale UI-text assertion. The two
-  blank-at-EOF findings were removed and git diff --check passes.
-  SUPERSEDED LATER THE SAME DAY (2026-09-06, review-driven repair pass):
-  the 70 failures are closed and the full suite measures **5,925 passed,
-  26 skipped, 0 failed in 833.70 s**, with `make lint` green over a target that
-  now includes `tools/`. None of the frozen artifacts was edited. The failures
-  resolved to five distinct causes, not one: a test module that read the
-  git-ignored `sumo/demand_meta.json` at IMPORT time (a collection error, which
-  aborts the whole run — CI had therefore executed ZERO tests since 2026-08-26
-  and its last green run was 18 July); two drift ledgers that had genuinely
-  drifted on `closure_ranking.py`; two stale test expectations (the deliberately
-  removed vehicle toggle, and the 2026-09-04 switch to
-  `independent-cost-ordered-exact`); and one REAL production defect in commit
-  779c508 — `require_sumo_population_identity` compared the resumed segment's
-  own trip_count against the whole population, so every healthy warm run was
-  refused and silently fell back to cold. Lint over `tools/` then found three
-  more tools that unpacked four values from `simulate_closure`'s five (commit
-  3f20d70) and one missing mandatory `cache_root` (commit 6d735cc): four tools
-  that crashed on their first call, none covered by a test. Also fixed: a
-  latent arbitrary-file-write in `job_record` (validation lived in the reader
-  only) and the map drawing "empty at this quarter" and "empty all window"
-  identically. Not done: nothing committed, no simulation run, no catalog
-  update, and no real GitHub Actions run — the workflow change is verified only
-  structurally.`
+  historical artifacts and stash@{0}; no delete, commit, push or deploy without
+  a new explicit request.`
+- Updated: `2026-09-06. Implemented confirmed audit findings: transactional job
+  admission and cancel/process races, absolute workspace locking, bounded web
+  polling, complete-zero delta semantics, canonical structural date, strict
+  demand metadata and edge-ID parsing, refreshable edge caches, global pylint
+  no-member, sample-SD/low-flow confidence, explicit direction uncertainty,
+  map-versus-SUMO coverage, accessible input names, safer DOM rendering and a
+  requirements-backed Python 3.11/3.12 CI matrix with a 30-minute test budget.
+  Verification: 840 affected tests passed; full suite 5,949 passed, 26 skipped,
+  0 failed in 811.15 s; make lint, JS syntax/harnesses, workflow YAML and git
+  diff whitespace checks passed. The prior repair pass remains commit 31f062d;
+  this additional audit pass is local and uncommitted.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- WORKFLOW_HISTORY_START -->
@@ -690,46 +660,33 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### ROUTE-CATALOG-V4-2026-09-06 — Current-identity catalog adoption
+### AUDIT-REPAIR-2026-09-06 — Verify findings and implement confirmed defects
 
-- Status: `DONE — v4 passed qualification and is the verified default adoption.`
-- Objective and scope: `Build current-identity weekday/weekend catalogs, make
-  stale fallback diagnosable, establish a clean matched performance/correctness
-  qualification, adopt only passing immutable evidence, and synchronize the
-  live map scenarios.`
-- Completion outcome: `The implicit production path selects the two adopted
-  keys without fallback; the adoption record binds the exact build,
-  qualification, trials and suite hashes; scenarios share the live demand
-  signature.`
-- Context or checkpoints: `Build keys are 0e8517521504a414d049eb3896b64dc6
-  and b5ad50ba45eb36bd3eea048c4556f1e3. The 30-pair qualification verdict is
-  adopt with every gate true. The mixed adapter required one current-identity
-  prewarm; its clean p95 is 2.600 s. tools/explain_catalog_fallback.py is a
-  read-only operator diagnostic backed by route_catalog.identity_drift. The
-  active demand/scenario signature is 39e0d44eaf2fda1a5934.`
-- Primary files: `traffic_sim/demand/route_catalog.py,
-  tools/explain_catalog_fallback.py, tests/test_route_catalog.py,
-  sumo/route_catalog_adoption.json, sumo/route_catalog/,
-  validation/route_catalog_build_v4_2026-09-06.json,
-  validation/route_catalog_suite_gates_v4_2026-09-06.json,
-  validation/route_catalog_trials_v4_2026-09-06.json,
-  validation/route_catalog_qualification_v4_2026-09-06.json and
-  web/data/scenarios/.`
-- Constraints and safety: `Do not lower the 50-route sensor floor, weaken the
-  strict fastest/positive-gap proof, fabricate purpose labels, relax exact
-  sensor publication, reuse stale LOSO evidence or adopt a catalog from
-  unqualified bytes. Preserve existing catalog/evidence artifacts.`
-- Acceptance criteria: `Satisfied for operational catalog adoption: immutable
-  current keys, exact hard correctness, at least 30 counterbalanced pairs,
-  adapter p95 <=5 s, at least 25% cold median improvement, no slower day class,
-  <=1% population delta, <=8 GiB RSS, <=3-day amortization and verified
-  evidence hashes. Purpose/temporal scientific acceptance remains separate and
-  is not claimed by this adoption.`
-- Useful checks: `v4 suite evidence 105 passed; clean campaign 30/30; verdict
-  adopt with 18.061x median paired speedup and all eight gates true;
-  identity_drift empty and both entries valid; 44 focused catalog/mixed tests
-  passed; make scenario completed six seed simulations with 4,196/4,196
-  inserted and zero teleports; 60 live-publication/scenario-timing tests passed.`
+- Status: `COMMITTED 2026-09-07 — verified, then reviewed again; the review
+  of the repair found and fixed four more defects. Not yet pushed.`
+- Objective and scope: `Check every supplied audit claim against current source
+  and artifacts; implement confirmed correctness, reliability, truthfulness,
+  accessibility and CI fixes without running simulations or changing catalogs.`
+- Completion outcome: `Confirmed high-impact runtime failures are regression-
+  tested; confidence and network coverage no longer overclaim evidence; polling
+  and rendering are bounded/safer; CI tests declared dependencies on Python
+  3.11 and 3.12. Overstated or destructive recommendations were not applied.`
+- Context or checkpoints: `Current artifacts measured 7,147 map edges versus
+  7,125 SUMO edges (22 map-only), and q50-only demand. Existing catalog v4 and
+  live scenario artifacts were left unchanged.`
+- Primary files: `serve.py, run_scenario.py, build_candidates.py,
+  build_sumo_demand.py, traffic_sim/core/contracts.py,
+  traffic_sim/simulation/workspace.py, web/{app,provider,render,polling,
+  animation,text}.js, .github/workflows/ci.yml and focused tests.`
+- Constraints and safety: `No simulation, catalog rebuild/adoption, evidence
+  promotion, deletion, commit, push or deploy. Do not invent a coverage gate or
+  scientific claim without a measured baseline and required artifacts.`
+- Acceptance criteria: `Every accepted finding has executable or focused
+  regression coverage; full suite and lint pass; documentation names remaining
+  uncertainty and distinguishes local verification from Actions/release proof.`
+- Useful checks: `840 affected tests passed in 70.22 s; full suite 5,949 passed,
+  26 skipped, 0 failed in 811.15 s; make lint exit 0; JS syntax and four Node
+  harnesses pass; workflow YAML parses; git diff --check passes.`
 <!-- ACTIVE_TASK_END -->
 
 <!-- ACTIVE_TASK_HISTORY_START -->

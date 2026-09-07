@@ -7,82 +7,55 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `ROUTE CATALOG V4 ADOPTED. The current weekday/weekend
-  entries pass their immutable evidence contract and the live scenarios match
-  the active demand build.`
-- Summary: `Catalogs 0e8517521504a414d049eb3896b64dc6 and
-  b5ad50ba45eb36bd3eea048c4556f1e3 were built on current generator/input
-  identity, qualified through 30 clean paired trials and adopted in the schema-3
-  default record. The new read-only tools/explain_catalog_fallback.py reports
-  both adopted pools serve current inputs and names component-level drift when
-  they do not. Baseline and Skånegatan scenarios were rebuilt for demand
-  39e0d44eaf2fda1a5934.`
-- Files changed: `traffic_sim/demand/route_catalog.py and
-  tests/test_route_catalog.py contain the identity-drift and mixed-support
-  behavior; tools/explain_catalog_fallback.py is new. Generated v4 build,
-  suite, clean trials and qualification evidence plus
-  sumo/route_catalog_adoption.json and the mixed adapter cache were produced.
-  web/data/scenarios/ and web/data/validation.json were refreshed. TASKS.md
-  and this block reflect the completed adoption. Unrelated dirty files remain
-  untouched.`
-- Checks: `Build 55.772 s. Suite gates: 105 passed. Qualification: 30 pairs,
-  verdict adopt, all eight gates true, 18.061x median paired speedup,
-  adapter p95 2.600 s, no slower day class, max population delta 0.234%,
-  amortization 0.487 days and max RSS 0.862 GB. Both current manifest drift
-  lists are empty and both entries validate. Focused post-adoption tests:
-  44 catalog/mixed tests passed and 60 live-publication/scenario-timing tests
-  passed. make scenario inserted 4,196/4,196 vehicles in six seed runs with
-  zero teleports. Final full suite: 5,832 passed, 70 failed, 26 skipped and two
-  warnings in 817.71 s; git diff --check and staged JSON validation pass.
-  SUPERSEDED LATER THE SAME DAY (2026-09-06, review-driven repair pass): all 70
-  failures are closed and the suite measures 5,925 passed, 26 skipped, 0 failed
-  in 833.70 s; make lint is green over a target that now includes tools/. No
-  frozen artifact was edited. The headline finding was that CI had run ZERO
-  tests since 2026-08-26 — tests/test_benchmark_speed.py read the git-ignored
-  sumo/demand_meta.json at import time, and a collection error aborts the whole
-  pytest run; the last green CI run was 18 July. Four tools were also found
-  crashing on their first call from three recent signature changes, plus one
-  real warm-arm defect in 779c508 that made every warm run fall back to cold.
-  Not done: nothing committed, no simulation, no catalog update, and no real
-  GitHub Actions run.`
-- Decisions and evidence: `An initial campaign became irreversibly rejectable
-  after two cold mixed adapter values near 30 s. It was stopped and preserved;
-  the current-identity mixed sensor-basis cache was prewarmed and independently
-  restored in 2.818 s before a new from-zero campaign. A competing resume had
-  reused the rejected pairs and was also stopped; its 21-pair artifact is
-  preserved separately. Only the clean from-zero 30-pair file is bound into
-  v4 qualification/adoption.`
-- Blockers or risks: `Catalog adoption is complete. The broader demand model
-  still has the previously documented purpose-structure WARN and stale/missing
-  temporal holdout; no fresh scientific claim is made from catalog adoption.
-  A post-adoption direct 2027-12-09 06:00-10:00 build proved implicit catalog
-  selection in 0.34 s, then exposed a separate PFE runaway: ten workers used
-  about 52 minutes CPU before manual interruption. The prior complete live
-  product remained intact. The 70 full-suite failures reported earlier that
-  day were concentrated in frozen historical fingerprint/campaign records, an
-  exhaustive-vs-cost-ordered production-mode expectation, two warm-state
-  integrations and one stale UI-label assertion. THEY ARE NOW CLOSED
-  (2026-09-06, review-driven repair pass): the suite measures 5,925 passed,
-  26 skipped, 0 failed, and make lint is green over a target that now includes
-  tools/. No frozen artifact was edited -- the frozen records were drift
-  ledgers that had genuinely drifted, and the two warm-state failures were
-  hiding a real production defect in 779c508. The suite IS green and may be
-  described as such; what must still NOT be claimed is a passing GitHub
-  Actions run (none has been executed) or any new scientific result -- nothing
-  was simulated, no catalog was updated and nothing was committed.`
-- Suggested next action: `Diagnose the subwindow PFE runaway without changing
-  catalog identity or adoption evidence. Separately decide whether to expand
-  the simulation boundary/endpoints or revise the purpose contract before any
-  new held-out semantic claim.`
-- Actor notes: `No deploy or monthly campaign launch occurred, and no
-  simulation was run or catalog rebuilt. The stale v3 adoption was replaced by
-  passing v4 evidence. One orphan temp snapshot was consumed to restore the
-  known 4,196-vehicle live release; the rejected benchmark artifacts remain
-  available under validation/. The later repair pass on 2026-09-06 WAS
-  committed and pushed to origin/strict-sensor-routes-2026-09-01, on the
-  project owner's explicit instruction after three review rounds; the
-  standing no-commit/push boundary was lifted for that change only and still
-  holds for delete and deploy.`
+- Focus and status: `AUDIT REPAIR COMMITTED 2026-09-07 on
+  strict-sensor-routes-2026-09-01. Confirmed findings are fixed; full suite
+  and lint pass. Reviewing the repair itself found four more defects, since
+  fixed: the job-admission rollback left the DURABLE record stuck in
+  "running" (blocking every later simulation behind a phantom orphan),
+  ET.ParseError escaped the closure endpoint's except clause, serve.py and
+  run_scenario.py grew two disagreeing net.net.xml parsers, and the caveat
+  renderer stripped the amber marking off ten warning lines. The route
+  catalog was also rebuilt, qualified and re-adopted; the adapter_p95 gate
+  was REMOVED at the owner's decision to allow that — the reason is recorded
+  where the gate stood, in traffic_sim/demand/catalog_qualification.py.`
+- Summary: `Fixed job-admission lock leaks, cancel/status/process races,
+  cwd-relative workspace locking, unbounded browser polling, fragile edge-ID
+  parsing, malformed demand-metadata fail-open behavior, stale edge caches and
+  duplicated structural dates. Confidence now uses sample SD and reports zero
+  when traffic is too low to estimate stability. Scenario artifacts declare
+  direction uncertainty and exclude/record map-only edges. UI inputs have
+  accessible names, dynamic result text uses safer DOM paths, and paused-frame
+  rendering avoids repeated edge work.`
+- Files changed: `Core changes are in serve.py, run_scenario.py,
+  build_candidates.py, build_sumo_demand.py, traffic_sim/core/contracts.py,
+  traffic_sim/simulation/workspace.py, web JS/HTML and .github/workflows/ci.yml.
+  Tests add executable polling, animation and HTML-escaping harnesses plus
+  focused Python regressions. TASKS.md and this block are synchronized.`
+- Checks: `Affected suite: 840 passed in 70.22 s. Full suite: 5,949 passed,
+  26 skipped, 0 failed and two warnings in 811.15 s. make lint exit 0. Node
+  syntax and four executable JS harnesses pass. Workflow YAML parses and git
+  diff --check passes.`
+- Decisions and evidence: `All A findings were confirmed. The audit overstated
+  accessibility (five unlabeled inputs, not nine), source complexity counts,
+  and q50 behavior (make demand is q50-only by default). Zero/low-flow
+  confidence and ddof=0 were real; unsupported-route confidence was already
+  zero and weak support already capped. Map/SUMO measurement found 7,147 versus
+  7,125 edges, exactly 22 map-only. No arbitrary 80% coverage gate or Python
+  3.9 CI job was added without a baseline; CI instead covers maintained 3.11
+  and 3.12 and installs requirements.txt.`
+- Blockers or risks: `No real GitHub Actions run exists until a pull request or
+  main push triggers it. The current published scenarios predate the new
+  uncertainty/network_coverage fields and were deliberately not regenerated.
+  The 125 GiB runs tree needs a user-approved retention policy before deletion.
+  Large-file/refactor debt remains separate. The purpose-structure WARN,
+  stale/missing temporal holdout and 2027-12-09 subwindow PFE runaway remain
+  scientific/operational risks.`
+- Suggested next action: `Review the local diff; if accepted, explicitly ask
+  for commit/push and create a pull request to obtain the first real CI result.
+  Keep simulation/catalog refresh separate and approval-bound.`
+- Actor notes: `No simulation, catalog build/adoption, evidence promotion,
+  deletion, commit, push, deploy or monthly campaign occurred in this pass.
+  The prior repair pass remains pushed at 31f062d.`
 <!-- CURRENT_HANDOFF_END -->
 
 <!-- CURRENT_HANDOFF_HISTORY_START -->
