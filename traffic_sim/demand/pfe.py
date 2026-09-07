@@ -259,14 +259,40 @@ def solve_interval(
                            extra=[(i_pos, -1), (i_neg, 1)]))
         b_eq.append(target)
 
-    res = linprog(
-        c_obj,
-        A_ub=vstack(rows_ub).tocsc() if rows_ub else None,
-        b_ub=np.array(b_ub) if rows_ub else None,
-        A_eq=vstack(rows_eq).tocsc() if rows_eq else None,
-        b_eq=np.array(b_eq) if rows_eq else None,
-        bounds=[(0, None)] * N, method="highs",
-    )
+    # Repairs already run in a fork pool. Nested HiGHS worker threads can
+    # deadlock after fork on macOS and also oversubscribe every calibration;
+    # one solver thread per process is deterministic and preserves parallelism
+    # at the variant×quarter level.
+    #
+    # Both milp() call sites took this cap when it was written; THIS one was
+    # missed, and it is the rung the ladder reaches when the entropy solver
+    # cannot meet the measured band (RUNG_LP_FALLBACK). A date needing the
+    # fallback therefore ran cores × cores HiGHS threads: measured live on a
+    # 2027-08-12 forecast build, ten workers at 98% CPU with 2540 of 2565
+    # profile samples inside HighsTaskExecutor::shutdown — the teardown of a
+    # thread pool that should never have been spawned.
+    with warnings.catch_warnings():
+        # scipy raises this as OptimizeWarning (a UserWarning), not a
+        # RuntimeWarning: the two sibling call sites filter the narrower
+        # class and never actually suppress it. Key on the message, which is
+        # what identifies the case, and the base class, which covers both.
+        # The warning is cosmetic — scipy says it "will be passed to HiGHS
+        # verbatim", which is exactly what this needs — but it would
+        # otherwise print once per quarter per variant.
+        warnings.filterwarnings(
+            "ignore",
+            message=r"Unrecognized options detected: .*'threads'.*",
+            category=Warning,
+        )
+        res = linprog(
+            c_obj,
+            A_ub=vstack(rows_ub).tocsc() if rows_ub else None,
+            b_ub=np.array(b_ub) if rows_ub else None,
+            A_eq=vstack(rows_eq).tocsc() if rows_eq else None,
+            b_eq=np.array(b_eq) if rows_eq else None,
+            bounds=[(0, None)] * N, method="highs",
+            options={"threads": 1},
+        )
     if not res.success:
         return None
     return res.x[:n]

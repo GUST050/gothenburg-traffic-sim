@@ -1,5 +1,10 @@
-"""Unit tests for pfe.py — the level-4 reconciliation engine."""
+"""Unit tests for pfe.py — the level-4 reconciliation engine.
 
+TestHighsThreadBudget at the end pins a property the two milp() call sites
+already had and the linprog() one did not.
+"""
+
+import ast
 import itertools
 import json
 import re
@@ -1999,3 +2004,76 @@ class TestPerDayEndpointDrawOrdinals:
 
         assert continuous[:len(one_day)] == one_day
         assert continuous[len(one_day):] != one_day
+
+
+class TestHighsThreadBudget:
+    """Every HiGHS solve runs inside a fork pool and must take ONE thread.
+
+    calibrate() flattens all (variant, quarter) solves into one fork pool over
+    every core. scipy's HiGHS backend defaults to a worker thread per core, so
+    a solver that does not cap itself gives cores x cores threads. pfe already
+    made that decision for both milp() call sites, with the reason written
+    twice: "Repairs already run in a fork pool. Nested HiGHS worker threads
+    can deadlock after fork on macOS and also oversubscribe every
+    calibration."
+
+    solve_interval's linprog() was left out. It is RUNG_LP_FALLBACK — reached
+    only when the entropy solver cannot meet the measured band — so a date
+    that needs the fallback pays the oversubscription on most of its quarters
+    while a date that does not never sees it. Measured on a live 2027-08-12
+    forecast build: ten workers, 98% CPU each, 2540 of 2565 profile samples
+    inside HighsTaskExecutor::shutdown, and 1000+ s against a 213 s reference
+    day that stayed on the entropy path.
+    """
+
+    @staticmethod
+    def _minimal_problem():
+        shapes = [Candidate(depart=0.0, edges=["A", "B"]),
+                  Candidate(depart=0.0, edges=["A"])]
+        return shapes, {"A": 10.0}, {}, {}
+
+    def test_lp_fallback_asks_highs_for_a_single_thread(self, monkeypatch):
+        seen = {}
+
+        def spy(*args, **kwargs):
+            seen.update(kwargs)
+            raise AssertionError("stop after capturing the call")
+
+        monkeypatch.setattr(pfe, "linprog", spy)
+        shapes, measured, bounds, priors = self._minimal_problem()
+        with pytest.raises(AssertionError):
+            solve_interval(shapes, measured, bounds, priors)
+
+        assert seen.get("options", {}).get("threads") == 1, (
+            "solve_interval runs inside calibrate()'s fork pool; without an "
+            "explicit thread cap each worker spawns a HiGHS pool of its own")
+
+    def test_every_highs_call_site_caps_its_threads(self):
+        """A future solver call must not reintroduce the same gap.
+
+        Parsed, not grepped: a text scan matched the word ``milp()`` inside a
+        comment explaining this very fix and reported a call site that does
+        not exist. Only real Call nodes count.
+        """
+        tree = ast.parse(Path(pfe.__file__).read_text())
+        solvers = {"linprog", "milp"}
+        found = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            name = getattr(node.func, "id", None) or getattr(
+                node.func, "attr", None)
+            if name not in solvers:
+                continue
+            found.append((name, node.lineno))
+            options = next((kw.value for kw in node.keywords
+                            if kw.arg == "options"), None)
+            threads = None
+            if isinstance(options, ast.Dict):
+                for key, value in zip(options.keys, options.values):
+                    if isinstance(key, ast.Constant) and key.value == "threads":
+                        threads = getattr(value, "value", None)
+            assert threads == 1, (
+                f"{name}() at pfe.py:{node.lineno} runs inside the "
+                "calibration fork pool without options={'threads': 1}")
+        assert len(found) >= 3, f"expected every HiGHS call site, saw {found}"
