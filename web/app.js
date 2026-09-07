@@ -734,7 +734,7 @@
           purposes: 'Modellerade reseärenden & längder',
           simulation: 'Simuleringshälsa',
           sensor_output: 'SUMO sensorutdata', multi_day: 'Flerdagskontinuitet',
-          sensor_output_exact: 'Exakt SUMO-passagetest',
+          sensor_output_exact: 'SUMO-passagenoggrannhet',
           held_out: 'Utelämnad-station (LOSO)',
         };
         const V_MARK = { pass: ['✓', 'v-pass'], warn: ['⚠', 'v-warn'],
@@ -770,10 +770,25 @@
                 + `GEH<5 ${s.geh_lt_5_pct ?? '–'}% · `
                 + (s.reason || 'rå SUMO edgeData och stationsaggregering');
             case 'sensor_output_exact':
-              return `${s.exact ?? '–'}/${s.constraints ?? '–'} exakta riktade `
-                + `sensor×kvartar · maxfel ${s.max_abs_error ?? '–'} · `
-                + `${s.mismatch_count ?? '–'} avvikelser · `
-                + (s.reason || 'alla råa 15-minuterspassager matchar exakt');
+              // The verdict first, then what the error actually is, and only
+              // then the exact-integer counts. Leading with "100/672" read as
+              // near-total failure for a run that sat inside every published
+              // criterion by a wide margin.
+              return `GEH<5 på ${s.geh_within ?? '–'}/${s.geh_cells ?? '–'} `
+                + `kvartsceller (median ${s.geh_median ?? '–'}, `
+                + `max ${s.geh_max ?? '–'}; ${s.standard ?? 'TAG M3.1'} kräver `
+                + `>${s.geh_guideline_pct ?? '–'}%) · dygnsvolym per riktning `
+                + `max ${s.volume_max_abs_pct ?? '–'}% av `
+                + `${s.volume_limit_pct ?? '–'}% · relativt fel per kvart: `
+                + `median ${s.relative_error_median_pct ?? '–'}%, `
+                + `p95 ${s.relative_error_p95_pct ?? '–'}% · exakt `
+                + `heltalsträff (information, ej krav): ensemble `
+                + `${s.exact ?? '–'}/${s.constraints ?? '–'}, representativt `
+                + `frö ${s.representative_exact ?? '–'}, minst ett frö `
+                + `${s.exact_any_seed ?? '–'} — ensemblens medelvärde av tre `
+                + `körningar är inget heltal i `
+                + `${s.non_integer_ensemble_cells ?? '–'} rutor`
+                + (s.reason ? ` · ${s.reason}` : '');
             case 'multi_day':
               return s.not_applicable ? 'inte tillämpligt för en dag' :
                 `${s.days ?? '–'} dagar · `

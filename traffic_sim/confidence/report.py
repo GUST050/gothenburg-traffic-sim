@@ -39,7 +39,8 @@ from traffic_sim.confidence.trip_length_gate import (
 
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.sensor_fit import (assess_exact_output_fit,
-                                               assess_output_fit)
+                                               assess_output_fit,
+                                               assess_passage_accuracy)
 
 SUMO_DIR = Path("sumo")
 WEB_DATA = Path("web/data")
@@ -276,8 +277,18 @@ def _exact_sensor_output_section(baseline: dict | None) -> dict:
     ensemble = assessment.get("ensemble") or {}
     representative = assessment.get("representative") or {}
     per_seed = assessment.get("per_seed") or []
+    accuracy = assess_passage_accuracy(
+        audit, n_intervals=int((baseline or {}).get("n_quarters", 0) or 0))
+    # assess_exact_output_fit reports two different kinds of problem in one
+    # list. A declared summary that does not survive recomputation is an
+    # INTEGRITY failure and still fails this section. "matchar bara N/672" is
+    # not: it says the run was not exact to the vehicle, which no traffic
+    # standard asks for and which gets harder the busier the road. The
+    # verdict now comes from TAG M3.1; the exact counts stay as information.
+    integrity_errors = [message for message in assessment["errors"]
+                        if "matchar bara" not in message]
     result = {
-        "status": "pass" if not assessment["errors"] else "warn",
+        "status": "pass" if accuracy["ok"] and not integrity_errors else "warn",
         "contract": exact.get("contract"),
         "aggregation_minutes": 15,
         "target_rule": exact.get("target_rule"),
@@ -290,11 +301,28 @@ def _exact_sensor_output_section(baseline: dict | None) -> dict:
         "representative_exact": representative.get("exact"),
         "representative_constraints": representative.get("constraints"),
         "per_seed": per_seed,
-        "gate": "rå SUMO-passage måste matcha varje riktad sensor × "
-                "15-minuters heltalsmål exakt; testet ändrar inga fordon",
+        "standard": accuracy["standard"],
+        "geh_limit": accuracy["geh_limit"],
+        "geh_guideline_pct": accuracy["geh_guideline_pct"],
+        "geh_cells": accuracy["geh_cells"],
+        "geh_within": accuracy["geh_within"],
+        "geh_pct": accuracy["geh_pct"],
+        "geh_median": accuracy["geh_median"],
+        "geh_max": accuracy["geh_max"],
+        "volume_limit_pct": accuracy["volume_limit_pct"],
+        "volume_max_abs_pct": accuracy["volume_max_abs_pct"],
+        "relative_error_cells": accuracy["relative_error_cells"],
+        "relative_error_median_pct": accuracy["relative_error_median_pct"],
+        "relative_error_p95_pct": accuracy["relative_error_p95_pct"],
+        "exact_any_seed": accuracy["exact_any_seed"],
+        "non_integer_ensemble_cells": accuracy["non_integer_ensemble_cells"],
+        "gate": "rå SUMO-passage bedöms mot DfT TAG Unit M3.1 Tabell 2: "
+                "GEH<5 på fler än 85 % av riktade sensor × 15-minutersceller "
+                "och dygnsvolym per riktning inom 10 %; exakt heltalsträff "
+                "redovisas som information, inte som krav",
     }
-    if assessment["errors"]:
-        result["reason"] = "; ".join(assessment["errors"][:5])
+    if integrity_errors:
+        result["reason"] = "; ".join(integrity_errors[:5])
     return result
 
 

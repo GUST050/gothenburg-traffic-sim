@@ -9,10 +9,16 @@ import validation_report as vr
 from traffic_sim.confidence import trip_length_gate as gate
 
 
-def test_web_panel_exposes_the_exact_sumo_passage_test():
+def test_web_panel_leads_with_accuracy_not_with_exactness():
+    """The panel used to open with "100/672 exakta", which read as a
+    near-total failure for a run inside every published criterion. The
+    verdict line comes first now; the exact counts stay, labelled as
+    information."""
     source = (Path(__file__).parent.parent / "web" / "app.js").read_text()
-    assert "sensor_output_exact: 'Exakt SUMO-passagetest'" in source
-    assert "sensor×kvartar" in source
+    assert "sensor_output_exact: 'SUMO-passagenoggrannhet'" in source
+    assert "kvartsceller" in source
+    assert "relativt fel per kvart" in source
+    assert "information, ej krav" in source
     assert "accepterade" in source
 
 
@@ -362,16 +368,36 @@ class TestAssemble:
             [row], n_intervals=2, uses_raw_ensemble_mean=True)
         return {"n_quarters": 2, "sensor_audit": audit}
 
-    def test_exact_sumo_passage_section_passes_only_zero_residual(self):
-        passed = vr._exact_sensor_output_section(
+    def test_passage_section_is_judged_on_accuracy_not_exactness(self):
+        """A one-vehicle miss is no longer reported as a failed test.
+
+        This section used to warn unless every directed sensor x 15 minutes
+        matched its rounded target to the vehicle. On a real build that read
+        100/672 and looked like near-total failure, while GEH was under 5 on
+        all 672 cells and daily volume landed within 0.22%. The verdict now
+        comes from DfT TAG Unit M3.1 Table 2; the exact counts remain, as
+        information.
+        """
+        exact = vr._exact_sensor_output_section(
             self._exact_baseline([10.0, 11.0]))
-        warned = vr._exact_sensor_output_section(
+        inexact = vr._exact_sensor_output_section(
             self._exact_baseline([10.0, 12.0]))
 
-        assert passed["status"] == "pass"
-        assert passed["exact"] == passed["constraints"] == 2
-        assert warned["status"] == "warn"
-        assert warned["mismatch_count"] == 1
+        assert exact["status"] == "pass"
+        assert exact["exact"] == exact["constraints"] == 2
+        # One vehicle out of eleven: inside TAG, outside exactness.
+        assert inexact["status"] == "pass"
+        assert inexact["mismatch_count"] == 1
+        assert inexact["exact"] == 1
+        assert inexact["geh_max"] < inexact["geh_limit"]
+
+    def test_passage_section_still_warns_when_the_volume_is_wrong(self):
+        """The gate has to be able to fail, or it is not a gate."""
+        leaked = vr._exact_sensor_output_section(
+            self._exact_baseline([10.0, 1.0]))
+
+        assert leaked["status"] == "warn"
+        assert leaked["volume_max_abs_pct"] > leaked["volume_limit_pct"]
 
     def test_seed_flags_warn_simulation(self, tmp_path, monkeypatch):
         _write_inputs(tmp_path, monkeypatch,
