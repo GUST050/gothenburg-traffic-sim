@@ -28,6 +28,29 @@ from traffic_sim.simulation.monthly_demand import (
 )
 
 
+# WHY THIS CAMPAIGN RUNS ONE TRIAL AT A TIME, AND WRITES THE SHARED REPO ROOT
+# (measured 2026-09-06/07, after both alternatives were built and run in full).
+#
+# The builds LOOK idle: a cProfile of one legacy build spends 110.8 of 118.3 s
+# inside `select.poll`, and the machine sits at 181% of 1000% CPU. That is the
+# PARENT blocked while its child works, not spare capacity.
+#
+# Two changes were tried on that reading and the measurements rejected both.
+# A per-trial sandbox (APFS `cp -c` clone of sumo/ and web/data, so concurrent
+# trials could not overwrite each other's demand_meta.json) ALONE took the
+# legacy median from 121 s to 237 s and the catalog restore's p95 from ~0.3 s
+# to 58.8 s: a clone is instant, but every later write into it pays
+# copy-on-write, and these builds write constantly. Adding 3-way concurrency
+# on top took the legacy median to 457 s, the restore p95 to 126 s, and the
+# campaign to 94.7 min against the serial 80.
+#
+# Both runs then FAILED the frozen `adapter_p95_le_5s` gate and made the
+# qualification reject a catalog that is fine. Timing IS this campaign's
+# evidence; anything that perturbs it is not an optimisation.
+#
+# Raising this again needs a full-campaign measurement, not an extrapolation
+# from the first wave — that extrapolation is exactly what predicted 34 min
+# for the run that took 94.7.
 FIXTURES = (
     {"name": "weekday", "date": "2027-09-08", "days": 1},
     {"name": "weekend", "date": "2027-09-11", "days": 1},

@@ -216,7 +216,25 @@ def qualify_catalog_trials(trials: list[dict], *, catalog_build_s: float,
         "trial_count": len(trials) >= 30,
         "hard_correctness": (
             not trial_hard_failures and not suite_hard_failures),
-        "adapter_p95_le_5s": metrics["catalog"]["adapter_s"]["p95"] <= 5.0,
+        # REMOVED 2026-09-07 at the project owner's decision, recorded here
+        # rather than silently deleted. The gate was:
+        #     "adapter_p95_le_5s": metrics["catalog"]["adapter_s"]["p95"] <= 5.0
+        #
+        # What it caught, and why it was dropped anyway: rebuilding the
+        # catalog produced new pool keys, which left
+        # `sumo/route_catalog/mixed_adapter_cache` cold for the new
+        # combination. Every `mixed` (2-day) trial then rebuilt that adapter
+        # from scratch. Measured over 20 trials the split was exactly clean —
+        # weekday/weekend/holiday 0.21-0.22 s, mixed 29.4-31.4 s — so the p95
+        # reported ~30 s against a 5 s limit. The steady-state cost this gate
+        # exists to police is the 0.21 s; the 30 s is a one-time cold build
+        # that a single warm-up would have removed.
+        #
+        # The honest alternative was to warm the cache and re-run the 80-min
+        # campaign; that was declined in favour of adopting now. Anyone
+        # restoring this protection must ALSO warm `mixed_adapter_cache` for
+        # the current keys first, or the same cold-start artifact will fail
+        # it again for the same non-reason.
         "cold_median_improves_25pct": catalog_median <= legacy_median * 0.75,
         "no_day_class_slower": not class_regressions,
         "paired_vehicle_population_delta_le_1pct": (

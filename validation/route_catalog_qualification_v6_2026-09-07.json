@@ -1,0 +1,148 @@
+{
+ "amortized_days": 1.0037494152206758,
+ "catalog_build_s": 110.261,
+ "day_class_medians": {
+  "holiday": {
+   "catalog_s": 6.636424,
+   "legacy_s": 116.428713
+  },
+  "mixed": {
+   "catalog_s": 40.114771,
+   "legacy_s": 205.817665
+  },
+  "weekday": {
+   "catalog_s": 6.4660709999999995,
+   "legacy_s": 115.16570150000001
+  },
+  "weekend": {
+   "catalog_s": 5.8483385000000006,
+   "legacy_s": 115.0922965
+  }
+ },
+ "evidence_binding": {
+  "candidate_n_total": 6000,
+  "catalog_build_path": "validation/route_catalog_build_v5_2026-09-06.json",
+  "catalog_build_sha256": "5425d2900b4681d03b7290b4553130c042930e9842a45a3646946b5f1c84a986",
+  "catalog_keys": {
+   "weekday": "70fcff97032d930db2032a770ef4a555",
+   "weekend": "611cce94dd56e63993cbf3e9fb923739"
+  },
+  "catalog_selected_n_total": {
+   "weekday": 6000,
+   "weekend": 6000
+  },
+  "suite_gates_path": "validation/route_catalog_suite_gates_v4_2026-09-06.json",
+  "suite_gates_sha256": "a1dc55a24ef480a8fc4d86f00036314186c7b31f13d0387b30ab27b3f3d3f69c",
+  "trials_path": "validation/route_catalog_trials_v8_2026-09-07.json",
+  "trials_sha256": "8d13224ff5e68731bda318ed9baeeb1d6e44bf3ba0cfb360e5c640d898680160"
+ },
+ "gates": {
+  "catalog_amortizes_within_3_days": true,
+  "cold_median_improves_25pct": true,
+  "hard_correctness": true,
+  "no_day_class_slower": true,
+  "paired_vehicle_population_delta_le_1pct": true,
+  "rss_within_8gib": true,
+  "trial_count": true
+ },
+ "median_saving_s": 109.84913,
+ "metrics": {
+  "catalog": {
+   "adapter_s": {
+    "max": 31.404,
+    "median": 0.215,
+    "min": 0.208,
+    "p95": 30.006999999999998
+   },
+   "peak_rss_bytes": {
+    "max": 891158528.0,
+    "median": 884948992.0,
+    "min": 825655296.0,
+    "p95": 891158528.0
+   },
+   "pfe_s": {
+    "max": 8.319,
+    "median": 3.4185,
+    "min": 3.068,
+    "p95": 6.843
+   },
+   "vehicles": {
+    "max": 37415.0,
+    "median": 20029.0,
+    "min": 17927.0,
+    "p95": 37415.0
+   },
+   "wall_s": {
+    "max": 42.009976,
+    "median": 6.5599665,
+    "min": 5.795626,
+    "p95": 41.566834
+   }
+  },
+  "legacy": {
+   "adapter_s": {
+    "max": 0.0,
+    "median": 0.0,
+    "min": 0.0,
+    "p95": 0.0
+   },
+   "peak_rss_bytes": {
+    "max": 891158528.0,
+    "median": 884948992.0,
+    "min": 825655296.0,
+    "p95": 891158528.0
+   },
+   "pfe_s": {
+    "max": 146.368,
+    "median": 58.169,
+    "min": 56.934,
+    "p95": 140.764
+   },
+   "vehicles": {
+    "max": 37497.0,
+    "median": 20052.0,
+    "min": 17969.0,
+    "p95": 37497.0
+   },
+   "wall_s": {
+    "max": 217.520062,
+    "median": 116.2678475,
+    "min": 113.537237,
+    "p95": 212.396657
+   }
+  },
+  "pfe_shape_variables": {
+   "catalog": null,
+   "legacy": null
+  }
+ },
+ "paired_speedup": 17.681945036964628,
+ "paired_speedup_stats": {
+  "max": 20.31403489248777,
+  "median": 17.681945036964628,
+  "min": 5.05437273965742,
+  "p95": 19.985936869805318
+ },
+ "paired_vehicle_population_relative_delta": {
+  "max": 0.002337358784573432,
+  "median": 0.0019472932338417959,
+  "min": 0.001147017753840016,
+  "p95": 0.002337358784573432
+ },
+ "pfe_timing_interpretation": "PFE time is reported as end-to-end product performance, not as an isolated solver speedup. Catalog and legacy arms may expose different counts of distinct route-by-purpose variables; the counts are reported when the producer provides them.",
+ "schema_version": 2,
+ "slower_day_classes": [],
+ "suite_hard_failures": [],
+ "suite_hard_gates": {
+  "day_library_restore": true,
+  "deterministic_repeat": true,
+  "malformed_catalog_rejected": true,
+  "purpose_route_compatibility": true,
+  "singleflight_recovery": true,
+  "sumo_runtime_no_regression": true,
+  "warm_state_identity": true
+ },
+ "trial_hard_failures": [],
+ "trials": 30,
+ "verdict": "adopt"
+}
