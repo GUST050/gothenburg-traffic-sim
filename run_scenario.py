@@ -22,7 +22,7 @@ Per-edge confidence (0-1), written into the scenario file:
   Far from sensors AND unstable across seeds → low confidence.
 
 Writes:
-  web/data/scenarios/<name>.json   — flows + confidence for the web app
+  web/data/scenarios/<name>.json   — flows, confidence and coverage metadata
   web/data/scenarios/index.json    — manifest the web app lists scenarios from
 """
 
@@ -59,7 +59,7 @@ from traffic_sim.simulation.sensor_fit import (assess_output_fit,
                                                summarize_rows)
 from traffic_sim.simulation.runtime import sumo_home
 from traffic_sim.simulation.metadata import (
-    DEFAULT_VCLASS, build_metadata, load_metadata)
+    DEFAULT_VCLASS, build_metadata, load_metadata, network_edge_ids)
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.core.contracts import ScenarioSpec, load_scenario_spec
 from traffic_sim.simulation.multiday import parse_summary
@@ -549,19 +549,17 @@ def build_scenario_payload(*, meta: dict, n_intervals: int, generated_at: str,
                            closure_integrity, seed_count: int, seed_values: list,
                            sig: str, seed_health: list, health_flags: list,
                            multi_day_validation, sensor_audit, flows_out: dict,
-                           conf_out: dict,
+                           conf_out: dict, network_coverage: dict,
                            disruption: dict | None = None,
                            teleport_policy: dict | None = None) -> dict:
     """The published scenario JSON payload, factored out so the benchmark harness
     can build the byte-identical artifact from the same inputs.
 
-    Behavior-preserving: this is exactly the dict ``main()`` assembled inline
-    before publication — same keys, values, ordering, the date-vs-multi-day and
-    multi_day_validation omission rules, and the ``generated_at`` field (passed
-    in so the caller controls the timestamp; it is a non-semantic field the
-    digest strips). Nothing about production output changed. The literal is kept
-    as ``payload = { "epoch": ... }`` so the published-payload no-timing-keys
-    guard in tests/test_scenario_timing.py continues to inspect it here.
+    Production and the benchmark harness use this one schema owner. The
+    ``generated_at`` field is passed in because it is non-semantic and stripped
+    from comparison digests; uncertainty and network coverage are deliberate
+    additive evidence fields. The literal stays as ``payload = { "epoch": ...
+    }`` so the no-timing-keys guard can inspect the publication seam here.
     """
     payload = {
         "epoch":            meta["epoch_sim"],
@@ -606,6 +604,8 @@ def build_scenario_payload(*, meta: dict, n_intervals: int, generated_at: str,
         **({"multi_day_validation": multi_day_validation}
            if multi_day_validation is not None else {}),
         "sensor_audit":      sensor_audit,
+        "uncertainty":       scenario_uncertainty(spec),
+        "network_coverage":  network_coverage,
         **({"disruption": disruption} if disruption is not None else {}),
         "flows":      flows_out,
         "confidence": conf_out,
@@ -659,6 +659,8 @@ def publish_scenario_artifacts(
         "demand_signature": signature,
         "build_id": meta.get("build_id"),
         "demand_build_key": meta.get("demand_build_key"),
+        "uncertainty": payload["uncertainty"],
+        "network_coverage": payload["network_coverage"],
         "window": f"{window_label}{source_tag}",
     })
     index["scenarios"].sort(key=lambda scenario: scenario["name"])
@@ -1906,8 +1908,10 @@ def reroute_closure_affected_vehicles(
 
 def demand_variants(meta: dict) -> list[Path]:
     """Calibrated route sets — q50 plus (if built) the q10/q90 direction-
-    split variants. Monte Carlo seeds are spread over them so the seed
-    spread — and the confidence — includes direction uncertainty.
+    split variants. Monte Carlo seeds are spread over exactly the variants
+    declared by the metadata. A q50-only build measures seed variation but
+    does not include direction-split uncertainty; published scenario metadata
+    records that distinction explicitly.
 
     The metadata is the authoritative contract. Looking only for sibling
     files let a new q50-only demand build silently reuse stale q10/q90 files
@@ -1921,6 +1925,22 @@ def demand_variants(meta: dict) -> list[Path]:
                 f"demand metadata requires {p.name}, but it is missing")
         paths.append(p)
     return paths
+
+
+def scenario_uncertainty(spec: ScenarioSpec) -> dict:
+    """Describe what the published confidence does and does not cover."""
+    mapping = tuple(spec.demand_variant_mapping)
+    variants = sorted({str(variant) for _seed, variant in mapping})
+    return {
+        "method": "spatial_prior_x_exp_negative_mean_cv",
+        "standard_deviation": (
+            "sample" if len(mapping) > 1 else "not_estimable_single_seed"),
+        "seed_count": len(mapping),
+        "demand_variants": variants,
+        "direction_uncertainty_included": (
+            {"q10", "q50", "q90"} <= set(variants)),
+        "low_flow_policy": "confidence_zero_without_interval_mean_above_2",
+    }
 
 
 def build_sumo_invocation(seed: int, route_path: Path, add_paths: list[Path],
@@ -2709,9 +2729,11 @@ def aggregate_flows(
     supported_edges: set[str] | frozenset[str] | None = None,
     low_evidence_edges: set[str] | frozenset[str] | None = None,
 ) -> tuple[dict[str, list[int]], dict[str, float]]:
-    """Mean flows + Monte Carlo confidence, for EVERY edge the map can draw.
+    """Mean flows + Monte Carlo confidence for the supplied edge domain.
 
-    Iterates web_edges, not just the union of edges some seed's edgeData
+    The production caller supplies the map/SUMO intersection and records any
+    map-only exclusions in ``network_coverage``. Iterates that domain, not just
+    the union of edges some seed's edgeData
     happened to report traffic on (found in a bug review 2026-07-10,
     independently verified, previously the whole set here): SUMO uses the
     same edge IDs as network.geojson for the whole simulated graph, so an
@@ -2737,8 +2759,21 @@ def aggregate_flows(
         if supported_edges is not None and eid not in supported_edges:
             conf_out[eid] = 0.0
             continue
-        busy = mean > 2           # CV is meaningless for near-zero flows
-        cv   = float((stack.std(axis=0)[busy] / mean[busy]).mean()) if busy.any() else 0.0
+        busy = mean > 2
+        if not busy.any():
+            # A coefficient of variation is not meaningful near zero. The
+            # old fallback used CV=0 and therefore published the spatial
+            # prior as confidence for a completely quiet edge. Zero means
+            # that this run did not produce enough traffic to estimate
+            # Monte Carlo stability; it is not a claim that the flow is
+            # certainly zero.
+            conf_out[eid] = 0.0
+            continue
+        # Seeds are a small Monte Carlo sample, not the complete population.
+        # Use sample SD when more than one seed is present so the confidence
+        # does not overstate stability for the usual three-seed ensemble.
+        ddof = 1 if stack.shape[0] > 1 else 0
+        cv = float((stack.std(axis=0, ddof=ddof)[busy] / mean[busy]).mean())
         confidence = prior[eid] * float(np.exp(-cv))
         if low_evidence_edges is not None and eid in low_evidence_edges:
             # Explicit full-edge support is backed by the weak assignment
@@ -2747,6 +2782,27 @@ def aggregate_flows(
             confidence = min(confidence, 0.15)
         conf_out[eid] = round(confidence, 3)
     return flows_out, conf_out
+
+
+def scenario_network_coverage(
+        map_edges: set[str], network_path: Path = NET_PATH,
+) -> tuple[set[str], dict]:
+    """Return drawable simulated edges and record excluded map-only geometry.
+
+    The edge set comes from the one owner of that question
+    (:func:`traffic_sim.simulation.metadata.network_edge_ids`), which serve.py
+    also uses to refuse a closure on unsimulated geometry — so the endpoint
+    that admits a study and the publisher that draws it can no longer disagree
+    about what the network contains. It is also an iterparse rather than the
+    whole-DOM ``ET.parse`` this function used to pay for on every run.
+    """
+    drawable = set(map_edges)
+    included = drawable & network_edge_ids(network_path)
+    return included, {
+        "map_edge_count": len(drawable),
+        "simulated_map_edge_count": len(included),
+        "excluded_map_only_edges": sorted(drawable - included),
+    }
 
 
 def create_scenario_workspace(name: str) -> Path:
@@ -3241,7 +3297,10 @@ def main() -> None:
             print(f"  WARNING multi-day continuity: {reason}")
 
     # ── Aggregate: mean flows + Monte Carlo confidence ─────────────────────────
-    web_edges = set(prior)   # only edges the map can draw
+    # A drawable GeoJSON feature is not necessarily a simulated SUMO edge.
+    # Keep map-only geometry absent from the flow payload: null means missing,
+    # while zero means the simulator measured the edge and no vehicle entered.
+    web_edges, network_coverage = scenario_network_coverage(set(prior))
     flows_out, conf_out = aggregate_flows(
         per_seed, web_edges, prior, n_intervals,
         supported_edges=calibrated_support,
@@ -3335,6 +3394,7 @@ def main() -> None:
         seed_values=seed_values, sig=sig, seed_health=seed_health,
         health_flags=health_flags, multi_day_validation=multi_day_validation,
         sensor_audit=sensor_audit, flows_out=flows_out, conf_out=conf_out,
+        network_coverage=network_coverage,
         disruption=disruption,
         teleport_policy=(ct.policy_record(teleport_policy_s)
                          if close_edges else None))

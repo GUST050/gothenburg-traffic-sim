@@ -44,10 +44,6 @@ disable=
 #   `dict | None` returns that the caller has already constrained
 #   (run_scenario.run_sumo with metrics=True).
     unsubscriptable-object,
-# no-member: pandas DatetimeIndex accessors (.hour/.dayofweek) are dynamic,
-#   and validation_report swaps sys.modules[__name__] for its
-#   implementation, which no static importer can follow.
-    no-member,
 # possibly-used-before-assignment: serve._close binds begin/end in two
 #   branches keyed on the same `spec is None` test; pylint cannot correlate
 #   two tests of one condition.

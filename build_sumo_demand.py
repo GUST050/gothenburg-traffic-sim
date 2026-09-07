@@ -49,7 +49,9 @@ import pandas as pd
 from traffic_sim.simulation.runtime import sumo_home
 from traffic_sim.core.fingerprint import (fingerprint_files, make_fingerprint,
                                            sha256_file)
-from traffic_sim.core.contracts import (DemandBuildSpec, load_demand_build_spec,
+from traffic_sim.core.contracts import (STRUCTURAL_REFERENCE_DATE,
+                                         DemandBuildSpec,
+                                         load_demand_build_spec,
                                          write_demand_build_spec)
 from traffic_sim.demand import cache as candidate_cache
 from traffic_sim.demand import route_catalog
@@ -85,8 +87,6 @@ INTERVAL = pd.Timedelta(minutes=15)
 # to recompute them from (the forecast only has point estimates AT the 6
 # sensors), so simulating a forecast date reuses these as-is from a fixed
 # real reference date rather than trying to derive them from the forecast.
-STRUCTURAL_REFERENCE_DATE = "2025-09-16"
-
 # Candidate-pool density: one random trip every N seconds of the window.
 # The pool needs route DIVERSITY, not volume — routeSampler repeats routes.
 CANDIDATE_PERIOD_S = 2.0
@@ -2182,7 +2182,7 @@ def _tracked_main() -> None:
     # G3: refresh the assembled validation report whenever demand changes;
     # never let reporting fail the build it reports on.
     try:
-        import validation_report
+        from traffic_sim.confidence import report as validation_report
         report = validation_report.write_report()
         run.record("validation_overall", report["overall"])
         run.add_output(validation_report.OUT_PATH)
@@ -2220,14 +2220,23 @@ def demand_run_products(sumo_dir: Path = SUMO_DIR) -> list[Path]:
     # live route during publish-after-validate. Never archive those stale
     # siblings as products of the new run. Without metadata, retain the
     # historical helper behaviour used by diagnostics and older fixtures.
+    metadata_path = sumo_dir / "demand_meta.json"
     include_auxiliaries = True
     try:
-        metadata = json.loads((sumo_dir / "demand_meta.json").read_text())
-        if not isinstance(metadata, dict):
-            raise ValueError("demand metadata must be an object")
-        include_auxiliaries = int(metadata.get("n_variants", 1)) == 3
-    except (OSError, ValueError, TypeError, json.JSONDecodeError):
-        pass
+        raw_metadata = metadata_path.read_text()
+    except FileNotFoundError:
+        raw_metadata = None
+    except OSError as exc:
+        raise ValueError(f"demand metadata is unreadable: {metadata_path}") from exc
+    if raw_metadata is not None:
+        try:
+            metadata = json.loads(raw_metadata)
+            if not isinstance(metadata, dict):
+                raise ValueError("demand metadata must be an object")
+            include_auxiliaries = int(metadata.get("n_variants", 1)) == 3
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            raise ValueError(
+                f"demand metadata is malformed: {metadata_path}") from exc
     candidates = base + (auxiliaries if include_auxiliaries else [])
     return [path for path in candidates if path.is_file()]
 

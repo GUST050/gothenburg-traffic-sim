@@ -12,7 +12,9 @@ const Render = (() => {
   const _flowCache = Object.create(null);
   let _onEdgeClick   = null;   // closure-mode callback (set by index.html)
   const _edges       = {};
+  const _edgeEntries = [];
   const _pending     = new Set();   // edges selected for closure, not yet simulated
+  let _animationDirty = true;
 
   const PENDING_STYLE = { color: '#b91c1c', weight: 5, opacity: 0.9, dashArray: '2 6' };
   // A street the simulation never reaches is NOT a street that happens to be
@@ -25,6 +27,7 @@ const Render = (() => {
   // already uses for missing data.
   const UNSIMULATED_STYLE = {
     color: '#cbd5e1', weight: 1.5, opacity: 0.35, dashArray: '1 5' };
+  const HIDDEN_DOT_STYLE = { opacity: 0, fillOpacity: 0 };
 
   // ── Vehicle playback state (every dot = one simulated car with real OD) ──
   let _traj        = null;   // {edges:[ids], vehicles:[{d,e,x,p?,a?}]} sorted by depart
@@ -296,7 +299,8 @@ const Render = (() => {
   }
 
   function redraw(qi) {
-    for (const id of Object.keys(_edges)) updateEdge(id, qi);
+    for (const [id] of _edgeEntries) updateEdge(id, qi);
+    _animationDirty = true;
   }
 
   // ── Vehicle playback helpers ──────────────────────────────────────────────────
@@ -421,8 +425,15 @@ const Render = (() => {
   let _lastTs = null;
 
   function animLoop(ts) {
-    const dt = _lastTs !== null ? Math.min((ts - _lastTs) / 1000, 0.05) : 0;
+    const playing = typeof State === 'undefined' || State.playing;
+    const renderFrame = Animation.shouldRenderFrame(playing, _animationDirty);
+    const dt = Animation.frameDelta(_lastTs, ts, playing);
     _lastTs = ts;
+    if (!renderFrame) {
+      requestAnimationFrame(animLoop);
+      return;
+    }
+    _animationDirty = false;
 
     // Smooth interpolation: the data is 15-min steps, but colour and dot
     // count blend linearly between quarter qi0 and qi0+1 so nothing jumps
@@ -437,7 +448,7 @@ const Render = (() => {
       for (const key of Object.keys(_flowCache)) delete _flowCache[key];
     }
 
-    for (const [id, e] of Object.entries(_edges)) {
+    for (const [id, e] of _edgeEntries) {
       if (!e.isSensor && !_provider.hasEdge(id)) continue;
 
       let pair = _flowCache[id];
@@ -461,7 +472,9 @@ const Render = (() => {
       // No traffic or missing data — hide all dots
       // (vehicle mode replaces the conveyor illustration with REAL cars)
       if (n === 0 || e.t === null) {
-        for (const d of e.dots) d.setStyle({ opacity: 0, fillOpacity: 0 });
+        for (const d of e.dots) {
+          Animation.applyMarkerStyle(d, 'hidden', HIDDEN_DOT_STYLE);
+        }
         continue;
       }
 
@@ -477,9 +490,11 @@ const Render = (() => {
           // Evenly spaced + shared phase → seamless loop
           const prog = ((i / n) + e.phase) % 1;
           d.setLatLng(interpolate(e.latlngs, prog));
-          d.setStyle({ fillColor: col, opacity: 1, fillOpacity: 0.95 });
+          Animation.applyMarkerStyle(
+            d, `visible:${col}`,
+            { fillColor: col, opacity: 1, fillOpacity: 0.95 });
         } else {
-          d.setStyle({ opacity: 0, fillOpacity: 0 });
+          Animation.applyMarkerStyle(d, 'hidden', HIDDEN_DOT_STYLE);
         }
       }
     }
@@ -504,6 +519,7 @@ const Render = (() => {
       // would crawl; canvas renders and hit-tests them smoothly.
       _map = L.map(mapEl, { zoomControl: true, preferCanvas: true })
         .setView([57.697, 11.983], 14);
+      _map.on('move zoom resize', () => { _animationDirty = true; });
       // Use OSM's documented browser tile endpoint directly.  The previous
       // CARTO URL now returns "API KEY REQUIRED" watermark tiles.  This app
       // requests only the currently visible viewport; the browser supplies a
@@ -603,7 +619,7 @@ const Render = (() => {
         if (!isSensor) {
           line.bindTooltip(() => {
             const qi = typeof State !== 'undefined' ? State.qi : 0;
-            let html = `<b>${name ?? 'Okänd väg'}</b>`;
+            let html = `<b>${WebText.escapeHtml(name ?? 'Okänd väg')}</b>`;
             const cmpHtml = deltaHtml();
             if (cmpHtml !== null) {
               return html + cmpHtml + confHtml(edgeConf());
@@ -616,7 +632,9 @@ const Render = (() => {
                 html += `<br><b style="font-size:1.15em">${cnt}</b> fordon / 15 min <small>(simulerat)</small>`;
               }
               const window = _provider.closureWindowText?.(id);
-              if (window) html += `<br><small>Avstängning: ${window}</small>`;
+              if (window) {
+                html += `<br><small>Avstängning: ${WebText.escapeHtml(window)}</small>`;
+              }
             }
             return html + confHtml(edgeConf());
           }, { sticky: true });
@@ -627,10 +645,12 @@ const Render = (() => {
         if (isSensor) {
           // Create pool — MAX_CARS dots, all hidden initially
           for (let i = 0; i < MAX_CARS; i++) {
-            dots.push(L.circleMarker(latlngs[0], {
+            const dot = L.circleMarker(latlngs[0], {
               radius: 5, color: '#ffffff', fillColor: '#94a3b8',
               weight: 1.5, fillOpacity: 0, opacity: 0, interactive: false,
-            }).addTo(fg));
+            }).addTo(fg);
+            dot._trafficStyleKey = 'hidden';
+            dots.push(dot);
           }
 
           line.bindTooltip(() => {
@@ -639,7 +659,8 @@ const Render = (() => {
             const dow  = (_provider.dateFromQI(qi).getUTCDay() + 6) % 7;
             const calm = _normalProfile ? _normalProfile.calmAt(id, qi, dow)  : null;
             const norm = _normalProfile ? _normalProfile.flowAt(id, qi, dow)  : null;
-            let html   = `<b>${name ?? 'Okänd väg'}</b> · Sensor ${sensor_id}`;
+            let html = `<b>${WebText.escapeHtml(name ?? 'Okänd väg')}</b> · ` +
+              `Sensor ${WebText.escapeHtml(sensor_id)}`;
             if (cnt !== null) {
               html += `<br><b style="font-size:1.15em">${cnt}</b> fordon / 15 min`;
               if (calm !== null && calm > 0) {
@@ -688,6 +709,7 @@ const Render = (() => {
           t: 0, count: 0, activeCars: 0, hadData: false,
           dots, phase: Math.random(), // random starting phase per edge
         };
+        _edgeEntries.push([id, _edges[id]]);
       }
 
       // Vehicle-playback overlay canvas (above tiles/paths, below the panels)
@@ -753,7 +775,7 @@ const Render = (() => {
     setPending(ids) {
       _pending.clear();
       for (const id of ids) _pending.add(id);
-      for (const [id, e] of Object.entries(_edges)) {
+      for (const [id, e] of _edgeEntries) {
         e._styleKey = undefined;   // force per-frame restyle
         if (_pending.has(id)) {
           e.line.setStyle(PENDING_STYLE);

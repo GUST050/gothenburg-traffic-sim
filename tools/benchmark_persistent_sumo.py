@@ -674,8 +674,21 @@ class ScenarioAssembler:
         closures = ctx["closures"] if case == "closure" else []
         per_seed_flows = [{e: np.asarray(v, dtype=float)
                            for e, v in s["flows"].items()} for s in per_seed]
+        if ctx.get("network_path") is not None:
+            web_edges, network_coverage = rs.scenario_network_coverage(
+                set(ctx["web_edges"]), ctx["network_path"])
+        else:
+            # Synthetic assembler tests declare their tiny web edge set as
+            # the complete simulated domain. The real context below always
+            # binds the actual net.net.xml path.
+            web_edges = set(ctx["web_edges"])
+            network_coverage = {
+                "map_edge_count": len(web_edges),
+                "simulated_map_edge_count": len(web_edges),
+                "excluded_map_only_edges": [],
+            }
         flows_out, conf_out = rs.aggregate_flows(
-            per_seed_flows, set(ctx["web_edges"]), ctx["prior"], N_INTERVALS)
+            per_seed_flows, web_edges, ctx["prior"], N_INTERVALS)
         entries_by_seed = [s.get("active_closure_entries") for s in per_seed]
         entries = integrity = None
         if case == "closure":
@@ -711,6 +724,7 @@ class ScenarioAssembler:
             seed_health=seed_health, health_flags=rs.seed_health_flags(seed_health),
             multi_day_validation=None, sensor_audit=sensor_audit,
             flows_out=flows_out, conf_out=conf_out,
+            network_coverage=network_coverage,
             # Production attaches the teleport policy to a closure payload and
             # nothing else. Omitting it here would make the two artifacts differ
             # for a reason that has nothing to do with execution mode.
@@ -1490,7 +1504,7 @@ class _SharedPrep:  # pragma: no cover - only under --execute
     def read_outputs(self, work_dir, seed, variant, query):
         import numpy as np                                   # noqa: PLC0415
         import run_scenario as rs                            # noqa: PLC0415
-        import closure_metrics as cm                         # noqa: PLC0415
+        from traffic_sim.simulation import metrics as cm     # noqa: PLC0415
         work_dir = Path(work_dir)
         close = query["closed_edges"]
         route = self._selected_route.get(str(work_dir), _seed_route(variant))
@@ -1766,6 +1780,7 @@ def build_assembler_context():  # pragma: no cover
 
     return {
         "web_edges": set(prior), "prior": prior, "meta": meta, "sig": sig,
+        "network_path": NET_PATH,
         "window_label": rs.demand_window_label(meta),
         "sensor_audit_for": sensor_audit_for,
         "fit_errors_for": fit_errors_for,

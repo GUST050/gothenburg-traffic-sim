@@ -240,6 +240,7 @@ class TestB1DateRangeContract:
             "calibrated_v1.rou.xml", "calibrated_v1.agents.json",
         ):
             (tmp_path / name).write_text(name)
+        (tmp_path / "demand_meta.json").write_text('{"n_variants": 3}')
         (tmp_path / "calibrated_v1.rou_close_old_edge.rou.xml").write_text("stale")
         products = {path.name for path in bsd.demand_run_products(tmp_path)}
         assert "calibrated_v1.rou_close_old_edge.rou.xml" not in products
@@ -261,17 +262,14 @@ class TestB1DateRangeContract:
         assert "calibrated_v1.rou.xml" not in products
         assert "calibrated_v2.rou.xml" not in products
 
-    def test_malformed_metadata_fails_open_to_conservative_product_set(
+    def test_malformed_metadata_refuses_to_archive_ambiguous_products(
             self, tmp_path):
         (tmp_path / "demand_meta.json").write_text("[]")
         for name in ("calibrated.rou.xml", "calibrated_v1.rou.xml"):
             (tmp_path / name).write_text(name)
 
-        products = {path.name for path in bsd.demand_run_products(tmp_path)}
-
-        assert products == {
-            "demand_meta.json", "calibrated.rou.xml", "calibrated_v1.rou.xml"
-        }
+        with pytest.raises(ValueError, match="demand metadata"):
+            bsd.demand_run_products(tmp_path)
 
     def test_date_is_a_backward_compatible_single_day_alias(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["build_sumo_demand.py", "--date", "2025-09-17"])

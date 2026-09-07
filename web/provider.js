@@ -93,6 +93,9 @@ class HistoricalProvider {
     this.label       = payload.scenario?.label ?? null;
     this.source      = payload.scenario?.source ?? 'historical';  // 'forecast' = simulated 2027
     this.agentDemand = payload.scenario?.agent_demand ?? null;
+    this.scenarioSpec = payload.scenario_spec ?? null;
+    this.uncertainty = payload.uncertainty ?? null;
+    this.networkCoverage = payload.network_coverage ?? null;
     // Per directed sensor edge: frozen source value, calibration target,
     // displayed ensemble mean, and the single vehicle seed.  This is kept
     // outside flowAt() because it is audit metadata, not map flow data.
@@ -306,6 +309,9 @@ class DeltaProvider {
     this.trajectories = closure.trajectories;
     this.sensorAudit  = closure.sensorAudit;
     this.agentDemand  = closure.agentDemand;
+    this.scenarioSpec = closure.scenarioSpec;
+    this.uncertainty  = closure.uncertainty;
+    this.networkCoverage = closure.networkCoverage;
     this._cv          = {};      // edgeId -> recovered CV, or null
   }
 

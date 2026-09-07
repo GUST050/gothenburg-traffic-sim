@@ -77,6 +77,7 @@ def test_web_shell_is_responsive_accessible_and_uses_the_professional_palette():
     html = (root / "web" / "index.html").read_text()
     controls = (root / "web" / "controls.js").read_text()
     app = (root / "web" / "app.js").read_text()
+    text = (root / "web" / "text.js").read_text()
 
     assert "min-width: 1180px" not in html
     assert "grid-template-columns: repeat(4" in html
@@ -84,8 +85,28 @@ def test_web_shell_is_responsive_accessible_and_uses_the_professional_palette():
     assert "@media (max-width: 720px)" in html
     assert 'name="description"' in html
     assert 'id="map" role="main"' in html
+    assert 'id="sim-uncertainty-hint"' in html
+    assert "Riktningsosäkerhet ingår inte" in app
     assert 'id="day-slider"' in html and 'aria-label="Välj dag"' in html
     assert 'id="tod-slider"' in html and 'aria-label="Välj tid på dygnet"' in html
+    for accessible_name in (
+            "Datum att simulera", "Första sökdatum", "Sista sökdatum",
+            "Tidigast tillåtna starttid", "Senast tillåtna sluttid"):
+        assert f'aria-label="{accessible_name}"' in html
+    # The caveat renderer lives in text.js, where a node harness can drive it
+    # against a fake document; app.js only calls it. Keeping BOTH halves
+    # pinned is the point — an inlined copy in app.js would be untested again.
+    assert "function renderTextLines(" in text
+    assert "function renderTextLines(" not in app
+    for server_derived_sink in (
+            "optimizeResultsMeta", "suggestResultsMeta", "monthlyResultsMeta"):
+        assert f"{server_derived_sink}.innerHTML" not in app
+        assert f"WebText.renderTextLines({server_derived_sink}" in app
+    # Warning lines are amber because they carry a marker the renderer must
+    # honour rather than strip; losing it once already made ten of them read
+    # as ordinary text.
+    assert ".suggest-warn" in html
+    assert "'strong'" in text
     assert ".leaflet-top.leaflet-left" in html
     assert ":focus-visible" in html
     assert "function localizedScenarioWindow(" in app
@@ -102,8 +123,11 @@ def test_web_shell_is_responsive_accessible_and_uses_the_professional_palette():
     assert 'controls.js?v=12' in html
     # Pin the current UI bundle so a cached copy cannot retain an older search
     # form or results view after a deliberate frontend change.
-    assert 'provider.js?v=16' in html
-    assert 'app.js?v=31' in html
+    assert 'provider.js?v=17' in html
+    assert 'text.js?v=2' in html
+    assert 'polling.js?v=1' in html
+    assert 'render.js?v=17' in html
+    assert 'app.js?v=36' in html
 
 
 def _signal_scenario_spec(*, closure=False, simulation_mode="micro",
@@ -196,6 +220,9 @@ def base_url(tmp_path, monkeypatch):
         return frozenset({"a_b_0", "b_a_0"})
     fake_known_edges.cache_clear = lambda: None   # _run_recalibrate calls this on success
     monkeypatch.setattr(serve, "known_edges", fake_known_edges)
+    fake_simulated_edges = lambda: fake_known_edges()
+    fake_simulated_edges.cache_clear = lambda: None
+    monkeypatch.setattr(serve, "simulated_edges", fake_simulated_edges)
     # Endpoint lifecycle tests use a deliberately tiny synthetic demand
     # release. Keep the new calibrated-support guard aligned with that same
     # fixture; dedicated tests below still prove an unsupported edge fails.
@@ -314,6 +341,39 @@ class TestJobRecordPaths:
 
 
 class TestServerStartup:
+    def test_known_edges_refreshes_when_network_artifact_changes(
+            self, tmp_path, monkeypatch):
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        network = data_dir / "network.geojson"
+        monkeypatch.setattr(serve, "WEB_DIR", tmp_path)
+        serve.known_edges.cache_clear()
+        network.write_text(json.dumps({"features": [{
+            "properties": {"id": "old_edge"}}]}))
+        assert serve.known_edges() == frozenset({"old_edge"})
+
+        network.write_text(json.dumps({"features": [{
+            "properties": {"id": "new_edge_with_other_size"}}]}))
+
+        assert serve.known_edges() == frozenset({"new_edge_with_other_size"})
+        serve.known_edges.cache_clear()
+
+    def test_simulated_edges_refresh_when_sumo_network_changes(
+            self, tmp_path, monkeypatch):
+        sumo_dir = tmp_path / "sumo"
+        sumo_dir.mkdir()
+        network = sumo_dir / "net.net.xml"
+        monkeypatch.setattr(serve, "SUMO_DIR", sumo_dir)
+        serve.simulated_edges.cache_clear()
+        network.write_text('<net><edge id="old_edge"/></net>')
+        assert serve.simulated_edges() == frozenset({"old_edge"})
+
+        network.write_text(
+            '<net><edge id="new_edge_with_other_size"><lane/></edge></net>')
+
+        assert serve.simulated_edges() == frozenset({"new_edge_with_other_size"})
+        serve.simulated_edges.cache_clear()
+
     def test_startup_never_reconciles_the_repositorys_own_job_records(self):
         assert serve.JOBS_DIR != serve.ROOT / "runs" / "jobs"
         assert serve.ROOT / "runs" not in serve.JOBS_DIR.parents
@@ -579,6 +639,52 @@ class TestClose:
             f"{base_url}/api/close?edges=a_b_0")
         assert status == 422
         assert body["unsupported_edges"] == ["a_b_0"]
+
+    def test_map_only_edge_is_rejected_as_absent_from_sumo(
+            self, base_url, monkeypatch):
+        monkeypatch.setattr(
+            serve, "known_edges", lambda: frozenset({"a_b_0", "map_only"}))
+        monkeypatch.setattr(
+            serve, "simulated_edges", lambda: frozenset({"a_b_0"}))
+        monkeypatch.setattr(
+            serve, "supported_closure_edges",
+            lambda: frozenset({"a_b_0", "map_only"}))
+
+        status, body = post_json_or_error(
+            f"{base_url}/api/close?edges=map_only")
+
+        assert status == 422
+        assert body["not_in_sumo_network"] == ["map_only"]
+        assert "SUMO" in body["error"]
+
+    def test_truncated_sumo_network_answers_503_instead_of_dropping(
+            self, base_url, monkeypatch, tmp_path):
+        """A half-written network must produce a message, not a dead socket.
+
+        Cancelling a build SIGKILLs its process group, which can leave
+        net.net.xml truncated. ET.ParseError derives from SyntaxError, not
+        from OSError or ValueError, so it fell straight through the handler's
+        except clause and the browser saw a dropped connection with nothing
+        to act on.
+        """
+        sumo_dir = tmp_path / "broken-sumo"
+        sumo_dir.mkdir()
+        (sumo_dir / "net.net.xml").write_text('<net><edge id="a_b_0"/>')
+        monkeypatch.setattr(serve, "SUMO_DIR", sumo_dir)
+        # base_url substitutes a fake simulated_edges; restore the real
+        # reader so this test exercises the actual XML path.
+        real_reader = lambda: serve.network_edge_ids(serve.SUMO_DIR / "net.net.xml")
+        real_reader.cache_clear = serve.network_edge_ids.cache_clear
+        monkeypatch.setattr(serve, "simulated_edges", real_reader)
+        serve.network_edge_ids.cache_clear()
+
+        status, body = post_json_or_error(f"{base_url}/api/close?edges=a_b_0")
+
+        serve.network_edge_ids.cache_clear()
+        assert status == 503
+        assert "verifieras" in body["error"]
+        assert body["detail"]
+        assert not serve._sim_lock.locked()
 
     def test_busy_lock_returns_409(self, base_url):
         serve._sim_lock.acquire()
@@ -1116,6 +1222,10 @@ class TestCancel:
         assert entered.wait(timeout=2)
         assert post_json(f"{base_url}/api/cancel?kind=close") == (
             202, {"status": "cancelling", "kind": "close"})
+        status_code, cancelling = get_json(f"{base_url}/api/close/status")
+        assert status_code == 200
+        assert cancelling["status"] == "cancelling"
+        assert "elapsed_s" not in cancelling
         release.set()
         request.join(timeout=3)
 
@@ -1218,6 +1328,83 @@ def _monthly_result(search_id):
             "reason": "a new untouched monthly held-out release gate has "
                       "not passed"},
     }
+
+
+class TestJobAdmissionFailure:
+    @pytest.mark.parametrize(("path", "payload"), [
+        ("/api/recalibrate?date=2025-09-16", None),
+        ("/api/suggest_closure?edges=a_b_0&duration_hours=6", None),
+        ("/api/optimize_signals", None),
+        ("/api/monthly_search",
+         {"closure_search_spec": _closure_search_spec("write-failure")}),
+    ])
+    def test_job_record_write_failure_releases_simulation_slot(
+            self, base_url, monkeypatch, path, payload):
+        def disk_full(*_args, **_kwargs):
+            raise OSError(errno.ENOSPC, "simulated full disk")
+
+        monkeypatch.setattr(serve, "job_record", disk_full)
+
+        status, body = post_json_or_error(
+            f"{base_url}{path}", payload=payload)
+
+        assert status == 500
+        assert "starta" in body["error"]
+        assert not serve._sim_lock.locked()
+        with serve._active_job_lock:
+            assert serve._active_job["kind"] is None
+
+    def test_thread_start_failure_leaves_no_record_stranded_in_running(
+            self, monkeypatch, tmp_path):
+        """Roll the LEDGER back too, not only the in-memory owner.
+
+        begin_active_job can succeed and the thread start still fail
+        (OSError: can't start new thread). The record then said "running"
+        for a job that never ran, and the next server start reconciled it
+        into an orphan whose acknowledgement gate refuses EVERY simulation —
+        the same permanent block start_active_job exists to prevent, moved
+        from the lock to the ledger.
+
+        Driven directly rather than over HTTP on purpose: ThreadingHTTPServer
+        starts a thread per request, so a test that broke thread creation
+        globally would break the transport it was measuring through. It also
+        takes its OWN ledger directory — conftest's is session-scoped and
+        every other job test writes into it, so "no record is stranded" is
+        only a statement about this job if this job is the only record.
+        """
+        def no_threads(self):
+            raise RuntimeError("can't start new thread")
+
+        original_start = threading.Thread.start
+        monkeypatch.setattr(serve, "JOBS_DIR", tmp_path / "jobs")
+        monkeypatch.setattr(threading.Thread, "start", no_threads)
+        assert serve._sim_lock.acquire(blocking=False)
+        with pytest.raises(RuntimeError):
+            serve.start_active_job(
+                "recalibrate", {"date": "2025-09-16"}, lambda: None, ())
+
+        assert not serve._sim_lock.locked()
+        with serve._active_job_lock:
+            assert serve._active_job["kind"] is None
+        records = serve.job_list(limit=50)
+        assert [r["kind"] for r in records] == ["recalibrate"], (
+            "the failed start must still leave exactly one audit record")
+        assert records[0]["status"] == "error"
+
+        # Restore ONLY thread creation. monkeypatch.undo() would also restore
+        # the session-wide JOBS_DIR and put the other tests' records back in
+        # front of the reconciliation this test is about to measure.
+        monkeypatch.setattr(threading.Thread, "start", original_start)
+        blocked, orphans = serve._RECOVERY_BLOCKED, set(serve._ORPHANED_JOB_IDS)
+        try:
+            assert serve.reconcile_jobs_on_startup(block_new_jobs=True) == 0
+            assert serve.simulation_recovery_block() is None
+        finally:
+            # reconcile arms process-global recovery state; a regression here
+            # must fail this test, never leak a gate into the next one.
+            serve._RECOVERY_BLOCKED = blocked
+            serve._ORPHANED_JOB_IDS.clear()
+            serve._ORPHANED_JOB_IDS.update(orphans)
 
 
 class TestMonthlySearchPreflight:
@@ -1843,6 +2030,42 @@ class TestRunInNewSession:
             [sys.executable, "-c", "import sys; sys.exit(3)"],
             cwd=".", timeout=30)
         assert res.returncode == 3
+
+    def test_cancel_race_still_communicates_and_reaps_child(self, monkeypatch):
+        """A child may disappear after poll() but before killpg()."""
+        calls = []
+
+        class VanishedProcess:
+            pid = 4242
+            returncode = -9
+
+            @staticmethod
+            def poll():
+                return None
+
+            @staticmethod
+            def communicate(timeout):
+                calls.append(("communicate", timeout))
+                return "", ""
+
+        monkeypatch.setattr(serve.subprocess, "Popen",
+                            lambda *_args, **_kwargs: VanishedProcess())
+        monkeypatch.setattr(
+            serve.os, "killpg",
+            lambda *_args: (_ for _ in ()).throw(ProcessLookupError()),
+        )
+        with serve._active_job_lock:
+            serve._active_job.update(
+                kind="close", process=None, cancel_requested=True,
+                job_id=None)
+
+        result = serve.run_in_new_session(["vanished"], cwd=".", timeout=3)
+
+        assert result.returncode == -9
+        assert calls == [("communicate", 3)]
+        with serve._active_job_lock:
+            assert serve._active_job["process"] is None
+        serve.finish_active_job("close")
 
     def test_timeout_kills_the_grandchild_too(self, tmp_path):
         import os

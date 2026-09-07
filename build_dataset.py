@@ -73,9 +73,10 @@ def build_time_features(n: int) -> np.ndarray:
     The LSTM sees them alongside the z-scored flow values.
     """
     ts  = pd.date_range(start=EPOCH, periods=n, freq=INTERVAL)
-    h   = ts.hour + ts.minute / 60          # 0–24
-    dow = ts.dayofweek                      # 0=Mon … 6=Sun
-    mon = ts.month                          # 1–12
+    # DatetimeIndex exposes these dynamically; pylint cannot infer them.
+    h   = ts.hour + ts.minute / 60          # pylint: disable=no-member  # 0–24
+    dow = ts.dayofweek                      # pylint: disable=no-member  # 0=Mon … 6=Sun
+    mon = ts.month                          # pylint: disable=no-member  # 1–12
 
     return np.column_stack([
         np.sin(2 * np.pi * h   / 24).astype(np.float32),

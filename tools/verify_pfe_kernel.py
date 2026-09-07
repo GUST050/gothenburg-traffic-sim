@@ -62,7 +62,7 @@ def inputs_digest() -> str:
 
 
 def build_real_problem():
-    import pfe
+    from traffic_sim.demand import pfe
     from demand.intake import build_targets, load_sensor_edges
     from demand.structure import structure_groups_for_shapes
     from demand.priors import (build_interval_constraints,
@@ -95,7 +95,7 @@ def solve_all(pure: bool):
     import importlib
     import os
     os.environ["PFE_PURE"] = "1" if pure else "0"
-    import pfe
+    from traffic_sim.demand import pfe
     importlib.reload(pfe)
     (shapes, route_cost, targets, groups,
      bounds_per_q, priors_per_q) = build_real_problem()

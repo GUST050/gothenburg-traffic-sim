@@ -12,6 +12,7 @@ import json
 import os
 import tempfile
 import xml.etree.ElementTree as ET
+from functools import lru_cache
 from pathlib import Path
 
 SCHEMA_VERSION = 2
@@ -44,6 +45,46 @@ def _vclass_permitted(allow: str | None, disallow: str | None, vclass: str) -> b
             return False
         return vclass not in tokens
     return True
+
+
+#: One owner for "which edges does the SUMO network contain".
+#: serve.py answers it to refuse a closure on drawable-but-unsimulated
+#: geometry; run_scenario.py answers it to keep that geometry out of the
+#: published flow domain. Two parsers drifted apart on their first day: one
+#: counted SUMO's internal junction edges, the other did not. Internal edges
+#: are junction interiors, never a street a closure can name, so they are
+#: excluded here -- and now they are excluded in exactly one place.
+@lru_cache(maxsize=4)
+def _network_edge_ids_cached(path: str, mtime_ns: int,
+                             size: int) -> frozenset[str]:
+    del mtime_ns, size          # identity only; the parse reads `path`
+    edges: set[str] = set()
+    # iterparse releases each element as it closes: a city network is a large
+    # file and this question needs one attribute per edge, not a DOM.
+    for _event, element in ET.iterparse(path, events=("end",)):
+        if element.tag == "edge":
+            edge_id = element.get("id")
+            if edge_id is not None and element.get("function") != "internal":
+                edges.add(edge_id)
+        element.clear()
+    return frozenset(edges)
+
+
+def network_edge_ids(net_path: Path) -> frozenset[str]:
+    """Every non-internal edge ID in a SUMO network, cache-keyed by file stat.
+
+    A rebuilt network must never be answered from a stale cache -- a closure
+    refused (or a flow domain trimmed) against yesterday's network is wrong in
+    a way nothing downstream can detect.
+    """
+    resolved = Path(net_path).resolve()
+    stat = resolved.stat()
+    return _network_edge_ids_cached(str(resolved), stat.st_mtime_ns,
+                                    stat.st_size)
+
+
+#: Callers that publish artifacts clear this after replacing the network.
+network_edge_ids.cache_clear = _network_edge_ids_cached.cache_clear
 
 
 def sha256_file(path: Path) -> str:

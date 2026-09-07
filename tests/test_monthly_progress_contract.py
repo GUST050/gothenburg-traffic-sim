@@ -23,6 +23,7 @@ from traffic_sim.simulation.search_workspace import (
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_JS = ROOT / "web" / "app.js"
+POLLING_JS = ROOT / "web" / "polling.js"
 INDEX_HTML = ROOT / "web" / "index.html"
 
 
@@ -228,13 +229,12 @@ class TestTheUiRendersTheDetail:
         assert "overflow-x: auto" in html
 
     def test_polling_has_bounded_failures_and_exponential_backoff(self):
-        source = APP_JS.read_text(encoding="utf-8")
-        poller = source[source.index(
-            "async function runRoadClosureOperation("):]
-        poller = poller[:poller.index("async function activateClosedScenario(")]
-        assert "maxConsecutivePollFailures = 5" in poller
-        assert "2 ** consecutivePollFailures" in poller
-        assert "consecutivePollFailures = 0" in poller
+        app = APP_JS.read_text(encoding="utf-8")
+        poller = POLLING_JS.read_text(encoding="utf-8")
+        assert "Polling.pollStatus" in app
+        assert "options.maxConsecutiveFailures ?? 5" in poller
+        assert "Math.min(4, 2 ** consecutiveFailures)" in poller
+        assert "consecutiveFailures = 0" in poller
         assert "servern svarar inte" in poller
 
 

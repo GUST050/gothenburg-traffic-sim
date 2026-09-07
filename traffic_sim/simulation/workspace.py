@@ -28,7 +28,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-LOCK_PATH = Path("runs") / ".demand-workspace.lock"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+LOCK_PATH = PROJECT_ROOT / "runs" / ".demand-workspace.lock"
 
 
 class WorkspaceBusy(RuntimeError):

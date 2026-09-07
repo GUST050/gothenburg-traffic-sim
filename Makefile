@@ -131,9 +131,9 @@ test:
 	python3 -m pytest tests/ -q
 
 # Critical static checks — the profile in .pylintrc that passes today, so a
-# failure means something changed. AGENTS.md documents this command.
-# `signals` is deliberately absent from the target list: AGENTS.md's repo map
-# names a signals/ package that does not exist; the signal studies are root
+# failure means something changed.
+# `signals` is deliberately absent from the target list because that package
+# does not exist; the signal studies are root
 # modules (signal_lab.py and friends) and are covered by *.py.
 # tools/ is the evidence layer — the measurement, freeze and benchmark scripts
 # the project's scientific claims come from — and leaving it out cost four

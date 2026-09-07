@@ -105,6 +105,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -1161,8 +1162,18 @@ def gate_latlon(G, gates: list[tuple[str, int]]) -> tuple[np.ndarray, np.ndarray
     return np.array(lats), np.array(lons)
 
 
+_SUMO_OSM_EDGE_ID = re.compile(r"^(-?\d+)_(-?\d+)_(\d+)$")
+
+
+def parse_sumo_osm_edge_id(eid: str) -> tuple[str, str, str]:
+    match = _SUMO_OSM_EDGE_ID.fullmatch(eid)
+    if match is None:
+        raise ValueError(f"invalid SUMO OSM edge id: {eid!r}")
+    return match.groups()
+
+
 def reverse_edge_id(eid: str) -> str:
-    u, v, k = eid.split("_")
+    u, v, k = parse_sumo_osm_edge_id(eid)
     return f"{v}_{u}_{k}"
 
 
@@ -1175,7 +1186,8 @@ def route_visits_a_node_twice(edges: list[str]) -> bool:
     check replaces the narrower adjacent-only version below."""
     if not edges:
         return False
-    nodes = [edges[0].split("_")[0]] + [e.split("_")[1] for e in edges]
+    parsed = [parse_sumo_osm_edge_id(edge) for edge in edges]
+    nodes = [parsed[0][0]] + [edge[1] for edge in parsed]
     return len(nodes) != len(set(nodes))
 
 

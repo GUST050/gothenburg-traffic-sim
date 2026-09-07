@@ -20,6 +20,7 @@ from typing import Any, Mapping
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 SCHEMA_VERSION = 1
+STRUCTURAL_REFERENCE_DATE = "2025-09-16"
 _EDGE_ID = re.compile(r"^[^\s/\\]+$")
 _MODES = frozenset({"meso", "micro"})
 _VARIANTS = frozenset({"q10", "q50", "q90", "edge_shares"})
@@ -183,7 +184,7 @@ class DemandBuildSpec:
     days: int = 1
     begin: str = "00:00"
     end: str = "24:00"
-    structural_reference_date: str = "2025-09-16"
+    structural_reference_date: str = STRUCTURAL_REFERENCE_DATE
     purpose: str = "standard"
 
     def __post_init__(self) -> None:
@@ -250,7 +251,8 @@ class DemandBuildSpec:
             begin=str(raw.get("begin", "00:00")),
             end=str(raw.get("end", "24:00")),
             structural_reference_date=str(
-                raw.get("structural_reference_date", "2025-09-16")),
+                raw.get("structural_reference_date",
+                        STRUCTURAL_REFERENCE_DATE)),
             purpose=str(raw.get("purpose", "standard")),
         )
         supplied_key = raw.get("build_key")

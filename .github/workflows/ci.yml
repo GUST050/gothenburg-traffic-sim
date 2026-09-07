@@ -9,7 +9,7 @@ jobs:
   # A JOB OF ITS OWN, not a step after the tests. The repository had no lint at
   # all, and four tools were broken by signature changes their call sites never
   # saw — every one a pylint finding. Making it a step would have tied it to
-  # the suite's 20-minute budget: a timeout kills the whole job, so the lint
+  # the suite's runtime budget: a timeout kills the whole job, so the lint
   # result would vanish exactly when the suite is in trouble and a second
   # signal is worth most. Separate jobs also fail independently and run in
   # parallel.
@@ -31,8 +31,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pandas numpy scipy osmnx networkx pyproj shapely geopandas \
-                      lightgbm scikit-learn numba==0.60.0 pytest
+          pip install -r requirements.txt
           pip install 'pylint>=3.3,<4'
 
       - name: Lint
@@ -40,22 +39,24 @@ jobs:
 
   pytest:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
           cache: pip
 
-      # eclipse-sumo (~100 MB binaries) and matplotlib are not needed by the
-      # test suite — install the analytical stack only. scipy and networkx
-      # are direct production imports and must not rely on transitive installs.
+      # Install the declared production/test environment itself. A handwritten
+      # subset let requirements.txt drift and made SUMO-dependent tests skip in
+      # the one environment intended to verify the repository.
       - name: Install dependencies
-        run: |
-          pip install pandas numpy scipy osmnx networkx pyproj shapely geopandas \
-                      lightgbm scikit-learn numba==0.60.0 pytest
+        run: pip install -r requirements.txt
 
       # tests/test_web_provider_js.py executes web/provider.js under node. It
       # skips where node is absent, which is right on a contributor's machine

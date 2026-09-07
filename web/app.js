@@ -359,8 +359,10 @@
             const srcLabel = currentSimSource === 'forecast' ? 'Prognos' : 'Historik';
             simDayHint.textContent = `${srcLabel}: ${currentSimDate}`;
             renderAgentDemand(provider, State.qi);
+            renderScenarioUncertainty(provider);
           } else if (!isSim) {
             simAgentHint.hidden = true;
+            simUncertaintyHint.hidden = true;
           }
         }
 
@@ -622,10 +624,32 @@
         const recalProgressLabel = document.getElementById('recal-progress-label');
         const simDayHint = document.getElementById('sim-day-hint');
         const simAgentHint = document.getElementById('sim-agent-hint');
+        const simUncertaintyHint = document.getElementById('sim-uncertainty-hint');
         let dayPickMode = false;
         let recalibrationJobRunning = false;
         let currentSimDate = '2025-09-16';
         let currentSimSource = 'historical';
+
+        function renderScenarioUncertainty(provider) {
+          const declared = provider.uncertainty?.demand_variants;
+          const mapped = Object.values(
+            provider.scenarioSpec?.demand_variant_mapping ?? {});
+          const variants = new Set(declared?.length ? declared : mapped);
+          if (!variants.size) {
+            simUncertaintyHint.hidden = true;
+            return;
+          }
+          const hasDirectionStress =
+            provider.uncertainty?.direction_uncertainty_included === true ||
+            ['q10', 'q50', 'q90'].every(name => variants.has(name));
+          simUncertaintyHint.textContent = hasDirectionStress
+            ? 'Osäkerhet: seedvariation + q10/q50/q90-riktningar'
+            : 'Osäkerhet: seedvariation · endast q50';
+          simUncertaintyHint.title = hasDirectionStress
+            ? 'Riktningsosäkerhet ingår genom q10-, q50- och q90-varianter.'
+            : 'Riktningsosäkerhet ingår inte; scenariot använder endast q50.';
+          simUncertaintyHint.hidden = false;
+        }
 
         function renderAgentDemand(provider, qi) {
           const demand = provider.agentDemand;
@@ -823,19 +847,20 @@
           const rows = Object.entries(r.sections).map(([name, s]) => {
             const [m, c] = V_MARK[s.status] || V_MARK.missing;
             return `<tr><td class="${c}">${m}</td>`
-              + `<td><strong>${V_LABELS[name] || name}</strong><br>`
-              + `<span class="v-detail">${describeSection(name, s)}</span><br>`
-              + (s.gate ? `<span class="v-detail" style="opacity:.7">grind: ${s.gate}</span>` : '')
+              + `<td><strong>${WebText.escapeHtml(V_LABELS[name] || name)}</strong><br>`
+              + `<span class="v-detail">${WebText.escapeHtml(describeSection(name, s))}</span><br>`
+              + (s.gate ? `<span class="v-detail" style="opacity:.7">grind: ${WebText.escapeHtml(s.gate)}</span>` : '')
               + `</td></tr>`;
           }).join('');
-          const provenance = `bygge ${r.demand_window} (${r.demand_source})`
+          const provenance = WebText.escapeHtml(
+            `bygge ${r.demand_window} (${r.demand_source})`
             + (r.demand_build_id ? ` · id ${r.demand_build_id.slice(0, 12)}` : '')
-            + ` · genererad ${r.generated_at}`;
+            + ` · genererad ${r.generated_at}`);
           validationBody.innerHTML =
             (stale
               ? `<div class="v-detail" id="validation-stale">⚠ Rapporten gäller ` +
                 `ett ANNAT bygge än det laddade scenariot ` +
-                `(scenario ${studyBuild.slice(0, 12)}). Grindarna nedan säger ` +
+                `(scenario ${WebText.escapeHtml(studyBuild.slice(0, 12))}). Grindarna nedan säger ` +
                 `ingenting om det du ser på kartan — kör om valideringen för ` +
                 `det aktiva bygget.</div>`
               : '')
@@ -1392,28 +1417,28 @@
         // ScenarioSpec tells the server whether D2 or D4 applies; the web app
         // only consumes the uniform summary shape.
         async function pollOptimize(onProgress) {
-          for (;;) {
-            await new Promise(r => setTimeout(r, 2000));
-            let status;
-            try {
-              status = await (await fetch('/api/optimize_signals/status')).json();
-            } catch (e) {
-              continue;
-            }
-            if (status.status === 'running' || status.status === 'cancelling') {
-              onProgress?.(status.elapsed_s);
-              continue;
-            }
-            return status;
-          }
+          return Polling.pollStatus('/api/optimize_signals/status', {
+            pollMs: 2000,
+            onProgress: status => onProgress?.(status.elapsed_s),
+          });
         }
 
-        function optMetricBox(label, valueHTML, subHTML) {
+        function optMetricBox(label, valueText, subText) {
           const div = document.createElement('div');
           div.className = 'opt-metric';
-          div.innerHTML = `<div class="opt-metric-label">${label}</div>` +
-                          `<div class="opt-metric-value">${valueHTML}</div>` +
-                          (subHTML ? `<div class="opt-metric-sub">${subHTML}</div>` : '');
+          const labelDiv = document.createElement('div');
+          labelDiv.className = 'opt-metric-label';
+          labelDiv.textContent = label;
+          const valueDiv = document.createElement('div');
+          valueDiv.className = 'opt-metric-value';
+          valueDiv.textContent = valueText;
+          div.append(labelDiv, valueDiv);
+          if (subText) {
+            const subDiv = document.createElement('div');
+            subDiv.className = 'opt-metric-sub';
+            subDiv.textContent = subText;
+            div.appendChild(subDiv);
+          }
           return div;
         }
 
@@ -1438,7 +1463,7 @@
           optimizeResultsCard.appendChild(optMetricBox('Före',
             `${Math.round(summary.before.total_time_loss_s / 60)} min`,
             `${summary.before.trip_count} resor` +
-            (summary.before_disqualified ? ' · <b>diskvalificerad</b>' : '')));
+            (summary.before_disqualified ? ' · diskvalificerad' : '')));
           const arrow = document.createElement('div');
           arrow.className = 'opt-arrow';
           arrow.textContent = '→';
@@ -1446,17 +1471,24 @@
           optimizeResultsCard.appendChild(optMetricBox('Efter',
             `${Math.round(summary.after.total_time_loss_s / 60)} min`,
             `${summary.after.trip_count} resor` +
-            (summary.after_disqualified ? ' · <b>diskvalificerad</b>' : '')));
+            (summary.after_disqualified ? ' · diskvalificerad' : '')));
           const pct = summary.relative_time_loss_pct;
           const deltaGood = pct !== null && pct < 0;
           const deltaDiv = document.createElement('div');
           deltaDiv.className = 'opt-delta';
-          deltaDiv.innerHTML = `<div class="opt-metric-label">Förändring</div>` +
-            `<div class="opt-delta-value ${deltaGood ? 'good' : 'bad'}">` +
-            `${pct === null ? '–' : (pct > 0 ? '+' : '') + pct + '%'}</div>` +
-            `<div class="opt-metric-sub">${summary.disqualified
-              ? 'diskvalificerad: ' + summary.disqualification_reasons.join(', ')
-              : 'ej diskvalificerad'}</div>`;
+          const deltaLabel = document.createElement('div');
+          deltaLabel.className = 'opt-metric-label';
+          deltaLabel.textContent = 'Förändring';
+          const deltaValue = document.createElement('div');
+          deltaValue.className = `opt-delta-value ${deltaGood ? 'good' : 'bad'}`;
+          deltaValue.textContent = pct === null
+            ? '–' : (pct > 0 ? '+' : '') + pct + '%';
+          const deltaSub = document.createElement('div');
+          deltaSub.className = 'opt-metric-sub';
+          deltaSub.textContent = summary.disqualified
+            ? 'diskvalificerad: ' + summary.disqualification_reasons.join(', ')
+            : 'ej diskvalificerad';
+          deltaDiv.append(deltaLabel, deltaValue, deltaSub);
           optimizeResultsCard.appendChild(deltaDiv);
 
           const metaLines = [];
@@ -1495,7 +1527,7 @@
             metaLines.push('<b>Detta är INTE en rekommendation</b> — signalprogrammen ' +
               'är syntetiska gissningar, inte Göteborgs verkliga ljusplaner.');
           }
-          optimizeResultsMeta.innerHTML = metaLines.join('<br>');
+          WebText.renderTextLines(optimizeResultsMeta, metaLines);
 
           const scheduleByTls = new Map();
           for (const row of summary.tls_timing_schedule ?? []) {
@@ -1677,36 +1709,10 @@
               throw new Error(data.error || `HTTP ${response.status}`);
             }
           }
-          let consecutivePollFailures = 0;
-          const maxConsecutivePollFailures = 5;
-          for (;;) {
-            const backoff = Math.min(4, 2 ** consecutivePollFailures);
-            await new Promise(r => setTimeout(
-              r, operation.pollMs * backoff));
-            let status;
-            try {
-              const response = await fetch(operation.statusUrl, {
-                cache: 'no-store',
-              });
-              if (!response.ok) throw new Error(`HTTP ${response.status}`);
-              status = await response.json();
-            } catch (e) {
-              consecutivePollFailures += 1;
-              if (consecutivePollFailures >= maxConsecutivePollFailures) {
-                throw new Error(
-                  'servern svarar inte; jobbet kan fortfarande köras — ' +
-                  'kontrollera servern och försök sedan återansluta');
-              }
-              continue;
-            }
-            consecutivePollFailures = 0;
-            if (status.status === 'checking_cache' ||
-                status.status === 'running' || status.status === 'cancelling') {
-              onProgress?.(status);
-              continue;
-            }
-            return status;
-          }
+          return Polling.pollStatus(operation.statusUrl, {
+            pollMs: operation.pollMs,
+            onProgress,
+          });
         }
 
         // Shared by both the plain closure-picking flow (btnRun below) and
@@ -1937,7 +1943,7 @@
             metaLines.push('För få icke-diskvalificerade fönster för att bedöma rangordningens tillförlitlighet.');
           }
           metaLines.push('Rang = förslagets ranking (INTE en tidsuppskattning); ΔTid är simulerad väntetid jämfört med baslinjen.');
-          suggestResultsMeta.innerHTML = metaLines.join('<br>');
+          WebText.renderTextLines(suggestResultsMeta, metaLines);
 
           suggestResultsBody.replaceChildren(...summary.candidates.map(c => {
             const tr = document.createElement('tr');
@@ -2431,7 +2437,7 @@
               'kandidaterna — grinden för påståendet “globalt bäst över hela ' +
               'sökintervallet” är ännu inte godkänd.');
           }
-          monthlyResultsMeta.innerHTML = metaLines.join('<br>');
+          WebText.renderTextLines(monthlyResultsMeta, metaLines);
           monthlyResultsNotice.textContent = noticeLines.join(' ');
           monthlyResultsNotice.classList.toggle('show', noticeLines.length > 0);
           monthlyResultsMethod.open = false;
@@ -3062,38 +3068,31 @@
         }
 
         async function pollRecalibration() {
-          for (;;) {
-            await new Promise(r => setTimeout(r, 4000));
-            let status;
-            try {
-              status = await (await fetch('/api/recalibrate/status')).json();
-            } catch (e) {
-              continue;   // transient network hiccup — keep polling
-            }
-            if (status.status === 'running' || status.status === 'cancelling') {
-              btnDayRun.textContent = `Kalibrerar om… (${status.elapsed_s}s)`;
-              showRecalibrationProgress(status.elapsed_s || 0);
-              if (status.status === 'cancelling') {
+          const status = await Polling.pollStatus('/api/recalibrate/status', {
+            pollMs: 4000,
+            onProgress: current => {
+              btnDayRun.textContent = `Kalibrerar om… (${current.elapsed_s}s)`;
+              showRecalibrationProgress(current.elapsed_s || 0);
+              if (current.status === 'cancelling') {
                 recalProgressLabel.textContent = 'Avbryter simulering…';
               }
-              continue;
-            }
-            hideRecalibrationProgress();
-            const attempted = `${status.date || 'okänt datum'}`
-              + (status.source ? ` (${status.source})` : '');
-            if (status.status === 'error') {
-              forgetPendingRecal();
-              announceStudyOutcome('Omkalibreringen', 'error', attempted,
-                                   status.error);
-            } else if (status.status === 'cancelled') {
-              forgetPendingRecal();
-              announceStudyOutcome('Omkalibreringen', 'cancelled', attempted);
-            } else if (status.status === 'done') {
-              clearStudyOutcome();
-              await applyFinishedRecalibration(status);
-            }
-            return status;
+            },
+          });
+          hideRecalibrationProgress();
+          const attempted = `${status.date || 'okänt datum'}`
+            + (status.source ? ` (${status.source})` : '');
+          if (status.status === 'error') {
+            forgetPendingRecal();
+            announceStudyOutcome('Omkalibreringen', 'error', attempted,
+                                 status.error);
+          } else if (status.status === 'cancelled') {
+            forgetPendingRecal();
+            announceStudyOutcome('Omkalibreringen', 'cancelled', attempted);
+          } else if (status.status === 'done') {
+            clearStudyOutcome();
+            await applyFinishedRecalibration(status);
           }
+          return status;
         }
 
         async function recoverStartedRecalibration(date, source, days) {
@@ -3195,15 +3194,37 @@
               btnDayRun.disabled = true;
               btnDayCancel.disabled = false;
               btnDayRun.textContent = `Kalibrerar om… (${status.elapsed_s}s)`;
-              await pollRecalibration();
-              btnDayRun.disabled = false;
-              btnDayCancel.disabled = false;
-              btnDayRun.textContent = 'Räkna om (~6 min)';
+              // The poller now GIVES UP after five consecutive failures
+              // instead of retrying forever, which is right — but the
+              // controls have to come back when it does. Without this,
+              // a server that goes away mid-job left this button disabled
+              // and frozen on a stale elapsed time with nothing said: the
+              // endless loop traded for an endless spinner.
+              try {
+                await pollRecalibration();
+              } finally {
+                recalibrationJobRunning = false;
+                hideRecalibrationProgress();
+                btnDayRun.disabled = false;
+                btnDayCancel.disabled = false;
+                btnDayRun.textContent = 'Räkna om (~6 min)';
+              }
             } else if (status.status === 'done' && status.date !== currentSimDate &&
                       pendingRecalMatches(status)) {
               await applyFinishedRecalibration(status);
             }
-          } catch (e) { /* serve.py not running (static hosting) — ignore */ }
+          } catch (e) {
+            // The FIRST fetch failing means serve.py is not running (static
+            // hosting) and there is nothing to report. A failure after a
+            // running job was already found is a different event — the
+            // server answered and then stopped — and the user is entitled
+            // to know that rather than watch a silent, idle-looking page.
+            if (recalibrationJobRunning) {
+              recalibrationJobRunning = false;
+              announceStudyOutcome('Omkalibreringen', 'error',
+                                   'pågående jobb', e.message);
+            }
+          }
         })();
 
         // Deep links must dismiss the workspace landing page, not just

@@ -184,6 +184,24 @@ class TestDemandVariants:
         with pytest.raises(ValueError, match="exactly q50"):
             run_scenario.demand_variant_entries(meta)
 
+    def test_uncertainty_contract_distinguishes_q50_from_direction_stress(self):
+        class Q50Spec:
+            demand_variant_mapping = (
+                (1000, "q50"), (1001, "q50"), (1002, "q50"))
+
+        class StressSpec:
+            demand_variant_mapping = (
+                (1000, "q10"), (1001, "q50"), (1002, "q90"))
+
+        q50 = run_scenario.scenario_uncertainty(Q50Spec())
+        stress = run_scenario.scenario_uncertainty(StressSpec())
+
+        assert q50["demand_variants"] == ["q50"]
+        assert q50["direction_uncertainty_included"] is False
+        assert stress["demand_variants"] == ["q10", "q50", "q90"]
+        assert stress["direction_uncertainty_included"] is True
+        assert stress["standard_deviation"] == "sample"
+
     def test_quantile_metadata_requires_every_declared_route_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
         (tmp_path / "calibrated.rou.xml").write_text("<routes/>")
@@ -1321,7 +1339,31 @@ class TestScenarioManifestDemandScope:
 
         assert set(flows_out) == web_edges
         assert flows_out["quiet_edge"] == [0, 0]
-        assert conf_out["quiet_edge"] == 0.7   # pure spatial prior, no CV to penalize it
+        assert conf_out["quiet_edge"] == 0.0
+
+    def test_aggregate_flows_does_not_claim_confidence_for_low_flow_noise(self):
+        per_seed = [
+            {"edge": np.array([0.0])},
+            {"edge": np.array([0.0])},
+            {"edge": np.array([4.0])},
+        ]
+
+        _flows, confidence = run_scenario.aggregate_flows(
+            per_seed, {"edge"}, {"edge": 0.8}, 1)
+
+        assert confidence["edge"] == 0.0
+
+    def test_aggregate_flows_uses_sample_std_for_small_seed_ensemble(self):
+        per_seed = [
+            {"edge": np.array([0.0])},
+            {"edge": np.array([3.0])},
+            {"edge": np.array([6.0])},
+        ]
+
+        _flows, confidence = run_scenario.aggregate_flows(
+            per_seed, {"edge"}, {"edge": 0.8}, 1)
+
+        assert confidence["edge"] == 0.294
 
     def test_aggregate_flows_zeroes_confidence_without_calibrated_route_support(self):
         per_seed = [{"supported": np.array([3.0, 2.0])}]
@@ -1342,7 +1384,52 @@ class TestScenarioManifestDemandScope:
             supported_edges=set(prior), low_evidence_edges={"support"})
 
         assert confidence["core"] == 0.8
-        assert confidence["support"] == 0.15
+        assert confidence["support"] == 0.0
+
+    def test_network_coverage_excludes_map_only_edges_from_flow_domain(
+            self, tmp_path):
+        network = tmp_path / "net.net.xml"
+        network.write_text(
+            '<net><edge id="simulated"><lane/></edge>'
+            '<edge id=":internal" function="internal"><lane/></edge></net>')
+
+        simulated, coverage = run_scenario.scenario_network_coverage(
+            {"simulated", "map_only"}, network)
+
+        assert simulated == {"simulated"}
+        assert coverage == {
+            "map_edge_count": 2,
+            "simulated_map_edge_count": 1,
+            "excluded_map_only_edges": ["map_only"],
+        }
+
+    def test_admission_and_publication_read_one_network_edge_owner(
+            self, tmp_path, monkeypatch):
+        """serve.py refuses a closure on unsimulated geometry; run_scenario
+        keeps that geometry out of the published flow domain. Two local
+        parsers answered that one question and disagreed on their first day —
+        one counted SUMO's internal junction edges, the other did not — so the
+        endpoint could admit a study the publisher would then exclude. Both
+        now go through metadata.network_edge_ids, and this fails if either
+        grows its own parser again.
+        """
+        import serve
+        from traffic_sim.simulation import metadata
+
+        network = tmp_path / "net.net.xml"
+        network.write_text(
+            '<net><edge id="simulated"><lane/></edge>'
+            '<edge id=":internal" function="internal"><lane/></edge></net>')
+        monkeypatch.setattr(serve, "SUMO_DIR", tmp_path)
+        metadata.network_edge_ids.cache_clear()
+
+        admitted = serve.simulated_edges()
+        published, _coverage = run_scenario.scenario_network_coverage(
+            {"simulated", ":internal", "map_only"}, network)
+
+        metadata.network_edge_ids.cache_clear()
+        assert admitted == frozenset({"simulated"})
+        assert published == set(admitted)
 
     def test_manifest_keeps_only_current_demand_entries(self):
         current = "abc123"
@@ -2029,6 +2116,8 @@ class TestSharedPayloadBuildersMatchLegacyProduction:
         scenario_id = "close_26842525_26355153_0"
         simulation_mode = "meso"
         network_build_id = "netbuild123"
+        demand_variant_mapping = (
+            (1000, "q50"), (1001, "q50"), (1002, "q50"))
 
         def to_dict(self):
             return {"scenario_id": self.scenario_id, "closures": [],
@@ -2040,7 +2129,7 @@ class TestSharedPayloadBuildersMatchLegacyProduction:
                          active_closure_entries, active_entries_by_seed,
                          closure_integrity, seed_count, seed_values, sig,
                          seed_health, health_flags, multi_day_validation,
-                         sensor_audit, flows_out, conf_out):
+                         sensor_audit, flows_out, conf_out, network_coverage):
         # A copy of the pre-extraction inline dict, kept here as the oracle.
         return {
             "epoch": meta["epoch_sim"], "interval_minutes": 15,
@@ -2069,7 +2158,10 @@ class TestSharedPayloadBuildersMatchLegacyProduction:
             "seed_health": seed_health, "seed_health_flags": health_flags,
             **({"multi_day_validation": multi_day_validation}
                if multi_day_validation is not None else {}),
-            "sensor_audit": sensor_audit, "flows": flows_out,
+            "sensor_audit": sensor_audit,
+            "uncertainty": run_scenario.scenario_uncertainty(spec),
+            "network_coverage": network_coverage,
+            "flows": flows_out,
             "confidence": conf_out}
 
     def _kwargs(self, *, case, multi_day=False):
@@ -2099,7 +2191,11 @@ class TestSharedPayloadBuildersMatchLegacyProduction:
             health_flags=[],
             multi_day_validation={"ok": True} if multi_day else None,
             sensor_audit={"summary": "audit"},
-            flows_out={"e0": [1, 2]}, conf_out={"e0": 0.5})
+            flows_out={"e0": [1, 2]}, conf_out={"e0": 0.5},
+            network_coverage={
+                "map_edge_count": 2, "simulated_map_edge_count": 1,
+                "excluded_map_only_edges": ["map_only"],
+            })
 
     @pytest.mark.parametrize("case", ["baseline", "closure"])
     def test_scenario_payload_matches_legacy(self, case):
@@ -2150,6 +2246,8 @@ class TestSharedPayloadBuildersMatchLegacyProduction:
             "demand_signature": kw["sig"],
             "build_id": "b1",
             "demand_build_key": "k1",
+            "uncertainty": run_scenario.scenario_uncertainty(kw["spec"]),
+            "network_coverage": kw["network_coverage"],
             "window": "00:00–24:00",
         }]
 

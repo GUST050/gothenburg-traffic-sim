@@ -167,8 +167,10 @@ from functools import lru_cache
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import NamedTuple
+from xml.etree import ElementTree as ET
 
-from traffic_sim.core.contracts import (ClosureSearchSpec, DemandBuildSpec,
+from traffic_sim.core.contracts import (STRUCTURAL_REFERENCE_DATE,
+                                         ClosureSearchSpec, DemandBuildSpec,
                                          ScenarioSpec,
                                          write_closure_search_spec,
                                          write_demand_build_spec,
@@ -189,6 +191,7 @@ from traffic_sim.simulation.search_workspace import load_search_workspace
 from traffic_sim.demand.route_support import combined_route_edges
 from traffic_sim.simulation.workspace import WorkspaceLock, workspace_holder
 from traffic_sim.simulation.runtime import sumo_home
+from traffic_sim.simulation.metadata import network_edge_ids
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
@@ -873,6 +876,41 @@ def begin_active_job(kind: str, args: dict | None = None) -> None:
                started_at=time.time(), server_pid=os.getpid())
 
 
+def start_active_job(kind: str, args: dict, target, target_args: tuple) -> None:
+    """Persist and start a background job without leaking its shared slot."""
+    try:
+        begin_active_job(kind, args)
+        threading.Thread(target=target, args=target_args, daemon=True).start()
+    except Exception as exc:
+        # begin_active_job publishes the in-memory owner before writing the
+        # durable record. A failed disk write therefore needs an explicit
+        # rollback even though no child exists yet.
+        with _active_job_lock:
+            job_id = (_active_job["job_id"]
+                      if _active_job["kind"] == kind else None)
+            if _active_job["kind"] == kind:
+                _active_job.update(kind=None, process=None,
+                                   cancel_requested=False, job_id=None)
+        # The DURABLE record must be rolled back too, not only the in-memory
+        # owner. begin_active_job can succeed and the thread start still fail
+        # (OSError: can't start new thread); the record then stays "running"
+        # for a job that never ran, and the next server start reconciles it
+        # into an orphan whose acknowledgement gate refuses EVERY simulation.
+        # That is the same permanent block this function exists to prevent,
+        # just moved from the lock to the ledger.
+        if job_id is not None:
+            try:
+                job_record(job_id, status="error", finished_at=time.time(),
+                           error=f"{type(exc).__name__}: {exc}"[:200])
+            except OSError as ledger_exc:
+                # The ledger is what just failed; say so rather than leaving
+                # a silent inconsistency between memory and disk.
+                print(f"{kind}: could not record the failed start: "
+                      f"{ledger_exc}", file=sys.stderr)
+        _sim_lock.release()
+        raise
+
+
 def finish_active_job(kind: str) -> None:
     with _active_job_lock:
         if _active_job["kind"] != kind:
@@ -957,7 +995,10 @@ def run_in_new_session(cmd: list[str], *, cwd: str,
         # Durable, so a post-crash reconcile can see/kill the live tree.
         job_record(job_id, pgid=proc.pid)
     if cancel_now:
-        os.killpg(proc.pid, signal.SIGKILL)
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
     try:
         out, err = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -974,11 +1015,39 @@ def run_in_new_session(cmd: list[str], *, cwd: str,
     return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
 
 
-@lru_cache(maxsize=1)
-def known_edges() -> frozenset[str]:
-    with open(WEB_DIR / "data" / "network.geojson") as f:
+@lru_cache(maxsize=4)
+def _known_edges_cached(path: Path, mtime_ns: int,
+                        size: int) -> frozenset[str]:
+    del mtime_ns, size
+    with open(path) as f:
         geo = json.load(f)
     return frozenset(feat["properties"]["id"] for feat in geo["features"])
+
+
+def known_edges() -> frozenset[str]:
+    path = WEB_DIR / "data" / "network.geojson"
+    stat = path.stat()
+    return _known_edges_cached(path.resolve(), stat.st_mtime_ns, stat.st_size)
+
+
+known_edges.cache_clear = _known_edges_cached.cache_clear
+
+
+def simulated_edges() -> frozenset[str]:
+    """Edge IDs present in the active SUMO network, refreshed on file change.
+
+    Delegates to the single owner of that question
+    (:func:`traffic_sim.simulation.metadata.network_edge_ids`) instead of
+    parsing net.net.xml a second time here. The local copy this replaces
+    already disagreed with run_scenario's copy on their first day: it counted
+    SUMO's internal junction edges and run_scenario's did not, so the endpoint
+    that admits a closure and the publisher that draws its flow domain were
+    answering the same question two ways.
+    """
+    return network_edge_ids(SUMO_DIR / "net.net.xml")
+
+
+simulated_edges.cache_clear = network_edge_ids.cache_clear
 
 
 def supported_closure_edges() -> frozenset[str]:
@@ -1713,8 +1782,23 @@ class Handler(SimpleHTTPRequestHandler):
     def _require_supported_closure_edges(self, edges: list[str]) -> bool:
         """Reject studies whose live demand cannot represent the road effect."""
         try:
+            map_only = sorted(set(edges) - simulated_edges())
+            if map_only:
+                self._json(422, {
+                    "error": "stängningen finns inte i det aktiva SUMO-nätet",
+                    "not_in_sumo_network": map_only,
+                })
+                return False
             unsupported = sorted(set(edges) - supported_closure_edges())
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
+        # ET.ParseError derives from SyntaxError, not from OSError or
+        # ValueError, so it was not caught here. Both reads above are
+        # iterparse over files a build writes: cancelling a demand or network
+        # build SIGKILLs its process group, which can leave net.net.xml or
+        # calibrated.rou.xml truncated. Without this the endpoint raised out
+        # of the handler and the browser saw a dropped connection instead of a
+        # message naming the file it needs rebuilt.
+        except (OSError, ValueError, json.JSONDecodeError,
+                ET.ParseError) as exc:
             self._json(503, {
                 "error": "den aktiva efterfrågans vägstödsgräns kunde inte verifieras",
                 "detail": str(exc)[:200],
@@ -2171,7 +2255,8 @@ class Handler(SimpleHTTPRequestHandler):
     def _close_status(self) -> None:
         with _close_lock:
             state = dict(_close_state)
-        if state.get("status") in {"running", "cancelling"}:
+        if (state.get("status") in {"running", "cancelling"}
+                and isinstance(state.get("started_at"), (int, float))):
             state["elapsed_s"] = round(time.time() - state["started_at"])
         return self._json(200, state)
 
@@ -2205,12 +2290,13 @@ class Handler(SimpleHTTPRequestHandler):
                 demand_spec = DemandBuildSpec(
                     start_date=date, source=source, days=days,
                     begin="00:00", end="24:00",
-                    structural_reference_date="2025-09-16")
+                    structural_reference_date=STRUCTURAL_REFERENCE_DATE)
             except ValueError as exc:
                 return self._json(400, {"error": str(exc)})
-        if demand_spec.structural_reference_date != "2025-09-16":
+        if demand_spec.structural_reference_date != STRUCTURAL_REFERENCE_DATE:
             return self._json(400, {"error":
-                                    "structural_reference_date måste vara 2025-09-16"})
+                "structural_reference_date måste vara "
+                f"{STRUCTURAL_REFERENCE_DATE}"})
         if demand_spec.purpose != "standard":
             return self._json(400, {"error":
                                     "closure_envelope-demand får bara startas "
@@ -2233,11 +2319,19 @@ class Handler(SimpleHTTPRequestHandler):
                                 days=days, demand_spec=demand_spec.to_dict(),
                                 demand_build_key=demand_spec.build_key,
                                 started_at=time.time())
-        begin_active_job("recalibrate", {"date": date, "source": source,
-                                 "days": days,
-                                 "demand_spec": demand_spec.to_dict()})
-        threading.Thread(target=self._run_recalibrate, args=(demand_spec,),
-                         daemon=True).start()
+        try:
+            start_active_job(
+                "recalibrate",
+                {"date": date, "source": source, "days": days,
+                 "demand_spec": demand_spec.to_dict()},
+                self._run_recalibrate, (demand_spec,),
+            )
+        except Exception as exc:
+            print(f"recalibrate: could not start background job: {exc}")
+            self._set_recal(status="error",
+                            error="jobbet kunde inte starta — se serverloggen")
+            return self._json(500, {
+                "error": "omkalibreringen kunde inte starta — se serverloggen"})
         return self._json(202, {"status": "started", "date": date, "source": source,
                                 "days": days, "demand_build_key": demand_spec.build_key})
 
@@ -2277,7 +2371,7 @@ class Handler(SimpleHTTPRequestHandler):
             demand_spec = DemandBuildSpec(
                 start_date=str(demand_spec), source=source or "historical",
                 days=days, begin="00:00", end="24:00",
-                structural_reference_date="2025-09-16")
+                structural_reference_date=STRUCTURAL_REFERENCE_DATE)
         date, source, days = (demand_spec.start_date, demand_spec.source,
                               demand_spec.days)
         DEMAND_SPEC_DIR.mkdir(parents=True, exist_ok=True)
@@ -2345,6 +2439,7 @@ class Handler(SimpleHTTPRequestHandler):
                 print(f"validation report: {type(exc).__name__}: {exc}")
 
             known_edges.cache_clear()   # network.geojson is unchanged but be safe
+            simulated_edges.cache_clear()
             self._set_recal(status="done", file="baseline.json",
                             date=date, source=source, days=days)
         except subprocess.TimeoutExpired:
@@ -2490,13 +2585,22 @@ class Handler(SimpleHTTPRequestHandler):
                                   duration_hours=duration_hours,
                                   scenario_spec=(spec.to_dict() if spec else None),
                                   started_at=time.time())
-        begin_active_job("suggest", {"edges": edges,
-                                     "duration_hours": duration_hours,
-                                     "scenario_spec": spec.to_dict() if spec else None})
-        threading.Thread(
-            target=self._run_suggest_closure,
-            args=(edges, duration_hours, slide_hours, top_k, extra_bad, seeds, spec),
-            daemon=True).start()
+        try:
+            start_active_job(
+                "suggest",
+                {"edges": edges, "duration_hours": duration_hours,
+                 "scenario_spec": spec.to_dict() if spec else None},
+                self._run_suggest_closure,
+                (edges, duration_hours, slide_hours, top_k, extra_bad,
+                 seeds, spec),
+            )
+        except Exception as exc:
+            print(f"suggest_closure: could not start background job: {exc}")
+            self._set_suggest(status="error",
+                              error="jobbet kunde inte starta — se serverloggen")
+            return self._json(500, {
+                "error": "stängningstidssökningen kunde inte starta — "
+                         "se serverloggen"})
         return self._json(202, {"status": "started", "edges": edges,
                                 "scenario_id": spec.scenario_id if spec else None})
 
@@ -2629,13 +2733,22 @@ class Handler(SimpleHTTPRequestHandler):
                                    window_end=window_end,
                                    scenario_spec=(spec.to_dict() if spec else None),
                                    started_at=time.time())
-        begin_active_job("optimize", {"edges": edges,
-                                       "window_start": window_start,
-                                       "window_end": window_end,
-                                       "scenario_spec": spec.to_dict() if spec else None})
-        threading.Thread(target=self._run_optimize_signals,
-                         args=(edges, window_start, window_end, spec),
-                         daemon=True).start()
+        try:
+            start_active_job(
+                "optimize",
+                {"edges": edges, "window_start": window_start,
+                 "window_end": window_end,
+                 "scenario_spec": spec.to_dict() if spec else None},
+                self._run_optimize_signals,
+                (edges, window_start, window_end, spec),
+            )
+        except Exception as exc:
+            print(f"optimize_signals: could not start background job: {exc}")
+            self._set_optimize(status="error",
+                               error="jobbet kunde inte starta — se serverloggen")
+            return self._json(500, {
+                "error": "signaloptimeringen kunde inte starta — "
+                         "se serverloggen"})
         return self._json(202, {"status": "started", "edges": edges,
                                 "window_start": window_start,
                                 "window_end": window_end,
@@ -2862,14 +2975,20 @@ class Handler(SimpleHTTPRequestHandler):
                                   edges=list(spec.directed_edges),
                                   closure_search_spec=spec.to_dict(),
                                   started_at=time.time())
-        begin_active_job("monthly", {
-            "search_id": spec.search_id,
-            "search_content_key": spec.content_key,
-            "closure_search_spec": spec.to_dict(),
-        })
-        threading.Thread(target=self._run_monthly_search,
-                         args=(spec, policy_path),
-                         daemon=True).start()
+        try:
+            start_active_job(
+                "monthly",
+                {"search_id": spec.search_id,
+                 "search_content_key": spec.content_key,
+                 "closure_search_spec": spec.to_dict()},
+                self._run_monthly_search, (spec, policy_path),
+            )
+        except Exception as exc:
+            print(f"monthly_search: could not start background job: {exc}")
+            self._set_monthly(status="error",
+                              error="jobbet kunde inte starta — se serverloggen")
+            return self._json(500, {
+                "error": "månadssökningen kunde inte starta — se serverloggen"})
         return self._json(202, {"status": "started",
                                 "search_id": spec.search_id})
 

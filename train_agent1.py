@@ -87,9 +87,10 @@ def build_features(n: int, *, epoch: pd.Timestamp = EPOCH) -> pd.DataFrame:
     captured by holiday_factors.json at inference time.
     """
     ts = pd.date_range(start=epoch, periods=n, freq=INTERVAL)
-    h  = ts.hour + ts.minute / 60
-    dw = ts.dayofweek
-    mo = ts.month
+    # DatetimeIndex exposes these dynamically; pylint cannot infer them.
+    h  = ts.hour + ts.minute / 60  # pylint: disable=no-member
+    dw = ts.dayofweek              # pylint: disable=no-member
+    mo = ts.month                  # pylint: disable=no-member
     return pd.DataFrame({
         "hour_sin":   np.sin(2 * np.pi * h  / 24),
         "hour_cos":   np.cos(2 * np.pi * h  / 24),

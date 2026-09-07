@@ -826,6 +826,11 @@ class TestReverseEdgeId:
         eid = "12345_6789_1"
         assert bc.reverse_edge_id(bc.reverse_edge_id(eid)) == eid
 
+    @pytest.mark.parametrize("edge_id", ["1_2", "1_2_0_extra", "a_2_0"])
+    def test_malformed_edge_id_is_rejected(self, edge_id):
+        with pytest.raises(ValueError, match="edge id"):
+            bc.reverse_edge_id(edge_id)
+
 
 class TestCandidateEndpointIntegrity:
     def test_load_sumo_routing_data_uses_lane_travel_time(self, tmp_path):
@@ -1568,6 +1573,10 @@ class TestRouteVisitsANodeTwice:
 
     def test_single_edge_is_not_a_repeat(self):
         assert not bc.route_visits_a_node_twice(["1_2_0"])
+
+    def test_malformed_edge_id_cannot_silently_change_route_topology(self):
+        with pytest.raises(ValueError, match="edge id"):
+            bc.route_visits_a_node_twice(["1_2_0", "2_3_0_extra"])
 
 
 class TestUpstreamDownstreamGates:

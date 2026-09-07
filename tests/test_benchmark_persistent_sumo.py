@@ -464,6 +464,8 @@ class _Spec:
         self.scenario_id = "close_x" if case == "closure" else "baseline"
         self.simulation_mode = "meso"
         self.network_build_id = "nb"
+        self.demand_variant_mapping = (
+            (1000, "q50"), (1001, "q10"), (1002, "q90"))
 
     def to_dict(self):
         return {"scenario_id": self.scenario_id, "mode": self.simulation_mode}
@@ -1535,8 +1537,14 @@ class TestScenarioDigestIsTheSharedProductionPayload:
         import numpy as np
         arrays = [{e: np.asarray(v, dtype=float) for e, v in s["flows"].items()}
                   for s in per_seed]
-        flows_out, conf_out = rs.aggregate_flows(arrays, {"e0", "e1"},
-                                                 ctx["prior"], h.N_INTERVALS)
+        web_edges = {"e0", "e1"}
+        network_coverage = {
+            "map_edge_count": 2,
+            "simulated_map_edge_count": 2,
+            "excluded_map_only_edges": [],
+        }
+        flows_out, conf_out = rs.aggregate_flows(
+            arrays, web_edges, ctx["prior"], h.N_INTERVALS)
         payload = rs.build_scenario_payload(
             meta=ctx["meta"], n_intervals=h.N_INTERVALS, generated_at="",
             spec=_Spec("baseline"), traj_name=None, name="baseline", label="L",
@@ -1547,7 +1555,8 @@ class TestScenarioDigestIsTheSharedProductionPayload:
             seed_health=[s["seed_health"] for s in per_seed],
             health_flags=rs.seed_health_flags([s["seed_health"] for s in per_seed]),
             multi_day_validation=None, sensor_audit={"a": 1},
-            flows_out=flows_out, conf_out=conf_out)
+            flows_out=flows_out, conf_out=conf_out,
+            network_coverage=network_coverage)
         assert got == h.canonical_digest(payload)
 
 

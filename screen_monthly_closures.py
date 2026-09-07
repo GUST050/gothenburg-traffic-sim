@@ -32,6 +32,7 @@ from traffic_sim.simulation.monthly_proxy import (
     stratified_shortlist,
 )
 from traffic_sim.simulation.proxy_projection import project_forecast_flows
+from traffic_sim.core.contracts import STRUCTURAL_REFERENCE_DATE as REFERENCE_DATE
 from traffic_sim.simulation.search_workspace import create_search_workspace
 
 
@@ -44,7 +45,7 @@ ASSIGNMENT_PATH = Path("sumo/assignment_priors.json")
 PRIORS_PATH = Path("sumo/prior_flows.json")
 OBSERVABILITY_PATH = Path("web/data/observability.json")
 NETWORK_METADATA_PATH = Path("sumo/network_metadata.json")
-STRUCTURAL_REFERENCE_DATE = "2025-09-16T00:00:00"
+STRUCTURAL_REFERENCE_DATE = f"{REFERENCE_DATE}T00:00:00"
 
 
 def _read(path: Path) -> dict[str, Any]:

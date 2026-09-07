@@ -116,6 +116,16 @@ class TestIdentityFingerprint:
 
 class TestWorkspaceLock:
 
+    def test_default_lock_path_is_project_absolute(self, monkeypatch, tmp_path):
+        expected = ws.PROJECT_ROOT / "runs" / ".demand-workspace.lock"
+        monkeypatch.setattr(ws, "LOCK_PATH", expected)
+        monkeypatch.chdir(tmp_path)
+
+        lock = ws.WorkspaceLock("cwd-independent")
+
+        assert lock.path.is_absolute()
+        assert lock.path == expected
+
     def test_second_holder_is_refused_and_told_who_holds_it(self, tmp_path):
         path = tmp_path / "lock"
         first = ws.WorkspaceLock("warm run", path=path)
