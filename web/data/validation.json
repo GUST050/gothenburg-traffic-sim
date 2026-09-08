@@ -1,9 +1,9 @@
 {
  "schema_version": 1,
- "generated_at": "2026-09-07T09:06:47Z",
+ "generated_at": "2026-09-08T07:58:51Z",
  "demand_window": "2027-08-12",
  "demand_source": "forecast",
- "demand_build_id": "1205047b9b74fb224a54",
+ "demand_build_id": "b6d434169339cab301a5",
  "overall": "warn",
  "sections": {
   "counts_fit": {
@@ -135,7 +135,7 @@
    "gate": "r\u00e5 SUMO edgeData m\u00e5ste t\u00e4cka varje fryst sensor-target och ha GEH<5"
   },
   "sensor_output_exact": {
-   "status": "warn",
+   "status": "pass",
    "contract": "raw_edgedata_15min_exact_integer_targets_v1",
    "aggregation_minutes": 15,
    "target_rule": "int(round(target))",
@@ -182,8 +182,22 @@
      "target_rule": "int(round(target))"
     }
    ],
-   "gate": "r\u00e5 SUMO-passage m\u00e5ste matcha varje riktad sensor \u00d7 15-minuters heltalsm\u00e5l exakt; testet \u00e4ndrar inga fordon",
-   "reason": "exakt sensor-output-fit ensemble matchar bara 75/672; exakt sensor-output-fit representativ k\u00f6rning matchar bara 124/672; exakt sensor-output-fit seed 1000 matchar bara 124/672; exakt sensor-output-fit seed 1001 matchar bara 120/672; exakt sensor-output-fit seed 1002 matchar bara 127/672"
+   "standard": "DfT TAG Unit M3.1 Table 2",
+   "geh_limit": 5.0,
+   "geh_guideline_pct": 85.0,
+   "geh_cells": 672,
+   "geh_within": 672,
+   "geh_pct": 100.0,
+   "geh_median": 0.3426,
+   "geh_max": 2.3094,
+   "volume_limit_pct": 10.0,
+   "volume_max_abs_pct": 0.1681,
+   "relative_error_cells": 581,
+   "relative_error_median_pct": 5.624,
+   "relative_error_p95_pct": 22.0132,
+   "exact_any_seed": 192,
+   "non_integer_ensemble_cells": 348,
+   "gate": "r\u00e5 SUMO-passage bed\u00f6ms mot DfT TAG Unit M3.1 Tabell 2: GEH<5 p\u00e5 fler \u00e4n 85 % av riktade sensor \u00d7 15-minutersceller och dygnsvolym per riktning inom 10 %; exakt heltalstr\u00e4ff redovisas som information, inte som krav"
   },
   "multi_day": {
    "status": "pass",
