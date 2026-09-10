@@ -1607,6 +1607,46 @@
           refreshCloseUI();
         });
 
+        // A closure simulation outlives the poll loop that started it, for
+        // exactly the reasons /api/recalibrate already documents above: a
+        // reload, a closed tab, or an operator who thought it had hung all
+        // end the polling while the server keeps computing and publishes a
+        // perfectly good scenario nobody is left watching. The server keeps
+        // the terminal state in memory, so it is recoverable — but only the
+        // reattach path below could read it, and that path handled a
+        // finished job for the MONTHLY search alone. A finished, failed, or
+        // cancelled `simulate` job was simply dropped: the scenario sat in
+        // index.json while the map still showed the previous study and the
+        // UI said nothing at all. Found 2026-09-10.
+        //
+        // Scoped by sessionStorage for the same reason as pendingRecal:
+        // /api/close/status stays "done" indefinitely (it is the last
+        // completed job, not "yours"), so applying it unconditionally would
+        // switch every future fresh page load into a stale closure. The
+        // marker is the ScenarioSpec id — the identity the server echoes
+        // back in its own status — so a tab only recovers the run it
+        // actually started.
+        const CLOSURE_SESSION_KEY = 'pendingClosure';
+        function rememberPendingClosure(scenarioId) {
+          if (!scenarioId) return;
+          try {
+            sessionStorage.setItem(CLOSURE_SESSION_KEY,
+                                   JSON.stringify({ scenario_id: scenarioId }));
+          } catch (_) { /* unavailable (private mode etc.) — no recovery */ }
+        }
+        function forgetPendingClosure() {
+          try { sessionStorage.removeItem(CLOSURE_SESSION_KEY); } catch (_) {}
+        }
+        function pendingClosureMatches(state) {
+          let pending;
+          try {
+            pending = JSON.parse(
+              sessionStorage.getItem(CLOSURE_SESSION_KEY) || 'null');
+          } catch (_) { return false; }
+          const id = state?.scenario_spec?.scenario_id;
+          return !!pending && !!id && pending.scenario_id === id;
+        }
+
         // One orchestration function for every road-closing operation. The
         // backend contracts remain deliberately different (ScenarioSpec for
         // a concrete simulation, ScenarioSpec + search inputs for an active
@@ -1634,6 +1674,13 @@
           const operation = ROAD_CLOSURE_OPERATIONS[kind];
           if (!operation) throw new Error(`okänd avstängningsåtgärd: ${kind}`);
           if (requestBody) {
+            // Before the POST, not after: the response can be lost (dropped
+            // connection, tunnel, sleeping laptop) while the server has
+            // already accepted the job, and that is precisely the case the
+            // marker exists to recover.
+            if (kind === 'simulate') {
+              rememberPendingClosure(requestBody.scenario_spec?.scenario_id);
+            }
             const response = await fetch(operation.startUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -1677,6 +1724,11 @@
               onProgress?.(status);
               continue;
             }
+            // This tab has now seen the outcome and will act on it, so the
+            // recovery marker has done its job. Anything the caller does
+            // with the terminal status happens in a live tab that can show
+            // its own banner.
+            if (kind === 'simulate') forgetPendingClosure();
             return status;
           }
         }
@@ -2711,6 +2763,41 @@
               state.status === 'checking_cache' ||
               state.status === 'running' || state.status === 'cancelling');
             if (!active) {
+              // The closure this tab started, finished while nobody was
+              // polling. The scenario is published and selectable; without
+              // this branch the map keeps the previous study and the UI
+              // never says a word. A failure or cancellation is recovered
+              // the same way, because "nothing happened" is the one thing
+              // the operator must never be left to conclude on their own.
+              const finishedClosure = states.find(([kind, state]) =>
+                kind === 'simulate' &&
+                (state.status === 'done' || state.status === 'error' ||
+                 state.status === 'cancelled') &&
+                pendingClosureMatches(state));
+              if (finishedClosure) {
+                const [, state] = finishedClosure;
+                forgetPendingClosure();
+                const attempted = (state.edges || []).join(', ');
+                if (state.status === 'done') {
+                  await openWorkspace('closure');
+                  try {
+                    await activateClosedScenario(state);
+                    clearStudyOutcome();
+                  } catch (e) {
+                    // Published, but no longer loadable — a recalibration
+                    // that landed afterwards wipes stale scenario files.
+                    announceStudyOutcome('Avstängningssimuleringen', 'error',
+                                         attempted, e.message);
+                  }
+                } else {
+                  announceStudyOutcome(
+                    'Avstängningssimuleringen',
+                    state.status === 'cancelled' ? 'cancelled' : 'error',
+                    attempted, state.error);
+                }
+                refreshCloseUI();
+                return;
+              }
               const completedExternal = states.find(([kind, state]) =>
                 kind === 'monthly' && state.status === 'done' &&
                 state.server_tracked === false && state.result);

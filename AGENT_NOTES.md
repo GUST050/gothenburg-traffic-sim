@@ -911,6 +911,33 @@ which model may continue. See `AGENTS.md`.
   hash to 8af39ae988ef69e79a0d8a9af21d4ad8ff84346be1605967922e3e3c8b8ba9e0
   and cmp passed. No cost-ordered v6 registration/outcome, SUMO benchmark,
   monthly campaign, branch operation, commit or push was created or run.`
+- Closure result recovery (2026-09-10): `The user asked why a road-closure run
+  they had just made never showed its result in the UI. Their run is on their
+  own machine and could not be inspected from the cloud session, so the report
+  they got is the list of paths that produce that symptom plus the exact
+  commands that separate them (Körhistorik, /api/close/status, /api/jobs,
+  web/data/scenarios/index.json). One of those paths was a real defect and is
+  now fixed: /api/close is start-plus-poll and the server keeps its terminal
+  state in memory, but the load-time reattach path in web/app.js recovered a
+  FINISHED job only for the monthly search. A `simulate` job that reached
+  done/error/cancelled while the tab was not polling — reload, closed tab, or
+  an operator who thought it had hung — was dropped silently: the scenario was
+  published and listed in index.json while the map kept the previous study and
+  the UI said nothing. This is CLAUDE.md's 2026-07-06 recalibration incident in
+  a second endpoint. The recovery mirrors the recalibration one exactly,
+  including its sessionStorage scoping (`pendingClosure`, keyed on the
+  ScenarioSpec id the server echoes back) so a fresh visitor is never dropped
+  into the last completed closure. A recovered failure or cancellation is
+  announced through the existing persistent banner rather than left silent, and
+  a done scenario that no longer loads (a later recalibration wipes stale
+  scenario files) is announced too.
+
+  Verification: node --check on web/app.js; the 12 new contract tests in
+  tests/test_closure_result_recovery.py passed; tests/test_serve.py 152 passed
+  with 3 pre-existing failures caused solely by SUMO being absent in this
+  container (verified identical on the unmodified tree);
+  tests/test_monthly_progress_contract.py and tests/test_validation_report.py
+  42 passed. No simulation, campaign or demand build was run.`
 - Actor notes: `Historical handoff detail follows outside the current markers;
   it is evidence for its date, not current workflow authority.`
 <!-- CURRENT_HANDOFF_END -->
