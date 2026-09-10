@@ -7,6 +7,101 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
+- Focus and status: `ITEM 1 / STAGE 3 — IMPLEMENTED AND TESTED, NOT
+  MEASURED (2026-09-10). The isolated day-reuse policy experiment exists and
+  its 68 regression tests pass; the measurement needs a checkout with the warm
+  day library and the simulation stack, and this one has neither. Both
+  candidate policies (canonical_union, day_type_local) are UNDECIDED — not
+  rejected, not adopted, and neither may be called a performance fix. Stage 2
+  stays deferred by design: it edits demand/day_library.py and
+  build_sumo_demand.py and would invalidate the warm library.`
+- Summary (2026-09-10, Item 1 Stage 3): `Added
+  tools/experiment_day_reuse_policy.py and
+  tests/test_experiment_day_reuse_policy.py. Purely additive: git diff --stat
+  over tracked files is empty. Stage 3 step 1 was run for real and PASSES -
+  the experiment's own files are outside demand_source_paths (31 entries
+  here), so they cannot change the demand source fingerprint or invalidate a
+  warm day. Step 1 also produced a second finding the plan needs: SUMO_DIR is
+  a hardcoded module constant in SIX inventory files (build_candidates.py,
+  build_sumo_demand.py, build_sumo_net.py, demand/feedback.py,
+  demand/intake.py, demand/publication.py), so the "never write to sumo/"
+  constraint cannot be met by adding a flag - adding one would edit an
+  inventory file and invalidate every warm day, which is the exact cost Stage
+  2 is deferred to avoid. The tool therefore drives each cold build in a
+  byte-identical copied working tree with its own --day-library-root, forcing
+  the composition by patching build_sumo_demand.window_pool_composition at
+  runtime (no source bytes change, so the identity is the identity the policy
+  would really produce). The experiment reduces to four cold builds - two
+  dates x two candidate compositions - inside the frozen 8-calibration /
+  30-minute budget, because each built day is compared against BOTH stored
+  context controls.
+  THE MEASUREMENT WAS NOT TAKEN AND NO ARTIFACT WAS WRITTEN. This checkout has
+  no runs/demand-days, no sumo/, no SUMO binaries and no numba, and it does
+  not contain the Stage 1 tool, its tests, its artifact, or the Item 1
+  contract section of IMPROVEMENT_PLAN.md - all of which are uncommitted on
+  the user's machine. Its demand source inventory is 31 files against the 40
+  reported there, and "dynamic_passage" appears nowhere in it. The tool fails
+  closed on exactly this: it exits 2 with "no stored days for 2027-06-03" and
+  writes nothing.`
+- Files changed (2026-09-10): `tools/experiment_day_reuse_policy.py (new),
+  tests/test_experiment_day_reuse_policy.py (new). No tracked file modified
+  apart from this handoff, TASKS.md and IMPROVEMENT_PLAN.md.`
+- Checks (2026-09-10): `python3 -m pytest
+  tests/test_experiment_day_reuse_policy.py -q -> 68 passed in 2.45 s.
+  Related selection (test_day_library, test_build_sumo_demand,
+  test_q50_subset_identity, test_demand_intake, test_demand_provenance,
+  test_warm_horizon, test_multiday, test_monthly_demand, test_candidate_cache,
+  test_catalog_qualification, test_route_catalog, test_build_candidates,
+  test_pfe, test_pfe_kernel, test_holiday_mapping, test_warm_state_cache,
+  test_warm_route_windows) plus the new suite -> 652 passed, 43 failed in
+  21.8 s. Those 43 are the untouched baseline of this environment: 36 need
+  SUMO binaries, 5 need numba, 2 need a generated sumo/direction_split.json
+  with quantiles. The same selection without the new files gives 584 passed
+  and the identical 43 failures. git diff --check is clean.
+  Verification method: written test-first (RED was an ImportError, then seven
+  named failures for three self-review defects), and five mutation checks
+  confirm the suite bites - comparing gzip container bytes, leaking
+  performance into the verdict, passing a policy on any single control,
+  reading the timing path after argv is rewritten, and tolerating an ambiguous
+  scratch library each break specific tests.`
+- Decisions and evidence (2026-09-10): `Three defects were found by
+  self-review and fixed test-first, because each would have wasted the user's
+  30-minute budget or produced a wrong answer: (1) main() located the freshly
+  built day with discover_controls, which fails closed unless BOTH arms exist
+  - a scratch library holds one, so every run would have aborted; added
+  find_built_day, which also refuses an ambiguous library and skips q50-only
+  subset entries. (2) A policy the run never reached was folded into
+  "keep the current identity", presenting an abandoned run as a result;
+  experiment_decision now reports unmeasured_policies and returns
+  inconclusive. (3) The forced-composition runner captured its timing path
+  after rewriting sys.argv and scaled ru_maxrss as if Linux, so on the user's
+  macOS the peak RSS would have been 1024x too large and the timing file
+  written under the wrong name; both fixed, and the fork pool's children are
+  now included in the peak.`
+- Blockers or risks (2026-09-10): `The build driver
+  (prepare_workspace / run_isolated_build / the forced-composition runner) is
+  UNEXERCISED - it needs SUMO, the scientific stack and a warm library, none
+  of which exist here. What is tested about it is structural: the plan never
+  targets the real sumo/ or the real day library, the workspace copy leaves
+  the source tree untouched and excludes runs/, and a tree without sumo/
+  prerequisites is a named refusal. Expect to debug it on first real use, and
+  budget for that separately from the four calibrations. Second risk: this
+  checkout is materially behind the user's working copy (31 vs 40 demand
+  sources; no dynamic_passage anywhere), so the dynamic-passage dimension is
+  implemented generically - absent on both sides is recorded as unevaluated,
+  present on one side is a mismatch, and it never silently passes.`
+- Suggested next action (2026-09-10): `Run the experiment where the day
+  library lives. Preflight first, then the full run. Then report the decision:
+  candidate approved for the overlapping-window check, or both policies
+  rejected as model changes with the 19 repetitions recorded as semantically
+  necessary. Stage 2 stays deferred - it edits demand/day_library.py and
+  build_sumo_demand.py and would invalidate the warm library this experiment
+  depends on.`
+- Actor notes (2026-09-10): `Nothing was committed or pushed. No artifact was
+  created under validation/. No production policy was activated.`
+
+PREVIOUS HANDOFF FOLLOWS.
+
 - Focus and status: `The canonical pre-picker weekday/weekend route catalog is
   robustness-repaired, matched-size qualified, schema-v3 adopted and soaked.
   Production defaults to the verified catalog with explicit legacy rollback.

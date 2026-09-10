@@ -14,7 +14,25 @@ owners, states and approval formulas are not active workflow rules. See
   demand-build errors. Keep the adopted canonical weekday/weekend route
   catalog stable, preserve exact scenario/trajectory/seed-health evidence and
   keep full annual warming disabled until explicitly launched.`
-- Status: `CATALOG QUALIFIED, ADOPTED AND SOAKED. A matched-size campaign used
+- Status: `ITEM 1 / STAGE 3 (2026-09-10, this checkout): the isolated
+  day-reuse policy experiment is IMPLEMENTED AND TESTED but NOT MEASURED here.
+  Stage 3 step 1 passes: `tools/` and `tests/` are outside
+  `demand_source_paths` (31 entries in this checkout), so
+  `tools/experiment_day_reuse_policy.py` and
+  `tests/test_experiment_day_reuse_policy.py` cannot change the demand source
+  fingerprint or invalidate a warm day. A second step-1 finding is new and
+  load-bearing: `SUMO_DIR = Path("sumo")` is a module constant in SIX
+  inventory files (build_candidates.py, build_sumo_demand.py,
+  build_sumo_net.py, demand/feedback.py, demand/intake.py,
+  demand/publication.py), so "never write to sumo/" cannot be met by any
+  flag — a cold build for the experiment must run in an isolated byte-identical
+  working copy with its own `--day-library-root`. That route is implemented.
+  NO MEASUREMENT WAS TAKEN AND NO ARTIFACT WAS WRITTEN: this checkout has no
+  `runs/demand-days`, no `sumo/`, no SUMO binaries, no numba, and neither the
+  Stage 1 tool/tests/artifact nor the Item 1 contract section, which are
+  uncommitted on the user's machine. Both candidate policies are therefore
+  UNDECIDED, not rejected.
+  PREVIOUSLY: CATALOG QUALIFIED, ADOPTED AND SOAKED. A matched-size campaign used
   the same 6,000-candidate request in both arms for 30 counterbalanced pairs.
   Median cold demand preparation fell 55.246→24.715 s (2.235x ratio of arm
   medians; 2.220x median paired speedup), every day
@@ -296,7 +314,14 @@ owners, states and approval formulas are not active workflow rules. See
   2.7→2.5 s, max one departure/s). It is not active: ten paired concurrent
   baseline trials measured median 1.805→1.846 s (+2.30%), and closure-shaped
   equivalence/performance is unmeasured.`
-- Suggested next action: `Keep the byte-exact single-write JSON optimization
+- Suggested next action: `ITEM 1 / STAGE 3: run the experiment where the warm day
+  library actually lives. `python3 tools/experiment_day_reuse_policy.py
+  --preflight-only` first, then the full run; it needs `runs/demand-days` to
+  hold both a pure and a mixed full three-variant control for 2027-06-03 and
+  2027-06-25, and it refuses with a named reason otherwise. Four cold builds,
+  inside the frozen 8-calibration / 30-minute budget. Do NOT quote either
+  policy as rejected or as a speed-up until that run exists.
+  THEN, as before: keep the byte-exact single-write JSON optimization
   and the passing exact-repeat cache. Campaign `ui-monthly-13lhsoy-5d` is
   operator-stopped, not running; do NOT restart it without a separate explicit
   user decision. When a restart is authorised, enable the global daily-unit
@@ -332,7 +357,12 @@ owners, states and approval formulas are not active workflow rules. See
   for low observability, or activate policy/UI/global-best claims without the
   applicable frozen evidence. Do not hardcode 107's annual 0.5231 as 96
   measured quarters or present q10/q90 as calibrated probabilities.`
-- Updated: `2026-08-28, sixth narrow review-batch pass: strict timeout-v3
+- Updated: `2026-09-10, Item 1 Stage 3: isolated day-reuse policy
+  experiment tool and tests added (additive only; no tracked file modified).
+  68 new tests pass, three implementation defects were found by self-review
+  and fixed test-first, and five mutation checks confirm the suite bites. The
+  measurement itself was not run - this checkout has neither the day library
+  nor the simulation stack. Previously, 2026-08-28, sixth narrow review-batch pass: strict timeout-v3
   deserialization and complete independent stop-proof field derivation are
   repaired and verified process-free; preserved evidence is byte-identical,
   and no excluded operational action was taken. Previously, a third pass the
@@ -418,6 +448,45 @@ owners, states and approval formulas are not active workflow rules. See
 
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
+
+### ITEM1-STAGE3-2026-09-10 — Isolated day-reuse policy experiment
+
+- Status: `IMPLEMENTED AND TESTED, NOT MEASURED. The experiment tool and its
+  regression suite exist and pass; the measurement needs a checkout that has
+  the warm day library and the simulation stack, and this one has neither.`
+- Objective and scope: `Decide whether replacing the composition-aware day
+  identity with canonical_union (always the full ordered POOL_KEYS) or
+  day_type_local (only the date's own pool key) produces the SAME calibrated
+  day as both context controls, on 2027-06-03 (weekday) and 2027-06-25
+  (weekend/holiday). Tools and tests only; no change to demand/,
+  traffic_sim/demand/, build_sumo_demand.py or the catalog policy.`
+- Completion outcome: `Either a diagnostic artifact
+  validation/day_reuse_policy_experiment_v1.json (release_evidence: false)
+  recording an exact-equivalence pass that then goes to the small overlapping-
+  window check, or a recorded rejection that keeps the current identity and
+  states that its repeated builds are semantically necessary.`
+- Context or checkpoints: `Step 1 (feasibility) is DONE and passes: tools/ and
+  tests/ are outside demand_source_paths. It also found that SUMO_DIR is a
+  module constant in six inventory files, so the isolated cold build must run
+  in a copied working tree with its own --day-library-root; no flag can
+  redirect it. Steps 2-4 and 6-10 are implemented. Step 5 (the measurement) is
+  open: four cold builds, inside 8 calibrations / 30 minutes.`
+- Primary files: `tools/experiment_day_reuse_policy.py,
+  tests/test_experiment_day_reuse_policy.py`
+- Constraints and safety: `Never write to sumo/, runs/demand-days or the
+  published scenarios. Never edit a file in demand_source_paths. Never start a
+  monthly search. Stop at the first regression in provenance, exact sensor
+  targets, population, publication health or structure guards. Compare
+  decompressed bytes and canonical JSON, never gzip container bytes. Wall time
+  and peak RSS are reported and are structurally barred from the verdict.
+  Activate nothing in production, even on a pass.`
+- Acceptance criteria: `A policy is a possible performance improvement only if
+  the same built day matches BOTH context controls exactly on BOTH dates. Any
+  output difference makes it a model change and fails it for Item 1. If
+  neither passes, keep the composition-aware identity.`
+- Useful checks: `python3 -m pytest tests/test_experiment_day_reuse_policy.py
+  -q` (68 passed); `python3 tools/experiment_day_reuse_policy.py
+  --preflight-only`.
 
 ### PERF-CLOSURE-2026-08-21 — Faster exact closures and monthly simulation
 

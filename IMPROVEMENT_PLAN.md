@@ -15,6 +15,55 @@ model-independent protocol in `AGENTS.md`.
 
 ## Current verified status — 2026-08-24
 
+- ITEM 1 / STAGE 3 — ISOLATED DAY-REUSE POLICY EXPERIMENT (added
+  2026-09-10). The experiment that decides whether the composition-aware day
+  identity can be replaced by `canonical_union` (always the full ordered
+  `POOL_KEYS`) or `day_type_local` (only the date's own pool key) is
+  IMPLEMENTED AND TESTED in `tools/experiment_day_reuse_policy.py` and
+  `tests/test_experiment_day_reuse_policy.py` (68 tests). It is NOT MEASURED,
+  so BOTH POLICIES ARE UNDECIDED — not rejected, not adopted, and neither may
+  be described as a performance fix.
+  STEP 1 (feasibility) IS DONE AND PASSES, with two findings. First, `tools/`
+  and `tests/` are outside `demand_source_paths`, so the experiment's own
+  files cannot change the demand source fingerprint or invalidate a warm day;
+  the tool asserts this at startup and refuses to run otherwise. Second, and
+  new: `SUMO_DIR = Path("sumo")` is a module constant in SIX inventory files
+  (`build_candidates.py`, `build_sumo_demand.py`, `build_sumo_net.py`,
+  `demand/feedback.py`, `demand/intake.py`, `demand/publication.py`), so the
+  "never write to `sumo/`" constraint CANNOT be met by adding a flag — adding
+  one edits an inventory file and invalidates every warm day, which is exactly
+  the cost Stage 2 is deferred to avoid. The cold builds therefore run in a
+  byte-identical copied working tree with their own `--day-library-root`, and
+  the composition is forced by patching
+  `build_sumo_demand.window_pool_composition` at runtime, so no source bytes
+  change and the identity produced is the identity the policy would really
+  produce.
+  DESIGN CONSEQUENCE WORTH RECORDING: because each built day is compared
+  against BOTH stored context controls, the experiment is four cold builds
+  (two dates × two candidate compositions), not eight — comfortably inside the
+  frozen 8-calibration / 30-minute budget. `canonical_union` reproduces the
+  MIXED control's composition and `day_type_local` the PURE one, so each
+  policy trivially answers one control and the whole question is whether it
+  also reproduces the OTHER. Stated plainly: the experiment asks whether pool
+  composition is inert, under identical current inputs.
+  WHY IT COULD NOT BE MEASURED IN THIS CHECKOUT: no `runs/demand-days`, no
+  `sumo/`, no SUMO binaries, no numba, and neither the Stage 1 tool/tests/
+  artifact nor the Item 1 implementation contract section — all uncommitted on
+  the user's machine. This checkout's demand source inventory is 31 files
+  against the 40 reported there, and `dynamic_passage` appears nowhere in it.
+  The tool fails closed on exactly this and writes nothing.
+  FOUR TRAPS THE TOOL CLOSES, each pinned by a test and confirmed by a
+  mutation check: gzip container bytes are not the day (stored artifacts are
+  gzipped and gzip records an mtime, so two identical days never hash equal —
+  every comparison decompresses and canonicalises JSON); wall time and peak
+  RSS are reported but structurally barred from the verdict; a pair whose
+  `source_hashes` disagree is INCONCLUSIVE, never "different", because
+  different code is a confound and not a composition effect; and matching only
+  its own composition is not a pass.
+  NOT DONE, and the next step: the measurement, run where the warm day library
+  lives. Even a pass activates nothing — the small overlapping-window check
+  comes first, inside the same budget.
+
 - MONTHLY SEARCH THROUGHPUT (added 2026-08-27). The declared 8x1 worker policy
   was never achieved: campaign `ui-monthly-13lhsoy-5d` measured 80 330.94
   worker-seconds over 88 771.27 active seconds (ratio 0.905 - one busy worker
