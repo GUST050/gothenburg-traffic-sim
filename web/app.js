@@ -2890,6 +2890,15 @@
             }
 
             const [kind, state] = active;
+            // Claim the running job before watching it. A tab that reattached
+            // and then closed again wrote no marker, because the marker is
+            // written where a job is STARTED and this path starts nothing —
+            // so the recovery above would not fire on the next load and the
+            // result would be dropped exactly as before, one level deeper.
+            // Watching a job's progress is the same reason to expect its
+            // result as starting it.
+            rememberPendingJob(
+              kind, ROAD_CLOSURE_OPERATIONS[kind].stateIdentity(state));
             await openWorkspace('closure');
             setClosureTool(kind);
             const spec = state.closure_search_spec;

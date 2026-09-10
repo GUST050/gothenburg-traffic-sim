@@ -130,6 +130,26 @@ class TestMarkerLifecycle:
         assert poller.index("forgetPendingJob(kind)") < poller.index("return status;")
 
 
+class TestReattachedJobIsClaimed:
+    """The marker is written where a job is STARTED, and the reattach path
+    starts nothing.  A tab that reattached to a running job and was then
+    closed again therefore left no marker, so the recovery would not fire on
+    the next load — the same dropped result, one level deeper."""
+
+    def _active_branch(self, source: str) -> str:
+        start = source.index("const [kind, state] = active;")
+        return source[start:source.index("const done = await runRoadClosureOperation(", start)]
+
+    def test_watching_a_running_job_claims_it(self):
+        branch = self._active_branch(_source())
+        assert "rememberPendingJob(" in branch
+        assert "ROAD_CLOSURE_OPERATIONS[kind].stateIdentity(state)" in branch
+
+    def test_the_claim_happens_before_the_poll_loop_can_end(self):
+        branch = self._active_branch(_source())
+        assert branch.index("rememberPendingJob(") < branch.index("openWorkspace('closure')")
+
+
 class TestFinishedJobRecovery:
     def test_a_finished_job_of_any_kind_is_recovered_on_load(self):
         block = _recovery_block(_source())
