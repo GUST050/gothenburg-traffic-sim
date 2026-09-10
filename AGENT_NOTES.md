@@ -950,6 +950,51 @@ which model may continue. See `AGENTS.md`.
   container (verified identical on the unmodified tree);
   tests/test_monthly_progress_contract.py and tests/test_validation_report.py
   42 passed. No simulation, campaign or demand build was run.`
+- Demand-archive fingerprint diagnostics (2026-09-10): `Follow-up to the
+  closure-recovery entry above: the user asked why the 16:10 monthly job failed
+  with "monthly demand archive has no readable build fingerprint:
+  runs/demand-20260910-064957-37c93c95-1cb2". Traced to
+  `_require_one_demand_generation` in traffic_sim/simulation/monthly_demand.py,
+  which reads `<archive>/demand_meta.json` for the generator source hashes and
+  wraps `except (OSError, ValueError)` in one sentence. That catch spans three
+  situations needing three different responses — the archive is gone, the build
+  never finished writing its metadata, or the file is corrupt (JSONDecodeError
+  is a ValueError) — and the message named none of them, so the operator could
+  not tell whether to rebuild, restore or re-point. The message now carries the
+  measured cause. Note the check runs on entries loaded from a CACHED release
+  manifest under runs/monthly-demand-releases/, before `validate_demand_archive`
+  ever runs, so it fires on an archive pinned by an earlier successful run and
+  since removed or truncated; nothing in the repository prunes runs/demand-*
+  (warm_demand_horizon.py --prune targets the day library, and
+  restore_live_demand_release only rmtree's web/data/scenarios), so the removal
+  was external to the code. Which of the three it was on the user's disk is not
+  determined here — they were given the commands to read it.
+  SECOND, LATENT DEFECT FIXED IN THE SAME PLACE: `prepare()` resolves a relative
+  archive path against the release manifest's directory, with a comment saying
+  "never the process working directory", and then hands the same entries to this
+  check — which resolved them against the working directory anyway. A copied or
+  hand-written release would fail HERE, blaming an unreadable fingerprint for a
+  path that was never resolved. `_require_one_demand_generation` now takes
+  `base_dir` (default None, so the existing direct callers are unchanged) and
+  prepare() passes `release_path.parent`.
+  SEPARATE QUESTION, ANSWERED NOT CHANGED: the user recalled being told to re-run
+  LOSO. Nothing asks for that. In web/data/validation.json the `held_out` (LOSO)
+  gate is `status: "info"` and its own note calls it "karakterisering, inte
+  grind". The gate that reports stale is `temporal_holdout`, `status: "missing"`,
+  naming three mismatches against the active release: candidate pool
+  dbfaf49a vs 0196779c, reference window 2025-09-16 vs 2027-11-11, and source
+  historical vs forecast. The LOSO figures in the panel likewise come from a
+  2025-09-16 historical window, so they describe a different build than the
+  2027-11-11 forecast now loaded. None of this is connected to the demand-archive
+  fingerprint check.
+
+  Verification: tests/test_monthly_demand.py 33 passed, including 6 new cases
+  pinning the three named causes, the preserved leading sentence and both
+  relative-path behaviours. With eclipse-sumo installed in this container the
+  earlier SUMO-absence failures are gone: tests/test_serve.py,
+  tests/test_closure_result_recovery.py and
+  tests/test_monthly_progress_contract.py ran 197 passed together. pylint on the
+  changed module exited 0. No simulation, campaign or demand build was run.`
 - Actor notes: `Historical handoff detail follows outside the current markers;
   it is evidence for its date, not current workflow authority.`
 <!-- CURRENT_HANDOFF_END -->

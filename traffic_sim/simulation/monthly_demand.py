@@ -197,8 +197,35 @@ def demand_generation_of(archive: Path) -> dict[str, str]:
     }
 
 
+def _unreadable_generation_reason(archive: Path, error: Exception) -> str:
+    """Name which cause actually fired behind an unreadable fingerprint.
+
+    OSError and ValueError cover three different situations that need three
+    different responses — the archive is gone, the build never finished
+    writing its metadata, or the file is corrupt — and the caller used to
+    report all of them with one sentence that named none. An operator reading
+    it could not tell whether to rebuild, restore or delete. Found live
+    2026-09-10 on a monthly search that failed against an archive whose state
+    on disk the message did not describe.
+    """
+    archive = Path(archive)
+    metadata = archive / "demand_meta.json"
+    if not archive.exists():
+        return "körarkivet finns inte på disken"
+    if not archive.is_dir():
+        return "sökvägen är ingen katalog"
+    if not metadata.exists():
+        return ("demand_meta.json saknas i arkivet — bygget skrev aldrig "
+                "klart sina metadata")
+    if isinstance(error, json.JSONDecodeError):
+        return f"demand_meta.json är trasig JSON: {error}"
+    return f"{type(error).__name__}: {error}"
+
+
 def _require_one_demand_generation(
     entries_by_key: Mapping[str, Mapping[str, Any]],
+    *,
+    base_dir: Path | None = None,
 ) -> None:
     """Refuse a release whose archives were built by different generators.
 
@@ -209,12 +236,20 @@ def _require_one_demand_generation(
     generations: dict[str, list[str]] = {}
     for key, entry in sorted(entries_by_key.items()):
         archive = Path(str(entry.get("archive", "")))
+        # The same rule prepare() states for its own resolution below: a
+        # release may be copied, or written with relative archive paths, and
+        # the process working directory is not where those point. Resolving
+        # them differently in the two places would fail a perfectly good
+        # release HERE, blaming an unreadable fingerprint for a path that was
+        # simply never resolved.
+        if base_dir is not None and not archive.is_absolute():
+            archive = (Path(base_dir) / archive).resolve()
         try:
             generation = demand_generation_of(archive)
-        except (OSError, ValueError):
+        except (OSError, ValueError) as error:
             raise ValueError(
                 f"monthly demand archive has no readable build fingerprint: "
-                f"{archive}"
+                f"{archive} ({_unreadable_generation_reason(archive, error)})"
             ) from None
         if not all(generation.values()):
             raise ValueError(
@@ -825,7 +860,8 @@ class MonthlyDemandResolverRunner:
         }
         if set(by_key) != set(required_by_key):
             raise ValueError("monthly demand release does not cover the shortlist")
-        _require_one_demand_generation(by_key)
+        _require_one_demand_generation(
+            by_key, base_dir=release_path.parent)
 
         for key, required in required_by_key.items():
             pinned = by_key[key]

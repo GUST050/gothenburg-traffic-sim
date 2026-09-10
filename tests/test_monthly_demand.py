@@ -744,6 +744,82 @@ def test_archive_without_generator_hashes_is_refused(tmp_path):
             {key: {"archive": str(archive)}})
 
 
+class TestUnreadableGenerationDiagnostics:
+    """OSError and ValueError cover three situations that need three different
+    responses — the archive is gone, the build never finished writing its
+    metadata, or the file is corrupt. One sentence naming none of them told a
+    real operator nothing on 2026-09-10, when a monthly search failed with
+    "monthly demand archive has no readable build fingerprint" and the state
+    of that archive on disk was exactly what they needed to know."""
+
+    def _entry(self, tmp_path, name="diag"):
+        key, required = _two_required(tmp_path)[0]
+        archive = _archive(tmp_path, required, name,
+                           finished_at="2026-07-21T00:00:00Z")
+        return key, archive
+
+    def test_a_deleted_archive_says_it_is_gone(self, tmp_path):
+        key, archive = self._entry(tmp_path)
+        shutil.rmtree(archive)
+        with pytest.raises(ValueError, match="finns inte på disken"):
+            monthly_demand._require_one_demand_generation(
+                {key: {"archive": str(archive)}})
+
+    def test_a_half_written_archive_names_the_missing_metadata(self, tmp_path):
+        key, archive = self._entry(tmp_path)
+        (archive / "demand_meta.json").unlink()
+        with pytest.raises(ValueError, match="demand_meta.json saknas"):
+            monthly_demand._require_one_demand_generation(
+                {key: {"archive": str(archive)}})
+
+    def test_a_corrupt_metadata_file_is_not_reported_as_a_missing_one(self, tmp_path):
+        """A truncated write and a deleted file need opposite responses:
+        rebuild the one, restore or re-point the other."""
+        key, archive = self._entry(tmp_path)
+        (archive / "demand_meta.json").write_text('{"build_fingerprint": ',
+                                                  encoding="utf-8")
+        with pytest.raises(ValueError, match="trasig JSON"):
+            monthly_demand._require_one_demand_generation(
+                {key: {"archive": str(archive)}})
+
+    def test_the_original_sentence_still_leads_the_message(self, tmp_path):
+        """The reason is added to the existing message, not swapped for it."""
+        key, archive = self._entry(tmp_path)
+        shutil.rmtree(archive)
+        with pytest.raises(ValueError) as raised:
+            monthly_demand._require_one_demand_generation(
+                {key: {"archive": str(archive)}})
+        assert str(raised.value).startswith(
+            "monthly demand archive has no readable build fingerprint:")
+
+
+class TestRelativeArchivePathResolution:
+    """prepare() resolves a relative archive path against the release
+    manifest, "never the process working directory", and then hands the same
+    entries to the generation check — which resolved them against the working
+    directory anyway. A copied or hand-written release therefore failed here,
+    blaming an unreadable fingerprint for a path that was never resolved."""
+
+    def test_a_relative_archive_resolves_against_the_release_manifest(self, tmp_path):
+        key, required = _two_required(tmp_path)[0]
+        archive = _archive(tmp_path, required, "relative-ok",
+                           finished_at="2026-07-21T00:00:00Z")
+        entries = {key: {"archive": archive.name}}
+        monthly_demand._require_one_demand_generation(
+            entries, base_dir=tmp_path)
+
+    def test_without_a_base_the_working_directory_is_not_guessed(self, tmp_path):
+        """No base directory means no resolution — the check must not silently
+        reinterpret a relative path against wherever the process happens to
+        be."""
+        key, required = _two_required(tmp_path)[0]
+        _archive(tmp_path, required, "relative-miss",
+                 finished_at="2026-07-21T00:00:00Z")
+        with pytest.raises(ValueError, match="no readable build fingerprint"):
+            monthly_demand._require_one_demand_generation(
+                {key: {"archive": "relative-miss"}})
+
+
 class TestLiveReleaseKillSafety:
     """The restore lives in a finally block, which a kill skips. A marker on
     disk is what lets the next run put the deployed release back."""
