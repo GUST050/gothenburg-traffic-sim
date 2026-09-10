@@ -912,27 +912,39 @@ which model may continue. See `AGENTS.md`.
   and cmp passed. No cost-ordered v6 registration/outcome, SUMO benchmark,
   monthly campaign, branch operation, commit or push was created or run.`
 - Closure result recovery (2026-09-10): `The user asked why a road-closure run
-  they had just made never showed its result in the UI. Their run is on their
-  own machine and could not be inspected from the cloud session, so the report
-  they got is the list of paths that produce that symptom plus the exact
-  commands that separate them (Körhistorik, /api/close/status, /api/jobs,
-  web/data/scenarios/index.json). One of those paths was a real defect and is
-  now fixed: /api/close is start-plus-poll and the server keeps its terminal
-  state in memory, but the load-time reattach path in web/app.js recovered a
-  FINISHED job only for the monthly search. A `simulate` job that reached
-  done/error/cancelled while the tab was not polling — reload, closed tab, or
-  an operator who thought it had hung — was dropped silently: the scenario was
-  published and listed in index.json while the map kept the previous study and
-  the UI said nothing. This is CLAUDE.md's 2026-07-06 recalibration incident in
-  a second endpoint. The recovery mirrors the recalibration one exactly,
-  including its sessionStorage scoping (`pendingClosure`, keyed on the
-  ScenarioSpec id the server echoes back) so a fresh visitor is never dropped
-  into the last completed closure. A recovered failure or cancellation is
-  announced through the existing persistent banner rather than left silent, and
-  a done scenario that no longer loads (a later recalibration wipes stale
-  scenario files) is announced too.
+  they had just made never showed its result in the UI. The run is on their own
+  machine, which this cloud session cannot reach, so the diagnosis was made from
+  status output they pasted back. MEASURED, and it moved the answer twice.
+  /api/close/status returned exactly {"status": "idle"}, serve.py:669's untouched
+  initial value, so no closure SIMULATION had run at all since that server
+  started; the job ledger held only `monthly` jobs. What the user calls a
+  road-closure run was the calendar search, /api/monthly_search. Its status then
+  showed `done` with a complete result for search ui-monthly-97e768 (edge
+  96527131_26842526_0, 2027-04-01..2027-06-01 forecast) that the UI had never
+  displayed. Root cause: the load-time reattach path in web/app.js recovered a
+  FINISHED job only when `state.server_tracked === false`, a flag serve.py sets
+  only for an ADOPTED, externally launched search — so a finished search this
+  server ran itself, and every finished `simulate` and `suggest` job, was dropped
+  silently. This is CLAUDE.md's 2026-07-06 recalibration incident in three more
+  endpoints. Fixed once for all three: ROAD_CLOSURE_OPERATIONS now carries a
+  requestIdentity/stateIdentity pair (scenario_spec.scenario_id for
+  simulate/suggest, search_id for monthly — the field the live status was
+  verified to echo), runRoadClosureOperation writes a per-kind sessionStorage
+  marker BEFORE the POST (a dropped 202 is exactly the case being recovered) and
+  clears it the moment any tab observes the outcome, and
+  recoverFinishedRoadClosureJob replays the same actions the live poll paths
+  take. The sessionStorage scoping is the one the recalibration recovery already
+  needed: a status endpoint holds the LAST completed job, not "yours", so an
+  unconditional recovery would drop every fresh page load into a stale result.
+  Failures and cancellations are announced through the existing persistent
+  banner, as is a `done` state whose result is no longer loadable. The adopted
+  external-search branch is untouched and still runs after the new one.
+  SEPARATE AND ALREADY SELF-RESOLVED: the 16:10:56 monthly job failed with
+  "monthly demand archive has no readable build fingerprint:
+  runs/demand-20260910-064957-37c93c95-1cb2"; the user's retry 90 s later
+  succeeded, so that archive path is not diagnosed here.
 
-  Verification: node --check on web/app.js; the 12 new contract tests in
+  Verification: node --check on web/app.js; 26 contract tests in
   tests/test_closure_result_recovery.py passed; tests/test_serve.py 152 passed
   with 3 pre-existing failures caused solely by SUMO being absent in this
   container (verified identical on the unmodified tree);
