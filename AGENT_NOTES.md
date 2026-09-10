@@ -967,8 +967,15 @@ which model may continue. See `AGENTS.md`.
   since removed or truncated; nothing in the repository prunes runs/demand-*
   (warm_demand_horizon.py --prune targets the day library, and
   restore_live_demand_release only rmtree's web/data/scenarios), so the removal
-  was external to the code. Which of the three it was on the user's disk is not
-  determined here — they were given the commands to read it.
+  was external to the code. CONFIRMED on the user's disk 2026-09-10: the cause
+  was the first of the three — `runs/demand-20260910-064957-37c93c95-1cb2` does
+  not exist at all. A sweep of `runs/monthly-demand-releases/` (the directory
+  exists) found ZERO manifests still referencing it, so the pin that failed the
+  16:10 job is already gone and nothing needs deleting; the blockage cleared
+  itself between that failure and the check. What removed both files is NOT
+  established and is outside the code — no repository path prunes
+  runs/demand-*. Worth suspecting disk pressure on that machine before the next
+  long campaign.
   SECOND, LATENT DEFECT FIXED IN THE SAME PLACE: `prepare()` resolves a relative
   archive path against the release manifest's directory, with a comment saying
   "never the process working directory", and then hands the same entries to this
