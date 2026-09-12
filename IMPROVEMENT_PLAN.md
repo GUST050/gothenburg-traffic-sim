@@ -114,6 +114,103 @@ utan timers ska fortfarande betecknas rekonstruerade, inte nyuppmätta.
 **Forskningsstöd:** [Python cProfile/pstats](https://docs.python.org/3/library/profile.html).
 Profilering identifierar arbete men dess overhead gör den olämplig som ensam A/B-klocka.
 
+#### Steg 0 — utfört 2026-09-12: mätverktyget finns, produktionsspåren saknas här
+
+**Var arbetet gjordes.** Inte i `/Users/gt/Documents/gs-project` utan i en ren
+molnklon av samma repo på commit `a64315f` (gren
+`claude/exciting-rubin-1e6k5m`). Arbetskopian var ren; inga andra ändringar
+fanns att bevara. `runs/` är gitignorerad och TOM i den här miljön, så varken
+`runs/closure-search/speed-monthly-june-20260912` eller
+`runs/demand-20260912-162423-45495c29-135a` gick att läsa. **Ingen
+återspelning av junikörningens verkliga evidens har därför körts.** Det som
+levereras är mätförmågan och dess kontrakt, inte nya produktionssiffror.
+
+**Ändrade filer:** två nya, inga ändrade.
+`tools/profile_passage_replay.py` (verktyget) och
+`tests/test_profile_passage_replay.py` (41 kontraktstester). Verktyget är ett
+LÖV i importgrafen: det importerar produktionen, produktionen importerar aldrig
+det. Verifierat i test att det varken ingår i `demand_source_paths` (38 källor)
+eller i `CATALOG_SOURCE_LABELS` (12 etiketter), så det kan inte flytta
+demand- eller katalogidentitet — kravet i steg 8 punkt 3. Placeringen är inte
+kosmetisk: `demand_source_paths` globbar `demand/*.py` OCH
+`traffic_sim/demand/*.py`, så samma fil lagd där hade ogiltigförklarat varje
+befintligt demandarkiv bara genom att existera. Diagnostik hör hemma i
+`tools/`.
+
+**Vad verktyget gör.** `--source <evidensrot>` `--out <ny mapp>`, där utmappen
+vägras om den ligger i eller innehåller evidensroten; ett test jämför varje
+källfils digest och storlek före/efter och kräver att de är oförändrade.
+Inventeringen klassar varje krävd fil som `raw`, `compressed`,
+`raw_hash_mismatch` eller `missing` och roten som `complete`, `compressed`
+eller `incomplete`; en komprimerad eller ofullständig rot replayas aldrig som
+komplett. Eftersom `prune_evidence` gzippar allt normalt kan `--expand-compressed`
+packa upp VERIFIERADE kopior i utmappen — aldrig på plats — och rapporten
+behåller då etiketten `trace_state: compressed`.
+
+**Återspelningen använder produktionsfunktionerna**, i `_refine`:s ordning:
+`trial.load_source` (som i sig kräver att varje indata-/spårhash stämmer OCH
+att ruttidsprojektionen rekonstruerar de råa `entered`-cellerna — det är den
+reproduktion av originalresultatet som steg 0 punkt 2 kräver INNAN någon tid
+redovisas), `passage._parse_entered` per arm, `dynamic.build_passage_system`
+(bas och expanderad, mätta var för sig — det är den dubblering steg 1 ska
+åtgärda), `expand_departure_support`, `fit_integer_flows`,
+`automatic_passage._stage_selection`, `calibrated_structure_report` för källa
+och kandidat, samt `_gzip_verified` på en KOPIA i utmappen. Med `--archive` +
+`--demand-spec` tidtas även `validate_demand_archive`, första anropet skilt
+från de följande i samma process.
+
+**Tidsredovisningen.** Varje fas bär `start_s`/`end_s` (`perf_counter`),
+`phase`, `parent_phase`, `date`, `variant`, `pid` och `input_identity`.
+Exklusiv tid är väggtid minus SEKVENTIELLA barn. En fas som markeras
+`concurrent` får `exclusive_s: null` med `exclusive_basis:
+concurrent_children_overlap` plus barnens summa och max var för sig — en våg
+får aldrig subtraheras som om den vore seriell. Roten redovisar en explicit
+residual. Kategorier som återspelningen INTE kan mäta är namngivna i
+`unmeasured_categories` (SUMO-subprocessen, de sex mätvågorna, publicering/
+rollback, costing/resolver, och arkivvalidering när den inte begärts) i stället
+för att tyst hamna i residualen. En återspelning som FALLERAR skriver ändå sin
+rapport, med `status: failed`, orsaken och de faser som hann mätas — ett
+mätverktyg får inte tappa mätningen när något går sönder.
+
+**Tester:** `python3 -m pytest -q tests/test_trial_dynamic_passage.py
+tests/test_dynamic_assignment.py tests/test_automatic_passage.py
+tests/test_passage_solver_checkpoint.py tests/test_build_sumo_demand.py
+tests/test_day_library.py tests/test_monthly_demand.py
+tests/test_independent_daily.py tests/test_monthly_search.py
+tests/test_demand_provenance.py tests/test_profile_passage_replay.py` →
+**427 passed, 2 failed, 1 skipped**. De två felen är miljöbundna och FANNS
+FÖRE ändringen (samma två före som efter): `test_independent_daily.py` kräver
+den genererade `sumo/net.net.xml`, som inte är spårad i git. Planens
+`tests/test_passage_evidence_pruning.py` finns inte i repot; närmaste
+befintliga täckning är `tests/test_automatic_passage.py`. `git diff --check`
+rent; pylint 10.00/10 på båda nya filerna.
+
+**Enda mätningen som faktiskt gjordes** (på testfixturen, sex fordon — INTE en
+produktionssiffra och inte jämförbar med junikörningens minuter): tre
+återspelningar i samma process gav `structure_source` 0,304 s första gången
+mot 0,077 s median därefter, medan `structure_candidate` låg på 0,077 s hela
+tiden. Det är `load_edge_geometry`-cachen som slår igenom, och det är precis
+den skillnad mellan kall programstart och återanvänd process som det
+gemensamma arbetskontraktet kräver att man separerar.
+
+**Kvarvarande risk och vad som återstår av steg 0.** Ett verktyg som aldrig
+körts mot riktig evidens har bara sina kontrakt som bevis. Innan steg 1 påbörjas
+på riktigt behöver följande köras på maskinen som har artefakterna:
+`python3 -m tools.profile_passage_replay --source <demandarkiv>/passage/q50
+--out runs/<ny mapp> --expand-compressed --repeats 3 --label <vardag|blandad
+pool|boundary>` för de tre deklarerade urvalen plus ett underlag med enbart
+träffar, och med `--archive`/`--demand-spec` för arkivvalideringen. Först då
+finns exklusiva tider för verkliga faser. Notera också att återspelningen utan
+`source_reports.json` löser UTAN de bevarade PFE-gränserna; rapporten
+deklarerar det som `solver_constraints: targets_and_groups_only` och sätter
+`selection_reproduced` till `unavailable`/`not_comparable` i stället för att
+låtsas att lösartiden är produktionens. En rot sparad med
+`TRAFFIC_SIM_KEEP_PASSAGE_EVIDENCE` ger den starkare jämförelsen.
+
+**Nästa steg:** steg 1, som verktyget nu kan mäta — `load_source`,
+`build_passage_system_base` och `build_passage_system_expanded` tidtas redan
+var för sig.
+
 ### Steg 1 — återanvänd verifierat passagesystem
 
 **Filer:** `tools/trial_dynamic_passage.py:load_source`,
