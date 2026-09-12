@@ -20,11 +20,14 @@ the evidence runs once; interactive baseline and closure simulations would
 read the reconciled route file with no new runtime option or extra output.  It is not wired into
 the production builder: the active real-network candidate fails the departure-
 dispersion gate below, so this remains a guarded diagnostic until a different
-standard-pool structure clears every adoption gate.
+standard-pool structure clears every adoption gate. A 2026-09-08 retry with
+quarter-preserving bounds and at least half of each original departure gap
+was infeasible on current demand; see validation/passage_reconciliation_trial_20260908.json.
 """
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from contextlib import nullcontext
 from dataclasses import dataclass
 import hashlib
 import json
@@ -112,7 +115,8 @@ def validate_route_targets(
     if not measured:
         raise DepartureReconciliationError("sensor target map is empty")
     for edge_id, series in targets.items():
-        if len(series) != n_intervals:
+        if (len(series) != n_intervals
+                or any(not math.isfinite(float(v)) or float(v) < 0 for v in series)):
             raise DepartureReconciliationError(
                 f"sensor {edge_id} target width differs from demand window")
     counts = {edge_id: [0] * n_intervals for edge_id in measured}
@@ -121,6 +125,10 @@ def validate_route_targets(
         if not 0 <= quarter < n_intervals:
             raise DepartureReconciliationError(
                 f"vehicle {vehicle.vehicle_id} departs outside demand window")
+        if vehicle.edges[0] in measured:
+            raise DepartureReconciliationError(
+                f"vehicle {vehicle.vehicle_id} has a sensor as its first edge; "
+                "departure shifting cannot create an entered event")
         touches = [edge for edge in vehicle.edges if edge in measured]
         if len(touches) != len(set(touches)):
             raise DepartureReconciliationError(
@@ -148,7 +156,7 @@ def parse_passage_evidence(
     """Parse one complete SUMO vehroute file into sensor-entry offsets.
 
     ``exitTimes[j-1]`` is the entry time for route edge ``j``.  For the first
-    edge, the real vehicle departure is its entry time.  Offsets are measured
+    edge there is no entered event: SUMO records departed instead.  Offsets are measured
     against the intended departure in the source route, so insertion delay is
     included rather than silently assumed away.
     """
@@ -182,6 +190,12 @@ def parse_passage_evidence(
         if len(exit_times) != len(edges):
             raise DepartureReconciliationError(
                 f"vehroute evidence width differs from route for {vehicle_id}")
+        times = [actual_depart, *exit_times]
+        if (any(not math.isfinite(t) or t < 0 for t in times)
+                or actual_depart < expected[vehicle_id].depart_s
+                or any(a > b for a, b in zip(times, times[1:]))):
+            raise DepartureReconciliationError(
+                f"vehroute evidence for {vehicle_id} has invalid times")
         factor = element.get("speedFactor")
         if factor is None:
             raise DepartureReconciliationError(
@@ -189,8 +203,8 @@ def parse_passage_evidence(
         speed_factors[vehicle_id] = factor
         intended = expected[vehicle_id].depart_s
         for index, edge_id in enumerate(edges):
-            if edge_id in measured_edges:
-                entry = actual_depart if index == 0 else exit_times[index - 1]
+            if edge_id in measured_edges and index > 0:
+                entry = exit_times[index - 1]
                 offsets[vehicle_id].append(entry - intended)
         seen.add(vehicle_id)
         element.clear()
@@ -228,7 +242,11 @@ def derive_monotone_departures(
     if min_gap_s <= 0:
         raise DepartureReconciliationError("minimum departure gap must be positive")
     scale = 10
-    gap_ticks = max(1, math.ceil(min_gap_s * scale))
+    gap_ticks = [0] + [
+        max(1, math.ceil(min_gap_s * scale),
+            math.ceil((right.depart_s - left.depart_s) * scale * 0.5 - 1e-9))
+        for left, right in zip(vehicles, vehicles[1:])
+    ]
     lower_ticks: list[int] = []
     upper_ticks: list[int] = []
     for vehicle in vehicles:
@@ -244,6 +262,9 @@ def derive_monotone_departures(
                            for value in offsets)
             raw_low = max(0.0, raw_low) + guard_s
             raw_high = min(float(duration_s), raw_high) - guard_s
+            # Keep every original PFE route-count, bound and purpose margin.
+            raw_low = max(raw_low, quarter * INTERVAL_S)
+            raw_high = min(raw_high, (quarter + 1) * INTERVAL_S - 0.1)
         else:
             # An unmeasured route contributes no passage constraint. Keep its
             # original time fixed; moving it would change demand for no gain.
@@ -257,13 +278,13 @@ def derive_monotone_departures(
         upper_ticks.append(high)
 
     forward: list[int] = []
-    for low in lower_ticks:
-        forward.append(max(low, forward[-1] + gap_ticks) if forward else low)
+    for index, low in enumerate(lower_ticks):
+        forward.append(max(low, forward[-1] + gap_ticks[index]) if forward else low)
     backward = [0] * len(vehicles)
     for index in range(len(vehicles) - 1, -1, -1):
         backward[index] = min(
             upper_ticks[index],
-            backward[index + 1] - gap_ticks
+            backward[index + 1] - gap_ticks[index + 1]
             if index + 1 < len(vehicles) else upper_ticks[index],
         )
     for index, vehicle in enumerate(vehicles):
@@ -277,7 +298,7 @@ def derive_monotone_departures(
         preferred = round(vehicle.depart_s * scale)
         value = min(max(preferred, forward[index]), backward[index])
         if chosen:
-            value = max(value, chosen[-1] + gap_ticks)
+            value = max(value, chosen[-1] + gap_ticks[index])
         if value > backward[index]:
             raise DepartureReconciliationError(
                 f"departure projection overflowed at {vehicle.vehicle_id}")
@@ -495,25 +516,37 @@ def _validate_stats(path: Path, expected_vehicles: int) -> None:
 def _parse_entered(path: Path, n_intervals: int,
                    measured_edges: Sequence[str]) -> dict[str, list[int]]:
     result = {edge_id: [0] * n_intervals for edge_id in measured_edges}
+    seen = set()
     try:
         for _event, element in ET.iterparse(path, events=("end",)):
             if element.tag != "interval":
                 continue
-            quarter = int(float(element.get("begin")) // INTERVAL_S)
+            begin = float(element.get("begin"))
+            end = float(element.get("end"))
+            quarter = int(begin // INTERVAL_S)
+            if (begin != quarter * INTERVAL_S or end != begin + INTERVAL_S
+                    or not 0 <= quarter < n_intervals or quarter in seen):
+                raise DepartureReconciliationError("invalid or duplicate edgeData interval")
+            seen.add(quarter)
+            edge_seen = set()
             if 0 <= quarter < n_intervals:
                 for edge in element.findall("edge"):
                     edge_id = edge.get("id")
                     if edge_id in result:
                         value = float(edge.get("entered") or 0)
-                        if not value.is_integer():
+                        if (not value.is_integer() or value < 0
+                                or edge_id in edge_seen):
                             raise DepartureReconciliationError(
                                 "edgeData entered count is not integral")
+                        edge_seen.add(edge_id)
                         result[edge_id][quarter] = int(value)
             element.clear()
     except (OSError, TypeError, ValueError, ET.ParseError) as error:
         if isinstance(error, DepartureReconciliationError):
             raise
         raise DepartureReconciliationError("SUMO edgeData is invalid") from error
+    if seen != set(range(n_intervals)):
+        raise DepartureReconciliationError("incomplete edgeData interval coverage")
     return result
 
 
@@ -562,6 +595,7 @@ def reconcile_sensor_passage_times(
     sumo_home: Path,
     seeds: Sequence[int] = DEFAULT_SEEDS,
     guard_s: int = DEFAULT_GUARD_S,
+    evidence_dir: Path | None = None,
 ) -> dict:
     """Reconcile and atomically publish one calibrated route/agent pair.
 
@@ -579,8 +613,12 @@ def reconcile_sensor_passage_times(
     profile_digests = []
     learning_started = time.perf_counter()
 
-    with tempfile.TemporaryDirectory(
-            prefix="passage-reconcile-", dir=str(route_path.parent)) as raw_tmp:
+    if evidence_dir is not None:
+        evidence_dir.mkdir(parents=True, exist_ok=False)
+    context = (nullcontext(str(evidence_dir)) if evidence_dir is not None else
+               tempfile.TemporaryDirectory(
+                   prefix="passage-reconcile-", dir=str(route_path.parent)))
+    with context as raw_tmp:
         workspace = Path(raw_tmp)
         for seed in seeds:
             run_dir = workspace / f"learn-{seed}"
@@ -598,7 +636,8 @@ def reconcile_sensor_passage_times(
             for vehicle_id, values in seed_offsets.items():
                 offsets[vehicle_id].extend(values)
             profile_digests.append(profile_digest)
-            vehroute_path.unlink()
+            if evidence_dir is None:
+                vehroute_path.unlink()
         if len(seeds) > 1 and len(set(profile_digests)) != len(seeds):
             raise DepartureReconciliationError(
                 "SUMO seed driver profiles unexpectedly collapsed")
@@ -617,6 +656,8 @@ def reconcile_sensor_passage_times(
             route_path, candidate_path, departures)
         _write_reconciled_agents(agent_path, candidate_agents, departures)
         _validate_rewrite(vehicles, candidate_path, departures)
+        validate_route_targets(
+            read_route_vehicles(candidate_path), targets, n_intervals=n_intervals)
 
         verification_started = time.perf_counter()
         for seed in seeds:
@@ -659,7 +700,7 @@ def reconcile_sensor_passage_times(
               for vehicle in vehicles]
     return {
         "schema_version": 1,
-        "contract": "sumo_entered_15min_monotone_departure_v1",
+        "contract": "sumo_entered_15min_monotone_departure_v2",
         "status": "exact",
         "seeds": list(seeds),
         "vehicles": len(vehicles),

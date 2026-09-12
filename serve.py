@@ -1637,9 +1637,16 @@ def adopted_monthly_search() -> dict | None:
         adopted_status = (
             "paused" if interruption == "stopped_by_user" or stale else "running"
         )
+        saved_error = progress.get("last_error")
+        failed_execution = bool(saved_error and not externally_running
+                                and interruption != "stopped_by_user")
+        if failed_execution:
+            adopted_status = "error"
         if interruption == "stopped_by_user":
             note = ("pausad av användaren — arbetsytan kan återupptas; "
                     "servern äger inte den tidigare processen")
+        elif failed_execution:
+            note = "körningen misslyckades — arbetsytans kontrollpunkter finns kvar"
         elif stale:
             note = ("arbetsytan säger körs men ingen månadsprocess äger "
                     "simuleringslåset — behandlas som pausad och återupptagbar")
@@ -1648,6 +1655,8 @@ def adopted_monthly_search() -> dict | None:
                     "arbetsytan; Avbryt kan inte stoppa den")
         return {
             "status": adopted_status,
+            "error": str(saved_error) if failed_execution else None,
+            "resumable": bool(failed_execution or adopted_status == "paused"),
             "search_id": search_id,
             "progress": progress,
             "elapsed_s": elapsed if elapsed is not None and elapsed >= 0 else 0,
@@ -3039,6 +3048,14 @@ class Handler(SimpleHTTPRequestHandler):
                 # every completed candidate published — deliberately NOT
                 # finish("cancelled"), which would forbid resuming. POSTing
                 # the same spec again continues from the saved evidence.
+                try:
+                    interrupted = load_search_workspace(
+                        MONTHLY_SEARCH_ROOT / spec.search_id, verify=False)
+                    interrupted.pause("stopped_by_user")
+                except (OSError, RuntimeError, ValueError):
+                    # The server state still reports cancellation. A workspace
+                    # may not exist yet if cancellation won the startup race.
+                    pass
                 self._set_monthly(status="cancelled",
                                   note="arbetsytan är återupptagbar — starta "
                                        "samma sökning igen för att fortsätta")

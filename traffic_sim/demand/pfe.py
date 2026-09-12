@@ -3366,6 +3366,10 @@ def write_calibration_report(
         report["relaxation_summary"] = {
             RUNG_NAMES[rung]: counts[rung] for rung in RUNG_NAMES if counts[rung]
         }
+        # A dropped bound need not be violated in the emitted draw. Consumers
+        # must not infer the retained contract from the violation list.
+        report["structural_bounds_retained_per_quarter"] = [
+            bool(_rung_keeps_structural_bounds(rung)) for rung in rungs]
     return report
 
 

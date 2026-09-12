@@ -7,6 +7,48 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
+- Focus and status: Item 1 stages 1-4 implemented and verified locally, 2026-09-11.
+- Summary: ui-monthly-g1f50b succeeded; June 25–27 chosen under deterministic q50 cost, still provisional. 29 schedules, 2 verified, 48 successful launches. Active duration 85 min 14 s.
+- Files changed: new tools/explain_day_reuse.py, tests/test_explain_day_reuse.py and validation/day_reuse_explanation_v1.json; IMPROVEMENT_PLAN.md stage 1 status, the day-reuse plan doc's authority note and the current coordination blocks. No existing production module was edited.
+- Checks: 15 manifest hashes match; all four pilot/finalist records pass production durable-evidence resolution (90 references, with sharing). 60 focused tests passed in 1.62 s. Browser result and Escape reviewed; no captured warnings/errors; API ping ok.
+- Decisions and evidence: 30 three-day demand archives, 49 passage calibrations for a 31-day backend. Passage median 55.792 s, sum 2722.725 s; nested PFE sum 3268.797 s. Investigate identity/context duplication before date-only reuse. Runs have different cache conditions, so 85 versus 49 minutes is not a controlled regression.
+- Blockers or risks: B1/B3 remain recorded validator defects. Terminal progress is 0/null. Full-day tooltip says 00:00–00:00; proximity legend overstates confidence. No full-suite, mobile, field-validation or global-best approval.
+- Reprioritisation, 2026-09-10 (project owner): item 1 is now self-contained in IMPROVEMENT_PLAN.md. It covers offline explanation, structured lookup diagnostics, a bounded reuse-policy experiment and job-level accounting; later priorities keep their relative order.
+- Measured read-only while reprioritising (no rebuild, nothing deleted): in the job's own write window the day library received 98 entries over 30 dates — 49 three-variant calibrations plus 49 deliberate q50-subset entries. 19 dates hold two calibrations, 11 hold one, which is exactly 49; every repeat differs in pool_composition (candidate_pool/metadata/catalog_keys follow from it) and no repeat has another cause. Zero (date, composition) pairs show more than one candidate-pool hash, so no nondeterminism. Separately, 296 entries over 94 dates still match the current 40-file source inventory and 1051 are already stale; the store is 8.6 GB.
+- Stage 1 result, 2026-09-10: tools/explain_day_reuse.py + tests/test_explain_day_reuse.py; 32 direct tests and all 263 selected Stage 1 and related tests pass. Real-data acceptance reproduces 49 full calibrations, 30 dates, 49 linked q50 aliases (0 unlinked), 19 repeated dates, causes {pool_composition: 19}. Artifact validation/day_reuse_explanation_v1.json carries release_evidence false and no wall clock, so two runs over one tree are byte-identical. A before/after snapshot of all 1347 manifest paths, mtimes, sizes and SHA-256 digests is unchanged, and 98 of the window's 98 entries remain reusable against the current 40-file inventory. Review added an output-inside-library refusal, exact full/alias variant classification and named rejection of structurally invalid manifests.
+- Defect found and fixed during stage 1: run as a script, sys.path[0] is tools/, so the source-inventory comparison silently degraded to ModuleNotFoundError and reported reusability as unknown. A subprocess test pins it; the inventory is now anchored to the repository root, as build_sumo_demand._source_files already requires.
+- New whole-library finding (same tool, no time filter): across 223 dates the store holds 660 full calibrations and 441 repeats. Closest-prior identity comparisons classify source_change 241, pool_composition 174 and candidate_drift 26, plus 27 aliases whose full partner is gone. These are difference classifications, not causal miss counts; Stage 2 is needed before claiming why historical rebuilds occurred. This does not change Stage 3's per-job ceiling of 19 of 49.
+- Stage 3 result, 2026-09-11: imported only the new experiment tool and tests from remote commit 49f3099, not its stale-base documentation. Review fixed four material defects: the real `passage_calibration` field was read under the wrong name and treated as optional; exact uncompressed route bytes were calculated but excluded from the verdict; full candidate provenance made every policy fail by construction; and a caller-supplied existing workspace could be recursively deleted. Artifact verification, non-policy input confounds and dynamic-passage timing extraction are now explicit. The real diagnostic used zero cold calibrations. On both control dates the pure and mixed archives differ in exact route bytes, route/departure records, canonical agents, population, semantic fit and dynamic-passage evidence with no confounds. Equality is transitive, so no single candidate day can equal both; `canonical_union` and `day_type_local` are eliminated under the frozen performance-only rule. Keep composition-aware identity. `validation/day_reuse_policy_experiment_v1.json` is 34,531 bytes, release_evidence false. 77 direct and 272 combined related tests pass; py_compile and diff whitespace checks pass.
+- Stage 2 result, 2026-09-11: `DayLibrary.lookup` distinguishes hit, absent, unreadable/schema/kind/key/identity rejection, invalid/missing/corrupt/size-mismatched artifact and I/O failure while `get` retains its old fail-closed return type. Malformed SHA/size mappings are now rejected as invalid records. The builder appends one causal record per requested library date with expected/compared key, differing fields, identity cause and lookup duration; an exact-date reconciliation guard prevents incomplete or duplicate publication. Direct builds require zero events. `day_library_diagnostics`, `timings_s` and `pfe_timing_s` are excluded together from the build fingerprint, and two differing diagnostic payloads produce the same build_id in the regression test. Plan-selected tests: 88 pass; combined Stage 1-3/day-library/builder tests: 282 pass; py_compile and diff check pass.
+- Catalog correction: the remote claim that Stage 2 cannot invalidate route-catalog selection is false in this tree. `build_sumo_demand` is one of 12 explicit `CATALOG_SOURCE_LABELS`. `adopted_catalog_config()` still verifies the adoption and stored bytes, but `tools/explain_catalog_fallback.py` reports both pools stale solely at `source_files.build_sumo_demand`; a demand build now would select legacy. Do not requalify midway through remaining source work.
+- Stage 4 result, 2026-09-11: every completed lookup now records the full-calibration action and q50-alias result. One shared validator is used before demand metadata publication and during archive consumption. Archive and job summaries enforce `hits + misses == requested_days`, `full_calibrations == misses` and `rejected_entries <= misses`; rejection remains a miss subset rather than a third disjoint bucket. Unknown, old or malformed decisions yield an explicit incomplete summary without guessed action counts. The aggregate is present in monthly backend provenance, progress detail after preparation/final publication and the final result. The focused integration set passes 110 tests; all seven related Stage 1-4/monthly files pass 401, with one existing urllib3 LibreSSL warning. py_compile and scoped diff checks pass.
+- Suggested next action: review/freeze the completed Stage 1-4 source diff. Then run one catalog qualification/adoption pass, verify implicit catalog selection, and perform the planned demand re-warm. Nothing is committed; all changes remain in the working tree.
+<!-- CURRENT_HANDOFF_END -->
+
+<!-- CURRENT_HANDOFF_HISTORY_START -->
+
+### Before departure-to-passage integration (2026-09-08)
+
+- Research repairs corrected hourly GEH interpretation, chronological forecast validation and stale LOSO handling. Length-weighted route regularization remained diagnostic only; the production route policy was unchanged.
+
+### UI snapshot before research repairs (2026-09-08)
+
+## CURRENT_HANDOFF
+
+- Focus and status: `2026-09-08 UI audit complete within local frontend scope; not committed.`
+- Summary: `Fixed the mobile scenario selector overflowing its panel and the legend covering the map. Improved secondary text and control sizes, mobile result summaries and history layout. A completed monthly result now has an explicit home-screen button instead of stealing startup focus. History job details have native buttons and table headings. Monthly dialogs isolate background controls, contain Tab/Shift+Tab and restore focus on Escape. Playback shortcuts ignore forms, links, disclosures, home/history and open monthly results.`
+- Files changed: `web/index.html, web/app.js, web/controls.js; executable keyboard regression harness in tests/js/controls_keyboard.test.js and pytest harness registration. TASKS.md updated; previous current blocks preserved below.`
+- Checks: `213 passed in 67.42 s across test_web_provider_js, test_monthly_progress_contract and test_serve. Initial 119 fixture errors were sandbox PermissionError on socket.bind, not assertion failures; rerun with permission passed. Node syntax and git diff --check passed. Browser inspected historical/forecast/scenario/date/closure/signals/history workspaces, existing scenario switching, validation disclosure, legend toggling, saved monthly result, Tab wrap and Escape. No overflow in inspected layouts at 320/375/768/1440px; no captured console warnings/errors.`
+- Decisions and evidence: `W3C WCAG 2.2 reflow and target-size guidance plus WAI APG modal keyboard guidance informed changes: https://www.w3.org/WAI/WCAG22/Understanding/reflow.html ; https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/ ; https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/ . Data and scientific caveats preserved.`
+- Blockers or risks: `No full repository suite, automated axe audit, screen-reader pass, Core Web Vitals measurement or reference-screenshot comparison. New SUMO jobs and scientific validation were outside this UI pass; existing scientific warnings remain.`
+- Suggested next action: `Review localhost:8000. Commit/publish only on a new explicit request.`
+- Actor notes: `Local preview was restarted after server tests; no simulation artifacts, catalogs or evidence were rewritten.`
+
+
+### Previous coordination snapshot (superseded by UI audit 2026-09-08)
+
+## CURRENT_HANDOFF
+
 - Focus and status: `AUDIT REPAIR COMMITTED 2026-09-07 on
   strict-sensor-routes-2026-09-01. Confirmed findings are fixed; full suite
   and lint pass. Reviewing the repair itself found four more defects, since
@@ -56,9 +98,7 @@ which model may continue. See `AGENTS.md`.
 - Actor notes: `No simulation, catalog build/adoption, evidence promotion,
   deletion, commit, push, deploy or monthly campaign occurred in this pass.
   The prior repair pass remains pushed at 31f062d.`
-<!-- CURRENT_HANDOFF_END -->
 
-<!-- CURRENT_HANDOFF_HISTORY_START -->
 ## CURRENT_HANDOFF_HISTORY
 
 - Focus and status: `CODE STABILIZATION PASS: repaired the 5-finding

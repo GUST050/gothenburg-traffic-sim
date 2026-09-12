@@ -1,0 +1,779 @@
+{
+  "artifact": "day_reuse_policy_experiment_v1",
+  "binding": {
+    "controls": {
+      "2027-06-03": {
+        "mixed": {
+          "key": "4e67cb9fb4873d66344672a5534e690e",
+          "manifest_sha256": "ead7771e0472087b77faeab91c8f0074106297ae527b63cb7a46e705c8488b8b",
+          "path": "/Users/gt/Documents/gs-project/runs/demand-days/2027-06-03/4e67cb9fb4873d66344672a5534e690e",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ]
+        },
+        "pure": {
+          "key": "bf3b965c9154d9852011a716ddf537ee",
+          "manifest_sha256": "5111752774b38249c656dd889a28e313cc461ba2ef1008e19bcf68eecce464ac",
+          "path": "/Users/gt/Documents/gs-project/runs/demand-days/2027-06-03/bf3b965c9154d9852011a716ddf537ee",
+          "pool_composition": [
+            "weekday"
+          ]
+        }
+      },
+      "2027-06-25": {
+        "mixed": {
+          "key": "e2414c71a8ca4884df900467ca80cb43",
+          "manifest_sha256": "1175f671abbcbb17962b01487684b3a03ad38d3c6aadeba79dce0cbda4381715",
+          "path": "/Users/gt/Documents/gs-project/runs/demand-days/2027-06-25/e2414c71a8ca4884df900467ca80cb43",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ]
+        },
+        "pure": {
+          "key": "0e9ac5e199f31941a5caace461893035",
+          "manifest_sha256": "7a973c2110f4c8daee324ced1437961a3a4d07b6ee80586135a4a83eb4bc35c9",
+          "path": "/Users/gt/Documents/gs-project/runs/demand-days/2027-06-25/0e9ac5e199f31941a5caace461893035",
+          "pool_composition": [
+            "weekend"
+          ]
+        }
+      }
+    },
+    "demand_source_files": {
+      "assignment_priors": "2d5e7201120bfcb0beaf0fe5e36ade8d57664230bc56825a1a5add3aef5ad92d",
+      "build_candidates": "1c1ee4cd22fd7a049e209c00dbd4ad145dc14081d2ecfeb066f4964f005d5602",
+      "build_data": "b3f395cebffd309d3e4130cf7cf8fd200323918b372e90af9f6bfa206fdfe8f7",
+      "build_sumo_demand": "09987a258d549f4586449485171e570906e0702317aef126443d855ec35668d7",
+      "build_sumo_net": "f2c0d830cf5173093639ccc2b767e5bc08735f6b4cfa7ac5669aca14dc319594",
+      "calibrated_provenance": "3fe34be7a2cdbebd34f29a78d7688a9d9e5dff762c7f6744a51dd3eb561c9898",
+      "candidate_cache": "5809c21df7d9d1eaf8c18d5b8e5cb1f276e4ff01e84cf4c7f6853a5a52e7cc98",
+      "demand/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "demand/calibration.py": "458ca86c1d58024136106b198f18a91ee687f1267257544024fbdb98438ceb74",
+      "demand/day_library.py": "1f77b223565833231cf9541bc834b3e7632185cc9d50f4a6708f5094f28dd67d",
+      "demand/feedback.py": "4e558de35352d9c6970d8b169299ddd0d33e9c38dbd6ccc3ecd587a6feede0fe",
+      "demand/intake.py": "2bd7034b25c603c48477be10ed6575b595d5c523dc43b37378ed3f3aa0095479",
+      "demand/locations.py": "5d33ada5933d7d178de9795ed2265cee07f4dd140122d53874802949a8b56af2",
+      "demand/priors.py": "17c82d9e823158b10b9181501031caceb4ceb26f74fbbc9b981d8d9b9598e542",
+      "demand/publication.py": "c9ab04738308b5cbd2de2f4e22d23a4ab6330d32dd930449f31af56f6db829da",
+      "demand/structure.py": "f015d1ed17fd972c3c0ef535bee1950f1c0e8ff8fa6b48687750a623df0d28a0",
+      "demand_source_identity": "e0dc75e0ad26de0bc205deb82635c3cdecc6d59dfb9c0aad5d658b6a18684866",
+      "direction_anchor": "2015a304a9ca435208ca9c624ef135a9c24e9a0a8078cd41512ce9e1a8416f33",
+      "dynamic_assignment": "fa76d4b9e3c00dd23fcffefb48726a24faf63371046583210e1d6318ec06bf03",
+      "dynamic_passage_adapter": "ba04a2b771f2fb293fc752ef72a464b628c362abbe807fee69fde31fbb5d4115",
+      "observability": "dd1cb62ad6252df7f09e795c7a57bad3e715a5d76f9f6d7751fac47b7fc22465",
+      "passage_accuracy": "8d44c5fde6ec38954daf8237a13d487571d339de75116ef0af1b1f486e6891e2",
+      "passage_measurement": "9abd801d4ac6b786e173d4eb09e9b42877f0f27e17a0d5efe7cc27020f696437",
+      "pfe": "93e9b6cceaafff43c687d54ccdf547a75f92b6e68aadbd8d12388d6a959ab55c",
+      "pfe_kernel": "50b6aed2bfb06037e2865c360a39012c49321e4a49bb184c08e007b87007060e",
+      "pipeline_fingerprint": "71baf5b88a9466c9834bedc89b96fca1f1cc3ac5aab85796dbe1c730a7c2dfd9",
+      "prior_flows": "359257cc5250a0318f41492864bc404bcebded80a158e17139eefd059c809f01",
+      "sensor_registry": "3746cf937300dee8af9f8047fa0b512d31c34dd30a4a344b6f6dc35df5d8a4a7",
+      "sensor_registry_data": "41db5d452cb104405d8bd6ac6b78e2c7748dcfe641a9266c7229a4fc7edf1f20",
+      "traffic_sim/demand/__init__.py": "c7a052308425fa340c33ae85b1ab937c68ecc228e527868337ae1e7c9cb5ffaf",
+      "traffic_sim/demand/automatic_passage.py": "38b9429a61c5c68ac311d83ab08c73c41a0492a6831e559262b951bd77846d98",
+      "traffic_sim/demand/build_lock.py": "82bf7dfaf0d2ef52684d008ed42bc1e9d46171b3efab4e79376ad18bec27ee14",
+      "traffic_sim/demand/catalog_qualification.py": "ccf0534e807fa6ba311a9155027c90a0ff425b9cdba48dd9416526cd2150827c",
+      "traffic_sim/demand/catalog_revalidation.py": "059baecbbeaee0f6ccbbb02514c9dac63470f84f02876edd5e703aeaede2e132",
+      "traffic_sim/demand/passage_solver.py": "369714d65bc2f8c261eb8ad5fb85a9b0090f8736496a36a15ccc2c59993ae608",
+      "traffic_sim/demand/route_catalog.py": "722fe77ef192c431b351591670d2e17fd106e4bc38715988e2ca7e5e7bfd22c0",
+      "traffic_sim/demand/route_regularization.py": "84cdfdb4eb48a05a8fc58d3f938d1dab877686fd56057e42662114a8869c7cf5",
+      "traffic_sim/demand/route_support.py": "027d93a3f30197d2866bfda22a5079758d6d10133fd52542b02bff0b0802aacb",
+      "traffic_sim/demand/sensor_route_contract.py": "7eac854dc3ae1ac4a4d3c4471687e7b656692202bdee1b9c609ed94de4730d2b",
+      "traffic_sim/demand/structure_caps.py": "c7ee61ab4afeb29111b5fe8268d8d8b17db7db9cd0ab800454e40585c668658b"
+    },
+    "demand_source_fingerprint": "676e43a0b668b5c1f4a836b28ebca9675d5e0a7a3f89c00300ed1d809607ef95",
+    "test_sha256": "38f2e60ee8eb7f0a40c8cf8b41369864c2e58bddff244d3e2a9210241c7428ac",
+    "tool_sha256": "142ef0f6391ce05fdb3a6461a8e8f74f4a180acc7b08ac4d137343e95a13fdf8"
+  },
+  "budget": {
+    "calibration_seconds": 0.0,
+    "cold_calibrations": 0,
+    "max_calibration_seconds": 1800,
+    "max_cold_calibrations": 8
+  },
+  "candidate_policies": [
+    "canonical_union",
+    "day_type_local"
+  ],
+  "control_dates": [
+    "2027-06-03",
+    "2027-06-25"
+  ],
+  "control_divergence_proof": {
+    "cold_calibrations_needed": 0,
+    "comparisons": [
+      {
+        "confounds": [],
+        "date": "2027-06-03",
+        "dimensions": {
+          "agent_records": {
+            "candidate_sha256": "b65b3ae6a860024daa67747e981f879bcd1f0ccdbb718d0f38d5bb921108fd22",
+            "control_sha256": "7ba88259ae4f72036434d4a4f9d4566f5e2f79800283db82f18ca7b9c497533b",
+            "status": "differs"
+          },
+          "dynamic_passage_fit": {
+            "candidate_sha256": "b7666de362f438f71c5d5041bb3ab3b21d1a07c4f257a03785235555b36bc5f0",
+            "control_sha256": "4a1781e758fe87b87c0f851814655a2fcdf050b4cf6db0cc14dfee61bd17c8a2",
+            "status": "differs"
+          },
+          "fit_semantics": {
+            "candidate_sha256": "19a8d170ca197250ba1b29a3001381150c7d21e8fc9cbbcab19331eb2e9c3abf",
+            "control_sha256": "7f6d008f4afefe1d7ee64188f87f637c004240d6382ab97e42552122622223df",
+            "status": "differs"
+          },
+          "integer_sensor_targets": {
+            "status": "equal"
+          },
+          "population": {
+            "candidate_sha256": "09831e2528317b685637c62b28133d37f4091971969a1930568d901c14090251",
+            "control_sha256": "e625e77b6169ec8457cb5adbf9a9420e946229b87cb328993466cd705caa4f11",
+            "status": "differs"
+          },
+          "provenance_health": {
+            "candidate_sha256": "81236846f4e3e95819da90b6ced0d332ce6d7001c34e1689fb1c1c08bcfe2f14",
+            "control_sha256": "708b6d292c149469dbb4d9b8d1030d5b1b92b04be1a685a1c93d7d4e52d5e92f",
+            "status": "differs"
+          },
+          "publication_health": {
+            "status": "equal"
+          },
+          "route_artifacts": {
+            "candidate_sha256": "e1a801d859c2e707e33aa397054723187e402ea9617707667aeb6b02758ce0e5",
+            "control_sha256": "ed7cdf464a3ff841f62d1a79f0f4491bd590016d90671947f282e13a1d3abf40",
+            "status": "differs"
+          },
+          "route_departures": {
+            "candidate_sha256": "6ccd7ee44a275707f671e340edf651f0f23cf77b4cfb6de84bf57204af3c5f52",
+            "control_sha256": "a9a01df773bf8b15abe649741518d87353024ed180a5d398615c195ebfa32475",
+            "status": "differs"
+          },
+          "route_edges": {
+            "candidate_sha256": "5979ffb238df9e6f909afcaeec3a0ae757dac3a7a01242103e47a0e1ff557049",
+            "control_sha256": "847426811aef02b16cab72126171af0fb703b2d9dc3788d8c79a5190f77ae405",
+            "status": "differs"
+          },
+          "structure_guards": {
+            "candidate_sha256": "ef43f7bf18b8e42d067aef9704421039708895089cc7916d3fb41001a0c43c40",
+            "control_sha256": "078a19cb13d58065d773d902e259822199b73f528e24522bbb81939ed0aba435",
+            "status": "differs"
+          }
+        },
+        "equivalent": false,
+        "mismatched_dimensions": [
+          "route_artifacts",
+          "route_departures",
+          "route_edges",
+          "agent_records",
+          "fit_semantics",
+          "population",
+          "structure_guards",
+          "provenance_health",
+          "dynamic_passage_fit"
+        ],
+        "regression_dimensions": [
+          "route_artifacts",
+          "fit_semantics",
+          "population",
+          "structure_guards",
+          "provenance_health"
+        ],
+        "reported": {
+          "candidate_count": {
+            "candidate": 541,
+            "control": 434
+          },
+          "candidate_metadata_hash": {
+            "candidate": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "control": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "candidate_pool_hash": {
+            "candidate": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879",
+            "control": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "identity_inputs": {
+            "candidate": {
+              "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+              "candidate_pool": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879",
+              "candidate_source": "catalog",
+              "catalog_keys": {
+                "weekday": "f0ce2e06669dbf3e3417254372df7cf8",
+                "weekend": "b4e2cd685ce979141880756467fbb884"
+              },
+              "constraints": "c091d43867aeaeead24b98a2a4d01689160ccac1be5f603b5d4cb58c7802aaa0",
+              "edge_geometry": "92cbcf3895b3d1428d3713a0e919cf6679f00a8e5d00e7974182345d088a1dbf",
+              "passage_network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+              "passage_runtime": {
+                "policy": "automatic_dynamic_passage_v3",
+                "sumo_binary_sha256": "adf7bb8425eca761980ea2a2b43e9761c5b464b046ce3b5ed038ff16e300489a"
+              },
+              "picker_runtime": {
+                "numba": "0.60.0",
+                "numpy": "2.0.2",
+                "platform": "macOS-15.6.1-arm64-arm-64bit",
+                "python": "3.9.6 (default, Apr 30 2025, 02:07:17) \n[Clang 17.0.0 (clang-1700.0.13.5)]",
+                "scipy": "1.13.1"
+              },
+              "purpose_shares": "fc59cdaa0d94a055a914c2de42372089b68086204c28f03f5b36914385bbb787",
+              "through_share_target": 0.25,
+              "variants": [
+                "edge_shares",
+                "edge_shares_q10",
+                "edge_shares_q90"
+              ]
+            },
+            "control": {
+              "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+              "candidate_pool": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+              "candidate_source": "catalog",
+              "catalog_keys": {
+                "weekday": "f0ce2e06669dbf3e3417254372df7cf8"
+              },
+              "constraints": "c091d43867aeaeead24b98a2a4d01689160ccac1be5f603b5d4cb58c7802aaa0",
+              "edge_geometry": "92cbcf3895b3d1428d3713a0e919cf6679f00a8e5d00e7974182345d088a1dbf",
+              "passage_network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+              "passage_runtime": {
+                "policy": "automatic_dynamic_passage_v3",
+                "sumo_binary_sha256": "adf7bb8425eca761980ea2a2b43e9761c5b464b046ce3b5ed038ff16e300489a"
+              },
+              "picker_runtime": {
+                "numba": "0.60.0",
+                "numpy": "2.0.2",
+                "platform": "macOS-15.6.1-arm64-arm-64bit",
+                "python": "3.9.6 (default, Apr 30 2025, 02:07:17) \n[Clang 17.0.0 (clang-1700.0.13.5)]",
+                "scipy": "1.13.1"
+              },
+              "purpose_shares": "fc59cdaa0d94a055a914c2de42372089b68086204c28f03f5b36914385bbb787",
+              "through_share_target": 0.25,
+              "variants": [
+                "edge_shares",
+                "edge_shares_q10",
+                "edge_shares_q90"
+              ]
+            }
+          },
+          "performance": {
+            "candidate": {
+              "dynamic_passage_s": null,
+              "peak_rss_bytes": null,
+              "total_calibration_s": null
+            },
+            "control": {
+              "dynamic_passage_s": null,
+              "peak_rss_bytes": null,
+              "total_calibration_s": null
+            }
+          },
+          "pfe_shape_variables": {
+            "candidate": 541,
+            "control": 434
+          },
+          "pool_composition": {
+            "candidate": [
+              "weekday",
+              "weekend"
+            ],
+            "control": [
+              "weekday"
+            ]
+          },
+          "route_provenance_sha256": {
+            "candidate": "36745b49825fad5054a224c0f43e5f9b9bc5975bfbd4801a2fdc9567bb5ce808",
+            "control": "450eb18f5a7f819a03c507a403506871102c57006ecbe547577553981205ada4"
+          },
+          "source_hashes_equal": true,
+          "stored_artifact_bytes": {
+            "candidate": {
+              "calibrated.agents.json.gz": {
+                "bytes": 929854,
+                "sha256": "a6815fbd6c499b60758789a1a8b8abf7e5e5079f9d2b3d5097cdbf8c8a98bfe2"
+              },
+              "calibrated.rou.xml.gz": {
+                "bytes": 1621379,
+                "sha256": "e393399f3b701752d0cb2fecd0266e6de50e3608216f725b745d3a8ae329969a"
+              },
+              "calibrated_v1.agents.json.gz": {
+                "bytes": 892625,
+                "sha256": "35fde62f4df3804e92543a4ec3eb10a0682ae716205d539f9fe81b46ec4b6b6b"
+              },
+              "calibrated_v1.rou.xml.gz": {
+                "bytes": 1594945,
+                "sha256": "6d3780a3ad01272729fc71dbc74c8d2f8e85c02110749d1efed66834e6241ba7"
+              },
+              "calibrated_v2.agents.json.gz": {
+                "bytes": 879286,
+                "sha256": "be94a621932bccaf2149e012fd583022c1e9acb67ddf72dc51e925fc9d0cfee5"
+              },
+              "calibrated_v2.rou.xml.gz": {
+                "bytes": 1592323,
+                "sha256": "92fbbdae45aeb6f2fecab4bd8e1cbb7355f85a2378421d91a3b29ab1f1530023"
+              },
+              "fit.json": {
+                "bytes": 825908,
+                "sha256": "824a8d901152d9bbdfd7664eefea9d190868c3380ae4b2ee5797906910f3f5e8"
+              },
+              "fit_v1.json": {
+                "bytes": 825109,
+                "sha256": "8578373ebaf058ed6a0af76c18d1677c72fb6c2fc979c7e9ef5c4ff72496da0f"
+              },
+              "fit_v2.json": {
+                "bytes": 820173,
+                "sha256": "4d251c6918c72e7e0637501f3886bc8274997dbc741827c3f00e963c45a8f361"
+              },
+              "provenance.json": {
+                "bytes": 369,
+                "sha256": "6a714b26805f6d4d707b609cb88b0ce4b6eb42e7b849af22e6b6283f639c2bbc"
+              }
+            },
+            "control": {
+              "calibrated.agents.json.gz": {
+                "bytes": 1010881,
+                "sha256": "41b07f93ef7059cb9a43ed6ce6ff3dd8c097d8f346965c64728e2a9c07c6b7f2"
+              },
+              "calibrated.rou.xml.gz": {
+                "bytes": 1736201,
+                "sha256": "316c8a7f129a64bb0803f7ecb316f2fd452514de804f1ea9e791c6400fb685ba"
+              },
+              "calibrated_v1.agents.json.gz": {
+                "bytes": 896475,
+                "sha256": "1ab83953b5e6f80a29850e189b4e22f53861f4dc29e6e5fe66721aa3ba1efc09"
+              },
+              "calibrated_v1.rou.xml.gz": {
+                "bytes": 1635027,
+                "sha256": "3f3fb678b47a2bdf28f0011bc59a84c5e4bcb612a6b3fc048bb3aac1ee59d1b0"
+              },
+              "calibrated_v2.agents.json.gz": {
+                "bytes": 977335,
+                "sha256": "0f67bc635aaeb6f22d462a42a30e541716b0c7a1be3f689739ec67d6c0827449"
+              },
+              "calibrated_v2.rou.xml.gz": {
+                "bytes": 1729670,
+                "sha256": "bc6d6b3c640912465341700492ecf5bae55b8be27923e466421de6ef5e040509"
+              },
+              "fit.json": {
+                "bytes": 753237,
+                "sha256": "fa8cdf059e4477c314aae2dc183bf872aa1cc4e867873d8820ae01256494ae13"
+              },
+              "fit_v1.json": {
+                "bytes": 747556,
+                "sha256": "c7544d250dde327ce624066c1676db64609dc5bf4baee6a4f37c4c2ce3daaa87"
+              },
+              "fit_v2.json": {
+                "bytes": 741688,
+                "sha256": "55b1d7e915a58322e20384196a6b42093713a7d8fb6ac20e0ff67e9d65c6f551"
+              },
+              "provenance.json": {
+                "bytes": 369,
+                "sha256": "dcba9f9cc81962e06f398ad2b8df8abe0091f2a98f57596a728ef1dabd51ad08"
+              }
+            },
+            "note": "gzip container bytes; never used for equivalence"
+          }
+        },
+        "status": "measured",
+        "unevaluated_dimensions": []
+      },
+      {
+        "confounds": [],
+        "date": "2027-06-25",
+        "dimensions": {
+          "agent_records": {
+            "candidate_sha256": "8d25e73c62405701f9766fcc6da2f56b990f40a8c5f20f0412403a6457e72691",
+            "control_sha256": "3c9f535071fd1670bfee693b49691f35d51a89fc5c78d7a472b460243b2445b5",
+            "status": "differs"
+          },
+          "dynamic_passage_fit": {
+            "candidate_sha256": "c5cae4ad9bec4c2a5f0339fc59a9c81d311932325288b9b8f392e66b30094916",
+            "control_sha256": "53dff9ffd1b3696babfbcb2b0ef16d74eb6602944c30b13e934bf98608f4499c",
+            "status": "differs"
+          },
+          "fit_semantics": {
+            "candidate_sha256": "e14efd7281501244ef3f01fc7d38a32afd77cb0a238a4918dd39498187b67de4",
+            "control_sha256": "fd8b58db2a8fdfc05a5dffe459d717411297afa5d2e5863ffb4f710168973ece",
+            "status": "differs"
+          },
+          "integer_sensor_targets": {
+            "status": "equal"
+          },
+          "population": {
+            "candidate_sha256": "ca123d8cb48e1d340f6d33ca5f3f20afcdac41c7fa0eefbd1c7e422437c276f1",
+            "control_sha256": "8bdcfb0db7e4d33b30895b1341d826944bd254d3aad00ff2e6d354b739733701",
+            "status": "differs"
+          },
+          "provenance_health": {
+            "candidate_sha256": "a0c4e8f70a22dd080bf32dc34e8e3e9c054533d2cf43c0b3615a7b268cef3678",
+            "control_sha256": "7228174570f9d4c6f0fb14539c561a19838c7ed44b20609e92667dcd972f26dc",
+            "status": "differs"
+          },
+          "publication_health": {
+            "status": "equal"
+          },
+          "route_artifacts": {
+            "candidate_sha256": "7477ad465b9fc32c7a250942b1757bcd13006e0e497787c25f0ebbde1b3f4a7b",
+            "control_sha256": "eb47f7a11ae0b023e9e17d4868647d4b52b33bef8600e377a102830a6949f69d",
+            "status": "differs"
+          },
+          "route_departures": {
+            "candidate_sha256": "e588e1a1dcd2f27083a734a8acb1ab49a6d5f5432b82cb82e55147a538ff905d",
+            "control_sha256": "fdce122647a0166507f6b373e1f8d0b662c5dabc0aa86a6129db833983ed54ea",
+            "status": "differs"
+          },
+          "route_edges": {
+            "candidate_sha256": "6017b99a6eec54ec5664e3f9039e96d23d0de20e42b9597de106c37ea7a6d53a",
+            "control_sha256": "1ffd108f94f2e7cc73b15e54586a2291da00a75b413c0bff447312ab8fbed787",
+            "status": "differs"
+          },
+          "structure_guards": {
+            "candidate_sha256": "2498ec607623a03eb8e84dfcfebf51afdac5218b8a9f15d5fc65017f67f7a214",
+            "control_sha256": "d1f74209b8562ab143e441ae296e02260cb453496dbeb35b6dd0aae35a7108f9",
+            "status": "differs"
+          }
+        },
+        "equivalent": false,
+        "mismatched_dimensions": [
+          "route_artifacts",
+          "route_departures",
+          "route_edges",
+          "agent_records",
+          "fit_semantics",
+          "population",
+          "structure_guards",
+          "provenance_health",
+          "dynamic_passage_fit"
+        ],
+        "regression_dimensions": [
+          "route_artifacts",
+          "fit_semantics",
+          "population",
+          "structure_guards",
+          "provenance_health"
+        ],
+        "reported": {
+          "candidate_count": {
+            "candidate": 541,
+            "control": 435
+          },
+          "candidate_metadata_hash": {
+            "candidate": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "control": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          },
+          "candidate_pool_hash": {
+            "candidate": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879",
+            "control": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4"
+          },
+          "identity_inputs": {
+            "candidate": {
+              "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+              "candidate_pool": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879",
+              "candidate_source": "catalog",
+              "catalog_keys": {
+                "weekday": "f0ce2e06669dbf3e3417254372df7cf8",
+                "weekend": "b4e2cd685ce979141880756467fbb884"
+              },
+              "constraints": "e644b1e528af3087a0365e7ed526f6d4bfffc8f6985effa810fd86f75116ee75",
+              "edge_geometry": "92cbcf3895b3d1428d3713a0e919cf6679f00a8e5d00e7974182345d088a1dbf",
+              "passage_network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+              "passage_runtime": {
+                "policy": "automatic_dynamic_passage_v3",
+                "sumo_binary_sha256": "adf7bb8425eca761980ea2a2b43e9761c5b464b046ce3b5ed038ff16e300489a"
+              },
+              "picker_runtime": {
+                "numba": "0.60.0",
+                "numpy": "2.0.2",
+                "platform": "macOS-15.6.1-arm64-arm-64bit",
+                "python": "3.9.6 (default, Apr 30 2025, 02:07:17) \n[Clang 17.0.0 (clang-1700.0.13.5)]",
+                "scipy": "1.13.1"
+              },
+              "purpose_shares": "977177c6bd1363418f2dec5666bb0dba40e9b20b721fbce065a62b01ec5b6b10",
+              "through_share_target": 0.25,
+              "variants": [
+                "edge_shares",
+                "edge_shares_q10",
+                "edge_shares_q90"
+              ]
+            },
+            "control": {
+              "candidate_metadata": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3",
+              "candidate_pool": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+              "candidate_source": "catalog",
+              "catalog_keys": {
+                "weekend": "b4e2cd685ce979141880756467fbb884"
+              },
+              "constraints": "e644b1e528af3087a0365e7ed526f6d4bfffc8f6985effa810fd86f75116ee75",
+              "edge_geometry": "92cbcf3895b3d1428d3713a0e919cf6679f00a8e5d00e7974182345d088a1dbf",
+              "passage_network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+              "passage_runtime": {
+                "policy": "automatic_dynamic_passage_v3",
+                "sumo_binary_sha256": "adf7bb8425eca761980ea2a2b43e9761c5b464b046ce3b5ed038ff16e300489a"
+              },
+              "picker_runtime": {
+                "numba": "0.60.0",
+                "numpy": "2.0.2",
+                "platform": "macOS-15.6.1-arm64-arm-64bit",
+                "python": "3.9.6 (default, Apr 30 2025, 02:07:17) \n[Clang 17.0.0 (clang-1700.0.13.5)]",
+                "scipy": "1.13.1"
+              },
+              "purpose_shares": "977177c6bd1363418f2dec5666bb0dba40e9b20b721fbce065a62b01ec5b6b10",
+              "through_share_target": 0.25,
+              "variants": [
+                "edge_shares",
+                "edge_shares_q10",
+                "edge_shares_q90"
+              ]
+            }
+          },
+          "performance": {
+            "candidate": {
+              "dynamic_passage_s": null,
+              "peak_rss_bytes": null,
+              "total_calibration_s": null
+            },
+            "control": {
+              "dynamic_passage_s": null,
+              "peak_rss_bytes": null,
+              "total_calibration_s": null
+            }
+          },
+          "pfe_shape_variables": {
+            "candidate": 541,
+            "control": 435
+          },
+          "pool_composition": {
+            "candidate": [
+              "weekday",
+              "weekend"
+            ],
+            "control": [
+              "weekend"
+            ]
+          },
+          "route_provenance_sha256": {
+            "candidate": "5fcb89237004e92f467ee3127fa00e7290a23cb3048f6dbadcf7538b70971fe5",
+            "control": "940cb766bab782364d72cbeb7ef0275b7db6a618701b0beba908eef4c85febe0"
+          },
+          "source_hashes_equal": true,
+          "stored_artifact_bytes": {
+            "candidate": {
+              "calibrated.agents.json.gz": {
+                "bytes": 373196,
+                "sha256": "4d3b3e5220f61501abcef80fbb2af14fb54eda2f9b6b1edd4bc4a45aa1d1998f"
+              },
+              "calibrated.rou.xml.gz": {
+                "bytes": 716434,
+                "sha256": "98672ed82e35dada032ca37575f0809ae4bd084ac2c293561ee8cb398f91076b"
+              },
+              "calibrated_v1.agents.json.gz": {
+                "bytes": 346083,
+                "sha256": "ec2ae203ccbcd702e76a348a3a500ef167f6ea7519456ac5c02a624d1473e636"
+              },
+              "calibrated_v1.rou.xml.gz": {
+                "bytes": 710062,
+                "sha256": "d6f2f624ca3373d3f14ee7af065582260cf389e32e7ba6bfee123d32ffde1378"
+              },
+              "calibrated_v2.agents.json.gz": {
+                "bytes": 330165,
+                "sha256": "874845a75be1cbf9b3d3f1ed5c7f296660aa67fe52b9be44f260ef280e2821f6"
+              },
+              "calibrated_v2.rou.xml.gz": {
+                "bytes": 678392,
+                "sha256": "a51ca067f2618b75e98b9bcc84c5b44a66f151ac65e96755c86105767841e037"
+              },
+              "fit.json": {
+                "bytes": 789034,
+                "sha256": "788220084183a95be8248c33d04e0f5cea919bbd5bdd3561dd1966fdd06c2e39"
+              },
+              "fit_v1.json": {
+                "bytes": 815470,
+                "sha256": "465938cdbccb3ec4cca43e26398ff7a4123166705a0aef6f824ef1ffce30bd0e"
+              },
+              "fit_v2.json": {
+                "bytes": 797711,
+                "sha256": "017b3d9c37e8c7746bb8c7dfe0f1a973f49c966803efdd2c3655b5793595d6bc"
+              },
+              "provenance.json": {
+                "bytes": 366,
+                "sha256": "27920af306a3e8c381c687c14065e4c487f0fe3776558b9e440cc1e9e8b518ab"
+              }
+            },
+            "control": {
+              "calibrated.agents.json.gz": {
+                "bytes": 373171,
+                "sha256": "5d5df91202eb45b6bcd21fb59006b7e93cec2738c316c68f5bc28013a53e7c7e"
+              },
+              "calibrated.rou.xml.gz": {
+                "bytes": 714873,
+                "sha256": "53f30754fbb21fe3f385e612d1b1a0d571ea38fe0387edb495dd1080e0028adc"
+              },
+              "calibrated_v1.agents.json.gz": {
+                "bytes": 345252,
+                "sha256": "a7a7367dd08c7b98e7dbcd04a7899a9f25ac4b3343d1c8f1f3b9bccf8ae99fab"
+              },
+              "calibrated_v1.rou.xml.gz": {
+                "bytes": 709676,
+                "sha256": "6dc38680eca2e372f7ebb7dd9a5eac4ddb9179918cf54eeddec37b8d97a6a96c"
+              },
+              "calibrated_v2.agents.json.gz": {
+                "bytes": 331211,
+                "sha256": "7cd8cea66732a60b2be1c9e80a5ba6f82e9d4f33833a00a35968c8850103c805"
+              },
+              "calibrated_v2.rou.xml.gz": {
+                "bytes": 691485,
+                "sha256": "d995ef34135de625449b848dbc2b5dac5b40f7b509f0811f8f3482940349371f"
+              },
+              "fit.json": {
+                "bytes": 703697,
+                "sha256": "212fa253d0c4e7d971bc7caba392d843bbe9311c1be0977cf2958220b1498df2"
+              },
+              "fit_v1.json": {
+                "bytes": 700501,
+                "sha256": "244629ffd505101d9dc9a8856d33413943070b9bff4c9900c96779353776e041"
+              },
+              "fit_v2.json": {
+                "bytes": 711028,
+                "sha256": "74c9bcb23a555565a78c010555631cfbb2bfc7458195f8cbcc751f73ae63b50b"
+              },
+              "provenance.json": {
+                "bytes": 366,
+                "sha256": "e5656a1b1b78db03a9bec3c6197d18df059da2774ad8406d05f72e362111079b"
+              }
+            },
+            "note": "gzip container bytes; never used for equivalence"
+          }
+        },
+        "status": "measured",
+        "unevaluated_dimensions": []
+      }
+    ],
+    "decision": "keep_composition_aware_identity",
+    "decisive": true,
+    "decisive_dates": [
+      {
+        "date": "2027-06-03",
+        "different_outputs": [
+          "agent_records",
+          "dynamic_passage_fit",
+          "fit_semantics",
+          "population",
+          "route_artifacts",
+          "route_departures",
+          "route_edges"
+        ]
+      },
+      {
+        "date": "2027-06-25",
+        "different_outputs": [
+          "agent_records",
+          "dynamic_passage_fit",
+          "fit_semantics",
+          "population",
+          "route_artifacts",
+          "route_departures",
+          "route_edges"
+        ]
+      }
+    ],
+    "eliminated_policies": [
+      "canonical_union",
+      "day_type_local"
+    ],
+    "statement": "The archived pure and mixed controls already differ in exact outputs. No day built once can equal both, so neither stable pool policy can satisfy the promotion rule."
+  },
+  "decision": {
+    "activate_in_production": false,
+    "decision": "keep_composition_aware_identity",
+    "eliminated_policies": [
+      "canonical_union",
+      "day_type_local"
+    ],
+    "inconclusive_policies": [],
+    "passing_policies": [],
+    "statement": "The archived pure and mixed controls already differ in exact outputs. No day built once can equal both, so neither stable pool policy can satisfy the promotion rule.",
+    "unmeasured_policies": []
+  },
+  "decision_rule": {
+    "even_on_pass": "no production activation; run the small overlapping-window check first",
+    "fail": "any output difference makes the policy a model change, not a safe performance fix",
+    "none_pass": "keep the composition-aware identity and record the repeated builds as semantically necessary",
+    "pass": "the same built day matches both context controls exactly, on both control dates"
+  },
+  "equivalence_dimensions": [
+    "route_artifacts",
+    "route_departures",
+    "route_edges",
+    "agent_records",
+    "fit_semantics",
+    "population",
+    "integer_sensor_targets",
+    "publication_health",
+    "structure_guards",
+    "provenance_health",
+    "dynamic_passage_fit"
+  ],
+  "generated_utc": "2026-09-11T07:04:14+00:00",
+  "notes": [
+    "No cold calibration was run: unequal archived controls make exact equality to both impossible by transitivity."
+  ],
+  "performance_fields_excluded_from_verdict": [
+    "total_calibration_s",
+    "dynamic_passage_s",
+    "peak_rss_bytes"
+  ],
+  "policies": {
+    "canonical_union": {
+      "activate_in_production": false,
+      "decision": "eliminated_by_control_divergence",
+      "statement": "The archived pure and mixed controls already differ in exact outputs. No day built once can equal both, so neither stable pool policy can satisfy the promotion rule."
+    },
+    "day_type_local": {
+      "activate_in_production": false,
+      "decision": "eliminated_by_control_divergence",
+      "statement": "The archived pure and mixed controls already differ in exact outputs. No day built once can equal both, so neither stable pool policy can satisfy the promotion rule."
+    }
+  },
+  "preflight": {
+    "check": "experiment files outside demand_source_paths",
+    "experiment_files": [
+      "tools/experiment_day_reuse_policy.py",
+      "tests/test_experiment_day_reuse_policy.py"
+    ],
+    "fingerprint_neutral": true,
+    "inside_inventory": [],
+    "inventory_size": 40,
+    "isolation_route": "isolated working copy; SUMO_DIR is a module constant in inventory files, so no flag can redirect it without invalidating warm days",
+    "planned_cold_calibrations": 4,
+    "sumo_dir_binding_sites": [
+      "build_candidates.py",
+      "build_sumo_demand.py",
+      "build_sumo_net.py",
+      "demand/feedback.py",
+      "demand/intake.py",
+      "demand/publication.py"
+    ]
+  },
+  "question": "Does replacing the composition-aware day identity with canonical_union or day_type_local produce the SAME calibrated day as both context controls?",
+  "release_evidence": false,
+  "reported_dimensions": [
+    "agent_records",
+    "candidate_count",
+    "candidate_semantic_hash",
+    "dynamic_passage_fit",
+    "dynamic_passage_s",
+    "fit_semantics",
+    "identity_inputs",
+    "integer_sensor_targets",
+    "peak_rss_bytes",
+    "pfe_shape_variables",
+    "population",
+    "provenance_health",
+    "publication_health",
+    "route_artifacts",
+    "route_departures",
+    "route_edges",
+    "route_provenance",
+    "source_hashes",
+    "structure_guards",
+    "total_calibration_s"
+  ],
+  "schema_version": 1
+}

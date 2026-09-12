@@ -32,6 +32,10 @@ _FIXED_SOURCES = {
     "prior_flows": "prior_flows.py",
     "observability": "observability.py",
     "demand_source_identity": "traffic_sim/demand/source_identity.py",
+    "dynamic_assignment": "traffic_sim/experimental/dynamic_assignment.py",
+    "dynamic_passage_adapter": "tools/trial_dynamic_passage.py",
+    "passage_measurement": "tools/departure_reconciliation.py",
+    "passage_accuracy": "traffic_sim/simulation/sensor_fit.py",
 }
 
 

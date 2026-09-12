@@ -8,6 +8,187 @@ trustworthy each answer is and *where that number came from*. A reviewed added
 station enters all three outputs without sensor-specific calibration code;
 whether it actually improves held-out accuracy must be measured, not promised.
 
+## Evaluation corrections — 2026-09-08
+
+`assess_passage_accuracy` aggregates complete groups of four 15-minute cells
+before comparing GEH with the hourly TAG criterion. Quarter GEH and the 10%
+aggregate-volume limit remain separate project guards; exact publication
+constraints are unchanged. Incomplete or invalid inputs cannot pass.
+Spatial and temporal holdout summaries share candidate/network hash, reference
+window, source and through-share freshness checks.
+
+`train_agent1.rolling_origin_scores` trains only on earlier observed,
+non-holiday targets and evaluates the model and seasonal baseline on identical
+observed pairs. Training artifacts are not automatically regenerated.
+
+`traffic_sim.demand.route_regularization` is an isolated, read-only geometry
+analysis CLI. It tests length-weighted path size using first-lane SUMO lengths,
+retaining the production penalty scale/floor and unique-geometry counting.
+It does not enter production calibration or establish held-out accuracy.
+
+`traffic_sim.experimental.passage_timing` is an isolated, read-only timing
+diagnostic. It derives entry to a target edge from the preceding route edge's
+exit time. A vehicle emitted on the target edge is excluded because SUMO
+edgeData classifies that event as `departed`, not `entered`. The diagnostic and
+its sparse lag projection do not alter PFE targets or production calibration.
+
+The isolated `tools.trial_passage_reconciliation --method quarter-assignment`
+path can preserve each route's source quarter, assign distinct explicit driver
+profiles, and validate unseen profiles with retained raw evidence. It is not
+production calibration: the user rejected post-picker reordering as unnatural.
+The optional minimum-shift variant failed unseen profiles. Further calibration
+work must permit cross-quarter travel and associate counts with each sensor's
+passage quarter; exact schedule fit is not behavioral or generalization evidence.
+
+`traffic_sim.experimental.dynamic_assignment` now implements a sparse,
+time-expanded integer flow solver. Each column is a physical route plus
+an explicit departure time; each row counts entry to one sensor edge in one
+passage interval and travel-time scenario. OD/purpose group totals and supplied
+column capacities are hard constraints, while L1 deviation from prior flows
+and a small departure-shift cost regularize selection. This is an experimental
+baseline, not the production entropy/structure solver. Before/after-horizon
+mass is reported explicitly; first-edge emissions do not count as entered.
+
+`tools.trial_dynamic_passage` binds an existing trial's input and raw traces,
+requires exact reconstruction of the source edgeData, materializes selected
+anonymous trip alternatives with source route/agent attributes, and compares
+raw SUMO counts with the original demand on unseen seeds. It snapshots inputs,
+code and outputs. The diagnostic comparison retains its residual errors and historical identity.
+
+`tools.activate_dynamic_passage` provides explicit, source-bound one-day q50
+activation. It carries the source's retained structural departure-quarter bounds
+into the passage solve, allowing only its already-recorded relaxed quarters.
+Native baseline and closure runs must pass existing publication/health checks;
+staged file hashes are checked before switching active demand and scenario files
+under workspace/demand locks, with backups and the index copied last.
+The user-authorized 2027-08-12 activation is build `e775b28187ae46f52cf5`;
+raw baseline exactness is658/672 ensemble cells and remains visible separately
+from publication acceptance. This record describes the initial one-day activation.
+Evidence and rollback manifest: `runs/dynamic-activation-final-20260908/`.
+
+## PFE across consecutive days
+
+All HiGHS solves in the parent passage fit explicitly use one native solver
+thread, matching PFE workers. Otherwise a parent scheduler initialized after
+day1is inherited by day2fork workers and can spin in
+`HighsTaskExecutor::shutdown` when they apply their own thread settings.
+A fresh-interpreter regression exercises parent fitting followed by forked
+HiGHS solving twice. This thread cap changes execution, not optimization
+constraints or validation gates.
+
+During blocking monthly backend preparation, a joined background heartbeat
+persists active elapsed time and progress every5seconds. The main thread owns
+workspace writes before/after that context; the heartbeat owns them during
+preparation. It reports `heartbeat_only=true`, never fabricated candidate
+completion. Completed workspaces are not mutated. The UI labels preparation
+without an unsupported per-day ETA or a misleading candidate counter.
+
+## Monthly execution failures
+
+A search workspace can remain resumable after an exception. Its durable
+`execution_status` records `failed` and progress retains `last_error`; the
+active-time clock stops at the exception. A resumed progress update clears the
+execution failure, while successful/terminal completion records the terminal
+execution status. The UI restores a dead owner's saved error as `status=error`
+with `resumable=true`, including older manifests containing only `last_error`.
+Workspace resumability is not evidence of a live process.
+
+## Automatic passage calibration
+
+Ordinary PFE builds now call `traffic_sim.demand.automatic_passage` after the
+PFE draw, before candidate-provenance validation and publication. Whole-day
+builds refine each missing day before storing it in `DayLibrary`; direct
+windows refine their staged variants before final metadata publication.
+`routeSampler` remains the explicitly selected counts-only reference engine.
+
+Each new variant measures its own complete route-entry times with three SUMO
+seeds, validates that their projections reconstruct raw sensor entries, and
+solves joint route/departure flows. It retains OD/purpose totals and the exact
+per-quarter structural-bound mask emitted by PFE. A dropped bound need not
+produce a violation, so violation lists cannot identify the original contract.
+Each direction arm retains its own PFE OD/purpose population. PFE stress
+outputs can have different integer vehicle totals; passage fitting must not
+impose q50 departure totals on q10/q90. Policy automatic_dynamic_passage_v3
+invalidates previous passage cache evidence for this corrected contract.
+The first fit uses a bounded ±900s support in 300s steps with a 60s guard.
+If that discrete grid introduces a short-trip concentration in a departure
+quarter, the fitter constrains the affected structural class using the same
+integer cap as publication and re-solves. If the grid cannot express a
+feasible repair, it expands to route-specific sensor-passage boundary times,
+deduplicated by their complete observation signature. This changes the time
+representation while preserving every physical route, OD/purpose group,
+sensor target and retained PFE edge bound.
+
+The integer solver expresses shared scenario targets as `A0*x=b` and
+`(Ai-A0)*x=0`, cancelling unchanged coefficients without dropping constraints.
+Expanded results are independently checked against the original equations.
+Retained PFE bounds and structural repair rows are included in the numeric
+checkpoint and cache identity. `traffic_sim.demand.passage_solver` saves each
+complete request before solving and reuses only a checked optimal result for
+identical model arrays, solver options (except time budget), runtime and code.
+A numeric cache hit does not bypass fresh SUMO validation. A time limit without
+an incumbent means feasibility is unknown; only proven infeasibility triggers
+support expansion. HiGHS remains single-threaded before subsequent PFE forks.
+
+Finished passage evidence uses deterministic gzip level3 with explicit stream
+ownership. Compression is verified by decompressed SHA-256 before each original
+is removed; the output descriptor closes before verification. This avoids the
+synchronous level9 CPU penalty while keeping the measured bytes recoverable.
+Each evidence root records `timings.json` with per-variant calibration time,
+evidence-retention time and total time. These are diagnostic timings, not a
+change to calibration or a reason to bypass source-bound day-cache identity.
+
+For a fast numeric diagnostic, replay a saved `solver-*/request.npz` with
+`python3 -m traffic_sim.demand.passage_solver REQUEST --output-dir NEW_DIRECTORY`
+(optionally `--time-limit SECONDS`). This preserves complete departure bounds
+and refuses to overwrite prior output. It restarts the numeric solve, not a
+saved branch-and-bound tree, and is not SUMO or release validation.
+
+Structural repair is an active-set loop: only observed violating quarters are
+added, and a moved violation is accumulated on the next pass. New unrelated
+structure warnings still fail closed. The repair strategy and quarters are
+recorded in `passage_calibration.structural_repair`; it is a model constraint
+and representation fallback, not a relaxation of the validation gate.
+
+Three other seeds compare original and candidate demand under identical seeds.
+No seed's total error or sensor's aggregate error may increase; complete-hour
+windows additionally pass the existing passage-accuracy criteria. Health,
+source identity and new structural-warning checks fail closed. The original
+PFE report and actual validation counts remain in `passage_calibration`;
+`pfe_fit` labels exactness as predicted passage-quarter exactness, not raw SUMO
+exactness. Native scenario publication criteria remain unchanged.
+
+All variants are validated before their route/agent files switch. Failed CLI
+builds restore conventional prior demand outputs. Day identities bind the
+canonical source inventory, SUMO binary and network; mixed old/new passage
+reports cannot merge. Reusing a valid day runs no extra SUMO calibration.
+Evidence: `validation/automatic_passage_20260908.json`; current optimization
+measurements: `validation/passage_speed_20260908.json`. The active release is
+unchanged; automatic behavior applies to new PFE builds.
+
+Fitting uses the exact affine form of absolute deviation when every prior is
+outside or at its variable bounds; interior priors retain epigraph variables.
+Columns merge only when all sensor, conservation, structural, boundary and
+objective coefficients agree. Aggregate capacities sum and the result expands
+deterministically to original columns; original constraints are rechecked.
+All nine measurements remain, in ordered batches with at most six workers,
+further bounded by CPU count. Retention uses at most three workers after
+calibration. The three direction variants still run serially; the staged
+spawn-worker candidate is not activated.
+The measured cold full-day build fell from75.7s to31.9s (repeat31.6s).
+
+`tools/revalidate_route_catalog.py --execute` can renew an existing full
+schema3 qualification when newly generated catalog artifacts are byte-identical.
+Only orchestrator (`build_sumo_demand`) source drift is eligible. Network,
+configuration, generator and output changes require full qualification. The
+certificate binds the original adoption, fresh build report, both manifests
+and all four output hashes. Adoption verifies the original qualification first,
+then the equivalence proof, failing closed on drift or missing evidence.
+This reuses catalog-artifact evidence, not a new end-to-end speed claim.
+Without `--execute`, the command only records validation evidence. Cached
+validation measured3.5s with the default command, or2.1s with an existing
+`--catalog-build` report; cold regeneration plus validation took115.4s.
+
 ## The estimation hierarchy (the core idea)
 
 Every quantity the program reports is produced at the highest possible level
@@ -942,6 +1123,18 @@ likewise binds Python/platform plus NumPy/SciPy/Numba and the complete canonical
 demand-source inventory. A newly added helper such as
 `traffic_sim/demand/structure_caps.py` can therefore no longer change picker
 semantics while matching an older stored day.
+Every library lookup published by a demand build is also a causal accounting
+record. It binds the requested date/key, named hit/miss/rejection reason,
+nearest differing identity when one exists, lookup time, whether a full
+calibration completed and the q50-alias action. The builder and monthly archive
+consumer share one validator for this record. Monthly accounting treats a
+rejected entry as an operational miss that required recalibration, while
+retaining the rejection as a subset counter. Complete records must satisfy
+`hits + misses == requested_days` and `full_calibrations == misses`; an old or
+malformed record is surfaced as `status: incomplete` and its action counts are
+not inferred. The aggregate is carried by backend provenance, progress detail
+and the final monthly result. These observational fields are excluded from the
+demand `build_id`.
 Reusable route geometry is drawn from a canonical weekday/weekend departure
 profile, while each calendar day's measured or forecast profile controls only
 departures; the first date encountered in a multi-day window can no longer
@@ -3148,3 +3341,12 @@ sensor density).
 - DynaMIT / DYNASMART-X — the estimate-then-predict system archetype.
 - TRR 2025 probe-volume estimation; arXiv 2605.09891 — FCD fusion upgrade
   path for level 3.
+
+### Closure throughput time origin (2026-09-10 correction)
+
+`run_scenario.parse_edgedata` indexes each interval by its absolute XML
+`begin / 900`, including trimmed and warm runs. Both monthly adapters pass
+these arrays to `active_closure_throughput` with the default zero array origin;
+SUMO process start is not a second offset. The optional `window_begin_s` applies
+only to explicitly rebased arrays. The strict nonzero-entry integrity check is
+unchanged. Frozen cold/warm evidence: `validation/closure_clock_origin_fix_20260910.json`.

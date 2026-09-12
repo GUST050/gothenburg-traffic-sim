@@ -363,6 +363,15 @@ class PreparingRunner(FakeRunner):
         return {
             **super().provenance(),
             "prepared_schedule_ids": list(self.prepared),
+            "day_library_accounting": {
+                "schema_version": 1, "status": "complete", "builds": 1,
+                "requested_days": 3, "hits": 2, "misses": 1,
+                "rejected_entries": 0, "full_calibrations": 1,
+                "q50_aliases": 1, "lookup_outcomes": {"hit": 2, "miss": 1},
+                "lookup_reasons": {"hit": 2, "entry_absent": 1},
+                "identity_causes": {"pool_composition": 1},
+                "q50_alias_statuses": {"not_requested": 2, "created": 1},
+            },
         }
 
 
@@ -435,6 +444,10 @@ def test_backend_prepares_only_screened_shortlist_before_provenance(tmp_path):
     assert result["simulation_backend"]["prepared_schedule_ids"] == list(
         runner.prepared
     )
+    assert result["day_library_accounting"]["hits"] == 2
+    workspace = load_search_workspace(tmp_path / "monthly-prepare-order")
+    assert workspace.manifest["progress"]["detail"][
+        "day_library_accounting"]["misses"] == 1
 
 
 def test_exhaustive_search_stops_after_first_unresolved_no_retry_timeout(
@@ -921,6 +934,7 @@ def test_restart_skips_immutable_completed_candidate(tmp_path):
     assert workspace.status == "running"
     assert workspace.manifest["progress"]["phase"] == "pilot"
     assert "transient" in workspace.manifest["progress"]["last_error"]
+    assert workspace.manifest["execution_status"] == "failed"
     first_pilot_calls = [
         call for call in runner.calls
         if call[0] == first_two[0].schedule_id and call[1] == "pilot"

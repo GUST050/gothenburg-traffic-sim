@@ -25,14 +25,16 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
 import time
 from collections import Counter
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Literal, Mapping, Sequence
 
 SCHEMA_VERSION = 1
 DEFAULT_ROOT = Path("runs") / "demand-days"
@@ -115,6 +117,178 @@ class DayIdentity:
         return _digest(self.to_dict())
 
 
+class LookupReason(str, Enum):
+    """Why a lookup ended the way it did.
+
+    ``get`` used to answer every one of these with the same ``None``, so a
+    build could not tell an absent day from a corrupt one, nor either from a
+    day that exists under a different -- equally correct -- identity. Named
+    outcomes are the same device ccache uses for its per-outcome counters.
+    """
+
+    HIT = "hit"
+    ENTRY_ABSENT = "entry_absent"
+    # Present but unusable: parsed as something other than a manifest, or not
+    # parseable at all.
+    MANIFEST_UNREADABLE = "manifest_unreadable"
+    SCHEMA_MISMATCH = "schema_mismatch"
+    KIND_MISMATCH = "kind_mismatch"
+    KEY_MISMATCH = "key_mismatch"
+    IDENTITY_MISMATCH = "identity_mismatch"
+    ARTIFACT_RECORD_INVALID = "artifact_record_invalid"
+    ARTIFACT_MISSING = "artifact_missing"
+    ARTIFACT_DIGEST_MISMATCH = "artifact_digest_mismatch"
+    ARTIFACT_SIZE_MISMATCH = "artifact_size_mismatch"
+    ARTIFACT_IO_ERROR = "artifact_io_error"
+
+
+class IdentityCause(str, Enum):
+    """The single field class that separated two identities for one date."""
+
+    SOURCE_CHANGE = "source_change"
+    VARIANT_SUBSET = "variant_subset"
+    POOL_COMPOSITION = "pool_composition"
+    CANDIDATE_DRIFT = "candidate_drift"
+    OTHER = "other"
+
+
+# Identity fields whose leaves are compared individually. Reporting a bare
+# "inputs" would name the container, not the input that actually changed.
+EXPANDED_IDENTITY_FIELDS = ("inputs", "source_hashes")
+CANDIDATE_FIELD_PREFIXES = ("inputs.candidate", "inputs.catalog_keys")
+
+
+def diff_identity(left: Mapping[str, Any],
+                  right: Mapping[str, Any]) -> tuple[str, ...]:
+    """Sorted dotted paths on which two stored identities differ."""
+    paths: set[str] = set()
+    for name in set(left) | set(right):
+        a, b = left.get(name), right.get(name)
+        if a == b:
+            continue
+        if name in EXPANDED_IDENTITY_FIELDS and isinstance(a, Mapping) \
+                and isinstance(b, Mapping):
+            for leaf in set(a) | set(b):
+                if a.get(leaf) != b.get(leaf):
+                    paths.add(f"{name}.{leaf}")
+            continue
+        paths.add(name)
+    return tuple(sorted(paths))
+
+
+def classify_identity_difference(
+        paths: Sequence[str]) -> IdentityCause | None:
+    """The one cause of a difference, in the order the plan fixed.
+
+    Order is the point. A changed source byte means the older entry could
+    never have been reused whatever else differs, and a variant subset is a
+    deliberate alias rather than a repeated solve. Only when neither holds
+    may a difference count as possibly avoidable calendar context.
+    """
+    if not paths:
+        return None
+    if any(p.startswith("source_hashes") for p in paths):
+        return IdentityCause.SOURCE_CHANGE
+    if "inputs.variants" in paths:
+        return IdentityCause.VARIANT_SUBSET
+    if "pool_composition" in paths:
+        return IdentityCause.POOL_COMPOSITION
+    if any(p.startswith(prefix) for p in paths
+           for prefix in CANDIDATE_FIELD_PREFIXES):
+        return IdentityCause.CANDIDATE_DRIFT
+    return IdentityCause.OTHER
+
+
+@dataclass(frozen=True)
+class DayLookup:
+    """The full result of asking the library for one day."""
+
+    manifest: dict[str, Any] | None
+    outcome: Literal["hit", "miss", "rejected"]
+    reason: LookupReason
+    expected_key: str
+    compared_key: str | None = None
+    differing_fields: tuple[str, ...] = ()
+    identity_cause: IdentityCause | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """A JSON-safe record for build metadata. Never the manifest."""
+        return {
+            "outcome": self.outcome,
+            "reason": self.reason.value,
+            "expected_key": self.expected_key,
+            "compared_key": self.compared_key,
+            "differing_fields": list(self.differing_fields),
+            "identity_cause": (None if self.identity_cause is None
+                               else self.identity_cause.value),
+        }
+
+
+Q50_ALIAS_STATUSES = frozenset({
+    "not_requested", "created", "already_present", "not_applicable"})
+
+
+def _valid_identity_key(value: Any) -> bool:
+    return (
+        isinstance(value, str) and len(value) == 32
+        and all(char in "0123456789abcdef" for char in value))
+
+
+def valid_day_library_diagnostic(item: Any) -> bool:
+    """Return whether one persisted lookup plus build action is complete.
+
+    This schema is shared by the builder and monthly archive consumer so the
+    producer cannot call a partial decision complete while the consumer later
+    guesses the missing counters.
+    """
+    if not isinstance(item, Mapping):
+        return False
+    outcome = item.get("outcome")
+    reason = item.get("reason")
+    expected_key = item.get("expected_key")
+    compared_key = item.get("compared_key")
+    differing_fields = item.get("differing_fields")
+    identity_cause = item.get("identity_cause")
+    duration = item.get("lookup_duration_s")
+    calibrated = item.get("full_calibration")
+    alias_status = item.get("q50_alias_status")
+    if (
+        outcome not in {"hit", "miss", "rejected"}
+        or reason not in {member.value for member in LookupReason}
+        or not _valid_identity_key(expected_key)
+        or (compared_key is not None and not _valid_identity_key(compared_key))
+        or not isinstance(differing_fields, list)
+        or any(not isinstance(field, str) or not field
+               for field in differing_fields)
+        or identity_cause not in {
+            None, *(member.value for member in IdentityCause)}
+        or isinstance(duration, bool)
+        or not isinstance(duration, (int, float))
+        or not math.isfinite(float(duration))
+        or duration < 0
+        or type(calibrated) is not bool
+        or calibrated != (outcome != "hit")
+        or alias_status not in Q50_ALIAS_STATUSES
+        or (outcome == "hit" and alias_status != "not_requested")
+        or (outcome != "hit" and alias_status == "not_requested")
+    ):
+        return False
+    classified = classify_identity_difference(differing_fields)
+    classified_value = None if classified is None else classified.value
+    if identity_cause != classified_value or (
+            (compared_key is None) != (not differing_fields)):
+        return False
+    if outcome == "hit":
+        return (reason == LookupReason.HIT.value and compared_key is None
+                and not differing_fields and identity_cause is None)
+    if outcome == "miss":
+        return reason == LookupReason.ENTRY_ABSENT.value
+    return (reason not in {
+        LookupReason.HIT.value, LookupReason.ENTRY_ABSENT.value}
+        and compared_key is None and not differing_fields
+        and identity_cause is None)
+
+
 class DayLibrary:
     """Filesystem store of calibrated day artifacts, keyed by DayIdentity."""
 
@@ -131,36 +305,128 @@ class DayLibrary:
     def get(self, identity: DayIdentity) -> dict[str, Any] | None:
         """Return a verified entry, or None if absent, incomplete or altered.
 
-        Verification is the point: an entry whose bytes no longer match its
-        manifest is treated as absent so the caller rebuilds it.
+        Unchanged for every existing caller: the verification and the
+        fail-closed answer both live in ``lookup`` now, and this is its
+        manifest. Nothing may be returned that ``lookup`` did not call a hit.
+        """
+        return self.lookup(identity).manifest
+
+    def _miss(self, identity: DayIdentity, reason: LookupReason) -> DayLookup:
+        """An absent entry, with whatever the same date can say about why."""
+        compared_key, fields = self._nearest_sibling(identity)
+        return DayLookup(manifest=None, outcome="miss", reason=reason,
+                         expected_key=identity.key, compared_key=compared_key,
+                         differing_fields=fields,
+                         identity_cause=classify_identity_difference(fields))
+
+    @staticmethod
+    def _rejected(identity: DayIdentity, reason: LookupReason) -> DayLookup:
+        """An entry that exists at the expected key but cannot be trusted."""
+        return DayLookup(manifest=None, outcome="rejected", reason=reason,
+                         expected_key=identity.key)
+
+    def _nearest_sibling(
+            self, identity: DayIdentity) -> tuple[str | None, tuple[str, ...]]:
+        """The stored identity for this DATE that is closest to the one asked.
+
+        Evidence, never a substitute: this explains why a date already in the
+        store was calibrated again, and is deliberately not returned as a
+        manifest. Nearest is fewest differing leaf paths, with the key as a
+        deterministic tie-breaker so two runs report the same sibling.
+        """
+        date_directory = self.root / identity.date
+        wanted = identity.to_dict()
+        best: tuple[int, str, tuple[str, ...]] | None = None
+        try:
+            candidates = sorted(p for p in date_directory.iterdir()
+                                if p.is_dir())
+        except OSError:
+            return None, ()
+        for entry in candidates:
+            if entry.name == identity.key or entry.name.endswith(".staging"):
+                continue
+            try:
+                manifest = json.loads(
+                    (entry / "manifest.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if not isinstance(manifest, dict):
+                continue
+            other = manifest.get("identity")
+            if not isinstance(other, dict):
+                continue
+            fields = diff_identity(wanted, other)
+            ranked = (len(fields), entry.name, fields)
+            if best is None or ranked[:2] < best[:2]:
+                best = ranked
+        if best is None:
+            return None, ()
+        return best[1], best[2]
+
+    def lookup(self, identity: DayIdentity) -> DayLookup:
+        """Verify one stored day and say exactly what was found.
+
+        Verification is unchanged and still fails closed; what is new is that
+        each way of failing has its own name, so a build can report why a day
+        was rebuilt instead of only that it was.
         """
         manifest_path = self.manifest_path(identity)
+        if not manifest_path.is_file():
+            return self._miss(identity, LookupReason.ENTRY_ABSENT)
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            return None
-        if (
-            not isinstance(manifest, dict)
-            or manifest.get("schema_version") != SCHEMA_VERSION
-            or manifest.get("kind") != "calibrated_demand_day"
-            or manifest.get("key") != identity.key
-            or manifest.get("identity") != identity.to_dict()
-            or not isinstance(manifest.get("artifacts"), dict)
+            return self._rejected(identity, LookupReason.MANIFEST_UNREADABLE)
+        if not isinstance(manifest, dict):
+            return self._rejected(identity, LookupReason.MANIFEST_UNREADABLE)
+        for predicate, reason in (
+            (manifest.get("schema_version") != SCHEMA_VERSION,
+             LookupReason.SCHEMA_MISMATCH),
+            (manifest.get("kind") != "calibrated_demand_day",
+             LookupReason.KIND_MISMATCH),
+            (manifest.get("key") != identity.key,
+             LookupReason.KEY_MISMATCH),
+            (manifest.get("identity") != identity.to_dict(),
+             LookupReason.IDENTITY_MISMATCH),
+            (not isinstance(manifest.get("artifacts"), Mapping),
+             LookupReason.ARTIFACT_RECORD_INVALID),
         ):
-            return None
+            if predicate:
+                return self._rejected(identity, reason)
         directory = self.path_for(identity)
         for name, record in manifest["artifacts"].items():
+            if not isinstance(record, Mapping):
+                return self._rejected(
+                    identity, LookupReason.ARTIFACT_RECORD_INVALID)
+            expected_digest = record.get("sha256")
+            expected_size = record.get("bytes")
+            if (
+                not isinstance(expected_digest, str)
+                or len(expected_digest) != 64
+                or any(char not in "0123456789abcdef"
+                       for char in expected_digest)
+                or type(expected_size) is not int
+                or expected_size < 0
+            ):
+                return self._rejected(
+                    identity, LookupReason.ARTIFACT_RECORD_INVALID)
             path = directory / name
             if not path.is_file():
-                return None
+                return self._rejected(identity, LookupReason.ARTIFACT_MISSING)
             try:
-                if sha256_bytes(path) != record.get("sha256"):
-                    return None
-                if path.stat().st_size != record.get("bytes"):
-                    return None
-            except (OSError, AttributeError):
-                return None
-        return manifest
+                digest = sha256_bytes(path)
+                size = path.stat().st_size
+            except OSError:
+                return self._rejected(identity,
+                                      LookupReason.ARTIFACT_IO_ERROR)
+            if digest != expected_digest:
+                return self._rejected(
+                    identity, LookupReason.ARTIFACT_DIGEST_MISMATCH)
+            if size != expected_size:
+                return self._rejected(
+                    identity, LookupReason.ARTIFACT_SIZE_MISMATCH)
+        return DayLookup(manifest=manifest, outcome="hit",
+                         reason=LookupReason.HIT, expected_key=identity.key)
 
     def put(
         self,
@@ -332,6 +598,18 @@ def merge_day_reports(
     """
     if not day_reports:
         raise ValueError("a window needs at least one day report")
+    passage_days = [report.get("passage_calibration") for report in day_reports]
+    if any(passage_days) and not all(
+            isinstance(record, Mapping) and record.get("status") == "validated"
+            for record in passage_days):
+        raise ValueError("cannot merge incomplete or mixed passage calibration evidence")
+    passage_policies = {
+        record.get("policy") for record in passage_days
+        if isinstance(record, Mapping)
+    }
+    if passage_policies and (
+            None in passage_policies or len(passage_policies) != 1):
+        raise ValueError("cannot merge mixed passage calibration policy versions")
     days = len(day_reports)
     total_quarters = days * quarters_per_day
     achieved: dict[str, list[float]] = {}
@@ -432,4 +710,10 @@ def merge_day_reports(
         "purpose_allocation": allocation,
         "purpose_allocation_summary": merged_summary,
         "relaxation_summary": dict(relaxation),
+        **({"passage_calibration": {
+            "policy": next(iter(passage_policies)), "status": "validated",
+            "days": [report["passage_calibration"] for report in day_reports]},
+            "measurement_basis": "predicted_sensor_passage_quarter"}
+           if all(report.get("passage_calibration", {}).get("status") == "validated"
+                  for report in day_reports) else {}),
     }

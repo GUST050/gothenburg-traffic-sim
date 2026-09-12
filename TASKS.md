@@ -8,6 +8,34 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- WORKFLOW_CONTROL_START -->
 ## WORKFLOW_CONTROL
 
+- Mode: `FLEXIBLE — simulation quality and performance research`
+- Current focus: `Freeze the completed Stage 1-4 day-library source changes, then restore current route-catalog adoption before any demand rebuild.`
+- Status: `Priority 1 Stages 1-4 are DONE locally. Stage 4 carries strictly reconciled day-library accounting through archive validation, monthly backend provenance, progress and result.json; incomplete records remain explicitly incomplete. The focused integration set passes 110 tests and all seven related test files pass 401. The adopted route-catalog artifacts verify, but implicit selection currently falls back because the expected keys drifted at source_files.build_sumo_demand.`
+- Suggested next action: `Review/freeze the Stage 1-4 diff, then run one route-catalog qualification/adoption pass, verify implicit catalog selection, and only then run the planned demand re-warm. Do not run a demand build before catalog re-adoption because it would use the slower legacy candidate builder.`
+- Eligible actors: `Any capable actor.`
+- Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation, commit or push.`
+- Updated: `2026-09-11. Stages 1-4 are locally complete; 401 related tests pass. Nothing committed or pushed.`
+<!-- WORKFLOW_CONTROL_END -->
+
+<!-- WORKFLOW_HISTORY_START -->
+
+### UI snapshot before research repairs (2026-09-08)
+
+## WORKFLOW_CONTROL
+
+- Mode: `FLEXIBLE — UI audit and repair`
+- Current focus: `2026-09-08 user-requested visual and functional UI improvements, informed by current W3C guidance.`
+- Status: `DONE within the UI scope; local changes, not committed or published.`
+- Suggested next action: `User review of the local interface. Scientific release and expensive simulation evidence remain separate.`
+- Eligible actors: `Any capable actor.`
+- Safety boundary: `Preserve simulation artifacts and evidence gates; no commit, push, deployment or campaign was requested.`
+- Updated: `2026-09-08. See ACTIVE_TASK and CURRENT_HANDOFF for fresh verification.`
+
+
+### Previous coordination snapshot (superseded by UI audit 2026-09-08)
+
+## WORKFLOW_CONTROL
+
 - Mode: `FLEXIBLE — review findings verified, accepted repairs implemented`
 - Current focus: `Review-driven reliability, scientific-truthfulness, UI and
   CI repair pass on top of the adopted route catalog.`
@@ -42,9 +70,7 @@ owners, states and approval formulas are not active workflow rules. See
   0 failed in 811.15 s; make lint, JS syntax/harnesses, workflow YAML and git
   diff whitespace checks passed. The prior repair pass remains commit 31f062d;
   this additional audit pass is local and uncommitted.`
-<!-- WORKFLOW_CONTROL_END -->
 
-<!-- WORKFLOW_HISTORY_START -->
 ## WORKFLOW_HISTORY
 
 - Status: `2026-08-30 REPAIR-BATCH PASS 6 (review-03 CHANGES_REQUIRED on
@@ -660,6 +686,53 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
+### SIM-RESEARCH-2026-09-10 — Performance and generalization roadmap
+
+- Status: `ITEM 1 IMPLEMENTATION PLAN READY; implementation not started.`
+- Objective and scope: `Identify robust, evidence-preserving improvements to heldag build speed, physical sensor matching, unseen-sensor/day generalization and closure decision fidelity.`
+- Completion outcome: `Item 1 now separates zero-risk offline diagnosis, structured in-build lookup reasons, a bounded context-independent pool experiment and job-level accounting. A pool policy can be promoted only with exact output equivalence; otherwise the current context-aware identity remains.`
+- Evidence: `validation/codebase_simulation_improvement_research_20260910.md; direct reproductions of map-validator IndexError and merge AttributeError; exact clockBegin/clockEnd unions from54 archived stats files; nested builder call inspection; active catalog-hit cadence; metadata and NumPy measurements; local timing, solver, source-reuse, LOSO, structure and libsumo preflight artifacts; official SUMO and FHWA primary guidance.`
+- Constraints and safety: `Do not weaken seeds, health, exactness, provenance or release gates. Historical no_viable remains invalid; bounded corrected closure check precedes a new full search. Performance patches remain unactivated until full-population equivalence, resource and cancellation checks pass.`
+<!-- ACTIVE_TASK_END -->
+
+<!-- ACTIVE_TASK_HISTORY_START -->
+
+### Before dynamic sensor-passage assignment
+
+## ACTIVE_TASK
+
+### RESEARCH-REPAIR-2026-09-08 — Correct evaluation and test route overlap
+
+- Status: `DONE for verified local repairs and structural diagnostic; no predictive-improvement claim.`
+- Objective and scope: `Implement research recommendations only where supported; prioritize point 6 safely.`
+- Completion outcome: `Hourly GEH standard comparison with retained project guards; chronological paired forecast validation using observed training labels; spatial LOSO freshness checks shared with temporal validation; separate length-weighted path-size diagnostic.`
+- Context or checkpoints: `Prior UI audit preserved. Geometry diagnostic: 416 unique routes, 92 changed weights, treatment/control cost ratio 0.4843–1.4138. No traffic-accuracy evaluation performed.`
+- Primary files: `sensor_fit.py, confidence/report.py, train_agent1.py, demand/route_regularization.py, web/app.js and focused tests.`
+- Constraints and safety: `No retraining, SUMO campaign, demand rebuild, scenario publication or production route-policy change. Exact publication constraints retained.`
+- Acceptance criteria: `Reproduced defects pass regression tests; length weighting is segmentation-invariant and rejects missing/invalid lengths; diagnostic binds inputs and changes no data.`
+- Useful checks: `238 passed across test_passage_accuracy, test_research_regressions, test_route_regularization, test_agent1, test_validation_report, test_web_provider_js, test_pfe and test_pfe_kernel. Node syntax checked. Full suite not run.`
+
+
+### UI snapshot before research repairs (2026-09-08)
+
+## ACTIVE_TASK
+
+### UI-AUDIT-2026-09-08 — Responsive controls and accessible navigation
+
+- Status: `DONE — local UI changes verified.`
+- Objective and scope: `Review existing workspaces online and in the browser; improve visual clarity, responsive layout and keyboard interaction.`
+- Completion outcome: `Collapsible map legend, bounded scenario select, stronger secondary text, larger actions, stacked mobile result summaries, explicit reopening of saved monthly results, keyboard-operable history and contained modal focus. Playback shortcuts respect forms and dialogs.`
+- Context or checkpoints: `Existing completed search remains accessible from home; active/paused job recovery is preserved. No scenario JSON or simulation contracts changed.`
+- Primary files: `web/index.html, web/app.js, web/controls.js, tests/js/controls_keyboard.test.js, tests/test_web_provider_js.py.`
+- Constraints and safety: `No new real SUMO run, catalog adoption, release promotion, commit, push or deployment.`
+- Acceptance criteria: `Relevant tests pass; inspected responsive views do not overflow; dialog focus wraps and returns correctly; form keys do not scrub playback.`
+- Useful checks: `213 passed in 67.42 s: tests/test_web_provider_js.py tests/test_monthly_progress_contract.py tests/test_serve.py. Initial sandbox port-bind errors were resolved by running with permission. Node syntax and git diff --check passed. Browser checked 320/375/768/1440px and safe workspace flows; no captured console errors. No full-suite, axe, screen-reader or screenshot-baseline claim.`
+
+
+### Previous coordination snapshot (superseded by UI audit 2026-09-08)
+
+## ACTIVE_TASK
+
 ### AUDIT-REPAIR-2026-09-06 — Verify findings and implement confirmed defects
 
 - Status: `COMMITTED 2026-09-07 — verified, then reviewed again; the review
@@ -687,9 +760,7 @@ owners, states and approval formulas are not active workflow rules. See
 - Useful checks: `840 affected tests passed in 70.22 s; full suite 5,949 passed,
   26 skipped, 0 failed in 811.15 s; make lint exit 0; JS syntax and four Node
   harnesses pass; workflow YAML parses; git diff --check passes.`
-<!-- ACTIVE_TASK_END -->
 
-<!-- ACTIVE_TASK_HISTORY_START -->
 ## ACTIVE_TASK_HISTORY
 
 ### CLOSURE-OBJECTIVE-REPAIR-2026-09-04 — Scorer/writer equivalence

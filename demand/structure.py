@@ -216,6 +216,23 @@ def load_edge_geometry() -> tuple[dict[str, tuple[float, float]],
     return edge_latlon, sensor_edge_ids, edge_len_m
 
 
+def route_od_distance_km(
+    edges: list[str] | tuple[str, ...],
+    edge_latlon: dict[str, tuple[float, float]] | None = None,
+) -> float | None:
+    """Return the endpoint distance used by every trip-length guard."""
+    if not edges:
+        return None
+    if edge_latlon is None:
+        edge_latlon, _sensor_ids, _edge_len_m = load_edge_geometry()
+    origin, destination = edge_latlon.get(edges[0]), edge_latlon.get(edges[-1])
+    if origin is None or destination is None:
+        return None
+    return float(gravity_distance_km(
+        np.array([destination[0]]), np.array([destination[1]]),
+        origin[0], origin[1])[0])
+
+
 def _route_structure_metrics(route_path: Path) -> dict | None:
     """Per-vehicle structure metrics for one SUMO route file — the shared
     machinery behind calibrated_structure_report (below). Emits the
@@ -270,11 +287,9 @@ def _route_structure_metrics(route_path: Path) -> dict | None:
                 "route: neither an inline <route edges=...> nor a reference to "
                 "a shared <route id=...> in the same file")
         edges = edges_text.split()
-        o, d = edge_latlon.get(edges[0]), edge_latlon.get(edges[-1])
         dest_edges.append(edges[-1])
-        if o is not None and d is not None:
-            distance_km = float(gravity_distance_km(
-                np.array([d[0]]), np.array([d[1]]), o[0], o[1])[0])
+        distance_km = route_od_distance_km(edges, edge_latlon)
+        if distance_km is not None:
             lengths_km.append(distance_km)
             quarter = int(float(veh.get("depart", "0")) // 900)
             quarter_totals[quarter] += 1
@@ -725,14 +740,6 @@ def structure_groups_for_shapes(shapes) -> list[tuple[str, list[int], float]]:
         return bool((gravity_distance_km(s_lats_a, s_lons_a, ll[0], ll[1])
                      * 1000.0).min() <= NEAR_SENSOR_RADIUS_M)
 
-    def od_length_km(shape) -> float | None:
-        o = edge_latlon.get(shape.edges[0])
-        d = edge_latlon.get(shape.edges[-1])
-        if o is None or d is None:
-            return None
-        return float(gravity_distance_km(
-            np.array([d[0]]), np.array([d[1]]), o[0], o[1])[0])
-
     def length_bin(km: float) -> int:
         for b, edge in enumerate(LENGTH_BIN_EDGES_KM):
             if km <= edge:
@@ -751,7 +758,7 @@ def structure_groups_for_shapes(shapes) -> list[tuple[str, list[int], float]]:
         if sensor_pts and shape.edges:
             if near(shape.edges[-1]):
                 candidate_groups["near_sensor_dest"].append(i)
-            km = od_length_km(shape)
+            km = route_od_distance_km(shape.edges, edge_latlon)
             if km is not None:
                 candidate_groups[bin_names[length_bin(km)]].append(i)
         # Exact route shapes have one first edge even when their provenance

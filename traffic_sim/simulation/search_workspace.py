@@ -205,7 +205,29 @@ class SearchWorkspace:
         if error is not None:
             progress["last_error"] = str(error)
         self.manifest["progress"] = progress
+        # The workspace remains reusable; record whether its latest execution
+        # actually failed rather than treating resumability as process liveness.
+        self.manifest["execution_status"] = "failed" if error is not None else "running"
+        if error is not None:
+            self._snapshot_active_elapsed(stop=True)
         self._flush()
+
+    def pause(self, interruption: str) -> None:
+        """Record a stopped attempt while keeping the workspace resumable."""
+        self._require_running()
+        if not isinstance(interruption, str) or not interruption.strip():
+            raise ValueError("workspace interruption must be non-empty")
+        progress = self.manifest.get("progress")
+        progress = dict(progress) if isinstance(progress, Mapping) else {}
+        detail = progress.get("detail")
+        detail = dict(detail) if isinstance(detail, Mapping) else {}
+        detail["interruption"] = interruption
+        progress["detail"] = detail
+        progress["updated_at"] = _now()
+        self.manifest["progress"] = progress
+        self.manifest["execution_status"] = "paused"
+        self._snapshot_active_elapsed(stop=True)
+        _atomic_json(self.directory / "manifest.json", self.manifest)
 
     def publish_artifact(
         self,
@@ -275,6 +297,7 @@ class SearchWorkspace:
             shutil.rmtree(self.scratch_dir)
         self.manifest.update({
             "status": status,
+            "execution_status": status,
             "finished_at": _now(),
             "scratch": "preserved" if preserve else "removed",
         })

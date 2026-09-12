@@ -37,6 +37,7 @@ import platform
 import subprocess
 import sys
 import tempfile
+import uuid
 import time
 import shutil
 import xml.etree.ElementTree as ET
@@ -68,7 +69,8 @@ from traffic_sim.demand.provenance import (DAY_PROVENANCE_NAME,
                                            validate_calibrated_provenance)
 from traffic_sim.demand.source_identity import demand_source_paths
 from demand.day_library import (DayIdentity, DayLibrary, assemble_window,
-                                merge_day_reports)
+                                merge_day_reports,
+                                valid_day_library_diagnostic)
 from train_agent1 import HOLIDAY_DATES_2025
 from build_agent1_flows import HOLIDAY_MAPPING_2027_TO_2025
 
@@ -98,6 +100,89 @@ def _digest_payload(payload) -> str:
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"),
                            allow_nan=False, default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def record_day_library_lookup(
+    library: DayLibrary,
+    identity: DayIdentity,
+    diagnostics: list[dict],
+    *,
+    clock=time.perf_counter,
+) -> dict | None:
+    """Look up one requested day and retain the causal result for metadata."""
+    started = clock()
+    lookup = library.lookup(identity)
+    duration = max(0.0, clock() - started)
+    event = {
+        "date": identity.date,
+        **lookup.to_dict(),
+        "lookup_duration_s": round(duration, 6),
+        # A hit is already complete. A miss/rejection is finalized only after
+        # the expensive calibration and optional q50 alias write succeed.
+        "full_calibration": False if lookup.outcome == "hit" else None,
+        "q50_alias_status": (
+            "not_requested" if lookup.outcome == "hit" else None),
+    }
+    diagnostics.append(event)
+    comparison = (f" compared={lookup.compared_key[:12]}"
+                  if lookup.compared_key else "")
+    print(f"  day {identity.date}: library "
+          f"{lookup.outcome}/{lookup.reason.value} "
+          f"key={identity.key[:12]}{comparison}")
+    return lookup.manifest
+
+
+def complete_day_library_decision(
+    diagnostics: list[dict],
+    *,
+    q50_alias_status: str,
+) -> None:
+    """Finalize the latest miss after its full calibration was published."""
+    if not diagnostics or diagnostics[-1].get("outcome") not in {
+            "miss", "rejected"}:
+        raise RuntimeError(
+            "day-library calibration has no pending miss decision")
+    if q50_alias_status not in {
+            "created", "already_present", "not_applicable"}:
+        raise RuntimeError(
+            f"unknown q50 alias status: {q50_alias_status!r}")
+    diagnostics[-1]["full_calibration"] = True
+    diagnostics[-1]["q50_alias_status"] = q50_alias_status
+
+
+def demand_build_fingerprint_contract(meta: dict) -> dict:
+    """The semantic build contract, excluding observational diagnostics."""
+    excluded = {
+        "timings_s", "pfe_timing_s", "day_library_diagnostics",
+        "build_fingerprint",
+    }
+    return {key: value for key, value in meta.items() if key not in excluded}
+
+
+def finalize_day_library_diagnostics(
+    diagnostics: list[dict],
+    requested_dates: Sequence[str],
+    *,
+    enabled: bool,
+) -> list[dict]:
+    """Require exactly one causal lookup decision for each library day."""
+    if not enabled:
+        if diagnostics:
+            raise RuntimeError(
+                "day-library diagnostics exist while the library is disabled")
+        return []
+    actual_dates = [event.get("date") for event in diagnostics]
+    expected_dates = list(requested_dates)
+    if actual_dates != expected_dates:
+        raise RuntimeError(
+            "day-library diagnostics do not reconcile with requested days: "
+            f"expected {expected_dates}, got {actual_dates}")
+    for event in diagnostics:
+        if not valid_day_library_diagnostic(event):
+            raise RuntimeError(
+                "day-library diagnostic is incomplete or inconsistent: "
+                f"{event!r}")
+    return list(diagnostics)
 
 
 def _source_files() -> dict[str, Path]:
@@ -362,6 +447,9 @@ def fit_summary(report: dict, *, targets: list[dict] | None = None,
         "purpose_replaced_routes": purpose.get("replaced_routes", 0),
         "relaxation_summary": report.get("relaxation_summary", {}),
     }
+    for field in ("passage_calibration", "measurement_basis"):
+        if field in report:
+            result[field] = report[field]
     if days > 1:
         if targets is None:
             raise ValueError("multi-day PFE summary requires frozen targets")
@@ -1027,6 +1115,7 @@ def main() -> None:
     # its provenance coherent for the live scenario set.
     demand_spec_path = SUMO_DIR / "demand_build_spec.json"
     timings_s: dict[str, float] = {}
+    day_library_diagnostics: list[dict] = []
 
     def timed(name: str, fn):
         started = time.perf_counter()
@@ -1387,6 +1476,8 @@ def main() -> None:
     if args.engine == "pfe":
         # ── The full hierarchy: hard counts + conservation bounds + priors ────
         from traffic_sim.demand import pfe
+        from traffic_sim.demand.automatic_passage import runtime_identity
+        passage_runtime = runtime_identity(home)
         # Structural (see STRUCTURAL_REFERENCE_DATE) — always the real 2025
         # reference date, even when simulating a --source forecast date.
         bounds_data, priors_data = timed(
@@ -1491,6 +1582,8 @@ def main() -> None:
                     "variants": [key for _suffix, key in chosen],
                     "picker_runtime": runtime_package_identity((
                         "numba", "numpy", "scipy")),
+                    "passage_runtime": passage_runtime,
+                    "passage_network": sha256_file(NET_PATH),
                 },
                 source_hashes=demand_day_source_hashes(),
             )
@@ -1530,18 +1623,21 @@ def main() -> None:
                 generate_candidates(weight_file,
                                     cache_date=day.strftime("%Y-%m-%d"))
                 identity = day_identity(day, day_index, variant_inputs)
-                entry = library.get(identity)
+                entry = record_day_library_lookup(
+                    library, identity, day_library_diagnostics)
                 if entry is None:
-                    _calibrate_one_day(library, identity, day_index,
-                                       variants, variant_inputs, options)
+                    alias_status = _calibrate_one_day(
+                        library, identity, day_index, variants,
+                        variant_inputs, options)
+                    complete_day_library_decision(
+                        day_library_diagnostics,
+                        q50_alias_status=alias_status)
                     entry = library.get(identity)
                     if entry is None:
                         raise RuntimeError(
                             f"demand day {identity.date} did not store")
                 else:
                     reused += 1
-                    print(f"  day {identity.date}: library hit "
-                          f"{identity.key[:12]}")
                 day_directories.append(library.path_for(identity))
                 for suffix, _key in variants:
                     per_variant_reports[suffix].append(json.loads(
@@ -1616,16 +1712,16 @@ def main() -> None:
             already uses.
             """
             if len(day_variants) <= 1:
-                return
+                return "not_applicable"
             median = median_variant(day_variants)
             if median is None:
-                return
+                return "not_applicable"
             suffix, _key = median
             day = range_start + pd.Timedelta(days=day_index)
             subset_identity = day_identity(day, day_index, variant_inputs,
                                            [median])
             if library.get(subset_identity) is not None:
-                return
+                return "already_present"
             route = scratch_dir / f"calibrated{suffix}.rou.xml"
             agents = _agent_path_for(route)
             record = scratch_dir / f"subset-{DAY_PROVENANCE_NAME}"
@@ -1647,6 +1743,7 @@ def main() -> None:
             })
             print(f"  day {subset_identity.date}: also stored as a q50-only "
                   f"day {subset_identity.key[:12]}")
+            return "created"
 
         def _calibrate_one_day(library, identity, day_index, variants,
                                variant_inputs, options):
@@ -1695,6 +1792,11 @@ def main() -> None:
                     raise RuntimeError(
                         f"demand day {identity.date} calibration failed: "
                         f"{exc}") from exc
+                from traffic_sim.demand.automatic_passage import refine_variants
+                day_reports = timed("dynamic_passage", lambda: refine_variants(
+                    day_inputs, day_reports, NET_PATH,
+                    Path("runs") / f"automatic-passage-{uuid.uuid4().hex}",
+                    candidate_pool=cand_path))
                 artifacts = {}
                 for suffix, _key in variants:
                     route = scratch_dir / f"calibrated{suffix}.rou.xml"
@@ -1730,8 +1832,9 @@ def main() -> None:
                     "geh_pct": day_reports[""]["geh_pct"],
                     "vehicles": day_reports[""]["vehicles"],
                 })
-                _store_q50_subset(library, day_index, variants,
-                                  variant_inputs, scratch_dir, day_reports)
+                return _store_q50_subset(
+                    library, day_index, variants, variant_inputs,
+                    scratch_dir, day_reports)
 
         # ── Congestion-feedback loop (primary "" / q50 variant only) ──────────
         # PFE picks route USE COUNTS to match sensor totals, but the candidate
@@ -1899,6 +2002,23 @@ def main() -> None:
         # augmentation added routes built with forbidden_edges=measured, i.e.
         # traffic that by construction can never cross a sensor. Under the
         # rule "only what is measured is simulated" it must not exist.
+        if not assembled_day_dirs:
+            from traffic_sim.demand.automatic_passage import refine_variants
+            passage_inputs = {
+                suffix: {"out_path": SUMO_DIR / f"calibrated{suffix}.rou.xml",
+                         "targets": targets_by_variant[key],
+                         "hard_bounds_pq": build_bounds_priors(suffix)[2]}
+                for suffix, key in variants}
+            source_reports = {suffix: report if not suffix else reports[suffix]
+                              for suffix, _key in variants}
+            reports = timed("dynamic_passage", lambda: refine_variants(
+                passage_inputs, source_reports, NET_PATH,
+                Path("runs") / f"automatic-passage-{uuid.uuid4().hex}",
+                candidate_pool=cand_path))
+            report = reports[""]
+            variant_fit_reports = {
+                key: fit_summary(reports[suffix], targets=targets_by_variant[key], days=args.days)
+                for suffix, key in variants}
         edge_support_augmentation = {"schema_version": 1,
                                      "status": "disabled_baseline_rule",
                                      "variants": {}}
@@ -1971,6 +2091,13 @@ def main() -> None:
             "through_share_target": args.through_share_target,
         },
     )
+    requested_day_dates = [
+        (range_start + pd.Timedelta(days=index)).strftime("%Y-%m-%d")
+        for index in range(args.days)
+    ]
+    meta["day_library_diagnostics"] = finalize_day_library_diagnostics(
+        day_library_diagnostics, requested_day_dates,
+        enabled=use_day_library if args.engine == "pfe" else False)
     meta["demand_variant_contract"] = variant_manifest
     if catalog_enabled:
         meta["candidate_catalog"] = {
@@ -2026,6 +2153,9 @@ def main() -> None:
         }
     if variant_fit_reports:
         meta["pfe_fit_variants"] = variant_fit_reports
+    if report is not None and report.get("passage_calibration"):
+        meta["passage_calibration"] = report["passage_calibration"]
+        meta["pfe_fit"]["measurement_basis"] = "predicted_sensor_passage_quarter"
     if candidate_provenance is not None:
         meta["candidate_provenance"] = candidate_provenance
     if edge_support_augmentation is not None:
@@ -2118,9 +2248,7 @@ def main() -> None:
     write_demand_build_spec(demand_spec_path, demand_spec)
     meta["build_fingerprint"] = make_fingerprint(
         source_file_records=STARTUP_SOURCE_HASHES,
-        contract={k: v for k, v in meta.items()
-                  if k not in {"timings_s", "pfe_timing_s",
-                               "build_fingerprint"}},
+        contract=demand_build_fingerprint_contract(meta),
         artifacts=fingerprint_artifacts,
         source_files=source_files,
         sumo_home=home,
@@ -2160,7 +2288,9 @@ def _tracked_main() -> None:
 
     run = runs.start_run("demand", inputs={"argv": sys.argv[1:]})
     try:
-        main()
+        from traffic_sim.demand.automatic_passage import preserve_demand_on_failure
+        with preserve_demand_on_failure(SUMO_DIR):
+            main()
     except BaseException as exc:
         run.finish("failed", error=f"{type(exc).__name__}: {exc}")
         raise

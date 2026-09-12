@@ -45,7 +45,7 @@ def test_validate_route_targets_is_exact_and_fail_closed(tmp_path):
 
 def test_route_target_validation_is_generic_at_fifty_sensors():
     vehicles = [
-        dr.RouteVehicle(f"v{index}", float(index + 1), (f"e{index}",))
+        dr.RouteVehicle(f"v{index}", float(index + 1), ("origin", f"e{index}"))
         for index in range(50)
     ]
     targets = {
@@ -196,3 +196,82 @@ def test_failed_verification_leaves_route_and_agents_unchanged(
 
     assert route.read_bytes() == before_route
     assert agents.read_bytes() == before_agents
+
+
+def test_projection_preserves_departure_quarter_or_refuses():
+    vehicles = [dr.RouteVehicle('v', 910.0, ('a', 'e'))]
+    with pytest.raises(dr.DepartureReconciliationError, match='departure interval'):
+        dr.derive_monotone_departures(
+            vehicles, {'v': [950.0]}, duration_s=1800, guard_s=60)
+
+
+def test_projection_spreads_compressed_departures_when_feasible():
+    vehicles = [dr.RouteVehicle(str(i), float(600 + i * 50), ('a', 'e'))
+                for i in range(6)]
+    schedule = dr.derive_monotone_departures(
+        vehicles, {str(i): [150.0] for i in range(6)},
+        duration_s=900, guard_s=60)
+    gaps = [b - a for a, b in zip(schedule.values(), list(schedule.values())[1:])]
+    assert min(gaps) >= 25.0
+    dr.validate_departure_dispersion(
+        dr.departure_spacing_summary([v.depart_s for v in vehicles]),
+        dr.departure_spacing_summary(list(schedule.values())))
+
+
+def test_first_edge_sensor_is_refused_before_sumo():
+    with pytest.raises(dr.DepartureReconciliationError, match='first edge'):
+        dr.validate_route_targets(
+            [dr.RouteVehicle('v', 1.0, ('e',))], {'e': [1]}, n_intervals=1)
+
+
+@pytest.mark.parametrize('bad', ['nan', '-1', '99'])
+def test_invalid_or_backwards_exit_evidence_refused(tmp_path, bad):
+    path = tmp_path / 'evidence.xml'
+    path.write_text('<routes><vehicle id="v" depart="100" speedFactor="1">'
+                    f'<route edges="a e" exitTimes="{bad} 200"/>'
+                    '</vehicle></routes>')
+    with pytest.raises(dr.DepartureReconciliationError, match='times'):
+        dr.parse_passage_evidence(
+            path, [dr.RouteVehicle('v', 100.0, ('a', 'e'))], {'e'})
+
+
+@pytest.mark.parametrize('intervals', [
+    '',
+    '<interval begin="0" end="900"/><interval begin="0" end="900"/>',
+    '<interval begin="1" end="900"/>',
+    '<interval begin="0" end="800"/>',
+    '<interval begin="0" end="900"><edge id="e" entered="-1"/></interval>',
+])
+def test_incomplete_or_invalid_edgedata_cannot_be_exact_zero(tmp_path, intervals):
+    path = tmp_path / 'edge.xml'
+    path.write_text('<meandata>' + intervals + '</meandata>')
+    with pytest.raises(dr.DepartureReconciliationError):
+        dr._parse_entered(path, 1, ['e'])
+
+
+@pytest.mark.parametrize('exact', [True, False])
+def test_trial_keeps_source_bytes_and_preserves_evidence(tmp_path, monkeypatch, exact):
+    from tools import trial_passage_reconciliation as trial
+    source = tmp_path / 'source'
+    source.mkdir()
+    _route(source / 'calibrated.rou.xml')
+    _agents(source / 'calibrated.agents.json')
+    (source / 'net.net.xml').write_text('<net/>')
+    (source / 'demand_meta.json').write_text(json.dumps({
+        'sensor_targets': {'variants': {'edge_shares': {'e': [2]}}}}))
+    before = {p.name: p.read_bytes() for p in source.iterdir()}
+    _fake_sumo(monkeypatch, exact=exact)
+    monkeypatch.setattr(trial, 'sumo_home', lambda: tmp_path)
+    out = tmp_path / 'trial'
+    report = trial.run_trial(source, out)
+    assert report['status'] == ('pass' if exact else 'refused')
+    assert {p.name: p.read_bytes() for p in source.iterdir()} == before
+    assert report['original_inputs_unchanged'] is True
+    assert len(list((out / 'evidence').glob('learn-*/vehroute.xml'))) == 3
+    assert json.loads((out / 'report.json').read_text()) == report
+    if exact:
+        assert (out / 'candidate/calibrated.rou.xml').read_bytes() != before['calibrated.rou.xml']
+    else:
+        assert (out / 'candidate/calibrated.rou.xml').read_bytes() == before['calibrated.rou.xml']
+    with pytest.raises(FileExistsError):
+        trial.run_trial(source, out)

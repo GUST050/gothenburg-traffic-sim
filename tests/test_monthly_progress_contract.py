@@ -295,3 +295,65 @@ def test_a_failed_job_never_reports_through_a_blocking_alert():
         f"announceStudyOutcome instead: {offenders}")
     assert all("announceStudyOutcome(" in b for b in blocks), (
         "every job-failure path must announce through the persistent banner")
+
+
+def test_dead_monthly_search_with_saved_error_is_visible(tmp_path, monkeypatch):
+    import serve
+    directory = tmp_path / 'broken-search'
+    directory.mkdir()
+    (directory / 'manifest.json').write_text(json.dumps({
+        'status': 'running', 'created_at': '2026-09-09T10:00:00Z',
+        'progress': {'phase': 'prepare_backend', 'last_error': 'dynamic fit infeasible'}}))
+    monkeypatch.setattr(serve, 'MONTHLY_SEARCH_ROOT', tmp_path)
+    monkeypatch.setattr(serve, 'workspace_holder', lambda: None)
+    result = serve.adopted_monthly_search()
+    assert result['status'] == 'error'
+    assert result['error'] == 'dynamic fit infeasible'
+    assert result['resumable'] is True
+
+
+def test_live_monthly_owner_does_not_inherit_previous_error(tmp_path, monkeypatch):
+    import serve
+    directory = tmp_path / 'retry-search'
+    directory.mkdir()
+    (directory / 'manifest.json').write_text(json.dumps({
+        'status': 'running',
+        'progress': {'phase': 'prepare_backend', 'last_error': 'previous attempt'}}))
+    monkeypatch.setattr(serve, 'MONTHLY_SEARCH_ROOT', tmp_path)
+    monkeypatch.setattr(serve, 'workspace_holder',
+                        lambda: {'owner': 'run_monthly_closure_search 123'})
+    result = serve.adopted_monthly_search()
+    assert result['status'] == 'running'
+    assert result['error'] is None
+
+
+def test_backend_heartbeat_updates_while_prepare_is_blocked_and_stops():
+    import threading
+    from traffic_sim.simulation.monthly_search import _preparation_heartbeat
+    updated = threading.Event()
+    class Workspace:
+        status = 'running'
+        def __init__(self):
+            self.updates = []
+        def update_progress(self, phase, **kwargs):
+            self.updates.append((phase, kwargs))
+            updated.set()
+    workspace = Workspace()
+    with _preparation_heartbeat(workspace, 60, interval_s=0.01):
+        assert updated.wait(2)
+        assert workspace.updates[-1][0] == 'prepare_backend'
+        assert workspace.updates[-1][1]['completed'] == 0
+        assert workspace.updates[-1][1]['detail']['heartbeat_only'] is True
+    count = len(workspace.updates)
+    assert count > 0
+    assert not any(t.name == 'monthly-prepare-heartbeat' for t in threading.enumerate())
+
+
+def test_completed_workspace_is_not_mutated_by_preparation_heartbeat():
+    from traffic_sim.simulation.monthly_search import _preparation_heartbeat
+    class Workspace:
+        status = 'succeeded'
+        def update_progress(self, *args, **kwargs):
+            pytest.fail('completed evidence must remain immutable')
+    with _preparation_heartbeat(Workspace(), 60, interval_s=0.001):
+        pass

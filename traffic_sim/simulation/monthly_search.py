@@ -16,6 +16,7 @@ import os
 import shutil
 import tempfile
 import threading
+from contextlib import contextmanager
 import time
 from collections.abc import Mapping as MappingABC
 from dataclasses import asdict, dataclass
@@ -1023,6 +1024,41 @@ def _candidate_ledger(
     return _StreamingCandidates(directory, manifest)
 
 
+@contextmanager
+def _preparation_heartbeat(workspace, total, *, interval_s=5.0):
+    """Persist liveness/time during blocking preparation, not fictitious work.
+
+    Only this thread writes the workspace while the caller prepares. Joining
+    before returning gives the main thread exclusive ownership again.
+    """
+    if workspace.status != "running":
+        yield
+        return
+    stopped = threading.Event()
+    errors = []
+
+    def beat():
+        while not stopped.wait(interval_s):
+            try:
+                workspace.update_progress(
+                    "prepare_backend", completed=0, total=total,
+                    detail={"heartbeat_only": True,
+                            "message": "Förbereder trafikunderlag; inga kandidater har simulerats ännu"})
+            except Exception as error:
+                errors.append(error)
+                return
+
+    worker = threading.Thread(target=beat, name="monthly-prepare-heartbeat", daemon=True)
+    worker.start()
+    try:
+        yield
+    finally:
+        stopped.set()
+        worker.join()
+    if errors:
+        raise RuntimeError("monthly preparation heartbeat failed") from errors[0]
+
+
 def _prepare_shortlist(
     runner: CandidateRunner,
     candidates: _MaterialisedCandidates | _StreamingCandidates,
@@ -1452,6 +1488,12 @@ def _final_result(
         "closure_search_spec": spec.to_dict(),
         "policy": policy.to_dict(),
         "simulation_backend": dict(backend_provenance),
+        "day_library_accounting": (
+            dict(backend_provenance["day_library_accounting"])
+            if isinstance(backend_provenance.get("day_library_accounting"),
+                          Mapping)
+            else None
+        ),
         "status": decision_status,
         "winner_id": winner_id,
         "tie_ids": tie_ids,
@@ -2153,8 +2195,18 @@ def run_monthly_search(
             )
         if active_controller is not None:
             runner = active_controller.wrap_runner(runner)
-        _prepare_shortlist(runner, schedules, shortlist_ids)
+        with _preparation_heartbeat(workspace, len(shortlist_ids)):
+            _prepare_shortlist(runner, schedules, shortlist_ids)
         backend_provenance = _backend_provenance(workspace, runner)
+        day_library_accounting = backend_provenance.get(
+            "day_library_accounting")
+        if workspace.status == "running" and isinstance(
+                day_library_accounting, Mapping):
+            detail = _runner_timing_snapshot(runner)
+            detail["day_library_accounting"] = dict(day_library_accounting)
+            workspace.update_progress(
+                phase, completed=len(shortlist_ids), total=len(shortlist_ids),
+                detail=detail)
         final_records = _artifact_records(
             workspace,
             kind="monthly_closure_search_result",
@@ -2403,10 +2455,11 @@ def run_monthly_search(
 
         phase = "publish"
         check_active(phase, publication=True)
-        workspace.update_progress(
-            phase,
-            detail=_runner_timing_snapshot(runner),
-        )
+        publish_detail = _runner_timing_snapshot(runner)
+        if isinstance(day_library_accounting, Mapping):
+            publish_detail["day_library_accounting"] = dict(
+                day_library_accounting)
+        workspace.update_progress(phase, detail=publish_detail)
         result = _final_result(
             spec,
             policy,

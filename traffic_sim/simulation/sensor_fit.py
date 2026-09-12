@@ -21,19 +21,9 @@ EXACT_ABS_TOLERANCE = 1e-9
 EXACT_TARGET_RULE = "int(round(target))"
 EXACT_OUTPUT_CONTRACT = "raw_edgedata_15min_exact_integer_targets_v1"
 
-#: DfT TAG Unit M3.1, Table 2 and its guideline share — the same published
-#: criteria tools/validate_dmrb.py already applies to held-out hourly link
-#: flows. They are CITED, not chosen: a threshold picked to clear the build in
-#: front of you is not a gate.
-#:
-#: They replace scoring this section on exact integer equality, which no
-#: traffic-engineering standard states and which gets structurally harder the
-#: busier the road. Measured on a real build: targets of 0-3 vehicles matched
-#: exactly 52.9% of the time and targets of 30-100 matched 4.0%, while GEH was
-#: below 5 on all 672 quarter cells (median 0.31) and daily volume per
-#: direction landed within 0.22%. The old score read 100/672 and looked like a
-#: near-total failure; the run was accurate to about 5% per quarter with no
-#: bias at all (260 cells over, 266 under).
+# TAG M3.1 Table 2 applies GEH to hourly flows. Quarter GEH remains a
+# descriptive/project guard; it must not stand in for that hourly check.
+# The 10% aggregate-volume guard is a separate project policy, not Table 2.
 PASSAGE_GEH_LIMIT = 5.0
 PASSAGE_GEH_GUIDELINE_PCT = 85.0
 PASSAGE_VOLUME_LIMIT_PCT = 10.0
@@ -53,7 +43,8 @@ def assess_passage_accuracy(audit: Any, *, n_intervals: int) -> dict:
     """Score realised SUMO passages against TAG M3.1, and describe the error.
 
     Two things are separated on purpose. The VERDICT uses the published
-    criteria above. The descriptive numbers beside it — relative error per
+    hourly GEH criterion and the retained project guards above. Descriptive
+    numbers beside it — relative error per
     quarter, and how much of any exact-match shortfall is arithmetic rather
     than error — carry no threshold, because no external standard states one
     and inventing one here would be fitting a rule to our own output.
@@ -67,6 +58,12 @@ def assess_passage_accuracy(audit: Any, *, n_intervals: int) -> dict:
     directions = audit.get("directions") if isinstance(audit, dict) else None
     if not isinstance(directions, list):
         directions = []
+    valid = (isinstance(n_intervals, int) and not isinstance(n_intervals, bool)
+             and n_intervals > 0 and n_intervals % 4 == 0 and bool(directions))
+    if not isinstance(n_intervals, int) or isinstance(n_intervals, bool):
+        n_intervals = 0
+    n_intervals = max(0, n_intervals)
+    hourly_geh: list[float] = []
     geh_values: list[float] = []
     relative: list[float] = []
     volume_pct: list[float] = []
@@ -74,11 +71,21 @@ def assess_passage_accuracy(audit: Any, *, n_intervals: int) -> dict:
     cells = 0
     for row in directions:
         if not isinstance(row, dict):
+            valid = False
             continue
         target = row.get("target_mean")
         simulated = row.get("simulated_mean_raw")
         if not isinstance(target, list) or not isinstance(simulated, list):
+            valid = False
             continue
+        row_valid = (len(target) == n_intervals == len(simulated)
+                     and all(_finite(v) is not None and float(v) >= 0
+                             for v in target + simulated))
+        valid = valid and row_valid
+        if row_valid:
+            for start in range(0, n_intervals - 3, 4):
+                hourly_geh.append(_geh(sum(map(float, simulated[start:start + 4])),
+                                       sum(map(float, target[start:start + 4]))))
         span = min(n_intervals, len(target), len(simulated))
         seeds = [s.get("simulated_raw") for s in (row.get("seed_runs") or [])
                  if isinstance(s, dict)
@@ -86,7 +93,7 @@ def assess_passage_accuracy(audit: Any, *, n_intervals: int) -> dict:
         for quarter in range(span):
             expected = _finite(target[quarter])
             produced = _finite(simulated[quarter])
-            if expected is None or produced is None:
+            if expected is None or produced is None or expected < 0 or produced < 0:
                 continue
             cells += 1
             geh_values.append(_geh(produced, expected))
@@ -113,10 +120,20 @@ def assess_passage_accuracy(audit: Any, *, n_intervals: int) -> dict:
     within = sum(1 for value in geh_values if value < PASSAGE_GEH_LIMIT)
     geh_pct = 100.0 * within / cells if cells else 0.0
     volume_max = max(volume_pct) if volume_pct else 0.0
+    hourly_within = sum(value < PASSAGE_GEH_LIMIT for value in hourly_geh)
+    hourly_pct = 100.0 * hourly_within / len(hourly_geh) if hourly_geh else 0.0
     return {
+        "hourly_geh_cells": len(hourly_geh),
+        "hourly_geh_within": hourly_within,
+        "hourly_geh_pct": round(hourly_pct, 4),
+        "hourly_geh_max": round(max(hourly_geh), 4) if hourly_geh else None,
+        "standard_aggregation_minutes": 60,
+        "volume_policy": "project_aggregate_volume_guard_v1",
+        "complete": bool(valid),
         # `>` rather than `>=`, matching validate_dmrb's reading of TAG's
         # "more than 85% of cases" for this same criterion.
-        "ok": bool(cells) and geh_pct > PASSAGE_GEH_GUIDELINE_PCT
+        "ok": bool(valid) and hourly_pct > PASSAGE_GEH_GUIDELINE_PCT
+              and geh_pct > PASSAGE_GEH_GUIDELINE_PCT
               and volume_max <= PASSAGE_VOLUME_LIMIT_PCT,
         "standard": "DfT TAG Unit M3.1 Table 2",
         "geh_limit": PASSAGE_GEH_LIMIT,

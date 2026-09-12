@@ -13,6 +13,702 @@ Historical Sol/Luna task names and exact-approval wording below describe the
 process used at the time; current collaboration follows the flexible,
 model-independent protocol in `AGENTS.md`.
 
+## Current reassessment — completed June search, 2026-09-10
+
+This block supersedes the priority order in the September 8 reassessment and
+qualifies the timing targets in
+[the detailed research report](validation/codebase_simulation_improvement_research_20260910.md).
+
+Verified run: `ui-monthly-g1f50b`, 18:29:15–19:54:32 local time;
+active time 5113.831 s (85 min 14 s), versus 2966.486 s in `ui-monthly-97e768`.
+These are different date ranges and cache conditions, not a controlled
+before/after benchmark. The new run compared 29 schedules, SUMO-checked two,
+and selected June 25–27, 00:00–24:00 daily. Deterministic q50 detour cost is
+32.0614 vehicle-hours; it is not measured SUMO delay. All 48 recorded launches
+succeeded without timeout. Both finalists are eligible with no hard failures.
+The policy remains provisional and global-best claims remain disallowed.
+`precision_met=false` describes the separate stochastic time-loss estimate;
+it is not itself a failure of deterministic q50 ranking.
+
+Verification: all 15 manifest artifact hashes match. Production
+`evidence_from_dict` resolves all four pilot/finalist records successfully,
+including 90 canonical observation references (some shared), nested routing
+provenance and transformed-route/access-impact artifacts. Focused checks:
+60 passed in 1.62 s across automatic passage, closure time origin, monthly
+progress contract and executable web harnesses. Local `/api/ping` returns ok.
+Desktop browser review confirms result dates, 29 computed / 2 verified labels,
+provisional-policy disclosure and Escape return; no captured console warnings
+or errors. No full suite, new simulation, mobile review or field validation.
+
+Performance observation from artifacts created during the job: 30 three-day
+demand archives, 25 with nonzero dynamic_passage timings; the backend names
+31 calendar-day units. There are 49 automatic-passage timing records totaling
+2722.725 s (45 min 23 s), median 55.792 s, range 24.637–93.034 s.
+The build-level dynamic_passage sum is 2722.755 s, consistent with these
+records. PFE wrapper time totals 3268.797 s and INCLUDES dynamic passage.
+The remaining 1845 s of overall active time is outside that wrapper and has
+not been attributed to specific work. Worker-seconds cannot be subtracted
+from wall time. This sample does not prove a per-day slowdown: its median
+passage time remains within the previous 53–59 s examples.
+
+Day-library measurement, read-only, 2026-09-10 (this reassessment; nothing was
+rebuilt, moved or deleted). Every `runs/demand-days/*/*/manifest.json` written
+inside the job's own 18:29:15–19:54:32 window was read: 98 entries over 30
+distinct calendar dates, of which 49 are three-variant calibrations
+(`edge_shares`, `_q10`, `_q90`) and 49 are the q50-only subset entries the
+library stores deliberately. Nineteen dates hold two three-variant entries and
+eleven hold one, which is exactly the 49. Every one of those 19 repeats differs
+in `pool_composition` — with `inputs.candidate_pool`, `candidate_metadata`
+and `catalog_keys` differing as a consequence, because the candidate pool is
+generated per composition — and no repeat has any other cause. No
+(date, composition) pair carries more than one candidate-pool hash, so no
+nondeterminism was observed. The gap between 49 and the 31 named calendar-day
+units is therefore accounted for; what is still unmeasured is how much of it is
+avoidable, since a composition genuinely changes the PFE variable set. A second
+miss class is already visible in the store: 2027-07-02 had a `('weekday',)`
+entry from 2026-09-05 and was calibrated again on 2026-09-10 because 16 source
+   files in `source_hashes` had changed.
+
+Revised implementation order. Item 1 was made the top priority by the project
+owner on 2026-09-10; the remaining items keep their previous relative order.
+
+1. **Explain repeated day calibrations, then test safe context-independent
+   reuse.** First add a read-only explainer and named cache outcomes. Then use
+   that evidence to compare the current context-aware pool with a canonical
+   pool and a day-type-local pool. A reuse policy is promoted only if it is
+   output-equivalent; a policy that changes calibrated demand is a model change
+   for item 7, not a performance optimisation. The complete implementation
+   contract is directly below this priority list.
+2. **Correct measurement:** add full-job and hierarchical stage timers so the
+   unattributed 1845 s becomes attributable without double counting. Inclusive
+   and exclusive times per stage, so an optimisation cannot merely move time
+   between records.
+3. **Bounded variant parallelism:** benchmark 1/2/3 workers on the same frozen
+   day, seed set and total SUMO budget, with exact output, memory and failure
+   checks. The old 35-second target is an experiment target, not a forecast.
+4. **Build I/O and metadata:** compact new JSON first with identical parsed
+   content and build identity; profile assembly, hashing, copies and large
+   report loading. Treat duplicate-contract removal as a separate migration.
+5. **Correctness and status clarity:** repair the previously reproduced B1/B3
+   validator crashes; represent terminal completion and computed/verified/
+   skipped counts explicitly. The terminal manifest still contains
+   completed=0,total=null, though the result UI correctly shows 29/2.
+6. **Truthful UI:** fix full-day button help text currently rendered as
+   00:00–00:00. Replace the map legend's proximity-based “Säker” wording with
+   measurement-support language; distance from a sensor is not demonstrated
+   predictive accuracy. Consider “Lägst beräknad q50-kostnad” instead of the
+   broad “Bästa period”, and show stochastic uncertainty separately.
+7. **Simulation fidelity:** refresh spatial/temporal holdout; validate physical
+   sensor positions before E1 adoption; obtain speed/queue/signal evidence
+   before supply calibration. Holdout evaluates improvement; it does not
+   itself improve the simulated traffic. Successful closure runs do not
+   establish unseen-sensor accuracy or exact field passage matching.
+8. **Persistent SUMO last:** directly measure process startup and test
+   `simulation.loadState` only if the measured benefit warrants maintenance
+   and equivalence risk. SUMO documents network reuse, but also RNG and
+   future-vehicle limitations:
+   https://sumo.dlr.de/docs/Simulation/SaveAndLoad.html .
+   Earlier 3–6 percent savings and 5/15 percent cutoffs were exploratory,
+   not experimentally established release thresholds.
+
+### Item 1 implementation contract — explain and safely reduce day rebuilds
+
+**Outcome.** Every day-library lookup must have a machine-readable result, and
+the completed job must explain how many days were hits, absent, rejected as
+corrupt or separated by a semantic identity field. After that instrumentation
+exists, one bounded experiment determines whether calendar context can be
+removed without changing calibrated output. The diagnostic work is useful by
+itself; fewer calibrations are conditional on equivalence evidence.
+
+**Measured baseline.** Use `ui-monthly-g1f50b` as the observational baseline:
+49 full three-variant calibrations for 30 distinct dates, including 19 dates
+calibrated under two `pool_composition` values. The 49 q50-subset entries are
+intentional aliases and do not count as extra solves. The theoretical ceiling
+for a stable one-entry-per-date policy in this sample is therefore 19 fewer
+full calibrations, or 38.8 percent. The recorded median of 55.792 seconds makes
+roughly 18 minutes a useful upper-bound estimate, not a promised wall-time
+improvement. `ui-monthly-97e768` is not a control because its dates and cache
+state differ.
+
+**Correctness gate.** Preserve q10/q50/q90 populations, integer sensor targets,
+route and agent records, departures, route provenance, dynamic-passage fit,
+structure guards and publication health. Compare uncompressed route bytes and
+canonical JSON, since gzip container bytes may contain non-semantic metadata.
+Any candidate whose calibrated artifacts differ from the current policy fails
+the performance-only gate. It may only continue later as a separately versioned
+simulation-quality experiment with held-out and SUMO evidence.
+
+**Search budget and stop rule.** Do not run a monthly search while developing
+this item. Reuse archived baseline entries, allow at most eight new cold
+single-day calibrations, and stop after 30 minutes of calibration wall time or
+on the first provenance, exactness or health regression. A full controlled
+month replay is allowed only after the isolated equivalence gate passes.
+
+#### Stage 1 — read-only explanation with zero cache invalidation
+
+Create `tools/explain_day_reuse.py` and
+`tests/test_explain_day_reuse.py`. Neither path is in
+`demand_source_paths`, so this stage must leave all existing `DayIdentity`
+keys usable. The tool has no third-party dependency and must never modify,
+move or prune `runs/demand-days`.
+
+The CLI contract is:
+
+```text
+python3 tools/explain_day_reuse.py \
+  --root runs/demand-days \
+  --since 2026-09-10T18:29:15+02:00 \
+  --until 2026-09-10T19:54:32+02:00 \
+  --output validation/day_reuse_explanation_v1.json
+```
+
+Its deterministic schema is `day_reuse_explanation_v1` with
+`release_evidence: false`, the requested filters, a summary, and entries grouped
+by date. Within each date, compare full three-variant entries with one another;
+link each q50 alias to the full entry that matches after ignoring only
+`inputs.constraints` and `inputs.variants`, with key as deterministic
+tie-breaker. This prevents the intentional aliases from multiplying the
+repeated-calibration count. Each comparison reports sorted dotted paths,
+expanding `inputs.*` and `source_hashes.*`, plus exactly one cause:
+`variant_subset`, `source_change`, `pool_composition`, `candidate_drift` or
+`other`. Cause precedence is source change, variant subset, pool composition,
+candidate drift, other. The report also compares stored `source_hashes` with
+the current source inventory and counts reusable entries and dates. Unreadable
+manifests are counted with their path and error class; they must not abort the
+scan or be silently omitted.
+
+Stage 1 tests must cover deterministic ordering, nested-field diffs, cause
+precedence, q50 aliases excluded from full-calibration counts, unreadable and
+incomplete manifests, time-bound inclusivity and current-source matching. The
+real-data acceptance check must reproduce 49 full calibrations, 30 dates,
+19 repeated dates and 19 `pool_composition` causes for the recorded job window.
+It must also prove that the set of existing manifest paths and identity keys is
+unchanged before and after the command.
+
+**Stage 1 status: DONE, 2026-09-10.** `tools/explain_day_reuse.py` and
+`tests/test_explain_day_reuse.py` exist; 32 direct tests and 263 selected Stage 1
+and related tests pass, including the real-data
+acceptance check, which reproduces exactly 49 full calibrations, 30 dates,
+49 linked q50 aliases with 0 unlinked, 19 repeated dates and
+`{"pool_composition": 19}`. A before/after snapshot of all 1 347 manifest
+paths, mtimes, sizes and SHA-256 digests under `runs/demand-days` is identical
+across the command, and 98 of the window's 98 entries are still reusable
+against the current 40-file inventory. The CLI rejects an output path inside
+the library root, including paths resolved through an existing symlink. The
+artifact is
+`validation/day_reuse_explanation_v1.json` (`release_evidence: false`), and the
+report carries no wall clock, so two runs over one tree are byte-identical.
+One real defect was found and fixed by a subprocess test: run as a script,
+`sys.path[0]` is `tools/`, so the source-inventory comparison silently reported
+`ModuleNotFoundError` and "unknown" reusability; the inventory is now anchored
+to the repository root the way `build_sumo_demand._source_files` already
+requires.
+
+**New finding from the same tool, whole library, no time filter** (reproduce
+with `python3 tools/explain_day_reuse.py --output <scratch>.json`): across all
+223 dates the store holds 660 full calibrations and 441 repeats. Each later
+entry is compared with its closest previously written sibling, giving
+`source_change` 241, `pool_composition` 174 and `candidate_drift` 26, plus 27
+q50 aliases whose full partner is no longer stored. These are deterministic
+identity-difference classifications, not logged historical cache-miss causes;
+Stage 2 is required for causal counts. Source drift is the most frequent
+classification, but the report cannot establish that code churn caused 241
+rebuilds. This does not change Stage 3's per-job ceiling of 19 of 49.
+
+#### Stage 2 — structured lookup diagnostics in the build
+
+Schedule this stage immediately before an already planned demand re-warm. It
+changes `demand/day_library.py` and `build_sumo_demand.py`; both are among the
+40 currently fingerprinted sources, so the edit intentionally makes the old
+entries unreachable by new identities. Do not weaken the source inventory to
+avoid that one-time cost.
+
+Add these compatible APIs to `demand/day_library.py`:
+
+```python
+class LookupReason(str, Enum): ...
+class IdentityCause(str, Enum): ...
+
+@dataclass(frozen=True)
+class DayLookup:
+    manifest: dict[str, Any] | None
+    outcome: Literal["hit", "miss", "rejected"]
+    reason: LookupReason
+    expected_key: str
+    compared_key: str | None = None
+    differing_fields: tuple[str, ...] = ()
+    identity_cause: IdentityCause | None = None
+
+def lookup(self, identity: DayIdentity) -> DayLookup: ...
+def get(self, identity: DayIdentity) -> dict[str, Any] | None:
+    return self.lookup(identity).manifest
+```
+
+Use distinct reasons for `hit`, `entry_absent`, `manifest_unreadable`, schema,
+kind, key and identity mismatch, invalid artifact record, missing artifact,
+digest mismatch, size mismatch and I/O error. If the exact key is absent,
+compare siblings under the same date, choose the nearest identity by number of
+differing leaf paths with key as deterministic tie-breaker, and report that
+comparison separately. Classify its fields with the same cause precedence as
+Stage 1. A sibling is evidence about why identities differ; it must never be
+returned as a cache hit.
+
+`build_sumo_demand.py` records one decision per requested day in
+`meta["day_library_diagnostics"]`: date, expected key, outcome, reason,
+compared key, differing fields, identity cause and lookup duration. It prints
+the same named outcome for hits and misses. Add `day_library_diagnostics` to
+the explicit build-fingerprint exclusion beside `timings_s` and
+`pfe_timing_s`; a regression test must show that different diagnostic timings
+and miss reasons do not change `build_id`. Existing `get()` callers and
+fail-closed behavior remain unchanged.
+
+Stage 2 tests extend `tests/test_day_library.py` for every reason, nearest-
+sibling tie-breaking and the compatibility wrapper. Builder tests cover one
+hit, one absent entry and one rejected corrupt entry, plus diagnostic exclusion
+from the build fingerprint. Run:
+
+```text
+python3 -m pytest -q tests/test_day_library.py \
+  tests/test_explain_day_reuse.py tests/test_build_sumo_demand.py \
+  -k 'day_library or day_reuse or build_fingerprint'
+```
+
+**Stage 2 status: DONE locally, 2026-09-11.** `DayLibrary.lookup()` preserves
+the old fail-closed `get()` API while returning named hit, absent and rejected
+outcomes, the nearest valid sibling comparison and one identity-cause class.
+Artifact records now reject missing or malformed SHA/size fields before byte
+verification. `build_sumo_demand.py` records exactly one lookup decision per
+requested library day, including duration, and refuses to publish metadata if
+the decision dates do not reconcile with the request. Direct/sub-day builds
+must have an empty diagnostic list. The entire diagnostic block is excluded
+from the semantic fingerprint, and a regression test proves that changing
+reason and duration leaves `build_id` unchanged. The prescribed Stage 2
+selection passes 88 tests; the combined Stage 1–3 and builder set passes 282.
+
+The current adopted route-catalog record and its stored artifacts still verify,
+but an implicit build would not select it: the expected weekday and weekend
+keys now differ solely at `source_files.build_sumo_demand`. This contradicts
+the remote-session assumption that Stage 2 cannot affect catalog selection;
+`build_sumo_demand` is explicitly one of `CATALOG_SOURCE_LABELS`. Finish Stage
+4 before one catalog qualification/adoption pass, then perform the planned
+demand re-warm. Running a demand build before that pass would use the slower
+legacy candidate builder.
+
+#### Stage 3 — bounded reuse-policy experiment
+
+Keep the current `pool_composition` identity as control. In an isolated harness,
+test two policies without writing production paths:
+
+| Variant | Candidate choice set | Expected contribution | Main risk |
+|---|---|---|---|
+| `context_control` | Current `window_pool_composition` | Reproduces both archived controls | Retains duplicate date calibrations |
+| `canonical_union` | Complete ordered `POOL_KEYS` for every date | One stable identity per date with a common choice set | Adds geometries and structure shares to pure windows |
+| `day_type_local` | Only the date's own `pool_key` | One stable identity and the smallest solve | Removes geometries available in mixed windows |
+
+Use 2027-06-03 as the weekday and 2027-06-25 as the weekend/holiday case; both
+already have pure and mixed-composition controls in the measured artifact set.
+For each policy, build the day once and compare it against both archived
+context-specific controls. Record candidate count and semantic hash, PFE
+shape-variable count, full/dynamic-passage wall time, peak RSS and all
+correctness-gate fields. The harness writes a diagnostic artifact with exact
+input and source hashes and `release_evidence: false`.
+
+Promotion requires one policy to match both contexts exactly for both dates,
+then pass a small overlapping-window integration test and a controlled replay
+whose primary metric is full calibrations per distinct date. The target for the
+observed month is at most 30 full calibrations instead of 49, with no new cache
+collision, timeout or memory regression. If neither policy is equivalent,
+retain the current composition-aware identity. Stage 1 and 2 still ship because
+they explain legitimate misses; item 1 then makes no speed claim.
+
+Any accepted policy gets an explicit `day_pool_policy` version in
+`DayIdentity`. Write new entries beside old ones and keep rollback as selecting
+the previous policy version; never overwrite or delete the prior library.
+
+**Stage 3 status: DONE, 2026-09-11 — retain the composition-aware identity.**
+The reviewed harness is `tools/experiment_day_reuse_policy.py`, with 77 direct
+tests in `tests/test_experiment_day_reuse_policy.py`. Before spending the cold
+build budget it verifies the two archived controls against each other. For both
+2027-06-03 and 2027-06-25, pure and mixed controls differ with no source or
+non-policy input confound in exact uncompressed route bytes, route/departure
+records, canonical agent data, population, semantic fit and
+`passage_calibration` evidence. One candidate built once cannot be equal to two
+unequal controls, so equality transitivity eliminates both `canonical_union`
+and `day_type_local` under the frozen performance-only promotion rule. The
+diagnostic therefore used 0 of 8 cold calibrations and 0 of 1,800 calibration
+seconds. `validation/day_reuse_policy_experiment_v1.json` records the bound
+control manifests, source hashes and comparison digests with
+`release_evidence: false`; it activates nothing. A model-changing policy could
+only be considered later under separate held-out and SUMO evidence.
+
+Review also corrected the initial remote implementation before it was run: it
+looked for `dynamic_passage` although real fit files use
+`passage_calibration`, made that missing field optional, calculated but did not
+compare the full uncompressed route hash, compared candidate count through the
+whole provenance object despite candidate count being the variable under test,
+and could remove a pre-existing caller workspace. Stored artifacts are now
+verified against manifest size and digest, all non-policy identity inputs are
+confound checks, dynamic-passage wall time is sourced from build metadata, and
+only a newly created scratch workspace can be cleaned up. The direct suite and
+the combined Stage 1/Stage 2/Stage 3/day-builder selection pass: 272 tests.
+
+#### Stage 4 — job-level accounting and completion
+
+The monthly job aggregates each build's decisions into its progress/result
+artifact: requested days, hits, misses, rejected entries, full calibrations,
+q50 aliases, counts by lookup reason and counts by identity cause. Counts must
+reconcile exactly; an unknown or missing decision makes the diagnostic summary
+incomplete rather than guessing.
+
+**Stage 4 status: DONE locally, 2026-09-11.** Each successful day decision now
+records whether a full calibration ran and whether its q50 alias was created,
+already present or not applicable. Producer and archive consumer use the same
+strict diagnostic validator. At archive level, `rejected` is retained as a
+named subset of operational misses, so `hits + misses == requested_days`,
+`full_calibrations == misses` and `rejected_entries <= misses`. The monthly
+resolver sums complete archive records by outcome, lookup reason, identity
+cause and alias status. Any old, missing, malformed or non-reconciling record
+produces `status: incomplete` with no inferred hit/miss totals. The aggregate
+is written into backend provenance, the live `prepare_backend`/final progress
+detail and `result.json`. Diagnostics remain excluded from `build_id`.
+
+Validation after implementation: all 401 tests in the Stage 1-4, builder,
+archive, monthly-search and progress-contract files pass; the focused Stage 4
+integration set passes 110 tests. `py_compile` and scoped `git diff --check`
+also pass. No SUMO build, catalog adoption, search, commit or push was run.
+
+Item 1 is complete when the focused tests pass, the offline report reproduces
+the frozen baseline, diagnostics do not affect `build_id`, the old cache API
+still fails closed, and the policy experiment ends in one of two explicit
+results: an equivalent policy promoted with a controlled speed measurement, or
+the current policy retained with the repeats classified as semantically
+required. No catalog adoption, release promotion or global-best claim follows
+from this work.
+
+No historical result was rewritten and no release claim follows from this
+implementation.
+
+## Research reassessment after user challenge — 2026-09-08
+
+This reassessment supersedes the priority order immediately below, not its
+measurements. Rank deficiency establishes ambiguity, not that OD-group
+regularization is the best remedy. The previous recommendation was too strong.
+
+Code evidence: pfe.py accumulates every route edge in achieved[edge][i], then
+assigns departures inside quarter i (around lines 3123–3131). This proves route
+membership by departure quarter, not actual sensor-crossing time. SUMO output
+is separately checked, but the inspected PFE does not jointly assign flow
+across departure and arrival quarters. Longer trips/more widely spaced sensors
+make this a relevant hypothesis to test, not an already measured dominant error.
+The simulate feedback branch also stops on stable PFE GEH before another
+simulation (build_sumo_demand.py around 1846), which cannot establish dynamic
+travel-time or route-choice convergence.
+
+Revised priorities:
+1. Audit departure-to-sensor travel-time distributions and cross-quarter
+   passage fractions. Prototype a sparse dynamic assignment mapping from
+   route/departure bin to sensor/passage bin on isolated historical evidence.
+   Test delayed demand recovery on synthetic known demand, then real held dates.
+   Keep current exact publication contracts; dynamic passage calibration must
+   explicitly reconcile them and must not silently replace route-count targets.
+2. Calibrate network supply before allowing demand to compensate for wrong
+   capacity: verify bottleneck discharge, speeds, travel times and actual signal
+   plans. run_scenario.py intentionally uses limited meso junction control due
+   to guessed signal timings; blindly enabling full control is not a remedy.
+3. Combine counts with independently measured travel times/speeds when available.
+   Speed alone is not informative about demand in every traffic regime.
+4. Evaluate simulator-in-the-loop demand calibration (Cadyts as an established
+   reference) and a physics-based surrogate to limit SUMO calls. Do not introduce
+   another optimizer before a correct measurement mapping and cost baseline.
+5. Compare representative actual days/conditions, not only mean demand or seed
+   variation. Keep grouped unseen-station/date validation as an evidence method,
+   not a mechanism that by itself improves model predictions.
+
+Sources and limits:
+- https://ops.fhwa.dot.gov/publications/fhwahop18036/chapter5.htm : calibrate
+  time-dynamic performance using travel-time/speed and bottleneck measures;
+  representative real days; distinguish travel-condition variability from seeds.
+- https://pubsonline.informs.org/doi/10.1287/trsc.1100.0367 : Bayesian demand
+  calibration using time-dependent counts; supports dynamic calibration, not
+  guaranteed accuracy for this project's exact-constraint solver.
+- https://eclipse.dev/sumo/docs/Contributed/Cadyts.html : SUMO integration exists;
+  compatibility and maintenance suitability need testing before adoption.
+- https://arxiv.org/html/2501.04783v1 : preprint, metropolitan highway case
+  studies using path travel times; cross-network algorithm evidence does not
+  prove unseen-sensor generalization for Gothenburg urban roads.
+- https://arxiv.org/html/2412.14089v1 : urban speed-calibration metamodel and
+  out-of-sample segment experiments; experimental data/setup limits apply.
+
+Research-only update: no source changes, simulations, retraining or adoption.
+
+Departure-to-passage checkpoint (2026-09-08): the experimental vehroute
+mapping now follows SUMO `entered` semantics and excludes vehicles emitted on
+the target edge. Recomputed saved-baseline vectors match edgeData exactly for
+all 7 target edges in every one of 96 quarters. Cross-quarter fractions remain
+material at 14.2–36.5%. This validates the timing extraction on old baseline
+evidence; it does not establish better held-date prediction, unseen-sensor
+generalization or a production policy change.
+
+## Consecutive-day HiGHS and preparation telemetry — 2026-09-09
+
+A live sample of ui-monthly-198410y located the next-day stall in
+HighsTaskExecutor::shutdown, not traffic optimization. Passage MILP had
+initialized a native multithread scheduler in the parent; later PFE fork
+workers inherited it. Passage now passes threads=1, matching PFE solver calls.
+A fresh-interpreter test repeats parent-fit→forked-solve twice with a bounded
+child join; failed children are terminated. This changes solver execution only.
+
+Blocking backend preparation now persists active time and timestamp every5s.
+The heartbeat explicitly denotes liveness, not completed candidate work. The
+UI removes the unsupported per-day estimate and preparation candidate counter,
+and shows age of the most recent status update. Old processes must restart to
+load the correction; no live process is silently patched.
+
+## Monthly stress-arm regression — 2026-09-09
+
+Corrected the earlier assumption that all PFE direction arms have identical
+vehicle totals. Passage policyv2conserves each arm independently; it no longer
+adds q50 departure equalities that contradict q10/q90 OD/purpose conservation.
+The actual failed2027-06-23spec now completes all3arms in isolation, with
+20638/20487/20599vehicles and paired candidate errors6/18/18. All retained
+sensor, structural and health checks remain. Evidence:
+`validation/monthly_stress_fix_20260909.json`.160focused tests pass; the full
+monthly search and full repository suite were not run. Overall validation
+still warns on structure/purposes and has missing sections.
+
+Monthly progress now records failed execution separately from workspace
+resumability. Dead-owner saved errors are visible in the UI, including older
+manifests; completed candidate evidence remains reusable.
+
+## Automatic passage default — 2026-09-08
+
+Implemented after user request. Fresh per-day measurements, retained PFE
+bounds, paired-seed regression checks, direction-arm population conservation,
+rollback and source/runtime-bound day-cache reuse are now in the ordinary PFE
+build path. Forecast2027-08-13 improves paired absolute error4673→16; native
+closure reroutes3646 of20059vehicles with no forbidden entries or health flags.
+The initial cold passage calibration took60.5s; exact solver simplification and
+bounded measurement concurrency now reduce it to23.4s. Total cold day build
+75.7→31.9s, repeated31.6s, with unchanged paired error16 and all9measurements.
+Cached-day PFE assembly previously measured0.7s, with no new SUMO.
+Current performance/native evidence: `validation/passage_speed_20260908.json`.
+Both catalogs now use explicit artifact-equivalence renewal of the original
+full qualification:115.4s including regeneration,3.5s for the default cached
+command,2.1s with an existing build report. Changed generator/input/output
+contracts still require full qualification; this is not a new campaign claim.
+See `validation/automatic_passage_20260908.json` for source-bound evidence.
+
+Next: independent historical and sensor-layout validation, preexisting slow
+subwindow PFE diagnosis. Catalog renewal is implemented for the narrow
+identical-artifact case; other changes require full requalification. No full-suite or global/generalization claim. The records below
+explain the earlier diagnostic and one-day activation stages.
+
+## Local dynamic passage activation — 2026-09-08
+
+The user subsequently requested activation and a closure test. The active
+2027-08-12 q50 build is `e775b28187ae46f52cf5`, preserving3293 structural
+constraints without adding relaxations. Three native closure seeds reroute3686
+vehicles with zero closed-edge entries, drops or health failures. Baseline raw
+exactness is658/672 ensemble cells. Existing publication criteria pass unchanged;
+exactness is diagnostic, correcting the earlier publication-gate wording below.
+Evidence: `runs/dynamic-activation-final-20260908/activation.json`.
+Automatic use on other dates, historical holdouts and sensor generalization
+remain future work. The comparison below describes the earlier isolated stage.
+
+## Dynamic passage implementation and real SUMO comparison — 2026-09-08
+
+Implemented `traffic_sim/experimental/dynamic_assignment.py` and
+`tools/trial_dynamic_passage.py`, with59 focused passing tests across new and
+existing timing paths. The operator uses physical route entry times separately
+for every sensor, including cross-quarter trips, repeated visits and boundary
+mass. Joint integer flows preserve364 OD/purpose totals on the active fixture;
+L1 prior deviation, finite option capacities and a smaller-shift preference
+limit arbitrary changes. This is a baseline regularizer, not a substitute for
+all production entropy/structure contracts.
+
+The bounded comparison is saved in
+`validation/dynamic_passage_calibration_20260908.json`. Input: forecast2027-08-12,
+19697 trips. The source operator reconstructs2016/2016 raw learning cells.
+Departures are offered within±900s at300s increments with a declared60s
+uncertainty envelope; this support needs independent behavioral validation.
+The final candidate selects3222 nonzero-shift anonymous flow alternatives.
+Ordinary SUMO randomness on unseen seeds4000/4001/4002 yields670/666/669 exact
+cells of672, absolute errors2/8/3; the identical-input baseline gives
+1557/1510/1549. Summed absolute error falls4616→13, approximately99.7%.
+Measured solve14.878s; solve plus six SUMO runs29.427s before artifact hashing.
+This is a bounded local improvement, not historical-data validation, a runtime
+speedup claim or a successful exactness gate. Status remains `sumo_mismatch`.
+
+Next: route/time-specific travel-time feedback; production entropy/structural
+constraints and coherent provenance in continuous/integer/materialization
+stages; withheld historical dates and sensors. Preserve the exact gate and do
+not select new parameters using the final validation seeds. No production
+activation, full warming or catalog rebuild occurred.
+
+## Revised passage model after naturalness objection — 2026-09-08
+
+The user rejected the post-picker reassignment approach. It remains diagnostic.
+`validation/quarter_route_assignment_20260908.json` records exact integer
+672/672 cells for three learning and three unseen profile arms, preserving all
+19,697 routes and departure-quarter counts, but moving 19,622 departures with
+253 s median and 892.4 s maximum absolute shift. Exactness does not establish
+naturalness. A minimum-cost alternative reached exact learning counts but
+failed unseen profiles (640–644/672 cells); retain that counterexample.
+
+Research supports dynamic OD/path-flow estimation coupled to simulated network
+loading, rather than treating the source quarter as the sensor quarter:
+https://arxiv.org/abs/2202.00099 (SUMO study on an artificial network), and
+https://transp-or.epfl.ch/documents/technicalReports/FloeBierNage08.pdf
+(Bayesian calibration framework). Our proposed adaptation is a sparse operator
+indexed by route, departure period, sensor and passage period. Update its
+travel-time information from simulation, retain OD/purpose priors and penalize
+unsupported temporal oscillation. Individual trips may cross different sensors
+in different quarters. Exact measured constraints remain; deterministic fit on
+one simulation seed is not sufficient validation. Evaluate withheld dates and
+sensors and sensitivity to congestion, with integer publication using the same
+passage semantics as the continuous fit.
+
+Measurement location needs explicit review: edgeData entered records entry to
+the street; a physical counter can lie farther along it. SUMO E1 detectors have
+lane position and 900 s aggregation, but switching measurement semantics needs
+verified mapping and runtime compatibility, not an assumed midpoint:
+https://sumo.dlr.de/docs/Simulation/Output/Induction_Loops_Detectors_(E1).html .
+No production solver, sensor contract or catalog was changed in this pass.
+
+## Passage integration experiment — 2026-09-08
+
+The user authorized production integration and a catalog rebuild if needed.
+Further code inspection found an existing offline monotone departure correction
+in `tools/departure_reconciliation.py`. It had previously failed departure
+spread checks. Retesting requires actual SUMO output; the 672 exact reconstructed
+baseline cells do not establish predictive improvement.
+
+Research: [SUMO Cadyts](https://eclipse.dev/sumo/docs/Contributed/Cadyts.html)
+uses simulated route timing and count measurements. Its SUMO coupling selects
+trips from alternatives and can distort OD structure when demand scaling is
+excessive. [SUMO routeSampler](https://sumo.dlr.de/docs/Tools/Turns.html)
+distinguishes entered counts from departures. Neither source establishes that
+an aggregate kernel from one old day remains valid after route mix or congestion
+changes. Our inference: prefer route/time-specific evidence and validate the
+resulting simulation, retaining population and provenance constraints.
+
+Implemented a bounded trial runner and repaired the existing correction:
+retain each source departure quarter (so all existing route-count, population,
+purpose and bound margins remain valid), retain at least half each adjacent
+source departure gap, reject first-edge sensor emissions, invalid/backward times,
+and missing/duplicate/incomplete edgeData intervals. Existing exact-output,
+health and aggregate dispersion gates remain required. The trial copies input
+files and retains three-seed raw evidence and source/input/binary hashes.
+
+Fresh result: `validation/passage_reconciliation_trial_20260908.json`.
+19,697 vehicles; seeds 1000/1001/1002; 6.326 s including three learning runs.
+The schedule refused before verification: pfe987 needs at least 24342.5 s but
+subsequent constraints allow at most 24330.4 s (12.1 s conflict). All original
+inputs remain unchanged. This rejects the proposed monotone treatment under
+the declared 60 s guard and spacing constraints. It does not prove that other
+joint route/time calibration is infeasible. No production integration or new
+predictive-accuracy claim is justified by this experiment.
+
+Run again with a fresh output directory:
+`python3 -m tools.trial_passage_reconciliation --demand-dir sumo --out runs/<new-trial>`.
+No catalog sources or route policy were changed, so no catalog rebuild is
+required. Next work is a joint route/departure assignment contract, including
+integer publication, driver identity and boundary handling, evaluated on frozen
+held dates before adoption. Do not manufacture exact counts through convoys.
+
+## Generalization research — 2026-09-08
+
+Goal: improve prediction on unseen sensors and dates while preserving exact
+active sensor constraints. No new production model or SUMO run in this pass.
+
+Fresh structural diagnostic:
+`validation/sensor_generalization_geometry_20260908.json`. On 416 unique
+geometries, every one of six station rows increases rank when added to the
+other registered directed sensor rows plus total flow. Exclusive support is
+50 geometries per station except station 107 (100). This tests a linear
+incidence model with fixed total, not feasible bounds or predictive accuracy.
+It identifies ambiguity in measured margins; it does not prove all such
+reallocations remain feasible under the complete production constraints.
+
+Prioritized experiments (hypotheses, not adopted improvements):
+
+1. Separate model selection from final testing. Outer holdouts must cover
+   entire stations/corridors and later dates; choose regularization strength
+   only within the remaining data. Remove held counts from all upstream
+   priors, aggregate totals, caches and candidate selection. Existing fixed-pool
+   LOSO tests missing counts at known locations; test new-location onboarding
+   separately by withholding that station from candidate construction too.
+   Keep both protocols: they answer different questions.
+2. Group regularization by origin/destination zones and purpose. Prefer a few
+   shared structural parameters over sensor-specific route coefficients.
+   Group definitions derive from geography/land use, never held traffic.
+   Apply soft penalties only inside the existing feasible constraints; compare
+   group prior sensitivity, not just a single assumed prior. Avoid making
+   arbitrary candidate multiplicity into a prior on real trip demand.
+3. Sensor-independent structural route support, plus explicitly attributed
+   exact-fit support where required. Test whether adding a station changes
+   predictions on untouched roads excessively. Preserve fastest-route and
+   avoidance proofs; more cross-sensor routes must be geographically justified,
+   never forced merely to improve a rank diagnostic. Keep current production
+   support policy until a separately versioned treatment passes evidence gates.
+4. Length-weighted path size remains a small controlled treatment. Since the
+   current penalty counts overlap across the entire pool, test sensitivity to
+   additional geographically unrelated OD alternatives as well as edge splitting
+   and purpose duplicates. Do not claim the global heuristic is already a
+   calibrated within-OD discrete-choice model or add sampling corrections without
+   a defined route-sampling probability model.
+
+Bounded comparison order: current baseline; length weighting only; baseline
+plus group regularization; combination only after independent effects are
+understood. Start on separately frozen historical inputs. Reserve a genuinely
+unseen station/date cohort for final evaluation: repeatedly selecting winners
+on the same six LOSO folds can overfit those folds. With few independent
+stations, state uncertainty and avoid universal generalization claims.
+
+Acceptance protocol: bind hashes for network, registry, raw observations,
+candidates/sidecars, fold-specific priors and code; pair seeds and simulated
+windows. Preserve exact active margins, route proofs and publication health.
+Report station-level hourly GEH, absolute count error, multiplicative daily
+error where the observed total is positive, worst-station degradation, and
+interval/seed stability. Evaluate station/day blocks rather than treating
+correlated quarters as independent samples. Stress missing stations and
+registry-order changes; measure runtime/memory as sensor count grows. A lower
+training error alone is never adoption evidence. Add sensors incrementally
+and assess remaining held stations with a frozen model-selection protocol.
+
+Sources: [grouped validation](https://scikit-learn.org/stable/modules/cross_validation.html),
+[nested model selection](https://scikit-learn.org/stable/auto_examples/model_selection/plot_nested_cross_validation_iris.html),
+[route-alternative sampling](https://transp-or.epfl.ch/documents/technicalReports/FrejBier07.pdf).
+These support evaluation and route-choice principles; the proposed group
+regularization and pool changes still require project-specific experiments.
+
+## Research implementation checkpoint — 2026-09-08
+
+Verified correctness repairs: hourly GEH interpretation, chronological paired
+forecast evaluation and spatial LOSO freshness checks. Existing published
+reports and trained models were not rebuilt. Prior UI work remains local.
+
+Point 6: length-weighted overlap is implemented only as a diagnostic. Run:
+
+```sh
+python3 -m traffic_sim.demand.route_regularization --candidates sumo/candidates.rou.xml --network sumo/net.net.xml
+```
+
+`validation/route_regularization_geometry_20260908.json` binds the measured
+416 geometries and 92 changed weights to XML/source hashes. Tests demonstrate
+segmentation invariance, not predictive superiority. Before adoption, freeze
+historical inputs, run paired LOSO and SUMO with identical seeds and exact
+sensor/route constraints, and compare held-out station error, GEH and route
+composition. OD/purpose regularization remains a separate hypothesis.
+No production route-policy change has been made. Junction realism requires
+travel-time/queue observations; congestion convergence, confidence calibration
+and broad modularization require separate evidence and scope.
+
+Research basis: [DfT TAG M3.1](https://assets.publishing.service.gov.uk/media/6a033d074fb0713aa63ea802/tag-m3-1-highway-assignment-modelling.pdf),
+[rolling-origin evaluation](https://otexts.com/fpp3/tscv.html),
+[preprocessing leakage](https://scikit-learn.org/stable/common_pitfalls.html),
+and [route-choice modelling](https://transp-or.epfl.ch/documents/technicalReports/KazBierFloe_2015.pdf).
+
 ## Current verified status — 2026-08-24
 
 - FASTEST-SENSOR-ROUTE LOSO DIAGNOSTIC (added 2026-09-01). The corrected
@@ -4561,3 +5257,23 @@ separate decision. The active local demand build is `dbb44172f30778adf8c0`,
 with zero short-trip cap violations and zero unanchored vehicles. Fresh
 temporal LOSO remains structurally underidentified and fails the TAG-aligned
 aggregate, so no absolute validation claim is made.
+
+## Route-specific passage support — 2026-09-09
+
+The automatic passage stage now treats a fixed departure-shift grid as a fast
+first representation rather than an assumption that every feasible sensor fit
+must satisfy. If the fit introduces a short-trip concentration, it adds the
+affected departure-quarter class to the optimization with the publication
+gate's exact integer semantics. An infeasible grid expands to route-specific
+sensor-passage change points and deduplicates alternatives by their complete
+observation signature. This retains physical routes, OD/purpose conservation,
+sensor targets and PFE edge bounds.
+
+The exact 2027-04-28 failure was replayed as a fresh three-arm day build. Its
+q10 arm exercised the boundary fallback, preserved all 18,889 route and
+OD/purpose records, removed the quarter-2 short-trip excess and reduced
+independent-seed passage error from 4,405 to 30. The build completed rather
+than failing after PFE. This is diagnostic evidence for the known failure, not
+a completed monthly search or approval of pre-existing purpose-length drift.
+Detailed evidence is in
+`validation/automatic_passage_structural_repair_20260909.json`.

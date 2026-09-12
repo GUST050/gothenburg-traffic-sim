@@ -1,6 +1,7 @@
 import hashlib
 import json
 import shutil
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,9 @@ from traffic_sim.core.contracts import (
 from traffic_sim.simulation.finalist_decision import CandidateEvidence
 from traffic_sim.simulation.monthly_demand import (
     MonthlyDemandResolverRunner,
+    aggregate_day_library_accounting,
     find_demand_archives,
+    summarize_day_library_diagnostics,
     validate_demand_archive,
 )
 from traffic_sim.simulation.independent_daily import (
@@ -316,10 +319,172 @@ def test_archive_validation_checks_contract_and_manifest_hashes(tmp_path):
         tmp_path, required, "demand-older", finished_at="2027-01-01T00:00:00Z")
     record = validate_demand_archive(archive, required)
     assert record["demand_build_spec"]["purpose"] == "closure_envelope"
+    assert record["day_library_accounting"]["status"] == "incomplete"
 
     (archive / "calibrated_v1.rou.xml").write_text("<tampered/>")
     with pytest.raises(ValueError, match="changed"):
         validate_demand_archive(archive, required)
+
+
+def test_archive_validation_publishes_complete_day_library_accounting(tmp_path):
+    schedules = generate_closure_schedules(_spec(end_date="2027-07-15"))
+    resolver = MonthlyDemandResolverRunner(
+        _spec(end_date="2027-07-15"),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+    )
+    required = resolver._required(schedules[0])
+    archive = _archive(
+        tmp_path, required, "demand-accounted",
+        finished_at="2027-01-01T00:00:00Z")
+    start = date.fromisoformat(required.start_date)
+    metadata = json.loads((archive / "demand_meta.json").read_text())
+    metadata["day_library_diagnostics"] = [
+        {
+            "date": (start + timedelta(days=index)).isoformat(),
+            "outcome": "hit", "reason": "hit",
+            "expected_key": f"{index:032x}", "compared_key": None,
+            "differing_fields": [], "identity_cause": None,
+            "lookup_duration_s": 0.01, "full_calibration": False,
+            "q50_alias_status": "not_requested",
+        }
+        for index in range(required.days)
+    ]
+    _rewrite_metadata(archive, metadata)
+
+    record = validate_demand_archive(archive, required)
+
+    assert record["day_library_accounting"]["status"] == "complete"
+    assert record["day_library_accounting"]["requested_days"] == required.days
+    assert record["day_library_accounting"]["hits"] == required.days
+    assert record["day_library_accounting"]["misses"] == 0
+
+
+def test_day_library_accounting_reconciles_rejections_as_misses():
+    diagnostics = [
+        {
+            "date": "2027-07-15", "outcome": "hit", "reason": "hit",
+            "expected_key": "a" * 32, "compared_key": None,
+            "differing_fields": [], "identity_cause": None,
+            "lookup_duration_s": 0.01, "full_calibration": False,
+            "q50_alias_status": "not_requested",
+        },
+        {
+            "date": "2027-07-16", "outcome": "miss",
+            "reason": "entry_absent", "identity_cause": "pool_composition",
+            "expected_key": "b" * 32, "compared_key": "c" * 32,
+            "differing_fields": ["pool_composition"],
+            "lookup_duration_s": 0.02,
+            "full_calibration": True, "q50_alias_status": "created",
+        },
+        {
+            "date": "2027-07-17", "outcome": "rejected",
+            "reason": "artifact_digest_mismatch", "identity_cause": None,
+            "expected_key": "d" * 32, "compared_key": None,
+            "differing_fields": [], "lookup_duration_s": 0.03,
+            "full_calibration": True,
+            "q50_alias_status": "already_present",
+        },
+    ]
+
+    summary = summarize_day_library_diagnostics(
+        diagnostics, start_date="2027-07-15", requested_days=3)
+
+    assert summary == {
+        "schema_version": 1,
+        "status": "complete",
+        "requested_days": 3,
+        "hits": 1,
+        "misses": 2,
+        "rejected_entries": 1,
+        "full_calibrations": 2,
+        "q50_aliases": 1,
+        "lookup_outcomes": {"hit": 1, "miss": 1, "rejected": 1},
+        "lookup_reasons": {
+            "artifact_digest_mismatch": 1, "entry_absent": 1, "hit": 1},
+        "identity_causes": {"pool_composition": 1},
+        "q50_alias_statuses": {"already_present": 1, "created": 1,
+                                "not_requested": 1},
+    }
+
+
+@pytest.mark.parametrize("diagnostics, reason", [
+    (None, "missing_diagnostics"),
+    ([{"date": "2027-07-15", "outcome": "hit", "reason": "hit"}],
+     "invalid_decision"),
+    ([{"date": "2027-07-16", "outcome": "hit", "reason": "hit",
+       "expected_key": "a" * 32, "compared_key": None,
+       "differing_fields": [], "identity_cause": None,
+       "lookup_duration_s": 0.01, "full_calibration": False,
+       "q50_alias_status": "not_requested"}], "date_mismatch"),
+])
+def test_day_library_accounting_is_incomplete_instead_of_guessing(
+        diagnostics, reason):
+    summary = summarize_day_library_diagnostics(
+        diagnostics, start_date="2027-07-15", requested_days=1)
+    assert summary == {
+        "schema_version": 1,
+        "status": "incomplete",
+        "requested_days": 1,
+        "reason": reason,
+    }
+
+
+def test_day_library_accounting_aggregates_complete_builds():
+    first = {
+        "status": "complete", "requested_days": 2, "hits": 1, "misses": 1,
+        "rejected_entries": 0, "full_calibrations": 1, "q50_aliases": 1,
+        "lookup_outcomes": {"hit": 1, "miss": 1},
+        "lookup_reasons": {"hit": 1, "entry_absent": 1},
+        "identity_causes": {"pool_composition": 1},
+        "q50_alias_statuses": {"not_requested": 1, "created": 1},
+    }
+    second = {
+        "status": "complete", "requested_days": 1, "hits": 0, "misses": 1,
+        "rejected_entries": 1, "full_calibrations": 1, "q50_aliases": 0,
+        "lookup_outcomes": {"rejected": 1},
+        "lookup_reasons": {"artifact_missing": 1},
+        "identity_causes": {},
+        "q50_alias_statuses": {"already_present": 1},
+    }
+    summary = aggregate_day_library_accounting([
+        {"build_key": "a", "day_library_accounting": first},
+        {"build_key": "b", "day_library_accounting": second},
+    ])
+    assert summary["status"] == "complete"
+    assert summary["builds"] == 2
+    assert summary["requested_days"] == 3
+    assert summary["hits"] == 1
+    assert summary["misses"] == 2
+    assert summary["rejected_entries"] == 1
+    assert summary["full_calibrations"] == 2
+    assert summary["q50_aliases"] == 1
+    assert summary["lookup_reasons"] == {
+        "artifact_missing": 1, "entry_absent": 1, "hit": 1}
+
+
+def test_day_library_accounting_aggregate_stays_incomplete():
+    summary = aggregate_day_library_accounting([
+        {"build_key": "known", "day_library_accounting": {
+            "status": "complete", "requested_days": 1, "hits": 1,
+            "misses": 0, "rejected_entries": 0, "full_calibrations": 0,
+            "q50_aliases": 0, "lookup_outcomes": {"hit": 1},
+            "lookup_reasons": {"hit": 1}, "identity_causes": {},
+            "q50_alias_statuses": {"not_requested": 1},
+        }},
+        {"build_key": "unknown", "day_library_accounting": {
+            "status": "incomplete", "requested_days": 2,
+            "reason": "missing_diagnostics",
+        }},
+    ])
+    assert summary == {
+        "schema_version": 1,
+        "status": "incomplete",
+        "builds": 2,
+        "requested_days": 3,
+        "incomplete_builds": [{
+            "build_key": "unknown", "reason": "missing_diagnostics"}],
+    }
 
 
 def test_archive_validation_rejects_another_demand_source_identity(tmp_path):

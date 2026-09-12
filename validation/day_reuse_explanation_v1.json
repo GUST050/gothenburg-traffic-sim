@@ -1,0 +1,1950 @@
+{
+  "dates": [
+    {
+      "comparisons": [
+        {
+          "baseline_key": "bf3b965c9154d9852011a716ddf537ee",
+          "cause": "pool_composition",
+          "compared_key": "4e67cb9fb4873d66344672a5534e690e",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-03",
+      "entries": [
+        {
+          "alias_of": "4e67cb9fb4873d66344672a5534e690e",
+          "key": "0cb50d0cbe30ad8156285340289d0e31",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789061248.095
+        },
+        {
+          "alias_of": "bf3b965c9154d9852011a716ddf537ee",
+          "key": "4cc9ac4faefce5f3b55b5e86ef62c46a",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789058733.594
+        },
+        {
+          "alias_of": null,
+          "key": "4e67cb9fb4873d66344672a5534e690e",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789061247.297
+        },
+        {
+          "alias_of": null,
+          "key": "bf3b965c9154d9852011a716ddf537ee",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789058732.769
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "7ea795ce5af054bfe0be4ac7e427b8e5",
+          "cause": "pool_composition",
+          "compared_key": "5fba9615fbe40910c2a07a6dd2e87eaa",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-04",
+      "entries": [
+        {
+          "alias_of": "5fba9615fbe40910c2a07a6dd2e87eaa",
+          "key": "292e521945b813195bcb625d87128230",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789061310.659
+        },
+        {
+          "alias_of": "7ea795ce5af054bfe0be4ac7e427b8e5",
+          "key": "507c672b8d5bf57352855ee41d762b2c",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789058810.87
+        },
+        {
+          "alias_of": null,
+          "key": "5fba9615fbe40910c2a07a6dd2e87eaa",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789061309.863
+        },
+        {
+          "alias_of": null,
+          "key": "7ea795ce5af054bfe0be4ac7e427b8e5",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789058810.078
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [],
+      "date": "2027-06-05",
+      "entries": [
+        {
+          "alias_of": "88ce507c1a698d8873e5d4603bffd97a",
+          "key": "45416835f57afb51e72c98bdfe898334",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789060490.077
+        },
+        {
+          "alias_of": null,
+          "key": "88ce507c1a698d8873e5d4603bffd97a",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789060489.37
+        }
+      ],
+      "full_calibrations": 1,
+      "other_entries": 0,
+      "q50_aliases": 1
+    },
+    {
+      "comparisons": [],
+      "date": "2027-06-06",
+      "entries": [
+        {
+          "alias_of": "e8b66fddffec1f76d044a452ca29d83a",
+          "key": "bee75a38c8847a61bc4c461bd7cde59e",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789060563.441
+        },
+        {
+          "alias_of": null,
+          "key": "e8b66fddffec1f76d044a452ca29d83a",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789060562.67
+        }
+      ],
+      "full_calibrations": 1,
+      "other_entries": 0,
+      "q50_aliases": 1
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "5b9d2845f0386ee6c5d8403eed7df14e",
+          "cause": "pool_composition",
+          "compared_key": "1a1e61d220ab908237e54e460b133f2d",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-07",
+      "entries": [
+        {
+          "alias_of": null,
+          "key": "1a1e61d220ab908237e54e460b133f2d",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789061132.471
+        },
+        {
+          "alias_of": null,
+          "key": "5b9d2845f0386ee6c5d8403eed7df14e",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789060645.292
+        },
+        {
+          "alias_of": "5b9d2845f0386ee6c5d8403eed7df14e",
+          "key": "a3603798c46c59060330f5e148e32420",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789060646.108
+        },
+        {
+          "alias_of": "1a1e61d220ab908237e54e460b133f2d",
+          "key": "a3c42e60f98062df26de07a8d8147e11",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789061133.279
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "b6ce855adc6b21e901632a7746d4c905",
+          "cause": "pool_composition",
+          "compared_key": "d16cb91fe1763d467dc24ec47a8d2f60",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-08",
+      "entries": [
+        {
+          "alias_of": "b6ce855adc6b21e901632a7746d4c905",
+          "key": "357fa5392f244b48f51b4daeb7364008",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789059948.129
+        },
+        {
+          "alias_of": "d16cb91fe1763d467dc24ec47a8d2f60",
+          "key": "66af022ca7c3cb55d9edc27b266b4599",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789061787.688
+        },
+        {
+          "alias_of": null,
+          "key": "b6ce855adc6b21e901632a7746d4c905",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789059947.312
+        },
+        {
+          "alias_of": null,
+          "key": "d16cb91fe1763d467dc24ec47a8d2f60",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789061786.92
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [],
+      "date": "2027-06-09",
+      "entries": [
+        {
+          "alias_of": null,
+          "key": "345f4138c4104a62da8d8667312b3fab",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789060010.491
+        },
+        {
+          "alias_of": "345f4138c4104a62da8d8667312b3fab",
+          "key": "b9c1dc49ec1ee4286b492e9b4fe37e09",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789060011.27
+        }
+      ],
+      "full_calibrations": 1,
+      "other_entries": 0,
+      "q50_aliases": 1
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "28b108348288d7193e5cf5068ca9914f",
+          "cause": "pool_composition",
+          "compared_key": "33d94da2150a4af33f768f5c84f19647",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-10",
+      "entries": [
+        {
+          "alias_of": null,
+          "key": "28b108348288d7193e5cf5068ca9914f",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789060081.97
+        },
+        {
+          "alias_of": null,
+          "key": "33d94da2150a4af33f768f5c84f19647",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789060748.232
+        },
+        {
+          "alias_of": "33d94da2150a4af33f768f5c84f19647",
+          "key": "a12db1419b15df0f50c54e3bd98a2e3a",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789060749.061
+        },
+        {
+          "alias_of": "28b108348288d7193e5cf5068ca9914f",
+          "key": "e52f0f7113f3853c92f81a2332476f69",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789060082.849
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "78dfc3ac88571da9f74d57d2bd37722b",
+          "cause": "pool_composition",
+          "compared_key": "cca5cecb08cfddbeed7acae72a45d4d6",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-11",
+      "entries": [
+        {
+          "alias_of": "cca5cecb08cfddbeed7acae72a45d4d6",
+          "key": "04f1d45d32da591a704ac7087b79b248",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789061588.092
+        },
+        {
+          "alias_of": null,
+          "key": "78dfc3ac88571da9f74d57d2bd37722b",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789059017.626
+        },
+        {
+          "alias_of": null,
+          "key": "cca5cecb08cfddbeed7acae72a45d4d6",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789061587.273
+        },
+        {
+          "alias_of": "78dfc3ac88571da9f74d57d2bd37722b",
+          "key": "de76b616d52eaef47f9c1f74809bfd71",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789059018.474
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [],
+      "date": "2027-06-12",
+      "entries": [
+        {
+          "alias_of": null,
+          "key": "2f7691f98b18bff5b0ff0a85b38af483",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789059075.645
+        },
+        {
+          "alias_of": "2f7691f98b18bff5b0ff0a85b38af483",
+          "key": "932ff0f0bae8f10865046f59dc659c28",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789059076.352
+        }
+      ],
+      "full_calibrations": 1,
+      "other_entries": 0,
+      "q50_aliases": 1
+    },
+    {
+      "comparisons": [],
+      "date": "2027-06-13",
+      "entries": [
+        {
+          "alias_of": null,
+          "key": "6350fa44d25a42d93d0df1742d8e5387",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789058071.004
+        },
+        {
+          "alias_of": "6350fa44d25a42d93d0df1742d8e5387",
+          "key": "d2a28b28b27c93fad08b0b9dfac2e970",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789058071.662
+        }
+      ],
+      "full_calibrations": 1,
+      "other_entries": 0,
+      "q50_aliases": 1
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "8e9ae85ec2ccad1c8d7047655602e9b7",
+          "cause": "pool_composition",
+          "compared_key": "ee52fbf19c7f6322345946351457920f",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-14",
+      "entries": [
+        {
+          "alias_of": "8e9ae85ec2ccad1c8d7047655602e9b7",
+          "key": "3177175ffdb4e476569660bb612584d5",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789057850.493
+        },
+        {
+          "alias_of": null,
+          "key": "8e9ae85ec2ccad1c8d7047655602e9b7",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789057849.688
+        },
+        {
+          "alias_of": "ee52fbf19c7f6322345946351457920f",
+          "key": "c3c1bfb69a72bea32224cb5793cbfe4c",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789058153.697
+        },
+        {
+          "alias_of": null,
+          "key": "ee52fbf19c7f6322345946351457920f",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789058152.905
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "e04f7ce8466e046ed6395ef3c58e50d6",
+          "cause": "pool_composition",
+          "compared_key": "5c9d8afc742ff19e268916dadaf54cc4",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-15",
+      "entries": [
+        {
+          "alias_of": "5c9d8afc742ff19e268916dadaf54cc4",
+          "key": "3f48dc9c64c813588e6236afbb25778f",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789058227.104
+        },
+        {
+          "alias_of": null,
+          "key": "5c9d8afc742ff19e268916dadaf54cc4",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789058226.296
+        },
+        {
+          "alias_of": "e04f7ce8466e046ed6395ef3c58e50d6",
+          "key": "a30abd14abb01bf16ffb0dd7dcc90b05",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789057930.692
+        },
+        {
+          "alias_of": null,
+          "key": "e04f7ce8466e046ed6395ef3c58e50d6",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789057929.86
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [],
+      "date": "2027-06-16",
+      "entries": [
+        {
+          "alias_of": "c42e2fe8a48b907df891febb2b7b9c44",
+          "key": "745a1ce8eb87363032b12feeddca53cf",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789057995.396
+        },
+        {
+          "alias_of": null,
+          "key": "c42e2fe8a48b907df891febb2b7b9c44",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789057994.563
+        }
+      ],
+      "full_calibrations": 1,
+      "other_entries": 0,
+      "q50_aliases": 1
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "e212834d56e82ac5f7f747d7a6d3fb25",
+          "cause": "pool_composition",
+          "compared_key": "98122860d9c0af6e3bdf6a6bcfdc3c46",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-17",
+      "entries": [
+        {
+          "alias_of": "e212834d56e82ac5f7f747d7a6d3fb25",
+          "key": "4002189d790aad391b4c106cff447930",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789059729.691
+        },
+        {
+          "alias_of": null,
+          "key": "98122860d9c0af6e3bdf6a6bcfdc3c46",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789061419.729
+        },
+        {
+          "alias_of": null,
+          "key": "e212834d56e82ac5f7f747d7a6d3fb25",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789059728.891
+        },
+        {
+          "alias_of": "98122860d9c0af6e3bdf6a6bcfdc3c46",
+          "key": "e7115d0a143961b185c76d07be04463d",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789061420.573
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "402631f9dd53e4a8c92fd11938fd0427",
+          "cause": "pool_composition",
+          "compared_key": "b49fd391ab70450704fb4b9c75628410",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-18",
+      "entries": [
+        {
+          "alias_of": null,
+          "key": "402631f9dd53e4a8c92fd11938fd0427",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789059793.867
+        },
+        {
+          "alias_of": "b49fd391ab70450704fb4b9c75628410",
+          "key": "77f9c6c24e420efb91c6595d666abd80",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789061479.756
+        },
+        {
+          "alias_of": null,
+          "key": "b49fd391ab70450704fb4b9c75628410",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789061478.977
+        },
+        {
+          "alias_of": "402631f9dd53e4a8c92fd11938fd0427",
+          "key": "cd9a30264b9a4d839f847cba62b8a1cf",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789059794.627
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [],
+      "date": "2027-06-19",
+      "entries": [
+        {
+          "alias_of": "e0e11b5ab51f766b581741fd542f1f42",
+          "key": "9fc352722130b4d2be4e3d457e2f49c8",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789059845.89
+        },
+        {
+          "alias_of": null,
+          "key": "e0e11b5ab51f766b581741fd542f1f42",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789059845.218
+        }
+      ],
+      "full_calibrations": 1,
+      "other_entries": 0,
+      "q50_aliases": 1
+    },
+    {
+      "comparisons": [],
+      "date": "2027-06-20",
+      "entries": [
+        {
+          "alias_of": null,
+          "key": "13f25e5d600600565e267ce6ab07f798",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789060303.244
+        },
+        {
+          "alias_of": "13f25e5d600600565e267ce6ab07f798",
+          "key": "eddf9c37093d39420f08f6a0571b28c0",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789060303.9
+        }
+      ],
+      "full_calibrations": 1,
+      "other_entries": 0,
+      "q50_aliases": 1
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "31219abffbc3a361e9ec7c45729e2008",
+          "cause": "pool_composition",
+          "compared_key": "fe49e92a32560b4c10da7c1c398328ff",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-21",
+      "entries": [
+        {
+          "alias_of": null,
+          "key": "31219abffbc3a361e9ec7c45729e2008",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789060399.519
+        },
+        {
+          "alias_of": "fe49e92a32560b4c10da7c1c398328ff",
+          "key": "67c7f64317b706da05c3bb58970faf08",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789061987.956
+        },
+        {
+          "alias_of": "31219abffbc3a361e9ec7c45729e2008",
+          "key": "7ba5957ba4be9a426a61899910d9fd42",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789060400.355
+        },
+        {
+          "alias_of": null,
+          "key": "fe49e92a32560b4c10da7c1c398328ff",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789061987.145
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "6b8ec13ced33be3692b1e6d044869738",
+          "cause": "pool_composition",
+          "compared_key": "9f6bf03bf4b0f170d77e2ba3e2d9b7c7",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-22",
+      "entries": [
+        {
+          "alias_of": null,
+          "key": "6b8ec13ced33be3692b1e6d044869738",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789059487.078
+        },
+        {
+          "alias_of": "6b8ec13ced33be3692b1e6d044869738",
+          "key": "8d0aff091bce87134c4d7a03ba6d1822",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789059487.855
+        },
+        {
+          "alias_of": null,
+          "key": "9f6bf03bf4b0f170d77e2ba3e2d9b7c7",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789060867.695
+        },
+        {
+          "alias_of": "9f6bf03bf4b0f170d77e2ba3e2d9b7c7",
+          "key": "c1567dcd4a4b4f533ffd92e2338818ae",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789060868.504
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "61e3425954d83decf7f83fcc389fa3e9",
+          "cause": "pool_composition",
+          "compared_key": "64f35698e6d0b1fed980a7b9f1be6454",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-23",
+      "entries": [
+        {
+          "alias_of": "61e3425954d83decf7f83fcc389fa3e9",
+          "key": "3a41e7d555c940acc3f70d128f7ef9aa",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789059559.603
+        },
+        {
+          "alias_of": null,
+          "key": "61e3425954d83decf7f83fcc389fa3e9",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789059558.781
+        },
+        {
+          "alias_of": null,
+          "key": "64f35698e6d0b1fed980a7b9f1be6454",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789060200.512
+        },
+        {
+          "alias_of": "64f35698e6d0b1fed980a7b9f1be6454",
+          "key": "fa7a1632fbdd16ae68aba3c1db39190e",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789060201.309
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "c368ade2de63763c65dad83f55cea77a",
+          "cause": "pool_composition",
+          "compared_key": "b7cfde76faac7ef66950dc1388c6eed6",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-24",
+      "entries": [
+        {
+          "alias_of": "b7cfde76faac7ef66950dc1388c6eed6",
+          "key": "7bda13aa904a85f581c657aa1b9a9e61",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789059620.647
+        },
+        {
+          "alias_of": "c368ade2de63763c65dad83f55cea77a",
+          "key": "87ddafa7054d0c23cea7ebf8fa791a62",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789059343.363
+        },
+        {
+          "alias_of": null,
+          "key": "b7cfde76faac7ef66950dc1388c6eed6",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789059619.804
+        },
+        {
+          "alias_of": null,
+          "key": "c368ade2de63763c65dad83f55cea77a",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789059342.586
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "e2414c71a8ca4884df900467ca80cb43",
+          "cause": "pool_composition",
+          "compared_key": "0e9ac5e199f31941a5caace461893035",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-25",
+      "entries": [
+        {
+          "alias_of": "e2414c71a8ca4884df900467ca80cb43",
+          "key": "02bf819e58c8025dd58e856078676c76",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789059384.248
+        },
+        {
+          "alias_of": null,
+          "key": "0e9ac5e199f31941a5caace461893035",
+          "kind": "full",
+          "pool_composition": [
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789060939.819
+        },
+        {
+          "alias_of": "0e9ac5e199f31941a5caace461893035",
+          "key": "294c53b41925b2341a4a56075c2fae59",
+          "kind": "alias",
+          "pool_composition": [
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789060940.391
+        },
+        {
+          "alias_of": null,
+          "key": "e2414c71a8ca4884df900467ca80cb43",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789059383.644
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "905134be7a5cf3102237ad9c3c54826e",
+          "cause": "pool_composition",
+          "compared_key": "3a907cc4eb06593116f0e226eb953f56",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-26",
+      "entries": [
+        {
+          "alias_of": "905134be7a5cf3102237ad9c3c54826e",
+          "key": "0ae76c53521943b5fac78f2d9b7daa4c",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789058523.967
+        },
+        {
+          "alias_of": "3a907cc4eb06593116f0e226eb953f56",
+          "key": "10ea868e0641f1e0c748cbe02588a264",
+          "kind": "alias",
+          "pool_composition": [
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789060985.787
+        },
+        {
+          "alias_of": null,
+          "key": "3a907cc4eb06593116f0e226eb953f56",
+          "kind": "full",
+          "pool_composition": [
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789060985.086
+        },
+        {
+          "alias_of": null,
+          "key": "905134be7a5cf3102237ad9c3c54826e",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789058523.256
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "d631b71bcea9759d1f3ec7d3d21cc358",
+          "cause": "pool_composition",
+          "compared_key": "a9da8b34840614d2674b0ced8eb9dc31",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-27",
+      "entries": [
+        {
+          "alias_of": "a9da8b34840614d2674b0ced8eb9dc31",
+          "key": "02842e9be685af822feb74df4d0b0e95",
+          "kind": "alias",
+          "pool_composition": [
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789061028.831
+        },
+        {
+          "alias_of": null,
+          "key": "a9da8b34840614d2674b0ced8eb9dc31",
+          "kind": "full",
+          "pool_composition": [
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789061028.151
+        },
+        {
+          "alias_of": null,
+          "key": "d631b71bcea9759d1f3ec7d3d21cc358",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789058564.746
+        },
+        {
+          "alias_of": "d631b71bcea9759d1f3ec7d3d21cc358",
+          "key": "f12b4687c53509c6a55f961fac46a0d2",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789058565.398
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "1ef3d46a8d8dd3caedd4b20e16a18bc1",
+          "cause": "pool_composition",
+          "compared_key": "518d2f075ce971d3ea1736446a0551d8",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-28",
+      "entries": [
+        {
+          "alias_of": null,
+          "key": "1ef3d46a8d8dd3caedd4b20e16a18bc1",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789058629.904
+        },
+        {
+          "alias_of": null,
+          "key": "518d2f075ce971d3ea1736446a0551d8",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789059177.029
+        },
+        {
+          "alias_of": "518d2f075ce971d3ea1736446a0551d8",
+          "key": "68379aa3df4e27545f68af9d60038ee8",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789059177.825
+        },
+        {
+          "alias_of": "1ef3d46a8d8dd3caedd4b20e16a18bc1",
+          "key": "c85eaf3f5a406ebe8fcabf71e79eb1f3",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789058630.65
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [
+        {
+          "baseline_key": "3b6b59b9e4655d142c648312303eb82e",
+          "cause": "pool_composition",
+          "compared_key": "e9717b635f9b9bd7ad8c9aa025ff6b18",
+          "fields": [
+            "inputs.candidate_metadata",
+            "inputs.candidate_pool",
+            "inputs.catalog_keys",
+            "pool_composition"
+          ]
+        }
+      ],
+      "date": "2027-06-29",
+      "entries": [
+        {
+          "alias_of": null,
+          "key": "3b6b59b9e4655d142c648312303eb82e",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789058325.554
+        },
+        {
+          "alias_of": "3b6b59b9e4655d142c648312303eb82e",
+          "key": "3ca149bb9eda8edc21518e265b97c430",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789058326.396
+        },
+        {
+          "alias_of": "e9717b635f9b9bd7ad8c9aa025ff6b18",
+          "key": "92fae1a192515b5c0688ca90ebf8ac7a",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789062139.821
+        },
+        {
+          "alias_of": null,
+          "key": "e9717b635f9b9bd7ad8c9aa025ff6b18",
+          "kind": "full",
+          "pool_composition": [
+            "weekday",
+            "weekend"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789062139.016
+        }
+      ],
+      "full_calibrations": 2,
+      "other_entries": 0,
+      "q50_aliases": 2
+    },
+    {
+      "comparisons": [],
+      "date": "2027-06-30",
+      "entries": [
+        {
+          "alias_of": "b137550ac664ac9d6906a345b43d9695",
+          "key": "8966bc6fcee22bb8410787475aa26f32",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789058387.409
+        },
+        {
+          "alias_of": null,
+          "key": "b137550ac664ac9d6906a345b43d9695",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789058386.576
+        }
+      ],
+      "full_calibrations": 1,
+      "other_entries": 0,
+      "q50_aliases": 1
+    },
+    {
+      "comparisons": [],
+      "date": "2027-07-01",
+      "entries": [
+        {
+          "alias_of": "e166972e4ad3b39595c0fc72d3438f42",
+          "key": "2b1862572d26eda4562fecedbc56194a",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789058441.56
+        },
+        {
+          "alias_of": null,
+          "key": "e166972e4ad3b39595c0fc72d3438f42",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789058440.807
+        }
+      ],
+      "full_calibrations": 1,
+      "other_entries": 0,
+      "q50_aliases": 1
+    },
+    {
+      "comparisons": [],
+      "date": "2027-07-02",
+      "entries": [
+        {
+          "alias_of": "72605c7ddf5400cc34bf4310fc515d05",
+          "key": "185305885bc18241f82e2430cef79cd5",
+          "kind": "alias",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares"
+          ],
+          "written_at": 1789058902.299
+        },
+        {
+          "alias_of": null,
+          "key": "72605c7ddf5400cc34bf4310fc515d05",
+          "kind": "full",
+          "pool_composition": [
+            "weekday"
+          ],
+          "reusable": true,
+          "variants": [
+            "edge_shares",
+            "edge_shares_q10",
+            "edge_shares_q90"
+          ],
+          "written_at": 1789058901.586
+        }
+      ],
+      "full_calibrations": 1,
+      "other_entries": 0,
+      "q50_aliases": 1
+    }
+  ],
+  "filters": {
+    "since": "2026-09-10T18:29:15+02:00",
+    "source_inventory_error": null,
+    "until": "2026-09-10T19:54:32+02:00"
+  },
+  "release_evidence": false,
+  "root": "runs/demand-days",
+  "schema": "day_reuse_explanation_v1",
+  "summary": {
+    "causes": {
+      "pool_composition": 19
+    },
+    "dates": 30,
+    "entries": 98,
+    "full_calibrations": 49,
+    "other_entries": 0,
+    "q50_aliases": 49,
+    "repeated_calibrations": 19,
+    "repeated_dates": 19,
+    "reusable_dates": 30,
+    "reusable_entries": 98,
+    "stale_entries": 0,
+    "unlinked_aliases": 0,
+    "unreadable_manifests": 0
+  },
+  "unreadable": []
+}

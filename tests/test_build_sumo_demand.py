@@ -2042,3 +2042,155 @@ class TestStartupSourceHashes:
         assert identity["platform"]
         assert identity["numpy"] == np.__version__
         assert identity["scipy"]
+
+
+class TestDayLibraryBuildDiagnostics:
+    @staticmethod
+    def _identity(*, composition=("weekday",)):
+        return bsd.DayIdentity(
+            date="2027-03-09", source="forecast",
+            pool_composition=composition,
+            inputs={"variants": ["edge_shares"], "candidate_pool": "aaa"},
+            source_hashes={"pfe": "source-v1"})
+
+    @staticmethod
+    def _store(library, identity, tmp_path):
+        artifact = tmp_path / f"{identity.key}.rou.xml"
+        artifact.write_text("<routes/>\n")
+        library.put(identity, {"calibrated.rou.xml": artifact})
+
+    def test_builder_records_one_named_hit(self, tmp_path, capsys):
+        library = bsd.DayLibrary(tmp_path / "library")
+        identity = self._identity()
+        self._store(library, identity, tmp_path)
+        diagnostics = []
+        ticks = iter((10.0, 10.125))
+
+        entry = bsd.record_day_library_lookup(
+            library, identity, diagnostics, clock=lambda: next(ticks))
+
+        assert entry is not None
+        assert diagnostics == [{
+            "date": "2027-03-09",
+            "expected_key": identity.key,
+            "outcome": "hit",
+            "reason": "hit",
+            "compared_key": None,
+            "differing_fields": [],
+            "identity_cause": None,
+            "lookup_duration_s": 0.125,
+            "full_calibration": False,
+            "q50_alias_status": "not_requested",
+        }]
+        assert "library hit/hit" in capsys.readouterr().out
+
+    def test_builder_records_absent_entry_and_nearest_identity_cause(
+            self, tmp_path, capsys):
+        library = bsd.DayLibrary(tmp_path / "library")
+        stored = self._identity()
+        self._store(library, stored, tmp_path)
+        wanted = self._identity(composition=("weekday", "weekend"))
+        diagnostics = []
+
+        entry = bsd.record_day_library_lookup(
+            library, wanted, diagnostics, clock=lambda: 3.0)
+
+        assert entry is None
+        assert diagnostics[0]["outcome"] == "miss"
+        assert diagnostics[0]["reason"] == "entry_absent"
+        assert diagnostics[0]["compared_key"] == stored.key
+        assert diagnostics[0]["differing_fields"] == ["pool_composition"]
+        assert diagnostics[0]["identity_cause"] == "pool_composition"
+        assert "library miss/entry_absent" in capsys.readouterr().out
+
+    def test_builder_records_rejected_corrupt_entry(self, tmp_path, capsys):
+        library = bsd.DayLibrary(tmp_path / "library")
+        identity = self._identity()
+        self._store(library, identity, tmp_path)
+        library.manifest_path(identity).write_text("{broken")
+        diagnostics = []
+
+        entry = bsd.record_day_library_lookup(
+            library, identity, diagnostics, clock=lambda: 3.0)
+
+        assert entry is None
+        assert diagnostics[0]["outcome"] == "rejected"
+        assert diagnostics[0]["reason"] == "manifest_unreadable"
+        assert "library rejected/manifest_unreadable" in capsys.readouterr().out
+
+    def test_diagnostics_and_their_timing_do_not_change_build_id(self):
+        from traffic_sim.core.fingerprint import make_fingerprint
+
+        base = {"schema_version": 1, "build": {"days": 3}}
+        first = {**base, "day_library_diagnostics": [
+            {"date": "2027-03-09", "outcome": "hit",
+             "lookup_duration_s": 0.001}]}
+        second = {**base, "day_library_diagnostics": [
+            {"date": "2027-03-09", "outcome": "rejected",
+             "reason": "artifact_digest_mismatch",
+             "lookup_duration_s": 9.0}]}
+
+        a = make_fingerprint(
+            contract=bsd.demand_build_fingerprint_contract(first),
+            artifacts={}, source_files={}, source_file_records={})
+        b = make_fingerprint(
+            contract=bsd.demand_build_fingerprint_contract(second),
+            artifacts={}, source_files={}, source_file_records={})
+
+        assert a["build_id"] == b["build_id"]
+
+    def test_exactly_one_decision_is_required_per_library_day(self):
+        events = [
+            {"date": "2027-03-09", "outcome": "hit",
+             "reason": "hit", "expected_key": "a" * 32,
+             "compared_key": None, "differing_fields": [],
+             "identity_cause": None, "lookup_duration_s": 0.1,
+             "full_calibration": False,
+             "q50_alias_status": "not_requested"},
+            {"date": "2027-03-10", "outcome": "miss",
+             "reason": "entry_absent", "expected_key": "b" * 32,
+             "compared_key": "c" * 32,
+             "differing_fields": ["pool_composition"],
+             "identity_cause": "pool_composition",
+             "lookup_duration_s": 0.2,
+             "full_calibration": True,
+             "q50_alias_status": "created"},
+        ]
+        assert bsd.finalize_day_library_diagnostics(
+            events, ["2027-03-09", "2027-03-10"], enabled=True) == events
+
+        with pytest.raises(RuntimeError, match="do not reconcile"):
+            bsd.finalize_day_library_diagnostics(
+                events + [events[-1]],
+                ["2027-03-09", "2027-03-10"], enabled=True)
+
+    def test_incomplete_or_inconsistent_decision_is_rejected(self):
+        base = {"date": "2027-03-09", "outcome": "miss",
+                "full_calibration": True,
+                "q50_alias_status": "created"}
+        for invalid in (
+            {**base, "full_calibration": False},
+            {key: value for key, value in base.items()
+             if key != "q50_alias_status"},
+            {**base, "q50_alias_status": "guessed"},
+        ):
+            with pytest.raises(RuntimeError, match="incomplete or inconsistent"):
+                bsd.finalize_day_library_diagnostics(
+                    [invalid], ["2027-03-09"], enabled=True)
+
+    def test_calibrated_decision_records_alias_result(self):
+        diagnostics = [{
+            "date": "2027-03-09", "outcome": "rejected",
+            "full_calibration": None, "q50_alias_status": None,
+        }]
+        bsd.complete_day_library_decision(
+            diagnostics, q50_alias_status="already_present")
+        assert diagnostics[0]["full_calibration"] is True
+        assert diagnostics[0]["q50_alias_status"] == "already_present"
+
+    def test_direct_build_has_no_day_library_decisions(self):
+        assert bsd.finalize_day_library_diagnostics(
+            [], ["2027-03-09"], enabled=False) == []
+        with pytest.raises(RuntimeError, match="disabled"):
+            bsd.finalize_day_library_diagnostics(
+                [{"date": "2027-03-09"}], ["2027-03-09"], enabled=False)

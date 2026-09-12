@@ -455,3 +455,327 @@ class TestStorageHousekeeping:
         assert library.get(identity) is not None
         assert "second" in (entry / "fit.json").read_text()
         assert not (entry.with_name(entry.name + ".replaced")).exists()
+
+
+class TestDayLookupExplainsEveryOutcome:
+    """A miss must say WHY, not merely that it missed.
+
+    ``get`` collapsed at least eleven distinct states into one ``None``, so a
+    build could not report whether a day was absent, corrupt, or simply
+    calibrated under a different identity. ``lookup`` names the state; ``get``
+    keeps its exact old signature and behaviour on top of it.
+    """
+
+    def _stored(self, tmp_path):
+        library = dl.DayLibrary(tmp_path / "library")
+        identity = dl.DayIdentity(
+            date="2027-03-09", source="forecast",
+            pool_composition=("weekday",),
+            inputs={"variants": ["edge_shares", "edge_shares_q10"],
+                    "candidate_pool": "aaa"},
+            source_hashes={"pfe": "x"})
+        artifact = tmp_path / "calibrated.rou.xml"
+        artifact.write_text("<routes>\n</routes>\n")
+        library.put(identity, {"calibrated.rou.xml": artifact},
+                    fit={"geh_pct": 100.0})
+        return library, identity
+
+    @staticmethod
+    def _rewrite_manifest(library, identity, mutate):
+        path = library.manifest_path(identity)
+        manifest = json.loads(path.read_text())
+        mutate(manifest)
+        path.write_text(json.dumps(manifest))
+
+    @staticmethod
+    def _artifact(library, identity):
+        manifest = json.loads(library.manifest_path(identity).read_text())
+        return (library.path_for(identity)
+                / next(iter(manifest["artifacts"])))
+
+    def test_a_stored_day_is_a_named_hit_carrying_its_manifest(self, tmp_path):
+        library, identity = self._stored(tmp_path)
+
+        result = library.lookup(identity)
+
+        assert result.outcome == "hit"
+        assert result.reason == dl.LookupReason.HIT
+        assert result.manifest["fit"]["geh_pct"] == 100.0
+        assert result.expected_key == identity.key
+        assert result.differing_fields == ()
+        assert result.identity_cause is None
+
+    def test_get_still_returns_exactly_the_manifest_or_none(self, tmp_path):
+        library, identity = self._stored(tmp_path)
+        absent = dl.DayIdentity(
+            date="2027-03-10", source="forecast",
+            pool_composition=("weekday",), inputs={"a": 1},
+            source_hashes={"pfe": "x"})
+
+        assert library.get(identity) == library.lookup(identity).manifest
+        assert library.get(identity) is not None
+        assert library.get(absent) is None
+
+    def test_an_unwritten_date_is_absent_not_rejected(self, tmp_path):
+        library, _identity = self._stored(tmp_path)
+        other = dl.DayIdentity(
+            date="2027-04-01", source="forecast",
+            pool_composition=("weekday",), inputs={"a": 1},
+            source_hashes={"pfe": "x"})
+
+        result = library.lookup(other)
+
+        assert (result.outcome, result.reason) == (
+            "miss", dl.LookupReason.ENTRY_ABSENT)
+        assert result.manifest is None
+        assert result.compared_key is None
+
+    def test_an_unparseable_manifest_is_rejected_with_its_own_reason(
+            self, tmp_path):
+        library, identity = self._stored(tmp_path)
+        library.manifest_path(identity).write_text("{not json")
+
+        result = library.lookup(identity)
+
+        assert (result.outcome, result.reason) == (
+            "rejected", dl.LookupReason.MANIFEST_UNREADABLE)
+        assert library.get(identity) is None
+
+    def test_a_manifest_that_is_not_an_object_is_unreadable(self, tmp_path):
+        library, identity = self._stored(tmp_path)
+        library.manifest_path(identity).write_text("[1, 2, 3]")
+
+        assert library.lookup(identity).reason == \
+            dl.LookupReason.MANIFEST_UNREADABLE
+
+    def test_a_future_schema_version_is_refused_by_name(self, tmp_path):
+        library, identity = self._stored(tmp_path)
+        self._rewrite_manifest(library, identity,
+                               lambda m: m.update(schema_version=999))
+
+        assert library.lookup(identity).reason == \
+            dl.LookupReason.SCHEMA_MISMATCH
+
+    def test_a_foreign_kind_is_refused_by_name(self, tmp_path):
+        library, identity = self._stored(tmp_path)
+        self._rewrite_manifest(library, identity,
+                               lambda m: m.update(kind="something_else"))
+
+        assert library.lookup(identity).reason == dl.LookupReason.KIND_MISMATCH
+
+    def test_a_manifest_naming_another_key_is_refused_by_name(self, tmp_path):
+        library, identity = self._stored(tmp_path)
+        self._rewrite_manifest(library, identity,
+                               lambda m: m.update(key="not-this-key"))
+
+        assert library.lookup(identity).reason == dl.LookupReason.KEY_MISMATCH
+
+    def test_a_manifest_describing_another_identity_is_refused_by_name(
+            self, tmp_path):
+        library, identity = self._stored(tmp_path)
+
+        def _retarget(manifest):
+            manifest["identity"]["date"] = "2027-03-10"
+
+        self._rewrite_manifest(library, identity, _retarget)
+        result = library.lookup(identity)
+
+        assert result.reason == dl.LookupReason.IDENTITY_MISMATCH
+        assert result.outcome == "rejected"
+
+    def test_an_artifact_record_that_is_not_a_mapping_is_refused_by_name(
+            self, tmp_path):
+        library, identity = self._stored(tmp_path)
+
+        def _corrupt(manifest):
+            name = next(iter(manifest["artifacts"]))
+            manifest["artifacts"][name] = "not-a-record"
+
+        self._rewrite_manifest(library, identity, _corrupt)
+
+        assert library.lookup(identity).reason == \
+            dl.LookupReason.ARTIFACT_RECORD_INVALID
+
+    @pytest.mark.parametrize("record", [
+        {},
+        {"sha256": None, "bytes": 1},
+        {"sha256": "abc", "bytes": "1"},
+        {"sha256": "abc", "bytes": -1},
+    ])
+    def test_a_malformed_artifact_mapping_is_invalid_not_a_digest_miss(
+            self, tmp_path, record):
+        library, identity = self._stored(tmp_path)
+
+        def _corrupt(manifest):
+            name = next(iter(manifest["artifacts"]))
+            manifest["artifacts"][name] = record
+
+        self._rewrite_manifest(library, identity, _corrupt)
+
+        assert library.lookup(identity).reason == \
+            dl.LookupReason.ARTIFACT_RECORD_INVALID
+
+    def test_an_artifacts_container_that_is_not_a_mapping_is_refused(
+            self, tmp_path):
+        library, identity = self._stored(tmp_path)
+        self._rewrite_manifest(library, identity,
+                               lambda m: m.update(artifacts=[]))
+
+        assert library.lookup(identity).reason == \
+            dl.LookupReason.ARTIFACT_RECORD_INVALID
+
+    def test_a_deleted_artifact_is_reported_as_missing(self, tmp_path):
+        library, identity = self._stored(tmp_path)
+        self._artifact(library, identity).unlink()
+
+        result = library.lookup(identity)
+
+        assert result.reason == dl.LookupReason.ARTIFACT_MISSING
+        assert result.outcome == "rejected"
+
+    def test_an_edited_artifact_is_reported_as_a_digest_mismatch(
+            self, tmp_path):
+        library, identity = self._stored(tmp_path)
+        self._artifact(library, identity).write_text("edited")
+
+        assert library.lookup(identity).reason == \
+            dl.LookupReason.ARTIFACT_DIGEST_MISMATCH
+
+    def test_a_wrong_recorded_size_is_reported_as_a_size_mismatch(
+            self, tmp_path):
+        library, identity = self._stored(tmp_path)
+
+        def _wrong_size(manifest):
+            name = next(iter(manifest["artifacts"]))
+            manifest["artifacts"][name]["bytes"] = 999999
+
+        self._rewrite_manifest(library, identity, _wrong_size)
+
+        assert library.lookup(identity).reason == \
+            dl.LookupReason.ARTIFACT_SIZE_MISMATCH
+
+    @pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0,
+                        reason="root can read a mode-000 file")
+    def test_an_unreadable_artifact_is_reported_as_an_io_error(self, tmp_path):
+        library, identity = self._stored(tmp_path)
+        artifact = self._artifact(library, identity)
+        artifact.chmod(0o000)
+        try:
+            result = library.lookup(identity)
+        finally:
+            artifact.chmod(0o644)
+
+        assert result.reason == dl.LookupReason.ARTIFACT_IO_ERROR
+        assert result.outcome == "rejected"
+
+
+class TestAbsentEntriesExplainThemselvesFromSiblings:
+    """Why a date already in the store was calibrated again.
+
+    The whole point of item 1: a date can hold several correct identities, and
+    the build could not say which field separated them. A sibling is evidence,
+    never a substitute -- it is reported, never returned.
+    """
+
+    def _library(self, tmp_path):
+        return dl.DayLibrary(tmp_path / "library")
+
+    def _identity(self, **overrides):
+        base = dict(date="2027-03-09", source="forecast",
+                    pool_composition=("weekday",),
+                    inputs={"variants": ["edge_shares", "edge_shares_q10"],
+                            "candidate_pool": "aaa"},
+                    source_hashes={"pfe": "x"})
+        base.update(overrides)
+        return dl.DayIdentity(**base)
+
+    def _store(self, library, tmp_path, identity):
+        artifact = tmp_path / f"{identity.key}.rou.xml"
+        artifact.write_text("<routes>\n</routes>\n")
+        library.put(identity, {"calibrated.rou.xml": artifact})
+        return identity
+
+    def test_a_composition_difference_is_named_as_the_cause(self, tmp_path):
+        library = self._library(tmp_path)
+        stored = self._store(library, tmp_path,
+                             self._identity(pool_composition=("weekday",)))
+        wanted = self._identity(pool_composition=("weekday", "weekend"))
+
+        result = library.lookup(wanted)
+
+        assert result.outcome == "miss"
+        assert result.manifest is None
+        assert result.compared_key == stored.key
+        assert result.differing_fields == ("pool_composition",)
+        assert result.identity_cause == dl.IdentityCause.POOL_COMPOSITION
+
+    def test_a_source_change_outranks_a_composition_difference(self, tmp_path):
+        library = self._library(tmp_path)
+        self._store(library, tmp_path, self._identity())
+        wanted = self._identity(pool_composition=("weekday", "weekend"),
+                                source_hashes={"pfe": "y"})
+
+        result = library.lookup(wanted)
+
+        assert result.identity_cause == dl.IdentityCause.SOURCE_CHANGE
+        assert "source_hashes.pfe" in result.differing_fields
+
+    def test_the_nearest_sibling_wins_over_a_more_distant_one(self, tmp_path):
+        library = self._library(tmp_path)
+        near = self._store(library, tmp_path,
+                           self._identity(pool_composition=("weekend",)))
+        self._store(library, tmp_path,
+                    self._identity(pool_composition=("weekend",),
+                                   source_hashes={"pfe": "y"},
+                                   inputs={"variants": ["edge_shares"],
+                                           "candidate_pool": "zzz"}))
+        wanted = self._identity(pool_composition=("weekday", "weekend"))
+
+        result = library.lookup(wanted)
+
+        assert result.compared_key == near.key
+        assert result.differing_fields == ("pool_composition",)
+
+    def test_equally_distant_siblings_are_broken_by_key_order(self, tmp_path):
+        library = self._library(tmp_path)
+        first = self._store(library, tmp_path,
+                            self._identity(pool_composition=("weekend",)))
+        second = self._store(library, tmp_path,
+                             self._identity(pool_composition=("holiday",)))
+        wanted = self._identity(pool_composition=("weekday", "weekend"))
+
+        result = library.lookup(wanted)
+
+        assert result.compared_key == min(first.key, second.key)
+
+    def test_a_date_with_no_sibling_reports_no_comparison(self, tmp_path):
+        library = self._library(tmp_path)
+        self._store(library, tmp_path, self._identity(date="2027-03-08"))
+
+        result = library.lookup(self._identity(date="2027-03-09"))
+
+        assert result.compared_key is None
+        assert result.differing_fields == ()
+        assert result.identity_cause is None
+
+    def test_an_unreadable_sibling_is_skipped_rather_than_crashing(
+            self, tmp_path):
+        library = self._library(tmp_path)
+        broken = self._store(library, tmp_path,
+                             self._identity(pool_composition=("holiday",)))
+        library.manifest_path(broken).write_text("{not json")
+        good = self._store(library, tmp_path,
+                           self._identity(pool_composition=("weekend",)))
+
+        result = library.lookup(
+            self._identity(pool_composition=("weekday", "weekend")))
+
+        assert result.compared_key == good.key
+
+    def test_a_sibling_is_never_returned_as_a_hit(self, tmp_path):
+        library = self._library(tmp_path)
+        self._store(library, tmp_path, self._identity())
+        wanted = self._identity(pool_composition=("weekend",))
+
+        assert library.get(wanted) is None
+        assert library.lookup(wanted).outcome == "miss"

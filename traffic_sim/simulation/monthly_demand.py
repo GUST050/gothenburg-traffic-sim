@@ -11,6 +11,7 @@ manifest, and routes every candidate to its matched SUMO backend.
 from __future__ import annotations
 
 import dataclasses
+from collections import Counter
 from functools import lru_cache
 import hashlib
 import json
@@ -19,7 +20,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -32,6 +33,7 @@ from traffic_sim.core.contracts import (
 from traffic_sim.core.fingerprint import sha256_file, sumo_version
 from traffic_sim.demand.build_lock import child_environment, demand_build_lock
 from traffic_sim.demand.source_identity import demand_source_fingerprints
+from demand.day_library import valid_day_library_diagnostic
 from traffic_sim.simulation.envelope import (
     EnvelopePolicy,
     build_simulation_envelope,
@@ -74,6 +76,182 @@ _VALIDATED_ARCHIVE_CACHE: dict[tuple[str, str, str, tuple[tuple[str, int, int], 
 _ARCHIVE_METADATA_INDEX: dict[
     str, tuple[tuple[tuple[str, int, int], ...], dict[str, tuple[Path, ...]]]
 ] = {}
+
+def _incomplete_day_library_accounting(
+    requested_days: int,
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "incomplete",
+        "requested_days": requested_days,
+        "reason": reason,
+    }
+
+
+def summarize_day_library_diagnostics(
+    diagnostics: Any,
+    *,
+    start_date: str,
+    requested_days: int,
+) -> dict[str, Any]:
+    """Validate and summarize one build's causal day-library decisions.
+
+    Rejected entries are operational misses: they trigger a full calibration.
+    The separate rejected counter retains that cause without creating a third
+    disjoint bucket. Missing or unknown fields return an incomplete summary;
+    no counts are inferred from a partial record.
+    """
+    if not isinstance(diagnostics, list) or not diagnostics:
+        return _incomplete_day_library_accounting(
+            requested_days, "missing_diagnostics")
+    try:
+        first = date.fromisoformat(start_date)
+    except (TypeError, ValueError):
+        return _incomplete_day_library_accounting(
+            requested_days, "invalid_start_date")
+    expected_dates = [
+        (first + timedelta(days=index)).isoformat()
+        for index in range(requested_days)
+    ]
+    if [item.get("date") if isinstance(item, Mapping) else None
+            for item in diagnostics] != expected_dates:
+        return _incomplete_day_library_accounting(
+            requested_days, "date_mismatch")
+
+    outcomes: Counter[str] = Counter()
+    reasons: Counter[str] = Counter()
+    causes: Counter[str] = Counter()
+    alias_statuses: Counter[str] = Counter()
+    for item in diagnostics:
+        outcome = item.get("outcome")
+        reason = item.get("reason")
+        cause = item.get("identity_cause")
+        alias_status = item.get("q50_alias_status")
+        if not valid_day_library_diagnostic(item):
+            return _incomplete_day_library_accounting(
+                requested_days, "invalid_decision")
+        outcomes[outcome] += 1
+        reasons[reason] += 1
+        if cause is not None:
+            causes[cause] += 1
+        alias_statuses[alias_status] += 1
+
+    hits = outcomes["hit"]
+    misses = outcomes["miss"] + outcomes["rejected"]
+    full_calibrations = sum(
+        1 for item in diagnostics if item["full_calibration"])
+    if hits + misses != requested_days or full_calibrations != misses:
+        return _incomplete_day_library_accounting(
+            requested_days, "count_mismatch")
+    return {
+        "schema_version": 1,
+        "status": "complete",
+        "requested_days": requested_days,
+        "hits": hits,
+        "misses": misses,
+        "rejected_entries": outcomes["rejected"],
+        "full_calibrations": full_calibrations,
+        "q50_aliases": alias_statuses["created"],
+        "lookup_outcomes": dict(sorted(outcomes.items())),
+        "lookup_reasons": dict(sorted(reasons.items())),
+        "identity_causes": dict(sorted(causes.items())),
+        "q50_alias_statuses": dict(sorted(alias_statuses.items())),
+    }
+
+
+def aggregate_day_library_accounting(
+    entries: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Combine complete per-archive summaries without inventing missing data."""
+    requested_days = 0
+    incomplete = []
+    summaries: list[tuple[str, Mapping[str, Any]]] = []
+    for entry in entries:
+        summary = entry.get("day_library_accounting")
+        build_key = str(entry.get("build_key", ""))
+        if not isinstance(summary, Mapping):
+            incomplete.append({"build_key": build_key,
+                               "reason": "missing_accounting"})
+            continue
+        days = summary.get("requested_days")
+        if type(days) is not int or days < 0:
+            incomplete.append({"build_key": build_key,
+                               "reason": "invalid_accounting"})
+            continue
+        requested_days += days
+        if summary.get("status") != "complete":
+            incomplete.append({
+                "build_key": build_key,
+                "reason": str(summary.get("reason") or "incomplete"),
+            })
+            continue
+        if any(type(summary.get(name)) is not int or summary[name] < 0
+               for name in ("hits", "misses", "rejected_entries",
+                            "full_calibrations", "q50_aliases")):
+            incomplete.append({"build_key": build_key,
+                               "reason": "invalid_accounting"})
+            continue
+        count_maps = {}
+        maps_valid = True
+        for name in ("lookup_outcomes", "lookup_reasons", "identity_causes",
+                     "q50_alias_statuses"):
+            raw = summary.get(name)
+            if not isinstance(raw, Mapping) or any(
+                    not isinstance(key, str) or type(value) is not int
+                    or value < 0 for key, value in raw.items()):
+                maps_valid = False
+                break
+            count_maps[name] = raw
+        if not maps_valid:
+            incomplete.append({"build_key": build_key,
+                               "reason": "invalid_accounting"})
+            continue
+        outcomes = count_maps["lookup_outcomes"]
+        aliases = count_maps["q50_alias_statuses"]
+        if (summary["hits"] + summary["misses"] != days
+                or summary["full_calibrations"] != summary["misses"]
+                or summary["rejected_entries"] > summary["misses"]
+                or outcomes.get("hit", 0) != summary["hits"]
+                or outcomes.get("miss", 0)
+                + outcomes.get("rejected", 0) != summary["misses"]
+                or outcomes.get("rejected", 0)
+                != summary["rejected_entries"]
+                or sum(outcomes.values()) != days
+                or sum(count_maps["lookup_reasons"].values()) != days
+                or sum(aliases.values()) != days
+                or aliases.get("created", 0) != summary["q50_aliases"]
+                or sum(count_maps["identity_causes"].values())
+                > summary["misses"]):
+            incomplete.append({"build_key": build_key,
+                               "reason": "count_mismatch"})
+            continue
+        summaries.append((build_key, summary))
+    if incomplete:
+        return {
+            "schema_version": 1,
+            "status": "incomplete",
+            "builds": len(entries),
+            "requested_days": requested_days,
+            "incomplete_builds": incomplete,
+        }
+
+    result: dict[str, Any] = {
+        "schema_version": 1,
+        "status": "complete",
+        "builds": len(entries),
+    }
+    for name in ("requested_days", "hits", "misses", "rejected_entries",
+                 "full_calibrations", "q50_aliases"):
+        result[name] = sum(int(summary[name]) for _, summary in summaries)
+    for name in ("lookup_outcomes", "lookup_reasons", "identity_causes",
+                 "q50_alias_statuses"):
+        counts: Counter[str] = Counter()
+        for _, summary in summaries:
+            raw = summary[name]
+            counts.update(raw)
+        result[name] = dict(sorted(counts.items()))
+    return result
 
 
 def _archive_validation_state(archive: Path) -> tuple[tuple[str, int, int], ...] | None:
@@ -656,6 +834,11 @@ def validate_demand_archive(
         ):
             raise ValueError(
                 f"demand archive fingerprint does not bind {filename}: {archive}")
+    day_library_accounting = summarize_day_library_diagnostics(
+        metadata.get("day_library_diagnostics"),
+        start_date=required.start_date,
+        requested_days=required.days,
+    )
     return {
         "run_id": str(manifest.get("run_id", archive.name)),
         "archive": str(archive),
@@ -665,6 +848,7 @@ def validate_demand_archive(
         "archive_manifest_sha256": sha256_file(archive / "manifest.json"),
         "outputs": records,
         "archive_content_key": _canonical_digest(records),
+        "day_library_accounting": day_library_accounting,
     }
 
 
@@ -1211,6 +1395,8 @@ class MonthlyDemandResolverRunner:
                 "monthly envelope backends disagree on "
                 "ranking_objective_evidence"
             )
+        day_library_accounting = aggregate_day_library_accounting(
+            self._release["entries"])
         return {
             "schema_version": SCHEMA_VERSION,
             "kind": "multi_envelope_monthly_sumo_backend",
@@ -1219,6 +1405,7 @@ class MonthlyDemandResolverRunner:
             "search_content_key": self.spec.content_key,
             "demand_release_id": self.spec.demand_build_id,
             "demand_release": dict(self._release),
+            "day_library_accounting": day_library_accounting,
             "envelope_backends": [
                 {
                     "demand_build_id": item["demand_build_id"],
