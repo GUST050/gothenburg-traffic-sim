@@ -1,6 +1,7 @@
 """Read-only phase replay and timing inventory for one passage evidence root.
 
-python3 -m tools.profile_passage_replay --source runs/<demand>/passage/q50 --out runs/<new>
+python3 -m tools.profile_passage_replay \
+  --source runs/automatic-passage-<id>/q50 --out runs/<new>
 
 IMPROVEMENT_PLAN.md "Körinstruktion för hastighetsarbetet", steg 0. The tool
 measures where passage calibration spends its time by replaying the SAME
@@ -14,6 +15,7 @@ or changing it cannot move any demand, catalog or scenario identity.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from contextlib import contextmanager
 import gzip
 import json
@@ -22,15 +24,16 @@ from pathlib import Path
 import shutil
 import time
 
+import numpy as np
+
 from demand.structure import calibrated_structure_report
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.demand import automatic_passage
 from traffic_sim.experimental import dynamic_assignment as dynamic
-from tools import departure_reconciliation as passage
 from tools import trial_dynamic_passage as trial
 
-SCHEMA_VERSION = 1
-POLICY = 'passage_replay_profile_v1'
+SCHEMA_VERSION = 2
+POLICY = 'passage_replay_profile_v2'
 SHIFT_SUPPORT_S = [-900, -600, -300, 0, 300, 600, 900]
 GUARD_S = 60
 
@@ -39,12 +42,13 @@ REQUIRED_INPUTS = tuple(f'input/{name}' for name in trial.INPUT_NAMES)
 REQUIRED_EVIDENCE = tuple(
     f'evidence/learning-0-arm-{arm}/{name}'
     for arm in trial.LEARNING_ARMS for name in ('edge.xml', 'vehroute.xml'))
+REPLAY_CONTRACT = f'input/{automatic_passage.REPLAY_CONTRACT_NAME}'
 
 #: Work this replay cannot account for, named so the residual stays explicit
 #: instead of being silently folded into a measured phase.
 UNMEASURED_CATEGORIES = {
     'sumo_subprocess': 'replay reads saved traces; no SUMO process is started',
-    'learning_and_validation_waves': 'six measurement runs are historical, not replayed',
+    'learning_and_validation_waves': 'nine SUMO runs are historical, not replayed',
     'publication_and_rollback': 'route/agent replacement is a production-only side effect',
     'archive_validation': 'not requested; pass --archive together with --demand-spec',
     'costing_and_resolver': 'cost-ordered execution needs a monthly workspace, not this root',
@@ -176,6 +180,15 @@ def inventory(source: Path) -> dict:
         else:
             state = 'missing'
         files[relative] = {'state': state, 'expected_sha256': expected}
+    contract_expected = digests.get(automatic_passage.REPLAY_CONTRACT_NAME)
+    contract_path = source / REPLAY_CONTRACT
+    if contract_path.is_file():
+        contract_actual = sha256_file(contract_path)
+        contract_state = ('raw' if contract_expected == contract_actual else
+                          'raw_unrecorded' if not contract_expected else
+                          'raw_hash_mismatch')
+    else:
+        contract_state = 'missing'
     states = {row['state'] for row in files.values()}
     if states == {'raw'}:
         trace_state = 'complete'
@@ -186,6 +199,11 @@ def inventory(source: Path) -> dict:
     return {
         'trace_state': trace_state,
         'files': files,
+        'replay_contract': {
+            'path': REPLAY_CONTRACT,
+            'state': contract_state,
+            'expected_sha256': contract_expected,
+        },
         'pruned_markers': {
             # prune_evidence removes these; their absence means the root can no
             # longer answer every question a fresh evidence root could.
@@ -216,29 +234,33 @@ def expand_compressed(source: Path, inventory_report: dict, out: Path) -> Path:
         expected = row['expected_sha256']
         if expected and sha256_file(target) != expected:
             raise ReplayRefused(f'expanded evidence does not match its recorded digest: {relative}')
+    contract = inventory_report['replay_contract']
+    if contract['state'] == 'raw':
+        target = root / REPLAY_CONTRACT
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source / REPLAY_CONTRACT, target)
     return root
 
 
-def _retained_bounds(source: Path, variant: str) -> tuple[list[dict] | None, str]:
-    """The retained PFE bounds if this root still carries its source report."""
-    reports_path = source.parent / 'source_reports.json'
-    if not reports_path.is_file():
-        return None, 'source_reports.json was pruned from the evidence root'
+def _load_replay_contract(source: Path, quarters: int) -> list[dict]:
+    """Load exact saved solver inputs and require the producing code identity."""
+    contract_path = source / REPLAY_CONTRACT
+    if not contract_path.is_file():
+        raise ReplayRefused(
+            f'{REPLAY_CONTRACT} is missing; use --preparation-only for legacy evidence')
     try:
-        reports = json.loads(reports_path.read_text())
+        contract = json.loads(contract_path.read_text())
     except (OSError, ValueError) as error:
-        return None, f'source_reports.json is unreadable: {error}'
-    key = '' if variant == 'q50' else variant
-    if key not in reports:
-        return None, f'source_reports.json has no entry for variant {variant!r}'
-    report = reports[key]
-    bounds_source = report.get('hard_bounds_pq')
-    if bounds_source is None:
-        return None, 'source report carries no per-quarter hard bounds'
-    try:
-        return automatic_passage._bounds(report, bounds_source), 'retained_pfe_bounds'
-    except ValueError as error:
-        return None, f'retained bounds are not usable: {error}'
+        raise ReplayRefused(f'unreadable replay contract: {error}') from error
+    if contract.get('schema_version') != 1 or contract.get('policy') != automatic_passage.POLICY:
+        raise ReplayRefused('replay contract schema or passage policy differs')
+    if contract.get('source_sha256') != automatic_passage.replay_source_sha256():
+        raise ReplayRefused('production source differs from the code that created the evidence')
+    bounds = contract.get('retained_bounds_pq')
+    if not isinstance(bounds, list) or len(bounds) != quarters \
+            or any(not isinstance(row, dict) for row in bounds):
+        raise ReplayRefused('replay contract has invalid retained per-quarter bounds')
+    return bounds
 
 
 def _validate_archive(archive: Path, spec_path: Path, recorder: PhaseRecorder,
@@ -262,13 +284,15 @@ def _validate_archive(archive: Path, spec_path: Path, recorder: PhaseRecorder,
                     call['outcome'] = f'rejected: {error}'
             calls.append(call['outcome'])
     return {'archive': str(archive), 'calls': calls,
-            'call_basis': 'first call is program-cold; later calls reuse this process'}
+            'call_basis': ('all calls occur after module imports; later calls may reuse '
+                           'validation caches in this process')}
 
 
 def replay(source: Path, out: Path, *, label: str | None = None,
            pool: Path | None = None, allow_compressed: bool = False,
            solver_time_limit_s: float = 60, archive: Path | None = None,
-           demand_spec: Path | None = None, archive_repeats: int = 3) -> dict:
+           demand_spec: Path | None = None, archive_repeats: int = 3,
+           preparation_only: bool = False) -> dict:
     """Replay preparation, solving, staging and structure over saved traces."""
     source, out = _resolve_isolation(source, out)
     out.mkdir(parents=True, exist_ok=False)
@@ -303,6 +327,10 @@ def replay(source: Path, out: Path, *, label: str | None = None,
             if found['trace_state'] == 'compressed' and not allow_compressed:
                 raise ReplayRefused('evidence root is compressed; pass '
                                     '--expand-compressed to replay verified copies')
+            if not preparation_only and found['replay_contract']['state'] != 'raw':
+                raise ReplayRefused(
+                    f'{REPLAY_CONTRACT} is {found["replay_contract"]["state"]}; '
+                    'use --preparation-only for legacy evidence')
             replay_root = source
             if found['trace_state'] == 'compressed':
                 with recorder.phase('expand_compressed'):
@@ -314,10 +342,9 @@ def replay(source: Path, out: Path, *, label: str | None = None,
                     options, groups, metadata = trial.load_source(replay_root)
                 baseline['vehicles'] = len(options)
                 baseline['od_purpose_groups'] = len(groups)
-            # load_source raises unless every input/trace digest matches AND the
-            # route-time projection reconstructs the raw entered cells, so reaching
-            # this point IS the reproduction of the original measurement.
-            report['source_reconstruction_verified'] = True
+            # This verifies the saved learning measurement only. Exact output
+            # reproduction is a separate, fail-closed digest comparison below.
+            report['measurement_reconstruction_verified'] = True
             report['vehicles'] = len(options)
             report['od_purpose_groups'] = len(groups)
             quarters = metadata['n_intervals']
@@ -329,25 +356,21 @@ def replay(source: Path, out: Path, *, label: str | None = None,
             report['quarters'] = quarters
             report['sensor_edges'] = len(edges)
 
-            with recorder.phase('trace_parsing', arms=len(trial.LEARNING_ARMS)):
-                for arm in trial.LEARNING_ARMS:
-                    with recorder.phase('parse_entered', arm=arm):
-                        passage._parse_entered(
-                            replay_root / f'evidence/learning-0-arm-{arm}/edge.xml',
-                            quarters, edges)
-
-            bounds, bounds_basis = _retained_bounds(source, variant)
+            bounds = None if preparation_only else _load_replay_contract(replay_root, quarters)
             report['solver_constraints'] = (
-                'targets_groups_and_retained_pfe_bounds' if bounds is not None
-                else 'targets_and_groups_only')
-            report['solver_constraints_reason'] = bounds_basis
+                'not_loaded_preparation_only' if preparation_only
+                else 'targets_groups_and_retained_pfe_bounds')
 
             with recorder.phase('system_construction') as construction:
                 with recorder.phase('build_passage_system_base'):
                     base = dynamic.build_passage_system(options, edges, quarters)
                 if bounds is not None:
                     with recorder.phase('departure_bound_constraints'):
-                        dynamic.departure_bound_constraints(base, bounds)
+                        matrix, lower, upper = dynamic.departure_bound_constraints(base, bounds)
+                        counts = matrix @ np.ones(len(options))
+                        if np.any(counts < lower) or np.any(counts > upper):
+                            raise ReplayRefused(
+                                'source violates the retained PFE structural bounds')
                 with recorder.phase('expand_departure_support'):
                     expanded = dynamic.expand_departure_support(
                         options, SHIFT_SUPPORT_S, begin_s=0, end_s=quarters * 900,
@@ -360,6 +383,33 @@ def replay(source: Path, out: Path, *, label: str | None = None,
             report['expanded_columns'] = len(expanded)
             report['sparse_nonzeros'] = int(system.matrix.nnz)
 
+            if preparation_only:
+                if archive is not None and demand_spec is not None:
+                    report['archive_validation'] = _validate_archive(
+                        archive, demand_spec, recorder, archive_repeats)
+                    if any(call != 'valid' for call in report['archive_validation']['calls']):
+                        raise ReplayRefused('demand archive validation was rejected')
+                report['selection_reproduced'] = {
+                    'state': 'not_evaluated',
+                    'reason': 'preparation-only mode does not solve or stage a selection',
+                }
+                root['vehicles'] = len(options)
+                report['status'] = 'profiled_preparation_only'
+                return report
+
+            original = _load_original_result(source)
+            repair = original.get('structural_repair') or {}
+            if repair.get('boundary_fallback') or int(repair.get('passes', 0)) != 0:
+                raise ReplayRefused(
+                    'saved result used boundary fallback or structural repair; '
+                    'this replay path cannot reproduce that solver branch')
+
+            with recorder.phase('structure_source'):
+                before = calibrated_structure_report(
+                    replay_root / 'input/calibrated.rou.xml', pool_path=pool)
+            if before is None:
+                raise ReplayRefused('source structural report is unavailable')
+
             with recorder.phase('solver') as solver:
                 with recorder.phase('fit_integer_flows'):
                     fit = dynamic.fit_integer_flows(
@@ -371,18 +421,18 @@ def replay(source: Path, out: Path, *, label: str | None = None,
             report['fit_status'] = fit.status
             selected = [option for option, count in zip(expanded, fit.counts) if count == 1]
             report['selected_vehicles'] = len(selected)
+            if Counter(option.group for option in selected) != Counter(groups) \
+                    or len(selected) != len(options):
+                raise ReplayRefused('replay changed the OD/purpose population')
 
             with recorder.phase('staging'):
                 candidate = automatic_passage._stage_selection(
                     replay_root / 'input', selected, out / 'candidate')
 
-            with recorder.phase('structure_reporting') as structure:
-                with recorder.phase('structure_source'):
-                    before = calibrated_structure_report(
-                        replay_root / 'input/calibrated.rou.xml', pool_path=pool)
-                with recorder.phase('structure_candidate'):
-                    after = calibrated_structure_report(candidate, pool_path=pool)
-                structure['pool_path'] = str(pool) if pool else None
+            with recorder.phase('structure_candidate', pool_path=str(pool) if pool else None):
+                after = calibrated_structure_report(candidate, pool_path=pool)
+            if after is None:
+                raise ReplayRefused('candidate structural report is unavailable')
             report['structure_flags_source'] = sorted(
                 automatic_passage._structure_flag_names(before or {}))
             report['structure_flags_candidate'] = sorted(
@@ -400,11 +450,15 @@ def replay(source: Path, out: Path, *, label: str | None = None,
             if archive is not None and demand_spec is not None:
                 report['archive_validation'] = _validate_archive(
                     archive, demand_spec, recorder, archive_repeats)
+                if any(call != 'valid' for call in report['archive_validation']['calls']):
+                    raise ReplayRefused('demand archive validation was rejected')
 
             report['selection_sha256'] = sha256_file(out / 'candidate/selection.json')
             report['routes_sha256'] = sha256_file(candidate)
             report['agents_sha256'] = sha256_file(out / 'candidate/calibrated.agents.json')
-            report['selection_reproduced'] = _compare_original(source, report)
+            report['selection_reproduced'] = _compare_original(original, report)
+            if report['selection_reproduced']['state'] != 'identical':
+                raise ReplayRefused('replayed route/departure selection differs from the saved result')
             root['vehicles'] = len(options)
             report['status'] = 'replayed'
 
@@ -426,29 +480,29 @@ def replay(source: Path, out: Path, *, label: str | None = None,
     return report
 
 
-def _compare_original(source: Path, report: dict) -> dict:
-    """Compare the replayed selection with the evidence root's own result.json.
-
-    A pruned root, or one solved under different constraints, cannot be
-    expected to reproduce the original bytes; say so instead of failing.
-    """
+def _load_original_result(source: Path) -> dict:
+    """Require the saved output that makes a solver replay comparable."""
     result_path = source / 'result.json'
     if not result_path.is_file():
-        return {'state': 'unavailable', 'reason': 'result.json was pruned from the root'}
+        raise ReplayRefused('result.json is missing; exact selection comparison is unavailable')
     try:
-        original = json.loads(result_path.read_text())
+        result = json.loads(result_path.read_text())
     except (OSError, ValueError) as error:
-        return {'state': 'unavailable', 'reason': f'result.json is unreadable: {error}'}
-    if report['solver_constraints'] != 'targets_groups_and_retained_pfe_bounds':
-        return {'state': 'not_comparable',
-                'reason': 'replay solved without the retained PFE bounds',
-                'original_routes_sha256': original.get('routes_sha256')}
+        raise ReplayRefused(f'result.json is unreadable: {error}') from error
+    if result.get('status') != 'validated':
+        raise ReplayRefused('saved passage result is not validated')
+    return result
+
+
+def _compare_original(original: dict, report: dict) -> dict:
+    """Compare the replayed selection with the loaded saved result.
+
+    Exact bytes are required by this performance-only experiment.
+    """
     matches = {key: original.get(key) == report.get(key)
                for key in ('selection_sha256', 'routes_sha256', 'agents_sha256')}
     return {'state': 'identical' if all(matches.values()) else 'differs',
-            'fields': matches,
-            'note': 'a differing but valid selection is possible when the fit has '
-                    'several optimal solutions; it is not evidence of a defect'}
+            'fields': matches}
 
 
 def _phase_walls(report: dict) -> dict[str, float]:
@@ -473,11 +527,10 @@ def _spread(values: list[float]) -> dict:
 
 
 def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
-    """Replay repeatedly in ONE process so program-cold cost becomes visible.
+    """Replay repeatedly in one already-imported process.
 
-    The first repeat pays module import, geometry loading and OS cache misses;
-    later repeats do not. Reporting them together as one average would hide
-    exactly the difference the work contract asks to separate.
+    The first repeat can pay lazy caches and filesystem cache misses. Module
+    imports happen before this function and are therefore outside these clocks.
     """
     if repeats < 1:
         raise ReplayRefused('at least one replay is required')
@@ -492,7 +545,8 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
         'diagnostic_only': True, 'active_production': False,
         'source_evidence_root': str(source), 'output_root': str(out),
         'repeats': repeats,
-        'process_state': 'first repeat is program-cold; later repeats reuse this process',
+        'process_state': ('all repeats run after module imports; the first may populate lazy '
+                          'and filesystem caches, later repeats reuse this process'),
         'runs': [{'repeat': index + 1, 'status': run['status'],
                   'report': str(out / f'repeat-{index + 1}/replay_report.json'),
                   'root_wall_s': run['timing']['root_wall_s'],
@@ -511,7 +565,7 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True,
-                        help='one passage evidence variant root, e.g. .../passage/q50')
+                        help='one variant root, e.g. runs/automatic-passage-<id>/q50')
     parser.add_argument('--out', type=Path, required=True,
                         help='a new directory outside the evidence root')
     parser.add_argument('--label', help='weekday, mixed-pool, boundary, all-hit')
@@ -525,7 +579,9 @@ def main() -> int:
                         help='demand_build_spec.json the archive must satisfy')
     parser.add_argument('--archive-repeats', type=int, default=3)
     parser.add_argument('--repeats', type=int, default=1,
-                        help='replay N times in one process to expose cold start')
+                        help='replay N times after imports to expose reusable process caches')
+    parser.add_argument('--preparation-only', action='store_true',
+                        help='profile parsing/system construction on legacy evidence; do not solve')
     parser.add_argument('--inventory-only', action='store_true')
     args = parser.parse_args()
     if args.inventory_only:
@@ -535,7 +591,8 @@ def main() -> int:
                    allow_compressed=args.expand_compressed,
                    solver_time_limit_s=args.solver_time_limit_s,
                    archive=args.archive, demand_spec=args.demand_spec,
-                   archive_repeats=args.archive_repeats)
+                   archive_repeats=args.archive_repeats,
+                   preparation_only=args.preparation_only)
     if args.archive is not None and args.demand_spec is None:
         print(json.dumps({'status': 'refused',
                           'reason': '--archive requires --demand-spec'}, indent=2))
@@ -544,13 +601,14 @@ def main() -> int:
         if args.repeats > 1:
             report = profile(args.source, args.out, repeats=args.repeats, **options)
             print(json.dumps(report, indent=2))
-            return 0 if all(run['status'] == 'replayed' for run in report['runs']) else 2
+            accepted = {'replayed', 'profiled_preparation_only'}
+            return 0 if all(run['status'] in accepted for run in report['runs']) else 2
         report = replay(args.source, args.out, **options)
     except ReplayRefused as error:
         print(json.dumps({'status': 'refused', 'reason': str(error)}, indent=2))
         return 2
     print(json.dumps(report, indent=2))
-    return 0 if report['status'] == 'replayed' else 2
+    return 0 if report['status'] in {'replayed', 'profiled_preparation_only'} else 2
 
 
 if __name__ == '__main__':

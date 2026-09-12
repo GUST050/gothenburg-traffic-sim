@@ -9,6 +9,7 @@ import gzip
 import json
 import math
 from pathlib import Path
+import shutil
 
 import pytest
 
@@ -27,7 +28,8 @@ def _entry_quarter(departure_s: float) -> int:
     return math.floor((departure_s + 60) / 900)
 
 
-def evidence_root(tmp_path: Path, *, departures=DEPARTURES) -> Path:
+def evidence_root(tmp_path: Path, *, departures=DEPARTURES,
+                  with_contract=True, with_result=True) -> Path:
     """One complete passage evidence root whose traces reconstruct exactly.
 
     The edgeData is DERIVED from the same route times the traces carry, so
@@ -53,6 +55,13 @@ def evidence_root(tmp_path: Path, *, departures=DEPARTURES) -> Path:
         'n_intervals': QUARTERS, 'date': '2027-06-16', 'source': 'forecast',
         'sensor_targets': {'variants': {'edge_shares': {SENSOR: counts}}}}))
     (inputs / 'net.net.xml').write_text('<net/>')
+    if with_contract:
+        (inputs / profiler.automatic_passage.REPLAY_CONTRACT_NAME).write_text(json.dumps({
+            'schema_version': 1,
+            'policy': profiler.automatic_passage.POLICY,
+            'retained_bounds_pq': [{} for _ in range(QUARTERS)],
+            'source_sha256': profiler.automatic_passage.replay_source_sha256(),
+        }, sort_keys=True))
     manifest = {'input_sha256': {path.name: sha256_file(path)
                                  for path in inputs.iterdir()},
                 'evidence_sha256': {}}
@@ -72,6 +81,28 @@ def evidence_root(tmp_path: Path, *, departures=DEPARTURES) -> Path:
             path = directory / name
             manifest['evidence_sha256'][str(path.relative_to(source))] = sha256_file(path)
     (source / 'report.json').write_text(json.dumps(manifest))
+    if with_contract and with_result:
+        options, groups, metadata = trial.load_source(source)
+        targets = metadata['sensor_targets']['variants']['edge_shares']
+        expanded = dynamic.expand_departure_support(
+            options, profiler.SHIFT_SUPPORT_S, begin_s=0,
+            end_s=QUARTERS * 900, guard_s=profiler.GUARD_S)
+        system = dynamic.build_passage_system(expanded, [SENSOR], QUARTERS)
+        fit = dynamic.fit_integer_flows(
+            system, targets, groups,
+            departure_bounds=[{} for _ in range(QUARTERS)])
+        selected = [option for option, count in zip(expanded, fit.counts) if count == 1]
+        stage = tmp_path / '.saved-result-stage'
+        candidate = profiler.automatic_passage._stage_selection(
+            inputs, selected, stage)
+        (source / 'result.json').write_text(json.dumps({
+            'status': 'validated',
+            'structural_repair': {'passes': 0, 'boundary_fallback': False},
+            'selection_sha256': sha256_file(stage / 'selection.json'),
+            'routes_sha256': sha256_file(candidate),
+            'agents_sha256': sha256_file(stage / 'calibrated.agents.json'),
+        }))
+        shutil.rmtree(stage)
     return source
 
 
@@ -93,6 +124,7 @@ class TestInventory:
 
         assert found['trace_state'] == 'complete'
         assert {row['state'] for row in found['files'].values()} == {'raw'}
+        assert found['replay_contract']['state'] == 'raw'
 
     def test_a_compressed_root_is_never_called_complete(self, tmp_path):
         source = evidence_root(tmp_path)
@@ -130,7 +162,7 @@ class TestInventory:
         assert profiler.inventory(source)['trace_state'] == 'incomplete'
 
     def test_pruning_markers_are_reported_rather_than_inferred(self, tmp_path):
-        source = evidence_root(tmp_path)
+        source = evidence_root(tmp_path, with_result=False)
 
         markers = profiler.inventory(source)['pruned_markers']
 
@@ -205,13 +237,35 @@ class TestRefusalBeforeMeasurement:
         with pytest.raises(ValueError, match='reconstruct'):
             profiler.replay(source, tmp_path / 'out')
 
+    def test_changed_production_code_identity_is_refused(self, tmp_path):
+        source = evidence_root(tmp_path)
+        path = source / profiler.REPLAY_CONTRACT
+        contract = json.loads(path.read_text())
+        contract['source_sha256']['dynamic_assignment'] = '0' * 64
+        path.write_text(json.dumps(contract))
+        manifest = json.loads((source / 'report.json').read_text())
+        manifest['input_sha256'][path.name] = sha256_file(path)
+        (source / 'report.json').write_text(json.dumps(manifest))
+
+        with pytest.raises(profiler.ReplayRefused, match='production source differs'):
+            profiler.replay(source, tmp_path / 'out')
+
+    def test_a_saved_structural_repair_is_not_misprofiled_as_the_simple_path(self, tmp_path):
+        source = evidence_root(tmp_path)
+        result = json.loads((source / 'result.json').read_text())
+        result['structural_repair']['passes'] = 1
+        (source / 'result.json').write_text(json.dumps(result))
+
+        with pytest.raises(profiler.ReplayRefused, match='structural repair'):
+            profiler.replay(source, tmp_path / 'out')
+
 
 class TestReplayReport:
     def test_the_original_measurement_is_reproduced_before_any_phase_is_reported(self, tmp_path):
         report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
 
         assert report['status'] == 'replayed'
-        assert report['source_reconstruction_verified'] is True
+        assert report['measurement_reconstruction_verified'] is True
         phases = [row['phase'] for row in report['timing']['phases']]
         assert phases.index('load_source') < phases.index('fit_integer_flows')
 
@@ -239,12 +293,19 @@ class TestReplayReport:
         assert 'sumo_subprocess' in report['unmeasured_categories']
         assert report['reads_saved_traces_only'] is True
 
-    def test_a_solve_without_the_retained_bounds_says_so(self, tmp_path):
-        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+    def test_legacy_evidence_is_preparation_only_and_never_runs_the_solver(self, tmp_path):
+        source = evidence_root(tmp_path, with_contract=False, with_result=False)
 
-        assert report['solver_constraints'] == 'targets_and_groups_only'
-        assert 'source_reports.json' in report['solver_constraints_reason']
-        assert report['selection_reproduced']['state'] == 'unavailable'
+        with pytest.raises(profiler.ReplayRefused, match='preparation-only'):
+            profiler.replay(source, tmp_path / 'refused')
+
+        report = profiler.replay(
+            source, tmp_path / 'out', preparation_only=True)
+        assert report['status'] == 'profiled_preparation_only'
+        assert report['solver_constraints'] == 'not_loaded_preparation_only'
+        assert report['selection_reproduced']['state'] == 'not_evaluated'
+        assert 'fit_integer_flows' not in {
+            row['phase'] for row in report['timing']['phases']}
 
     def test_the_report_is_written_beside_the_replay_not_the_evidence(self, tmp_path):
         source = evidence_root(tmp_path)
@@ -253,6 +314,19 @@ class TestReplayReport:
 
         assert (tmp_path / 'out/replay_report.json').is_file()
         assert not (source / 'replay_report.json').exists()
+
+    def test_any_changed_route_selection_is_a_failed_equivalence_gate(self, tmp_path):
+        source = evidence_root(tmp_path)
+        result = json.loads((source / 'result.json').read_text())
+        result['routes_sha256'] = 'f' * 64
+        (source / 'result.json').write_text(json.dumps(result))
+
+        with pytest.raises(profiler.ReplayRefused, match='selection differs'):
+            profiler.replay(source, tmp_path / 'out')
+
+        report = json.loads((tmp_path / 'out/replay_report.json').read_text())
+        assert report['status'] == 'refused'
+        assert report['selection_reproduced']['state'] == 'differs'
 
     def test_a_compressed_root_replays_from_verified_copies_and_stays_labelled(self, tmp_path):
         source = evidence_root(tmp_path)
@@ -385,14 +459,31 @@ def test_the_replayed_system_is_the_production_system(tmp_path):
     assert report['vehicles'] == len(options)
 
 
+def test_production_evidence_persists_the_exact_replay_contract(tmp_path, monkeypatch):
+    from tests.test_automatic_passage import fixture
+
+    inputs, reports, network, _calls = fixture(tmp_path, monkeypatch)
+    profiler.automatic_passage.refine_variants(
+        inputs, reports, network, tmp_path / 'evidence')
+
+    contract_path = tmp_path / 'evidence/q50/input' \
+        / profiler.automatic_passage.REPLAY_CONTRACT_NAME
+    contract = json.loads(contract_path.read_text())
+    manifest = json.loads((tmp_path / 'evidence/q50/report.json').read_text())
+    assert contract['retained_bounds_pq'] == [{}, {}, {}, {}]
+    assert contract['source_sha256'] == profiler.automatic_passage.replay_source_sha256()
+    assert manifest['input_sha256'][contract_path.name] == sha256_file(contract_path)
+
+
 class TestRepeatedProfile:
-    def test_the_cold_first_pass_is_reported_apart_from_the_reused_process(self, tmp_path):
+    def test_the_first_pass_is_reported_apart_from_the_reused_process(self, tmp_path):
         source = evidence_root(tmp_path)
 
         summary = profiler.profile(source, tmp_path / 'out', repeats=3)
 
         assert [run['repeat'] for run in summary['runs']] == [1, 2, 3]
         assert all(run['status'] == 'replayed' for run in summary['runs'])
+        assert 'after module imports' in summary['process_state']
         assert 'load_source' in summary['first_repeat_phase_wall_s']
         assert summary['reused_process_phase_wall_s']['load_source']['n'] == 2
 
@@ -450,7 +541,7 @@ class TestArchiveValidationPhase:
         assert [row['call'] for row in timed] == [0, 1, 2]
         assert all(row['parent_phase'] == 'archive_validation' for row in timed)
 
-    def test_a_rejected_archive_is_recorded_rather_than_hidden(self, tmp_path, monkeypatch):
+    def test_a_rejected_archive_refuses_the_replay_after_recording_it(self, tmp_path, monkeypatch):
         from traffic_sim.simulation import monthly_demand
         self._stub(monkeypatch, [])
         monkeypatch.setattr(monthly_demand, 'validate_demand_archive',
@@ -459,11 +550,13 @@ class TestArchiveValidationPhase:
         spec = tmp_path / 'spec.json'
         spec.write_text(json.dumps({'days': 1}))
 
-        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out',
-                                 archive=tmp_path / 'archive', demand_spec=spec,
-                                 archive_repeats=1)
+        with pytest.raises(profiler.ReplayRefused, match='archive validation'):
+            profiler.replay(evidence_root(tmp_path), tmp_path / 'out',
+                            archive=tmp_path / 'archive', demand_spec=spec,
+                            archive_repeats=1)
 
-        assert report['status'] == 'replayed'
+        report = json.loads((tmp_path / 'out/replay_report.json').read_text())
+        assert report['status'] == 'refused'
         assert 'another build contract' in report['archive_validation']['calls'][0]
 
     def test_the_cli_refuses_an_archive_without_its_contract(self, tmp_path, capsys, monkeypatch):

@@ -33,6 +33,17 @@ from tools import trial_dynamic_passage as trial
 from tools import departure_reconciliation as passage
 
 POLICY = 'automatic_dynamic_passage_v3'
+REPLAY_CONTRACT_NAME = 'passage_replay_contract.json'
+
+
+def replay_source_sha256() -> dict[str, str]:
+    """Code identity needed to interpret a saved pure passage replay."""
+    return {
+        'automatic_passage': sha256_file(Path(__file__)),
+        'dynamic_assignment': sha256_file(Path(dynamic.__file__)),
+        'trial_dynamic_passage': sha256_file(Path(trial.__file__)),
+        'departure_reconciliation': sha256_file(Path(passage.__file__)),
+    }
 
 
 @contextmanager
@@ -228,6 +239,12 @@ def _refine(data, source_report, network, work, candidate_pool):
         shutil.copy2(source, inputs / name)
     metadata = {'n_intervals': quarters, 'sensor_targets': {'variants': {'edge_shares': targets}}}
     (inputs / 'demand_meta.json').write_text(json.dumps(metadata))
+    (inputs / REPLAY_CONTRACT_NAME).write_text(json.dumps({
+        'schema_version': 1,
+        'policy': POLICY,
+        'retained_bounds_pq': bounds,
+        'source_sha256': replay_source_sha256(),
+    }, sort_keys=True, separators=(',', ':')) + '\n')
     manifest = {'input_sha256': {p.name: sha256_file(p) for p in inputs.iterdir()},
                 'evidence_sha256': {}}
     (work / 'evidence').mkdir()

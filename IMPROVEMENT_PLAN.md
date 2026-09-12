@@ -207,9 +207,34 @@ deklarerar det som `solver_constraints: targets_and_groups_only` och sätter
 låtsas att lösartiden är produktionens. En rot sparad med
 `TRAFFIC_SIM_KEEP_PASSAGE_EVIDENCE` ger den starkare jämförelsen.
 
-**Nästa steg:** steg 1, som verktyget nu kan mäta — `load_source`,
-`build_passage_system_base` och `build_passage_system_expanded` tidtas redan
-var för sig.
+**Korrigering efter oberoende review 2026-09-12.** Den första implementationen
+kunde inte göra den utlovade ekvivalenta solverreplayen. Råa `hard_bounds_pq`
+är en separat inparameter till `_refine`; de finns inte i `source_reports.json`,
+och normal pruning tar dessutom bort den filen. Att lösa med enbart mål och
+grupper är ett annat optimeringsproblem och får inte kallas `replayed`.
+
+Reparationen sparar därför ett hashbundet
+`input/passage_replay_contract.json` i framtida passageevidens. Det innehåller
+exakt behållna kvartalsgränser och producerande kodidentitet. Full replay
+kräver detta kontrakt och ett validerat `result.json`, och vägrar källdrift,
+arkivavvisning, ännu ej implementerad boundary/structure-repair samt varje
+skillnad i selection/routes/agents. Äldre evidens kan endast köras med
+`--preparation-only`; då körs ingen solver. Första upprepningen kallas inte
+längre programkall eftersom modulimporterna sker innan tidtagningen.
+
+Rätt variantrot är `runs/automatic-passage-<id>/q50` (eller `_v1`/`_v2`),
+inte en undermapp i demandarkivet. En verklig komprimerad äldre q50-rot kördes
+säkert i preparation-only-läge: 19 558 fordon, 136 780 expanderade kolumner,
+894 019 sparse nonzeros och 7,798 s total replaytid. `load_source` tog 3,126 s,
+departure expansion 2,140 s, basbygget 0,689 s, expanderat systembygge 1,510 s
+och verifierad uppackning 0,324 s. Det är en diagnostisk observation, inte ett
+A/B-resultat. 67 fokuserade profiler/automatic-passage-tester passerar.
+
+**Nästa steg:** bygg exakt en ny dag med normala produktionsgrindar och bevarad
+evidens. Kör sedan verktyget mot dess
+`runs/automatic-passage-<id>/q50` och kräv `status: replayed` plus identiska
+selection/routes/agents innan steg 1 ändrar produktionskoden. Ingen hel
+datumuppvärmning behövs för denna mätning.
 
 ### Steg 1 — återanvänd verifierat passagesystem
 
