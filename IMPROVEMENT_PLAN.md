@@ -375,7 +375,9 @@ detail and `result.json`. Diagnostics remain excluded from `build_id`.
 Validation after implementation: all 401 tests in the Stage 1-4, builder,
 archive, monthly-search and progress-contract files pass; the focused Stage 4
 integration set passes 110 tests. `py_compile` and scoped `git diff --check`
-also pass. No SUMO build, catalog adoption, search, commit or push was run.
+also pass. No SUMO build, catalog adoption or search was run. The completed
+Stage 1-4 implementation and its required passage-calibration dependencies were
+subsequently delivered in commit `5b9a3e9`.
 
 Item 1 is complete when the focused tests pass, the offline report reproduces
 the frozen baseline, diagnostics do not affect `build_id`, the old cache API

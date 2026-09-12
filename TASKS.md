@@ -9,12 +9,12 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — simulation quality and performance research`
-- Current focus: `Freeze the completed Stage 1-4 day-library source changes, then restore current route-catalog adoption before any demand rebuild.`
-- Status: `Priority 1 Stages 1-4 are DONE locally. Stage 4 carries strictly reconciled day-library accounting through archive validation, monthly backend provenance, progress and result.json; incomplete records remain explicitly incomplete. The focused integration set passes 110 tests and all seven related test files pass 401. The adopted route-catalog artifacts verify, but implicit selection currently falls back because the expected keys drifted at source_files.build_sumo_demand.`
-- Suggested next action: `Review/freeze the Stage 1-4 diff, then run one route-catalog qualification/adoption pass, verify implicit catalog selection, and only then run the planned demand re-warm. Do not run a demand build before catalog re-adoption because it would use the slower legacy candidate builder.`
+- Current focus: `Obtain independent review of delivered Stage 1-4, then restore current route-catalog adoption before any demand rebuild.`
+- Status: `Priority 1 Stages 1-4 and their required passage-calibration dependencies are committed and pushed as 5b9a3e9. Stage 4 carries strictly reconciled day-library accounting through archive validation, monthly backend provenance, progress and result.json; incomplete records remain explicitly incomplete. The clean staged snapshot passed 400 tests with 1 environment skip. The adopted route-catalog artifacts verify, but implicit selection currently falls back because the expected keys drifted at source_files.build_sumo_demand.`
+- Suggested next action: `Review commit 5b9a3e9 against 2b482dd. Repair any concrete review findings, then run one route-catalog qualification/adoption pass locally, verify implicit catalog selection, and only then run the planned demand re-warm.`
 - Eligible actors: `Any capable actor.`
-- Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation, commit or push.`
-- Updated: `2026-09-11. Stages 1-4 are locally complete; 401 related tests pass. Nothing committed or pushed.`
+- Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation or expensive catalog/demand run without explicit scope; keep unrelated local changes outside this delivery.`
+- Updated: `2026-09-12. Stages 1-4 are pushed as 5b9a3e9; unrelated local changes remain outside that commit.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- WORKFLOW_HISTORY_START -->
