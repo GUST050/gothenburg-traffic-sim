@@ -1,5 +1,434 @@
 # Gothenburg Traffic Simulation Improvement Plan
 
+## Körinstruktion för hastighetsarbetet — 2026-09-12
+
+Detta är den aktuella instruktionen för en implementerande modell. Den ersätter
+den preliminära ordningen i forskningscheckpointen nedan. Äldre avsnitt behålls
+som historik. Uppgiften här är resultatneutral prestandaförbättring; ingen av de
+föreslagna ändringarna är genomförd enbart för att den står i dokumentet.
+
+### Börja här: uppdrag, nuläge och avgränsning
+
+1. Arbeta i `/Users/gt/Documents/gs-project`. Läs `AGENTS.md`, aktuella markerade
+   block i `TASKS.md`/`AGENT_NOTES.md` och relevanta kontrakt i `ARCHITECTURE.md`.
+   Kontrollera `git status --short` och diffen för varje fil du tänker ändra.
+   Arbetskopian innehåller många andra ändringar: återställ eller skriv inte över dem.
+2. Läs `validation/monthly_minutes_research_20260912.md`. Referenskörningen är
+   `runs/closure-search/speed-monthly-june-20260912/artifacts/result.json`.
+   Körningen är SLUTFÖRD, trots äldre samordningsnotiser om aktiv PID 47204.
+3. Utför stegen nedan i ordning. Ett experiment utan visad nettovinst ska
+   dokumenteras och lämnas oaktiverat. Fortsätt till nästa oberoende steg.
+4. Denna dokumentbeställning är inte en beställning av en ny månadskörning,
+   generell uppvärmning, commit, push eller publicering. Vid senare implementering
+   används avgränsade diagnostiska körningar i egna utmappar. Använd redan sparade
+   spår när de är fullständiga. Starta ingen lång körning bara för att testa en hjälpfunktion.
+5. Ändra inte seedantal, mätband, sensoruppsättning, kvartlängd, simuleringshorisont,
+   OD/ändamålspopulationer, trafikmodell, ruttpool, stoppbevis eller lösartoleranser.
+   q10/q50/q90 kan ha olika fordonsantal; påtvinga aldrig q50:s population på dem.
+6. Behåll datum PLUS poolsammansättning och övrig källidentitet i återanvändningen.
+   Datum-only-återanvändning är inte godkänd. Radera inte källhashar för att få träffar.
+
+### Mätbas: använd rätt siffror
+
+Total aktiv tid var 3758,937 s, cirka 62 min 39 s. 29 är antalet scheman;
+backend använder 31 underlag. 30 arkiv byggdes nya, ett återanvändes från canary.
+49 passagekalibreringar utfördes under körningen. Slutrapportens 52 inkluderar
+tre historiska kalibreringar. Redovisa utfört arbete separat från ärvd diagnostik.
+
+| Exklusiv tidskategori | Tid | Säkerhet |
+| --- | ---: | --- |
+| Passagekalibrering | 2092,043 s | Direkta timers, avstämda mot nya arkiv |
+| Övrigt inom PFE/variantbygget | 672,457 s | Differens mellan nästlade timers |
+| Övrigt inom demandbyggen | cirka 311,5 s | Byggmanifest med sekundupplösning |
+| Backend utanför registrerade byggintervall | cirka 214 s | Rekonstruerad tidslinje |
+| Kostnadsberäkningens tidsfönster | cirka 82 s | Artefakttidsstämplar |
+| Piloternas tidsfönster | cirka 100 s | Artefakttidsstämplar |
+| Finalister och resultat | cirka 288 s | Artefakttidsstämplar |
+
+Inuti passagekalibreringen: learning_sumo 339,911 s; validation_sumo 539,680 s;
+prepare_system 556,435 s; solve_integer_flows 234,391 s; stage_and_structure
+205,391 s; retention 128,500 s; prepare_inputs 33,825 s; report_serialization
+24,047 s. Resterande tid är ej namngiven overhead. SUMO-faserna innehåller även
+hantering runt processerna. Lägg aldrig ihop en timer med dess barn eller
+subprocessernas summerade worker-seconds med väggtid.
+
+En läsande återspelning på `runs/demand-20260912-162423-45495c29-135a` gav:
+arkivvalidering 1,24–1,30 s vid första anrop och cirka 0,35 s därefter;
+tredagarssammanslagning för alla tre varianter 1,97 s; strukturrapport cirka
+1,38 s. 51 640 fordon hade 491 unika rutter. Detta är ett exempelarkiv,
+inte en genomsnittsmätning för alla dagar eller en uppmätt optimeringsvinst.
+
+### Gemensamt arbetskontrakt för VARJE ändring
+
+- Baslinje: frys berörda källfiler, Python/SUMO/biblioteksversioner, argv, indatahashar
+  och vald cachekonfiguration. Git-SHA räcker inte i en smutsig arbetskopia.
+- Kör originalet och spara utdata innan ändringen. Lägg diagnostik i en ny egen
+  undermapp i `runs/`; återanvänd inte tidigare evidensmappar som skrivmål.
+- Definiera likhet före implementation: samma sensorvärden per kvart, rutter,
+  avgångstider, fordonsordning/ID, agentdata, OD/ändamål, strukturflaggor och
+  rangordning. Jämför även glesa matrisers form, index, data och randvillkor.
+- För befintliga publiceringsformat krävs byte-identiska rutt- och agentfiler.
+  Tidsstämplar, externa timings och dokumenterade absoluta utmappar jämförs separat.
+  Ignorera aldrig ett fält bara för att jämförelsen annars fallerar.
+- Två lika bra lösarobjektiv med olika ruttval är en resultatändring i detta uppdrag.
+- Skriv regressionstest för kontraktet. Kör relevanta befintliga tester. Kontrollera
+  både giltiga och felaktiga indata: fel ska fortsatt avvisas.
+- Mät före/efter utan profilerare, växelvis A/B och B/A, minst tre par initialt.
+  Separera kall programstart, återanvänd process, arkivträff och kalibreringsmiss.
+  Kalla inte en första läsning disk-kall utan kontroll av operativsystemets cache.
+- Rapportera varje par, median, spridning, toppminne och antal nya processer.
+  Är skillnaden jämförbar med variationen behövs fler mätningar; deklarera inte vinst.
+- Kontrollera avbrott, felstädning och atomisk publicering för ändringar som
+  skriver eller parallelliserar. Behåll originalvägen tills experimentet godkänts.
+- Slutredovisning per steg: ändrade filer, testkommando/resultat, evidenssökvägar,
+  likhetskontroll, tider före/efter, kvarvarande risk och nästa steg.
+
+### Steg 0 — mät de saknade delarna och skapa återspelning
+
+**Filer:** `build_sumo_demand.py`, `traffic_sim/demand/automatic_passage.py`,
+`demand/day_library.py`, `traffic_sim/simulation/monthly_demand.py`,
+`traffic_sim/simulation/cost_ordered_execution.py`, `traffic_sim/ops/runs.py`.
+
+1. Bygg ett litet diagnostikverktyg i `tools/` som tar explicit indata och utmapp.
+   Verktyget ska vägra skriva inuti indataarkivet. Inventera sparade spår först:
+   komprimerade, rensade eller ofullständiga spår får inte behandlas som kompletta.
+2. Återspela förberedelse/lösning/struktur från fullständiga learning-spår med
+   befintlig `tools/trial_dynamic_passage.py` som utgångspunkt. Anpassa inte
+   trialens algoritm till produktionsalgoritmen genom antaganden: använd samma
+   produktionsfunktioner och visa att originalresultatet reproduceras först.
+3. Logga `perf_counter` start/slut, phase, parent_phase, datum, variant, PID och
+   input identity. Registrera setup, parsing, matrisbygge, solver, staging,
+   rapportering, komprimering, kopiering, hashning, arkivvalidering och costing.
+4. Separera väggtid runt SUMO-subprocessen från parsing och health-kontroll efteråt.
+   Mät arbetsvågornas väggtid; summera inte samtidiga körningar till total väntetid.
+5. Profilera vardag, helg/blandad pool och en svår boundary-dag; välj dem ur
+   artefakterna och dokumentera varför. Mät separat ett underlag med enbart träffar.
+6. Redovisa exklusiva tider och en explicit residual. Lägg timings utanför
+   semantiska fingeravtryck enligt befintligt kontrakt; testa detta.
+
+**Klart när:** alla stora pipelinefaser har mätpunkter, timers kan stämmas av
+utan dubbelräkning, och återspelning reproducerar baslinjen. Historiska minuter
+utan timers ska fortfarande betecknas rekonstruerade, inte nyuppmätta.
+**Tester:** `tests/test_automatic_passage.py`, `tests/test_build_sumo_demand.py`,
+`tests/test_demand_provenance.py`, samt diagnostikverktygets egna kontraktstester.
+**Forskningsstöd:** [Python cProfile/pstats](https://docs.python.org/3/library/profile.html).
+Profilering identifierar arbete men dess overhead gör den olämplig som ensam A/B-klocka.
+
+### Steg 1 — återanvänd verifierat passagesystem
+
+**Filer:** `tools/trial_dynamic_passage.py:load_source`,
+`traffic_sim/demand/automatic_passage.py:_refine`,
+`traffic_sim/experimental/dynamic_assignment.py:build_passage_system` och
+`expand_departure_support`.
+
+1. Mät de tre förekomsterna separat: load_source bygger ett system, _refine
+   bygger grundsystemet igen, expand_departure_support bygger ett dummy-system
+   för validering. Den expanderade kandidatmatrisen är däremot ett annat system.
+2. Extrahera den gemensamma fullständiga indatavalideringen. Den publika vägen
+   ska fortfarande kontrollera identiteter, scenarioomfång, monotona ändliga tider,
+   kapacitet, sensorordning och kvartgränser.
+3. Inför en intern representation som bär verifierade options, groups, metadata
+   och grundsystemet. Behåll `load_source`-tuple-API för befintliga anropare,
+   exempelvis med en separat intern loader. Dela inte skrivbara arrayer okontrollerat.
+4. Låt _refine använda exakt det system som verifierats. Beräkna expanderat
+   system när supporten ändras. Ta inte bort råspårens hash- eller entered-kontroll.
+5. Testa upprepade sensorpassager, startedge, tomma data, olika scenarioordning,
+   negativa/NaN tider och passager utanför horisonten. Jämför grund- och randmatriser.
+
+**Tester:** `tests/test_trial_dynamic_passage.py`, `tests/test_dynamic_assignment.py`,
+`tests/test_automatic_passage.py`, `tests/test_passage_solver_checkpoint.py`.
+**Vinstområde:** del av prepare_systems 556 s; hela posten kan inte elimineras.
+**Stöd:** konkret dubbelarbete i repot. [SciPy sparse](https://docs.scipy.org/doc/scipy/reference/sparse.html)
+stöder formatvalet; CSR och delade observationer används REDAN och är inte nya förslag.
+
+### Steg 2 — beräkna fasta ruttegenskaper per unik rutt
+
+**Filer:** `demand/structure.py:calibrated_structure_report`,
+`_route_structure_metrics`, `purpose_lengths_km`, `purpose_length_bins`,
+`route_od_distance_km`; anrop i `automatic_passage.py`.
+
+1. Profilera antalet unika edge-tupler och endpoint-par per faktisk dag/variant.
+   Använd inte automatiskt tredagarsexemplets kvot för passagekalibreringen.
+2. Skapa en lokal route-facts-tabell: full edge-tupel -> endpoint-avstånd,
+   antal sensorpassager, sista sensorposition och onward-sträcka. Nyckeln måste
+   också bindas till den geometri/sensoruppsättning som använts.
+3. Behåll nuvarande avståndsformel och summeringsordning. Räkna ruttfakta en gång
+   och använd dem för varje fordon. Behåll samtliga observationer för medianer
+   och andelar; deduplicera aldrig bort fordon ur statistiken.
+4. Dela parserresultat mellan rapportens hjälpfunktioner. Stöd både inline-rutter
+   och namngivna rutter. Saknad/ogiltig rutt ska fortfarande ge samma avvisning.
+5. Poolfakta kan återanvändas inom en innehållsbunden körning. Kandidatens
+   kvartantal, ändamålsfördelning och short-trip-audit beräknas på nytt efter tidsflytt.
+6. Testa särskilt avstånd på trösklarna, loopar med återbesök vid en sensor,
+   identiska rutter med olika ändamål/avgångar och geometri som ändras på disk.
+
+**Klart när:** hela rapportobjektet och flaggorna är identiska på referensfallen,
+och uppmätt total rapport-/passagetid minskar. Testa cacheinvalidiering.
+**Tester:** lägg beteendetester i relevant befintlig strukturtäckning, lokalisera
+den med `rg -n 'calibrated_structure_report|under_1km' tests`; kör även
+`tests/test_automatic_passage.py` och `tests/test_build_sumo_demand.py`.
+**Stöd:** uppmätta 229 444 avståndsanrop i exempelrapporten, 51 640 fordon/491 rutter.
+[ElementTree](https://docs.python.org/3/library/xml.etree.elementtree.html) dokumenterar
+parseralternativen; streaming ger inte automatiskt mindre CPU-tid.
+
+### Steg 3 — lösar- och supportkostnad, endast efter mätning
+
+**Filer:** `dynamic_assignment.py:fit_integer_flows`,
+`departure_bound_constraints`, `departure_group_bound_constraints`.
+
+1. Dela den befintliga solve_integer_flows-timern i supportmatris, constraintbygge,
+   lösaranrop, checkpoint/cache och efterverifiering.
+2. Identifiera om samma constraintmatris byggs flera gånger för identisk support.
+   Återanvänd endast när options, ordning, bounds och grupper matchar exakt.
+3. Behåll nuvarande CSR-representation, scenario-differenser och binära
+   objektivförenklingar; dessa är redan införda. Börja inte om med samma optimeringar.
+4. Ändra inte kolumnordning, reduktionsordning eller solverinställningar för en
+   snabbare lösning utan att kontrollera faktisk vald lösning, inte bara objektivet.
+
+**Tester:** dynamic_assignment, passage_solver_checkpoint och automatic_passage.
+**Vinsttak:** hela den nuvarande posten är 234 s för månaden. Det är inte rimligt
+att prioritera en riskfylld solvermigration som lösning på en timmes körtid.
+
+### Steg 4 — bevisfiler, parsing och serialization
+
+**Filer:** `automatic_passage.py:_gzip_verified` och retention-anroparen,
+`tools/trial_dynamic_passage.py:load_source/materialize_selection`,
+`traffic_sim/ops/runs.py`, `build_sumo_demand.py:_tracked_main`.
+
+1. Profilera bytes och tid för kopiering, komprimering, dekomprimerad verifiering,
+   hashning, XML och JSON var för sig. Gzip nivå 3, fast mtime och parallell
+   retention finns redan: föreslå dem inte som nya förändringar.
+2. Testa i första hand färre pass över samma oföränderliga bytes. Samordna
+   kopiering och hashning endast om publicerat mål fortfarande verifieras enligt
+   arkivkontraktet. Ta inte bort kontrollen av det faktiskt skrivna resultatet.
+3. Undvik hårdlänkar till muterbara livefiler. Ändrad komprimeringsnivå kräver
+   tydligt hanterade komprimerade/okomprimerade digest-kontrakt.
+4. Behåll atomisk tempfil/publicering, avbrottsstädning, manifest och råevidens.
+   Skjut inte integritetsarbete till efter att jobbet redan rapporterat succeeded.
+
+**Tester:** `tests/test_passage_evidence_pruning.py`, provenance och relevanta
+run-registry-tester. Testa avbruten komprimering, korrupt mål och saknad evidens.
+**Vinstområde:** retention 128,5 s; övrig parsing ingår i andra poster och får
+inte dubbelräknas. Kompakt atomisk demand_meta-skrivning finns redan.
+
+### Steg 5 — underlag, arkiv och kostnadsberäkning
+
+**Filer:** `monthly_demand.py:find_demand_archives/validate_demand_archive/prepare`,
+`demand/day_library.py:assemble_window`, `cost_ordered_execution.py`,
+`traffic_sim/simulation/deterministic_disruption.py` och `monthly_sumo.py`.
+
+1. Mät faktiska antal läsningar och valideringar per arkiv under resolver-setup.
+   Specbaserad arkivindexering finns redan. Cost-ledger-cachen finns redan.
+2. För samma verifierade snapshot, skicka vidare en intern descriptor och dess
+   parsade metadata. Inför inte en global `path -> valid`-cache. Inträde från
+   disk kräver fortsatt full kontroll och senare filändringar ska upptäckas.
+3. Välj en explicit snapshot-strategi: en ägd isolerad kopia som konsumeras under
+   kontrollerat livscykelansvar, eller fortsatt kontroll vid läsgränser. Enbart
+   mtime/size räcker inte mot innehållsändringar med bevarad stat-information.
+4. Mät kostnad för route parsing och ruttresolver per unik rutt i costing. Återanvänd
+   resolverresultat bara med hela routingskonfigurationen/closureidentiteten som
+   nyckel och bevara scorer/writer-överensstämmelsen.
+5. Optimera assemble_window endast om mätningen motiverar det. Behåll datumordning,
+   tidsförskjutning, ID-sekvens, fordonsantal och agentkoppling. Exemplet tog bara 1,97 s.
+
+**Tester:** `tests/test_monthly_demand.py`, `tests/test_day_library.py`,
+`tests/test_independent_daily.py`, `tests/test_monthly_search.py`, provenance.
+**Klart när:** träff/miss/korruption/källbyte och ofullständiga manifest ger rätt
+utfall; identisk kostnadslista, vinnare och stoppbevis. Ingen liveträdsmutation.
+**Prioritet:** villkorad av steg 0; exempelvalidering på 0,35 s är inte bevis
+för många minuters möjlig vinst.
+
+### Steg 6 — isolerad byggare och kontrollerad parallellism
+
+**Filer:** `build_sumo_demand.py`, `monthly_demand.py:_resolve_new_release`,
+`day_library.py`, process-/köhantering i `independent_daily.py`.
+
+1. Gör först serial byggning med explicit input-root/output-root. Inventera alla
+   globala SUMO_DIR/web-output/importberoenden; CLI ska behålla sitt kontrakt.
+2. Låt jobbspecifika produkter byggas i egen temporär katalog. Publicera ett
+   komplett arkiv atomiskt. Uppdatering av gemensamma UI-produkter ska vara en
+   separat avsiktlig operation. Bekräfta att fel lämnar gamla produkter intakta.
+3. Behåll lås tills den skyddade resursen verkligen är isolerad. Inför single-flight
+   per identitetsnyckel så två arbetare inte bygger/publicerar samma dag samtidigt.
+4. Mät serial baseline. Prova sedan två arbetare med en gemensam totalbudget för
+   PFE, solver och SUMO. Multiplicera inte 10 PFE-arbetare med tre varianter och
+   flera datum. Bind även minnesbudget och avbrottspropagering.
+5. Vänta in och hantera alla barn innan ett fel/avbrott publiceras. Resultatens
+   ordning ska följa datum/seed, inte vilken process som blir klar först.
+
+**Tester:** dagbibliotek, månadsdemand, independent_daily_queue och builder;
+dubbla nycklar, arbetar-krasch, avbrott, partiella utdata och serial/parallell likhet.
+**Stöd:** [Python executors](https://docs.python.org/3/library/concurrent.futures.html).
+Processer har serialiseringskostnad; mer parallellism är ett experiment, inte en garanti.
+
+### Steg 7 — SUMO-start, persistent worker och libsumo-experiment
+
+**Filer:** `automatic_passage.py:_measure/_measure_batch`,
+`tools/departure_reconciliation.py` och SUMO-runtimeanrop som steg 0 identifierat.
+
+1. Mät tom uppstart på exakt nätverk/runtime, faktisk processväggtid och intern
+   simuleringsklocka. Använd skillnaden som blandad overhead, inte automatiskt
+   nätparsning. Mät samma samtidighet som produktionen.
+2. Prova en worker med två scenarier. `traci.load` laddar nätet igen;
+   `traci.simulation.loadState` kan undvika detta. Börja med tomt tillstånd före
+   första fordonet. Spara RNG uttryckligen och skapa korrekt tillstånd per seed.
+3. Kontrollera klocka, framtida avgångar, fordon, signaler, detektorer, routes,
+   closureändringar, filutdata och alla RNG-källor mellan jobben. Testa A→B och
+   B→A mot två separata kalla processer; testet ska upptäcka ordningsberoende.
+4. Jämför råa sensorceller, rutter/tider, population och health. Testa baseline och
+   closure. Samma dags totalantal räcker inte för godkännande.
+5. Testa libsumo separat och versionsmatchat i isolerad miljö. Det tar bort socket-
+   kommunikation, inte bevisligen nätladdning. Parallella instanser kräver separata
+   processer. Ingen global LIBSUMO_AS_TRACI-aktivering före verifiering.
+6. Behåll kall processväg vid stödproblem. Välj den nya vägen endast om hela
+   mätvågen blir snabbare, minnet är acceptabelt och resultaten förblir identiska.
+
+**Stöd:** [SUMO SaveAndLoad](https://sumo.dlr.de/docs/Simulation/SaveAndLoad.html)
+anger att RNG inte sparas som standard och att vissa interna modelltillstånd
+inte sparas. [Libsumo](https://sumo.dlr.de/docs/Libsumo.html) dokumenterar socketvinsten
+och processkravet. Dessa dokument garanterar inte likhet för denna modell.
+**Vinstområde:** endast den uppmätta undvikbara delen av 879,6 s SUMO-faser.
+Multiplicera inte 0,6 s uppstart med antalet samtidiga processer som om de vore seriella.
+
+### Steg 8 — sammanhängande slutverifiering och leverans
+
+1. Kör de gemensamma referensfallen med alla godkända ändringar tillsammans.
+   Summera inte isolerade vinster: mät nettovinsten igen med lika cachetillstånd.
+2. Kör en riktig baseline/closure-canary med alla varianter och ordinarie seedar.
+   Återspelning av gamla spår är inte test av ändrad SUMO-körning.
+3. Kontrollera vilka ändrade källfiler som påverkar demand- och katalogidentitet.
+   Gör klart källändringarna innan katalogförnyelse. Använd byte-ekvivalensvägen
+   bara om dess befintliga kontrakt medger ändringarna; annars krävs rätt
+   kvalificering. Bredda inte certifikatet för att slippa ett misslyckat test.
+4. Ingen all-datum-warming. Bygg endast det diagnostiken behöver. Redovisa
+   engångskostnad för kall cache separat från följande återanvändningskörningar.
+5. Verifiera att status/progress beskriver utfört arbete: requested days, aktuella
+   kalibreringar, återanvända historiska underlag, färdiga kandidater och resultatlänk.
+   Detta förbättrar observerbarhet; räkna det inte som simuleringshastighet.
+6. Uppdatera aktuella projektblock med verifierat läge. Rapportera varje stegs
+   accept/reject/deferred och varför. Inga löften om minuter innan mätning finns.
+
+Rekommenderad gemensam fokuserad kontroll (utöka med berörda feltester):
+
+```sh
+python3 -m pytest -q tests/test_trial_dynamic_passage.py tests/test_dynamic_assignment.py tests/test_automatic_passage.py tests/test_passage_solver_checkpoint.py tests/test_passage_evidence_pruning.py tests/test_build_sumo_demand.py tests/test_day_library.py tests/test_monthly_demand.py tests/test_independent_daily.py tests/test_monthly_search.py tests/test_demand_provenance.py
+git diff --check
+```
+
+Om miljö/fil saknas: rapportera konkret vad och använd en tillgänglig smalare
+kontroll; påstå inte att hela kontrollen passerar. Fokuserade tester ersätter inte
+fullständig releaseevidens. Preliminär policy/global-best-gräns består.
+
+### Instruktion att ge nästa implementerande modell
+
+> Läs denna körinstruktion i IMPROVEMENT_PLAN.md och börja med steg 0. Verifiera
+> verkligt repo och indata innan arbete. Fortsätt stegvis genom resultatneutrala
+> förbättringar, mät varje ändring och behåll endast verifierade nettovinster.
+> Dokumentera alla beslut i samma plan. Ändra inte modellkontrakt, återanvänd inte
+> fel datum-/poolidentitet, minska inte seedar och starta ingen generell warming.
+> Lägg inga semantiska ändringar i en prestandapatch. När ett experiment inte
+> förbättrar helheten, lämna det oaktiverat och fortsätt till nästa oberoende steg.
+
+## Performance research checkpoint — 2026-09-12 completed June search
+
+Research and proposed implementation order; no new optimization is activated by
+this section. Scope: preserve exact outputs, sensor constraints, stochastic seeds,
+route provenance and the existing composition-aware day identity.
+
+Measured run: `speed-monthly-june-20260912`, 3758.937 seconds active elapsed.
+The earlier estimates of 29 demand builds confused parent schedules with demand
+envelopes. There are 31 backend entries, including one reused canary archive;
+30 new demand archives and 49 new passage calibrations were observed in the run
+window. The final accounting's 52 full calibrations includes three historical
+canary calibrations and must not be reported as 52 executions in this run.
+
+| Exclusive timing category | Seconds |
+| --- | ---: |
+| Automatic passage (49 timing records) | 2092.043 |
+| Remaining PFE/variants wrapper | 672.457 |
+| Outside PFE/variants wrapper, not fully attributed | 994.437 |
+
+Inside automatic passage: learning measurements 339.911 s, validation measurements
+539.680 s, system preparation 556.435 s, integer solving/system construction
+234.391 s, staging/structure 205.391 s, evidence retention 128.500 s, input
+preparation 33.825 s, report serialization 24.047 s. These are nested phase wall
+times; do not add them to their parent or sum subprocess worker-seconds as elapsed.
+The timings were selected by the job's creation/finish window and cross-checked
+against new archive dynamic_passage totals (2092.091 s, rounding difference).
+
+### Implementation order and acceptance
+
+1. **Account for the remaining time on a saved envelope.** Instrument archive
+   validation, assembly, copying, hashing, metadata parsing, costing and runner
+   initialization separately. Separate executed work from diagnostics inherited
+   from an existing archive. Use cProfile for attribution and unprofiled paired
+   wall-time measurements for performance. No new month run is needed. Measure
+   full-hit and mixed hit/miss paths as well as a cold calibration.
+2. **Return and reuse verified passage data.** `tools/trial_dynamic_passage.py`
+   `load_source` already builds and verifies the source PassageSystem;
+   `automatic_passage._refine` immediately builds it again.
+   `expand_departure_support` additionally builds a dummy system solely to
+   validate inputs. Extract complete validation into a shared routine and offer
+   an internal immutable validated-source object. Keep the public loader's
+   existing tuple contract compatible. Preserve sensor/scenario/option ordering,
+   CSR entries including duplicate passages, boundary counts and solver inputs.
+   Do not replace checks with an unchecked caller-supplied boolean.
+3. **Parse structure inputs once per immutable snapshot.**
+   `calibrated_structure_report` calls route metrics, purpose lengths and purpose
+   bins, then repeats pool analysis. Share parsed routes/agents and cache only
+   pool-derived metrics by content identity; compute candidate counts and
+   quarter-dependent audits anew after departure changes. Geometry is ALREADY
+   cached and the solver ALREADY uses sparse CSR: neither is a new speed claim.
+4. **Reuse fully validated archive snapshots within one preparation.**
+   `find_demand_archives` validates matches, then resolver `prepare` validates
+   the selected archive again. Profile downstream runner reads as well. Pass an
+   immutable verified archive descriptor and parsed metadata through these
+   boundaries. Preserve verification on external entry, corruption detection,
+   generation binding and detection/rejection of files changed during use.
+   Path-only or mtime-only caches are not substitutes for integrity validation.
+5. **If assembly/copying is material, isolate the builder output workspace.**
+   Current `_resolve_new_release` owns a global demand lock and builds through
+   live products before restoring them. A pure build-to-directory interface and
+   atomic immutable publication would permit controlled independent work and
+   remove live-file churn. First preserve serial output equivalence; parallelize
+   only after per-key single-flight, cleanup/cancellation and a shared CPU/memory
+   budget exist. Preserve exact three-day concatenation and chronological IDs.
+6. **Only then experiment with persistent SUMO workers.** `simulation.loadState`
+   avoids network reload; `traci.load` does not. Save/restore RNG state and bind
+   each seed, input, time origin, output destination and closure configuration.
+   Start with an empty pre-simulation state; require cold-vs-reloaded equality
+   for sensor counts, routes, departures, health and closure outcomes. libsumo
+   removes socket communication but is not proof of avoided network parsing.
+   Parallel libsumo requires separate processes. This remains an experiment.
+
+Benefit bounds: halving the 556.435 s preparation bucket saves 4.64 minutes;
+halving preparation plus staging/structure saves 6.35 minutes. These are scenarios,
+not measured speedups, and overlap with other optimizations. Even eliminating all
+integer-solving time saves only 3.91 minutes. Do not advertise seconds-per-day or
+a fixed month runtime before measuring the full pipeline with equal cache state.
+
+Acceptance fixtures: frozen weekday, weekend, mixed-pool and difficult boundary
+days; q10/q50/q90 including unequal populations; closure and baseline; cache hit,
+miss, corrupted entry, changed input and interruption. Require identical selected
+route/departure records, canonical agents, populations, sensor-quarter counts,
+structural flags, solver objective and deterministic ranking. Require unchanged
+validation seeds, tolerances and health gates. Compare peak memory and total wall
+time in alternating before/after runs. Any equal-objective but different route
+solution is a result change under this performance-only scope.
+
+Do not start with date-only reuse, fewer validation seeds, relaxed solver accuracy,
+shorter simulation horizons, extra nested workers or altered traffic models.
+Composition-independent day calibration is a separate model experiment; the
+existing policy experiment did not establish exact equivalence.
+
+Primary sources checked: [Python profiling](https://docs.python.org/3/library/profile.html),
+[ElementTree](https://docs.python.org/3/library/xml.etree.elementtree.html),
+[SciPy sparse](https://docs.scipy.org/doc/scipy/reference/sparse.html),
+[Python executors](https://docs.python.org/3/library/concurrent.futures.html),
+[SUMO save/load](https://sumo.dlr.de/docs/Simulation/SaveAndLoad.html),
+[libsumo](https://sumo.dlr.de/docs/Libsumo.html).
+The documentation establishes API properties, not speedups in this repository.
+
 **Date:** 2026-08-24 (historical plan consolidated 2026-07-18; current status
 re-verified against the branch, active artifacts and validation records)
 **Status:** Canonical strategic and historical improvement record. The
@@ -217,11 +646,11 @@ rebuilds. This does not change Stage 3's per-job ceiling of 19 of 49.
 
 #### Stage 2 — structured lookup diagnostics in the build
 
-Schedule this stage immediately before an already planned demand re-warm. It
-changes `demand/day_library.py` and `build_sumo_demand.py`; both are among the
-40 currently fingerprinted sources, so the edit intentionally makes the old
+This stage changes `demand/day_library.py` and `build_sumo_demand.py`; both are
+among the currently fingerprinted sources, so the edit intentionally makes old
 entries unreachable by new identities. Do not weaken the source inventory to
-avoid that one-time cost.
+avoid that boundary. New entries are created lazily for dates requested by
+real work; no multi-date cache prefill is required.
 
 Add these compatible APIs to `demand/day_library.py`:
 
@@ -290,9 +719,10 @@ but an implicit build would not select it: the expected weekday and weekend
 keys now differ solely at `source_files.build_sumo_demand`. This contradicts
 the remote-session assumption that Stage 2 cannot affect catalog selection;
 `build_sumo_demand` is explicitly one of `CATALOG_SOURCE_LABELS`. Finish Stage
-4 before one catalog qualification/adoption pass, then perform the planned
-demand re-warm. Running a demand build before that pass would use the slower
-legacy candidate builder.
+4 before one catalog qualification/adoption pass. The owner declined a
+multi-date demand re-warm on 2026-09-12; keep day creation on demand. Running a
+demand build before catalog adoption would use the slower legacy candidate
+builder.
 
 #### Stage 3 — bounded reuse-policy experiment
 
