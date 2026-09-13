@@ -1106,3 +1106,60 @@ class TestSharedStructureContext:
             == measured['structure_context']['geometry_sha256']
         assert measured['structure_context']['sensor_identity'] \
             == measured['input_identity']['measured_sensor_edge_identity']
+
+
+class TestSolverMeasurement:
+    """Step 3 instrumentation, activated privately from the profiler."""
+
+    def test_the_replay_reports_every_declared_solver_phase(self, tmp_path):
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        measured = report['solver_measurement']
+        assert set(measured['phases']) == set(profiler.dynamic.SOLVER_PHASE_NAMES)
+        assert measured['phases']['milp_solve']['calls'] == 1
+        assert measured['milp_executed'] is True
+
+    def test_a_cache_hit_shows_that_milp_did_not_run(self, tmp_path):
+        summary = profiler.profile(evidence_root(tmp_path), tmp_path / 'out', repeats=2)
+
+        first, second = (run['solver_measurement'] for run in summary['runs'])
+        assert first['milp_executed'] is True
+        assert second['milp_executed'] is False
+        assert second['phases']['milp_solve']['calls'] == 0
+        assert second['phases']['checkpoint_cache_lookup']['calls'] == 1
+        assert first['solver_cache_hit'] is False and second['solver_cache_hit'] is True
+
+    def test_exclusive_solver_time_fits_inside_the_measured_phase(self, tmp_path):
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        phases = {row['phase']: row for row in report['timing']['phases']}
+        total = sum(row['exclusive_s']
+                    for row in report['solver_measurement']['phases'].values())
+        assert 0 < total <= phases['fit_integer_flows']['wall_s'] + 1e-6
+
+    def test_the_solver_measurement_is_declared_observational(self, tmp_path):
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        assert 'fingerprint' in report['solver_measurement']['basis']
+
+    def test_the_hook_is_uninstalled_after_the_replay(self, tmp_path):
+        profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        assert profiler.dynamic._SOLVER_PHASE_OBSERVER is None
+
+    def test_the_hook_is_uninstalled_after_a_refusal(self, tmp_path):
+        source = evidence_root(tmp_path)
+        (source / 'evidence/learning-0-arm-1001/edge.xml').unlink()
+
+        with pytest.raises(profiler.ReplayRefused):
+            profiler.replay(source, tmp_path / 'out')
+
+        assert profiler.dynamic._SOLVER_PHASE_OBSERVER is None
+
+    def test_measurement_does_not_reach_the_solver_checkpoint(self, tmp_path):
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        state = json.loads((tmp_path / 'out/solver/state.json').read_text())
+        assert set(state) == {'key', 'status', 'cache_hit', 'columns', 'rows',
+                              'has_incumbent', 'wall_s', 'cpu_s', 'message'}
+        assert report['solver_request_key'] == state['key']

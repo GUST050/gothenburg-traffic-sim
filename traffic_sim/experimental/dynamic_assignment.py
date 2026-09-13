@@ -14,6 +14,7 @@ checked on independent simulation runs before any production adoption.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from contextlib import contextmanager
 import math
 import warnings
 from typing import AbstractSet, Mapping, Sequence
@@ -21,6 +22,58 @@ from typing import AbstractSet, Mapping, Sequence
 import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, milp
 from scipy.sparse import coo_matrix, csr_matrix, eye, hstack, vstack
+
+
+#: Phases the solver reports when a diagnostic observer is installed. Declared
+#: here so a report can show a phase that did NOT run — on a cache hit, an
+#: absent ``milp_solve`` is the evidence that the solver was never invoked.
+SOLVER_PHASE_NAMES = (
+    'input_validation_and_hard_rhs',
+    'scenario_difference_matrix',
+    'departure_bound_constraints',
+    'departure_group_bound_constraints',
+    'constraint_assembly',
+    'column_equivalence_reduction',
+    'checkpoint_request_serialization',
+    'checkpoint_request_key',
+    'checkpoint_request_write',
+    'checkpoint_cache_lookup',
+    'checkpoint_cache_write',
+    'milp_solve',
+    'reexpansion_and_verification',
+)
+
+#: DIAGNOSTIC ONLY, and None in production. A tool installs an observer for the
+#: duration of one measured call; nothing here changes the model, the solver
+#: options, the column order, the cache identity or the checkpoint format.
+_SOLVER_PHASE_OBSERVER = None
+
+
+@contextmanager
+def _observe_solver_phases(observer):
+    """Install a phase observer for one measured section, then remove it.
+
+    Removal is unconditional: a timeout, an infeasible model or any other
+    exception must not leave production code reporting into a dead collector.
+    """
+    global _SOLVER_PHASE_OBSERVER
+    previous = _SOLVER_PHASE_OBSERVER
+    _SOLVER_PHASE_OBSERVER = observer
+    try:
+        yield observer
+    finally:
+        _SOLVER_PHASE_OBSERVER = previous
+
+
+@contextmanager
+def _solver_phase(name: str):
+    """Time one solver phase when observed; do nothing at all otherwise."""
+    observer = _SOLVER_PHASE_OBSERVER
+    if observer is None:
+        yield
+        return
+    with observer.phase(name):
+        yield
 
 
 class DynamicAssignmentError(RuntimeError):
@@ -196,118 +249,126 @@ def fit_integer_flows(
     contracts. Infeasibility is reported; no measured row or group is relaxed.
     A time-limited feasible incumbent is allowed only after full verification.
     """
-    if not math.isfinite(time_limit_s) or not 0 < time_limit_s <= 120:
-        raise ValueError('time limit must be in (0, 120] seconds')
-    if set(targets) != set(system.sensors):
-        raise ValueError('target sensors differ from observation system')
-    values = []
-    for edge in system.sensors:
-        series = targets[edge]
-        if len(series) != system.n_intervals:
-            raise ValueError('target interval count differs')
-        for value in series:
+    with _solver_phase('input_validation_and_hard_rhs'):
+        if not math.isfinite(time_limit_s) or not 0 < time_limit_s <= 120:
+            raise ValueError('time limit must be in (0, 120] seconds')
+        if set(targets) != set(system.sensors):
+            raise ValueError('target sensors differ from observation system')
+        values = []
+        for edge in system.sensors:
+            series = targets[edge]
+            if len(series) != system.n_intervals:
+                raise ValueError('target interval count differs')
+            for value in series:
+                if isinstance(value, bool) or not math.isfinite(value) \
+                        or value < 0 or float(value) != int(value):
+                    raise ValueError('explicit nonnegative integer targets are required')
+                values.append(int(value))
+        groups = tuple(sorted({option.group for option in system.options}))
+        if set(group_totals) != set(groups):
+            raise ValueError('every OD/purpose group needs an explicit total')
+        for value in group_totals.values():
             if isinstance(value, bool) or not math.isfinite(value) \
                     or value < 0 or float(value) != int(value):
-                raise ValueError('explicit nonnegative integer targets are required')
-            values.append(int(value))
-    groups = tuple(sorted({option.group for option in system.options}))
-    if set(group_totals) != set(groups):
-        raise ValueError('every OD/purpose group needs an explicit total')
-    for value in group_totals.values():
-        if isinstance(value, bool) or not math.isfinite(value) \
-                or value < 0 or float(value) != int(value):
-            raise ValueError('group totals must be nonnegative integers')
-    n = len(system.options)
-    group_index = {group: i for i, group in enumerate(groups)}
-    conservation = coo_matrix((np.ones(n),
-        ([group_index[option.group] for option in system.options], np.arange(n))),
-        shape=(len(groups), n)).tocsr()
-    hard = vstack([system.matrix, conservation], format='csr')
-    rhs = np.array(values * len(system.scenarios) + [group_totals[g] for g in groups])
-    if departure_totals is not None:
-        if len(departure_totals) != system.n_intervals or any(
-                isinstance(v, bool) or not math.isfinite(v) or v < 0 or int(v) != v
-                for v in departure_totals):
-            raise ValueError('departure totals must cover every interval with nonnegative integers')
-        quarters = [math.floor(o.departure_s / system.interval_s) for o in system.options]
-        entries = [(q, i) for i, q in enumerate(quarters) if 0 <= q < system.n_intervals]
-        population = coo_matrix((np.ones(len(entries)),
-            ([q for q, _ in entries], [i for _, i in entries])),
-            shape=(system.n_intervals, n)).tocsr()
-        hard = vstack([hard, population], format='csr')
-        rhs = np.r_[rhs, departure_totals]
-    # Every travel-time scenario must hit the SAME target. Expressing that
-    # as A0*x=b and (Ai-A0)*x=0 preserves the feasible set exactly, while
-    # cancelling the many unchanged passage incidences between scenarios.
-    # Keep the original equations above for independent output verification.
-    block = len(system.sensors) * system.n_intervals
-    scenario_rows = block * len(system.scenarios)
-    baseline = hard[:block]
-    solve_hard = vstack(
-        [baseline] + [hard[start:start+block] - baseline
-                      for start in range(block, scenario_rows, block)]
-        + [hard[scenario_rows:]], format='csr')
-    solve_hard.eliminate_zeros()
-    solve_rhs = rhs.copy()
-    solve_rhs[block:scenario_rows] = 0
-    prior = np.array([option.prior for option in system.options])
-    upper = np.array([option.capacity for option in system.options])
-    preferences = np.array([option.preference_cost for option in system.options])
-    # On [0, capacity], |x-prior| is linear when the prior is at/outside
-    # either bound. This includes every binary route/time alternative.
-    # Keep the general epigraph formulation for interior/fractional priors.
-    linear_prior = bool(np.all((prior <= 0) | (prior >= upper)))
-    if linear_prior:
-        constraints = [LinearConstraint(solve_hard, solve_rhs, solve_rhs)]
-        cost = preferences + np.where(prior >= upper, -1., 1.)
-        integrality = np.ones(n)
-        limits = Bounds(np.zeros(n), upper)
-    else:
-        identity = eye(n, format='csr')
-        constraints = [
-            LinearConstraint(hstack([solve_hard, csr_matrix(solve_hard.shape)], format='csr'),
-                             solve_rhs, solve_rhs),
-            LinearConstraint(hstack([identity, -identity], format='csr'), -np.inf, prior),
-            LinearConstraint(hstack([-identity, -identity], format='csr'), -np.inf, -prior),
-        ]
-        cost = np.r_[preferences, np.ones(n)]
-        integrality = np.r_[np.ones(n), np.zeros(n)]
-        limits = Bounds(np.zeros(2*n), np.r_[upper, np.full(n, np.inf)])
-    edge_matrix, edge_lower, edge_upper = departure_bound_constraints(
-        system, departure_bounds)
-    group_matrix, group_lower, group_upper = departure_group_bound_constraints(
-        system, departure_group_bounds)
-    bound_matrix = vstack([edge_matrix, group_matrix], format='csr')
-    bound_lower = np.r_[edge_lower, group_lower]
-    bound_upper = np.r_[edge_upper, group_upper]
-    if len(bound_lower):
-        bounded = bound_matrix if linear_prior else hstack([
-            bound_matrix, csr_matrix(bound_matrix.shape)], format='csr')
-        constraints.append(LinearConstraint(bounded, bound_lower, bound_upper))
-    members = None
-    if linear_prior:
-        full = vstack([solve_hard, bound_matrix], format='csc')
-        keys = vstack([full, system.boundary_matrix], format='csc')
-        keys.sort_indices()
-        groups_by_column, representatives, members = {}, [], []
-        for column in range(n):
-            start, end = keys.indptr[column:column+2]
-            key = (keys.indices[start:end].tobytes(), keys.data[start:end].tobytes(), cost[column])
-            group = groups_by_column.get(key)
-            if group is None:
-                group = len(members)
-                groups_by_column[key] = group
-                representatives.append(column)
-                members.append([])
-            members[group].append(column)
-        # Merge only columns with identical observations, conservation,
-        # structural bounds, boundary accounting AND objective coefficient.
-        # Re-expand into original physical alternatives before verification.
-        cost = cost[representatives]
-        constraints = [LinearConstraint(full[:, representatives],
-                        np.r_[solve_rhs, bound_lower], np.r_[solve_rhs, bound_upper])]
-        limits = Bounds(np.zeros(len(members)), [upper[indices].sum() for indices in members])
-        integrality = np.ones(len(members))
+                raise ValueError('group totals must be nonnegative integers')
+        n = len(system.options)
+        group_index = {group: i for i, group in enumerate(groups)}
+        conservation = coo_matrix((np.ones(n),
+            ([group_index[option.group] for option in system.options], np.arange(n))),
+            shape=(len(groups), n)).tocsr()
+        hard = vstack([system.matrix, conservation], format='csr')
+        rhs = np.array(values * len(system.scenarios) + [group_totals[g] for g in groups])
+        if departure_totals is not None:
+            if len(departure_totals) != system.n_intervals or any(
+                    isinstance(v, bool) or not math.isfinite(v) or v < 0 or int(v) != v
+                    for v in departure_totals):
+                raise ValueError('departure totals must cover every interval '
+                                 'with nonnegative integers')
+            quarters = [math.floor(o.departure_s / system.interval_s) for o in system.options]
+            entries = [(q, i) for i, q in enumerate(quarters) if 0 <= q < system.n_intervals]
+            population = coo_matrix((np.ones(len(entries)),
+                ([q for q, _ in entries], [i for _, i in entries])),
+                shape=(system.n_intervals, n)).tocsr()
+            hard = vstack([hard, population], format='csr')
+            rhs = np.r_[rhs, departure_totals]
+    with _solver_phase('scenario_difference_matrix'):
+        # Every travel-time scenario must hit the SAME target. Expressing that
+        # as A0*x=b and (Ai-A0)*x=0 preserves the feasible set exactly, while
+        # cancelling the many unchanged passage incidences between scenarios.
+        # Keep the original equations above for independent output verification.
+        block = len(system.sensors) * system.n_intervals
+        scenario_rows = block * len(system.scenarios)
+        baseline = hard[:block]
+        solve_hard = vstack(
+            [baseline] + [hard[start:start+block] - baseline
+                          for start in range(block, scenario_rows, block)]
+            + [hard[scenario_rows:]], format='csr')
+        solve_hard.eliminate_zeros()
+        solve_rhs = rhs.copy()
+        solve_rhs[block:scenario_rows] = 0
+        prior = np.array([option.prior for option in system.options])
+        upper = np.array([option.capacity for option in system.options])
+        preferences = np.array([option.preference_cost for option in system.options])
+        # On [0, capacity], |x-prior| is linear when the prior is at/outside
+        # either bound. This includes every binary route/time alternative.
+        # Keep the general epigraph formulation for interior/fractional priors.
+        linear_prior = bool(np.all((prior <= 0) | (prior >= upper)))
+        if linear_prior:
+            constraints = [LinearConstraint(solve_hard, solve_rhs, solve_rhs)]
+            cost = preferences + np.where(prior >= upper, -1., 1.)
+            integrality = np.ones(n)
+            limits = Bounds(np.zeros(n), upper)
+        else:
+            identity = eye(n, format='csr')
+            constraints = [
+                LinearConstraint(hstack([solve_hard, csr_matrix(solve_hard.shape)], format='csr'),
+                                 solve_rhs, solve_rhs),
+                LinearConstraint(hstack([identity, -identity], format='csr'), -np.inf, prior),
+                LinearConstraint(hstack([-identity, -identity], format='csr'), -np.inf, -prior),
+            ]
+            cost = np.r_[preferences, np.ones(n)]
+            integrality = np.r_[np.ones(n), np.zeros(n)]
+            limits = Bounds(np.zeros(2*n), np.r_[upper, np.full(n, np.inf)])
+    with _solver_phase('departure_bound_constraints'):
+        edge_matrix, edge_lower, edge_upper = departure_bound_constraints(
+            system, departure_bounds)
+    with _solver_phase('departure_group_bound_constraints'):
+        group_matrix, group_lower, group_upper = departure_group_bound_constraints(
+            system, departure_group_bounds)
+    with _solver_phase('constraint_assembly'):
+        bound_matrix = vstack([edge_matrix, group_matrix], format='csr')
+        bound_lower = np.r_[edge_lower, group_lower]
+        bound_upper = np.r_[edge_upper, group_upper]
+        if len(bound_lower):
+            bounded = bound_matrix if linear_prior else hstack([
+                bound_matrix, csr_matrix(bound_matrix.shape)], format='csr')
+            constraints.append(LinearConstraint(bounded, bound_lower, bound_upper))
+    with _solver_phase('column_equivalence_reduction'):
+        members = None
+        if linear_prior:
+            full = vstack([solve_hard, bound_matrix], format='csc')
+            keys = vstack([full, system.boundary_matrix], format='csc')
+            keys.sort_indices()
+            groups_by_column, representatives, members = {}, [], []
+            for column in range(n):
+                start, end = keys.indptr[column:column+2]
+                key = (keys.indices[start:end].tobytes(),
+                       keys.data[start:end].tobytes(), cost[column])
+                group = groups_by_column.get(key)
+                if group is None:
+                    group = len(members)
+                    groups_by_column[key] = group
+                    representatives.append(column)
+                    members.append([])
+                members[group].append(column)
+            # Merge only columns with identical observations, conservation,
+            # structural bounds, boundary accounting AND objective coefficient.
+            # Re-expand into original physical alternatives before verification.
+            cost = cost[representatives]
+            constraints = [LinearConstraint(full[:, representatives],
+                            np.r_[solve_rhs, bound_lower], np.r_[solve_rhs, bound_upper])]
+            limits = Bounds(np.zeros(len(members)), [upper[indices].sum() for indices in members])
+            integrality = np.ones(len(members))
     # This solve runs in the parent between daily PFE fork pools. A native
     # HiGHS thread pool here is inherited broken by the next day's children;
     # applying their threads=1 option then spins in HighsTaskExecutor.shutdown.
@@ -318,7 +379,8 @@ def fit_integer_flows(
                          constraints=constraints,
                          options={'time_limit': time_limit_s, 'threads': 1})
         if checkpoint_dir is None:
-            result = milp(**arguments)
+            with _solver_phase('milp_solve'):
+                result = milp(**arguments)
         else:
             from traffic_sim.demand.passage_solver import solve_checkpointed
             if cache_dir is None:
@@ -332,29 +394,30 @@ def fit_integer_flows(
             f'dynamic fit time limit; feasibility unknown: {result.message}{checkpoint}')
     if result.x is None or result.status not in (0, 1):
         raise DynamicAssignmentError(f'infeasible or unsolved dynamic fit: {result.message}')
-    raw = result.x[:n]
-    if members is not None:
-        aggregated = result.x
-        if not np.all(np.isfinite(aggregated)) or np.any(aggregated < -1e-6) \
-                or np.any(np.abs(aggregated - np.rint(aggregated)) > 1e-6):
-            raise DynamicAssignmentError('invalid aggregated integer flow')
-        raw = np.zeros(n)
-        for indices, total in zip(members, np.maximum(0, np.rint(aggregated))):
-            for column in indices:
-                raw[column] = min(total, upper[column])
-                total -= raw[column]
-            if total != 0:
-                raise DynamicAssignmentError('aggregated flow exceeds original capacity')
-    if not np.all(np.isfinite(raw)):
-        raise DynamicAssignmentError('solver output is non-finite')
-    counts = np.rint(raw).astype(np.int64)
-    if np.any(np.abs(raw - counts) > 1e-6) \
-            or np.any(counts < 0) or np.any(counts > upper) \
-            or not np.array_equal(hard @ counts, rhs):
-        raise DynamicAssignmentError('solver output violates integer passage constraints')
-    bounded = bound_matrix @ counts
-    if np.any(bounded < bound_lower) or np.any(bounded > bound_upper):
-        raise DynamicAssignmentError('solver output violates production departure bounds')
+    with _solver_phase('reexpansion_and_verification'):
+        raw = result.x[:n]
+        if members is not None:
+            aggregated = result.x
+            if not np.all(np.isfinite(aggregated)) or np.any(aggregated < -1e-6) \
+                    or np.any(np.abs(aggregated - np.rint(aggregated)) > 1e-6):
+                raise DynamicAssignmentError('invalid aggregated integer flow')
+            raw = np.zeros(n)
+            for indices, total in zip(members, np.maximum(0, np.rint(aggregated))):
+                for column in indices:
+                    raw[column] = min(total, upper[column])
+                    total -= raw[column]
+                if total != 0:
+                    raise DynamicAssignmentError('aggregated flow exceeds original capacity')
+        if not np.all(np.isfinite(raw)):
+            raise DynamicAssignmentError('solver output is non-finite')
+        counts = np.rint(raw).astype(np.int64)
+        if np.any(np.abs(raw - counts) > 1e-6) \
+                or np.any(counts < 0) or np.any(counts > upper) \
+                or not np.array_equal(hard @ counts, rhs):
+            raise DynamicAssignmentError('solver output violates integer passage constraints')
+        bounded = bound_matrix @ counts
+        if np.any(bounded < bound_lower) or np.any(bounded > bound_upper):
+            raise DynamicAssignmentError('solver output violates production departure bounds')
     return FlowFit(counts, 'predicted_exact_requires_sumo',
                    float(np.abs(counts - prior).sum()), result.message)
 

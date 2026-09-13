@@ -502,6 +502,46 @@ replay, inte releasebevis och inte ett fullständigt produktionsdagsbygge.
 **Vinsttak:** hela den nuvarande posten är 234 s för månaden. Det är inte rimligt
 att prioritera en riskfylld solvermigration som lösning på en timmes körtid.
 
+#### Steg 3 — mätinstrumentering klar 2026-09-13, ingen optimering föreslagen
+
+Endast mätning. Lösarmatematik, solverinställningar, kolumnordning,
+cacheidentitetens KONSTRUKTION och checkpointformatet är orörda.
+
+`dynamic_assignment` har nu en privat, diagnostisk hook: `SOLVER_PHASE_NAMES`,
+`_SOLVER_PHASE_OBSERVER` (None i produktion) och
+`_observe_solver_phases(observer)` som installerar och ALLTID avinstallerar i
+ett `finally`. Nio regioner mäts med exklusiv tid — indatavalidering och
+conservation/hard/rhs, scenario-differensmatrisen,
+`departure_bound_constraints`, `departure_group_bound_constraints`,
+sammanslagning till constraints/bounds, kolumnekvivalens och
+representantreduktion, checkpointserialisering/request key/requestskrivning/
+cache lookup/cacheskrivning, `scipy.optimize.milp` när den körs, samt
+återexpansion och full efterverifiering. Exklusiv tid är egen tid, så en
+nästlad fas aldrig dubbelräknas. Profilern aktiverar hooken privat runt
+`fit_integer_flows` och rapporterar `solver_measurement` med alla faser, även
+de som inte kördes: **vid cacheträff visar rapporten `milp_solve` med 0 anrop
+och `milp_executed: false`.**
+
+**Verifierat att mätningen inte rör resultatet.** Mot `b270087` på fixturen är
+`request.npz` byte-identisk, selection/routes/agents oförändrade, och
+`state.json` har exakt samma nycklar. Med och utan observer i samma process är
+request key identisk.
+
+**En konsekvens som måste vara känd före nästa A/B.** `solve_checkpointed`
+hashar avsiktligt bytes ur `passage_solver.py` OCH
+`experimental/dynamic_assignment.py` in i cachenyckeln. Instrumenteringen
+redigerar båda, så nyckeln FLYTTAR — mätt `f85eec4175f4` → `709c822ed204` —
+medan modell-delen av nyckeln är oförändrad (`2d6c534b167f` i båda). Det är
+kontraktet som fungerar, inte en defekt: varje redigering av de filerna, även
+en kommentar, gör samma sak. Praktiskt betyder det att **alla befintliga
+passage-solver-cacheposter är ogiltiga från den här commiten**, så arm B i
+nästa A/B startar med kall solvercache. Jämför inte varm arm A mot kall arm B.
+
+**Ingen steg 3-optimering föreslås.** Fixturens faser är mikrosekunder och
+säger ingenting om vilken fas som dominerar i produktion. Kör mätningen på den
+sparade q50-evidensen och läs `solver_measurement.phases`; först då finns
+underlag för att välja åtgärd.
+
 ### Steg 4 — bevisfiler, parsing och serialization
 
 **Filer:** `automatic_passage.py:_gzip_verified` och retention-anroparen,

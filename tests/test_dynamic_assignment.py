@@ -436,3 +436,144 @@ def test_the_verified_support_path_is_not_public():
     assert not hasattr(dynamic, 'expand_departure_support_verified')
     assert hasattr(dynamic, '_expand_departure_support_verified')
     assert 'expand_departure_support_verified' not in dir(dynamic)
+
+
+class TestSolverPhaseInstrumentation:
+    """Step 3 is MEASUREMENT only: the solve must be identical either way."""
+
+    def _system(self, n=6):
+        options = [option(f'v{i}', 100 + 900 * (i % 3), ['o', 's', 'd'],
+                          [0, 10, 20], prior=1, upper=1) for i in range(n)]
+        system = dynamic.build_passage_system(options, ['s'], 3)
+        targets = {'s': [sum(1 for o in options
+                             if int((o.departure_s + 10) // 900) == q)
+                         for q in range(3)]}
+        return system, targets, {'od': n}
+
+    class _Observer:
+        """The tool-side collector, reduced to what the hook must support."""
+
+        def __init__(self):
+            self.rows = {}
+            self._children = []
+
+        def phase(self, name):
+            import contextlib
+            import time
+
+            @contextlib.contextmanager
+            def _measure():
+                row = self.rows.setdefault(name, {'calls': 0, 'exclusive_s': 0.0,
+                                                  'cumulative_s': 0.0})
+                row['calls'] += 1
+                self._children.append(0.0)
+                began = time.perf_counter()
+                try:
+                    yield
+                finally:
+                    elapsed = time.perf_counter() - began
+                    children = self._children.pop()
+                    row['cumulative_s'] += elapsed
+                    row['exclusive_s'] += elapsed - children
+                    if self._children:
+                        self._children[-1] += elapsed
+            return _measure()
+
+    def test_the_hook_is_absent_unless_a_tool_installs_it(self):
+        assert dynamic._SOLVER_PHASE_OBSERVER is None
+
+    def test_instrumentation_changes_neither_request_nor_result(self, tmp_path):
+        import json
+        system, targets, groups = self._system()
+        plain = dynamic.fit_integer_flows(
+            system, targets, groups, checkpoint_dir=tmp_path / 'a',
+            cache_dir=tmp_path / 'cache-a')
+        with dynamic._observe_solver_phases(self._Observer()):
+            measured = dynamic.fit_integer_flows(
+                system, targets, groups, checkpoint_dir=tmp_path / 'b',
+                cache_dir=tmp_path / 'cache-b')
+
+        assert measured.counts.tolist() == plain.counts.tolist()
+        assert (tmp_path / 'a/request.npz').read_bytes() \
+            == (tmp_path / 'b/request.npz').read_bytes()
+        first = json.loads((tmp_path / 'a/state.json').read_text())
+        second = json.loads((tmp_path / 'b/state.json').read_text())
+        assert first['key'] == second['key']
+        assert set(first) == set(second)
+
+    def test_a_miss_runs_milp_and_a_hit_does_not(self, tmp_path):
+        system, targets, groups = self._system()
+        cache = tmp_path / 'cache'
+        miss, hit = self._Observer(), self._Observer()
+
+        with dynamic._observe_solver_phases(miss):
+            dynamic.fit_integer_flows(system, targets, groups,
+                                      checkpoint_dir=tmp_path / 'one', cache_dir=cache)
+        with dynamic._observe_solver_phases(hit):
+            dynamic.fit_integer_flows(system, targets, groups,
+                                      checkpoint_dir=tmp_path / 'two', cache_dir=cache)
+
+        assert miss.rows['milp_solve']['calls'] == 1
+        assert 'milp_solve' not in hit.rows
+        assert hit.rows['checkpoint_cache_lookup']['calls'] == 1
+
+    def test_every_declared_phase_is_measured_at_least_once(self, tmp_path):
+        system, targets, groups = self._system()
+        observer = self._Observer()
+
+        with dynamic._observe_solver_phases(observer):
+            dynamic.fit_integer_flows(
+                system, targets, groups, checkpoint_dir=tmp_path / 'c',
+                cache_dir=tmp_path / 'cache-c',
+                departure_bounds=[{} for _ in range(3)])
+
+        for name in dynamic.SOLVER_PHASE_NAMES:
+            if name == 'checkpoint_cache_write':
+                continue
+            assert name in observer.rows, name
+
+    def test_exclusive_time_is_never_double_counted(self, tmp_path):
+        import time
+        system, targets, groups = self._system()
+        observer = self._Observer()
+
+        began = time.perf_counter()
+        with dynamic._observe_solver_phases(observer):
+            dynamic.fit_integer_flows(system, targets, groups,
+                                      checkpoint_dir=tmp_path / 'd',
+                                      cache_dir=tmp_path / 'cache-d')
+        elapsed = time.perf_counter() - began
+
+        total = sum(row['exclusive_s'] for row in observer.rows.values())
+        assert 0 < total <= elapsed + 1e-6
+
+    def test_an_infeasible_fit_restores_the_hook(self, tmp_path):
+        system, _targets, groups = self._system()
+        impossible = {'s': [99, 0, 0]}
+
+        with pytest.raises(dynamic.DynamicAssignmentInfeasible):
+            with dynamic._observe_solver_phases(self._Observer()):
+                dynamic.fit_integer_flows(system, impossible, groups,
+                                          checkpoint_dir=tmp_path / 'e',
+                                          cache_dir=tmp_path / 'cache-e')
+
+        assert dynamic._SOLVER_PHASE_OBSERVER is None
+
+    def test_an_arbitrary_exception_restores_the_hook(self):
+        class _Boom(Exception):
+            pass
+
+        with pytest.raises(_Boom):
+            with dynamic._observe_solver_phases(self._Observer()):
+                raise _Boom()
+
+        assert dynamic._SOLVER_PHASE_OBSERVER is None
+
+    def test_a_validation_failure_restores_the_hook(self):
+        system, _targets, groups = self._system()
+
+        with pytest.raises(ValueError):
+            with dynamic._observe_solver_phases(self._Observer()):
+                dynamic.fit_integer_flows(system, {'other': [0, 0, 0]}, groups)
+
+        assert dynamic._SOLVER_PHASE_OBSERVER is None

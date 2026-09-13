@@ -32,7 +32,6 @@ from demand.structure import calibrated_structure_report, structure_context
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.demand import automatic_passage
 from traffic_sim.experimental import dynamic_assignment as dynamic
-from tools import departure_reconciliation as passage
 from tools import trial_dynamic_passage as trial
 
 SCHEMA_VERSION = 2
@@ -109,6 +108,56 @@ class CallCostProfiler:
                 for name, row in sorted(
                     (name, self._totals.get(name, empty))
                     for name in STRUCTURE_CALL_NAMES)}
+
+
+class SolverPhaseProfiler:
+    """Exclusive time per solver phase, for the diagnostic hook.
+
+    The same accounting rule as the structure profiler: a phase reports its OWN
+    time, elapsed minus whatever instrumented phases ran inside it, so nesting
+    can never be added twice.
+    """
+
+    def __init__(self):
+        self._totals: dict[str, dict] = {}
+        self._children_s: list[float] = []
+
+    @contextmanager
+    def phase(self, name: str):
+        row = self._totals.setdefault(
+            name, {'calls': 0, 'cumulative_s': 0.0, 'exclusive_s': 0.0})
+        row['calls'] += 1
+        self._children_s.append(0.0)
+        began = time.perf_counter()
+        try:
+            yield
+        finally:
+            elapsed = time.perf_counter() - began
+            children = self._children_s.pop()
+            row['cumulative_s'] += elapsed
+            row['exclusive_s'] += elapsed - children
+            if self._children_s:
+                self._children_s[-1] += elapsed
+
+    def report(self) -> dict:
+        # Every declared phase, including the ones that did not run: on a cache
+        # hit an absent milp_solve IS the evidence, so it must be visible as a
+        # zero rather than as a missing key.
+        empty = {'calls': 0, 'cumulative_s': 0.0, 'exclusive_s': 0.0}
+        return {name: {'calls': row['calls'],
+                       'cumulative_s': round(row['cumulative_s'], 6),
+                       'exclusive_s': round(max(row['exclusive_s'], 0.0), 6)}
+                for name, row in sorted(
+                    (name, self._totals.get(name, empty))
+                    for name in dynamic.SOLVER_PHASE_NAMES)}
+
+
+@contextmanager
+def measure_solver_phases():
+    """Install the private solver hook for one measured fit, then remove it."""
+    counter = SolverPhaseProfiler()
+    with dynamic._observe_solver_phases(counter):
+        yield counter
 
 
 @contextmanager
@@ -690,7 +739,8 @@ def replay(source: Path, out: Path, *, label: str | None = None,
                           else out / 'solver-cache')
             cache_root.mkdir(parents=True, exist_ok=True)
             with recorder.phase('solver') as solver:
-                with recorder.phase('fit_integer_flows'):
+                with measure_solver_phases() as solver_phases, \
+                        recorder.phase('fit_integer_flows'):
                     fit = dynamic.fit_integer_flows(
                         system, targets, groups, time_limit_s=solver_time_limit_s,
                         departure_bounds=bounds,
@@ -698,6 +748,14 @@ def replay(source: Path, out: Path, *, label: str | None = None,
                         cache_dir=cache_root)
                 solver['status'] = fit.status
             checkpoint = _solver_checkpoint_state(out / 'solver')
+            phases = solver_phases.report()
+            report['solver_measurement'] = {
+                'basis': ('observational; measured outside every demand, passage '
+                          'and solver fingerprint'),
+                'solver_cache_hit': checkpoint['cache_hit'],
+                'milp_executed': phases['milp_solve']['calls'] > 0,
+                'phases': phases,
+            }
             solver['cache_hit'] = checkpoint['cache_hit']
             report['solver_cache_root'] = str(cache_root)
             report['solver_cache_hit'] = checkpoint['cache_hit']
@@ -871,6 +929,7 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
                   'solver_cache_hit': run.get('solver_cache_hit'),
                   'solver_request_key': run.get('solver_request_key'),
                   'structure_measurement': run.get('structure_measurement'),
+                  'solver_measurement': run.get('solver_measurement'),
                   'phase_wall_s': wall}
                  for index, (run, wall) in enumerate(zip(runs, walls))],
         'first_repeat_phase_wall_s': walls[0],

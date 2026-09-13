@@ -465,3 +465,24 @@ def test_the_solver_request_key_is_unchanged_by_reuse(tmp_path):
         keys.append(json.loads((work / 'solver/state.json').read_text())['key'])
 
     assert keys[0] == keys[1]
+
+
+def test_production_calibration_installs_no_solver_observer(tmp_path, monkeypatch):
+    """The step-3 hook is diagnostic: production must never carry it."""
+    from traffic_sim.experimental import dynamic_assignment as dynamic
+
+    seen = []
+    real = dynamic.fit_integer_flows
+    monkeypatch.setattr(
+        auto.dynamic, 'fit_integer_flows',
+        lambda *args, **kwargs: (seen.append(dynamic._SOLVER_PHASE_OBSERVER),
+                                 real(*args, **kwargs))[1])
+    inputs, reports, network, _calls = fixture(tmp_path, monkeypatch)
+
+    result = auto.refine_variants(inputs, reports, network, tmp_path / 'evidence')
+
+    assert seen and all(observer is None for observer in seen)
+    evidence = result['']['passage_calibration']
+    assert 'solver_measurement' not in evidence
+    assert 'solver_phases' not in evidence
+    assert dynamic._SOLVER_PHASE_OBSERVER is None
