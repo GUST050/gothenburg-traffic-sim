@@ -1049,6 +1049,9 @@ def main() -> int:
     parser.add_argument('--preparation-only', action='store_true',
                         help='profile parsing/system construction on legacy evidence; do not solve')
     parser.add_argument('--inventory-only', action='store_true')
+    parser.add_argument('--retention-root', type=Path,
+                        help='measure prune_evidence on an owned copy of this '
+                             'finished multi-variant evidence root')
     parser.add_argument('--io-phases', action='store_true',
                         help='also measure evidence I/O phases: reads, gzip, '
                              'writes, hashing, verification and publication')
@@ -1067,10 +1070,21 @@ def main() -> int:
             return 2
         print(json.dumps(report, indent=2))
         return 0
+    if args.retention_root is not None:
+        try:
+            report = profile_retention(args.retention_root, args.out,
+                                       repeats=args.repeats)
+        except ReplayRefused as error:
+            print(json.dumps({'status': 'refused', 'reason': str(error)},
+                             indent=2))
+            return 2
+        print(json.dumps(report['first_repeat']['ranking'], indent=2))
+        return 0 if report['source_unchanged_after_every_repeat'] else 1
     if args.source is None:
-        print(json.dumps({'status': 'refused',
-                          'reason': '--source is required unless --archive-only is used'},
-                         indent=2))
+        print(json.dumps(
+            {'status': 'refused',
+             'reason': '--source is required unless --archive-only or '
+                       '--retention-root is used'}, indent=2))
         return 2
     if args.inventory_only:
         print(json.dumps(inventory(args.source), indent=2))
@@ -1098,6 +1112,178 @@ def main() -> int:
         return 2
     print(json.dumps(report, indent=2))
     return 0 if report['status'] in {'replayed', 'profiled_preparation_only'} else 2
+
+
+
+RETENTION_UNMEASURED = [
+    'sumo_subprocess: retention runs after every simulation has finished',
+    'demand_build: this mode measures retention alone, never a calibration',
+    'filesystem_cache_state: the first repeat pays cold page cache for a copy '
+    'this tool just wrote, which is not the state a finished build meets',
+]
+
+
+def _retention_fingerprint(root: Path) -> dict:
+    """Every file under ``root`` by relative path, size and digest."""
+    return {str(path.relative_to(root)): (path.stat().st_size,
+                                          sha256_file(path))
+            for path in sorted(Path(root).rglob('*')) if path.is_file()}
+
+
+def _decompressed_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    with gzip.open(path, 'rb') as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _retention_repeat(root: Path, original: dict, work: Path,
+                      index: int) -> dict:
+    """One measured retention pass over an owned copy of ``root``.
+
+    The copy is timed and reported SEPARATELY: it is this tool's own cost, not
+    retention's, and folding it in would overstate the very thing being
+    measured. Nothing is hard-linked, so compressing the copy cannot reach the
+    original through a shared inode.
+    """
+    copy = work / 'copy'
+    copy_started = time.perf_counter()
+    shutil.copytree(root, copy)
+    copy_s = time.perf_counter() - copy_started
+
+    files = [path for path in copy.rglob('*') if path.is_file()]
+    hardlink_free = all(path.stat().st_nlink == 1 for path in files)
+    raw_before = sum(1 for path in files if path.suffix == '.xml')
+    bytes_before = sum(path.stat().st_size for path in files)
+
+    collector = io_phases.PhaseCollector(
+        unmeasured_categories=RETENTION_UNMEASURED)
+    started = time.perf_counter()
+    with io_phases.observe(collector):
+        with io_phases.phase('retention_root'):
+            automatic_passage.prune_evidence(copy)
+    wall = time.perf_counter() - started
+    measurement = collector.report(root='retention_root')
+
+    after = [path for path in copy.rglob('*') if path.is_file()]
+    raw_after = sum(1 for path in after if path.suffix == '.xml')
+    packed = [path for path in after if path.suffix == '.gz']
+    bytes_after = sum(path.stat().st_size for path in after)
+
+    # Every compressed file must still be the original bytes. Checked against
+    # the ORIGINAL root, not against the copy it was made from, so a copy that
+    # was already wrong cannot certify itself.
+    mismatches, verified = [], 0
+    for path in packed:
+        relative = str(path.relative_to(copy))[:-len('.gz')]
+        expected = original.get(relative)
+        if expected is None:
+            mismatches.append({'file': relative, 'reason': 'absent from source'})
+            continue
+        if _decompressed_digest(path) != expected[1]:
+            mismatches.append({'file': relative, 'reason': 'digest differs'})
+            continue
+        verified += 1
+
+    result = {
+        'repeat': index + 1,
+        'copy_s': round(copy_s, 6),
+        'copy_is_hardlink_free': hardlink_free,
+        'retention_root_wall_s': round(wall, 6),
+        'phases': measurement['phases'],
+        'ranking': measurement['ranking'],
+        'residual_s': measurement['residual_s'],
+        'raw_xml_files_before': raw_before,
+        'raw_xml_files_after': raw_after,
+        'compressed_files_after': len(packed),
+        'bytes': {key: value for name in measurement['phases']
+                  for key, value in measurement['phases'][name]['bytes'].items()},
+        'bytes_on_disk_before': bytes_before,
+        'bytes_on_disk_after': bytes_after,
+        'compression_ratio': round(bytes_after / bytes_before, 6)
+        if bytes_before else None,
+        'gz_verified_against_original': verified,
+        'gz_digest_mismatches': mismatches,
+        'candidate_dirs_removed': not list(copy.glob('*/candidate*')),
+        'rollback_files_removed': not list(copy.glob('original-*')),
+        'source_reports_removed': not (copy / 'source_reports.json').exists(),
+        'source_unchanged': _retention_fingerprint(root) == original,
+    }
+    # Aggregate the byte counters across phases rather than per phase, so the
+    # summary answers "how many bytes moved" without hiding where.
+    totals: dict[str, int] = {}
+    for entry in measurement['phases'].values():
+        for key, value in entry['bytes'].items():
+            totals[key] = totals.get(key, 0) + value
+    result['bytes'] = totals
+    return result
+
+
+def profile_retention(root: Path, out: Path, *, repeats: int = 3) -> dict:
+    """Measure the real prune_evidence path on an owned copy of ``root``.
+
+    A single-variant replay never runs retention: it compresses one copied
+    file directly. This exercises the whole contract -- inventory, the thread
+    pool, per-file verification, cleanup -- on a real three-variant root,
+    without building anything and without touching the original.
+    """
+    root = Path(root).resolve()
+    out = Path(out).resolve()
+    if _overlaps(out, root):
+        raise ReplayRefused(
+            f'retention output {out} must be outside the evidence root {root}')
+    if repeats < 1:
+        raise ReplayRefused('at least one repeat is required')
+    out.mkdir(parents=True, exist_ok=True)
+
+    original = _retention_fingerprint(root)
+    runs_out = []
+    for index in range(repeats):
+        work = out / f'repeat-{index + 1}'
+        work.mkdir(parents=True, exist_ok=False)
+        try:
+            runs_out.append(_retention_repeat(root, original, work, index))
+        finally:
+            # Only this tool's own copy is removed, and only after its numbers
+            # are in hand.
+            shutil.rmtree(work / 'copy', ignore_errors=True)
+
+    def spread(key):
+        return _spread([run[key] for run in runs_out[1:]]) if len(runs_out) > 1 else {}
+
+    report = {
+        'schema_version': 1,
+        'policy': 'passage_retention_profile_v1',
+        'diagnostic_only': True,
+        'active_production': False,
+        'release_evidence': False,
+        'source_evidence_root': str(root),
+        'output_root': str(out),
+        'repeats': repeats,
+        'process_state': ('all repeats run in one process after imports; each '
+                          'gets its own fresh copy and its own collector'),
+        'source_inventory': {
+            'files': len(original),
+            'bytes': sum(size for size, _digest in original.values()),
+            'raw_xml_files': sum(1 for name in original
+                                 if name.endswith('.xml')),
+            'raw_xml_bytes': sum(size for name, (size, _d) in original.items()
+                                 if name.endswith('.xml')),
+        },
+        'source_unchanged_after_every_repeat': all(
+            run['source_unchanged'] for run in runs_out),
+        'runs': runs_out,
+        'first_repeat': runs_out[0],
+        'reused_process': {
+            'retention_root_wall_s': spread('retention_root_wall_s'),
+            'copy_s': spread('copy_s'),
+        },
+        'unmeasured_categories': RETENTION_UNMEASURED,
+    }
+    (out / 'retention_profile.json').write_text(
+        json.dumps(report, indent=2) + '\n')
+    return report
 
 
 if __name__ == '__main__':
