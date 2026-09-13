@@ -2284,15 +2284,20 @@ def _tracked_main() -> None:
     products, and a latest_demand pointer flipped only on success — so a
     finished-looking artifact can never again be separated from the code
     and inputs that made it."""
-    from traffic_sim.ops import runs
+    from traffic_sim.ops import io_phases, runs
 
     run = runs.start_run("demand", inputs={"argv": sys.argv[1:]})
     try:
         from traffic_sim.demand.automatic_passage import preserve_demand_on_failure
+        # The phase marks below are diagnostic and inert unless a tool
+        # installs a collector; none of them changes what is preserved,
+        # archived, recorded or reported.
         with preserve_demand_on_failure(SUMO_DIR):
-            main()
+            with io_phases.phase("demand_main"):
+                main()
     except BaseException as exc:
-        run.finish("failed", error=f"{type(exc).__name__}: {exc}")
+        with io_phases.phase("demand_run_finish_failed"):
+            run.finish("failed", error=f"{type(exc).__name__}: {exc}")
         raise
     meta_path = SUMO_DIR / "demand_meta.json"
     # Archive only the files this build can produce.  A glob here is unsafe:
@@ -2300,25 +2305,32 @@ def _tracked_main() -> None:
     # so earlier runs accidentally archived unrelated files as if they were
     # part of the new demand build. Missing optional q10/q90 variants are
     # omitted rather than recorded as phantom outputs.
-    for product in demand_run_products(SUMO_DIR):
-        run.add_output(product)
-    if meta_path.exists():
-        with open(meta_path) as f:
-            meta = json.load(f)
-        run.record("calibrated_structure",
-                   meta.get("calibrated_structure", {}))
-        run.record("structure_flags", meta.get(
-            "calibrated_structure", {}).get("structure_flags", []))
+    with io_phases.phase("demand_product_listing"):
+        products = demand_run_products(SUMO_DIR)
+    with io_phases.phase("demand_add_outputs"):
+        for product in products:
+            run.add_output(product)
+    with io_phases.phase("demand_meta_read"):
+        if meta_path.exists():
+            io_phases.add_bytes(read=meta_path.stat().st_size)
+            with open(meta_path) as f:
+                meta = json.load(f)
+            run.record("calibrated_structure",
+                       meta.get("calibrated_structure", {}))
+            run.record("structure_flags", meta.get(
+                "calibrated_structure", {}).get("structure_flags", []))
     # G3: refresh the assembled validation report whenever demand changes;
     # never let reporting fail the build it reports on.
-    try:
-        from traffic_sim.confidence import report as validation_report
-        report = validation_report.write_report()
-        run.record("validation_overall", report["overall"])
-        run.add_output(validation_report.OUT_PATH)
-    except Exception as exc:
-        print(f"validation report: {type(exc).__name__}: {exc}")
-    run.finish("succeeded")
+    with io_phases.phase("demand_validation_report"):
+        try:
+            from traffic_sim.confidence import report as validation_report
+            report = validation_report.write_report()
+            run.record("validation_overall", report["overall"])
+            run.add_output(validation_report.OUT_PATH)
+        except Exception as exc:
+            print(f"validation report: {type(exc).__name__}: {exc}")
+    with io_phases.phase("demand_run_finish"):
+        run.finish("succeeded")
 
 
 def demand_run_products(sumo_dir: Path = SUMO_DIR) -> list[Path]:
