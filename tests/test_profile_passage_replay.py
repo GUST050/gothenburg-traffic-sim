@@ -601,19 +601,19 @@ class TestDirectReplayCacheIsolation:
 
         with pytest.raises(profiler.ReplayRefused, match='solver cache'):
             profiler.replay(source, tmp_path / 'out',
-                            solver_cache_dir=source / 'stolen-cache')
+                            _solver_cache_dir=source / 'stolen-cache')
 
     def test_a_cache_containing_the_evidence_is_refused(self, tmp_path):
         source = evidence_root(tmp_path)
 
         with pytest.raises(profiler.ReplayRefused, match='solver cache'):
-            profiler.replay(source, tmp_path / 'out', solver_cache_dir=source.parent)
+            profiler.replay(source, tmp_path / 'out', _solver_cache_dir=source.parent)
 
     def test_the_cache_may_not_be_the_evidence_root_itself(self, tmp_path):
         source = evidence_root(tmp_path)
 
         with pytest.raises(profiler.ReplayRefused, match='solver cache'):
-            profiler.replay(source, tmp_path / 'out', solver_cache_dir=source)
+            profiler.replay(source, tmp_path / 'out', _solver_cache_dir=source)
 
     def test_the_refusal_happens_before_anything_is_written(self, tmp_path):
         source = evidence_root(tmp_path)
@@ -621,7 +621,7 @@ class TestDirectReplayCacheIsolation:
 
         with pytest.raises(profiler.ReplayRefused):
             profiler.replay(source, tmp_path / 'out',
-                            solver_cache_dir=source / 'input')
+                            _solver_cache_dir=source / 'input')
 
         assert not (tmp_path / 'out').exists()
         assert _tree_state(source) == before
@@ -702,6 +702,143 @@ class TestStructureMeasurement:
         rows = report['structure_measurement']
         assert rows['structure_source_calls']['_route_structure_metrics']['calls'] \
             == rows['structure_candidate_calls']['_route_structure_metrics']['calls'] == 1
+
+
+class TestCacheOwnership:
+    """A caller-supplied cache must belong to the profile layout, not anywhere."""
+
+    def test_the_keyword_is_private(self):
+        import inspect
+
+        parameters = inspect.signature(profiler.replay).parameters
+        assert '_solver_cache_dir' in parameters
+        assert 'solver_cache_dir' not in parameters
+
+    def test_a_cache_outside_the_profile_layout_is_refused(self, tmp_path):
+        source = evidence_root(tmp_path)
+
+        with pytest.raises(profiler.ReplayRefused, match='beside'):
+            profiler.replay(source, tmp_path / 'out',
+                            _solver_cache_dir=tmp_path / 'elsewhere/solver-cache')
+
+    def test_the_profile_layout_is_accepted(self, tmp_path):
+        source = evidence_root(tmp_path)
+        root = tmp_path / 'profile'
+        root.mkdir()
+
+        report = profiler.replay(source, root / 'repeat-1',
+                                 _solver_cache_dir=root / 'solver-cache')
+
+        assert report['status'] == 'replayed'
+        assert report['solver_cache_hit'] is False
+
+    def test_ownership_is_checked_before_anything_is_created(self, tmp_path):
+        source = evidence_root(tmp_path)
+        before = _tree_state(source)
+
+        with pytest.raises(profiler.ReplayRefused):
+            profiler.replay(source, tmp_path / 'out',
+                            _solver_cache_dir=tmp_path / 'stray/solver-cache')
+
+        assert not (tmp_path / 'out').exists()
+        assert not (tmp_path / 'stray').exists()
+        assert _tree_state(source) == before
+
+    def test_a_cache_inside_the_evidence_is_still_refused(self, tmp_path):
+        source = evidence_root(tmp_path)
+
+        with pytest.raises(profiler.ReplayRefused, match='solver cache'):
+            profiler.replay(source, source.parent / 'out',
+                            _solver_cache_dir=source / 'solver-cache')
+
+
+class TestNamedRouteInventory:
+    """Production resolves shared <route id=...>; the inventory must too."""
+
+    def _write(self, path, body):
+        path.write_text(f'<routes>\n{body}\n</routes>\n')
+        return path
+
+    def test_named_references_are_resolved_and_counted(self, tmp_path):
+        route = self._write(tmp_path / 'named.rou.xml', (
+            '<route id="r1" edges="o s d"/>\n'
+            '<vehicle id="v0" depart="0" route="r1"/>\n'
+            '<vehicle id="v1" depart="1" route="r1"/>\n'
+            '<vehicle id="v2" depart="2"><route edges="o s d"/></vehicle>\n'))
+
+        shape = profiler.route_shape_inventory(route)
+
+        assert shape['vehicles'] == 3
+        assert shape['inline_route_vehicles'] == 1
+        assert shape['named_reference_vehicles'] == 2
+        assert shape['named_route_definitions'] == 1
+        # The named and inline forms describe the same physical route.
+        assert shape['unique_edge_tuples'] == 1
+        assert shape['unique_endpoint_pairs'] == 1
+
+    def test_an_unresolvable_reference_is_refused(self, tmp_path):
+        route = self._write(tmp_path / 'broken.rou.xml',
+                            '<vehicle id="v0" depart="0" route="missing"/>')
+
+        with pytest.raises(profiler.ReplayRefused, match='no resolvable route'):
+            profiler.route_shape_inventory(route)
+
+    def test_an_empty_route_is_refused(self, tmp_path):
+        route = self._write(tmp_path / 'empty.rou.xml',
+                            '<vehicle id="v0" depart="0"><route edges=""/></vehicle>')
+
+        with pytest.raises(profiler.ReplayRefused, match='no resolvable route'):
+            profiler.route_shape_inventory(route)
+
+    def test_a_file_without_vehicles_is_refused(self, tmp_path):
+        route = self._write(tmp_path / 'none.rou.xml', '<route id="r1" edges="o s"/>')
+
+        with pytest.raises(profiler.ReplayRefused, match='no vehicles'):
+            profiler.route_shape_inventory(route)
+
+    def test_the_inline_fixture_is_reported_as_inline(self, tmp_path):
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        shape = report['structure_measurement']['source_route']
+        assert shape['inline_route_vehicles'] == len(DEPARTURES)
+        assert shape['named_reference_vehicles'] == 0
+        assert shape['named_route_definitions'] == 0
+
+
+class TestGeometryIdentity:
+    """The measurement must say which geometry and sensor set produced it."""
+
+    def test_every_instrumented_function_is_reported_even_at_zero_calls(self, tmp_path):
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        rows = report['structure_measurement']['structure_source_calls']
+        assert set(rows) == set(profiler.STRUCTURE_CALL_NAMES)
+
+    def test_the_input_identity_binds_geometry_content_and_sensors(self, tmp_path):
+        from demand import structure
+
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        identity = report['structure_measurement']['input_identity']
+        assert identity['geo_path'] == str(structure.GEO_PATH)
+        assert identity['geometry_sha256'] == sha256_file(structure.GEO_PATH)
+        assert identity['measured_sensor_edges'] == 7
+        assert len(identity['measured_sensor_edge_identity']) == 64
+
+    def test_the_identity_does_not_warm_or_mutate_the_geometry_cache(self, tmp_path):
+        from demand import structure
+
+        structure._EDGE_GEOMETRY_CACHE = None
+        identity = profiler.structure_input_identity()
+
+        assert structure._EDGE_GEOMETRY_CACHE is None
+        assert identity['measured_sensor_edges'] == 7
+
+    def test_the_sensor_identity_is_deterministic_and_order_free(self, tmp_path):
+        first = profiler.structure_input_identity()
+        second = profiler.structure_input_identity()
+
+        assert first == second
 
 
 class TestArchiveValidationPhase:
@@ -917,3 +1054,23 @@ def test_each_repeat_carries_its_own_structure_measurement(tmp_path):
         assert measured['route_facts_cache'] == 'not_implemented'
         assert measured['source_route']['unique_edge_tuples'] == 1
         assert measured['structure_source_calls']['_route_structure_metrics']['calls'] == 1
+
+
+def test_the_sensor_identity_uses_the_newline_terminated_convention():
+    """Two machines must derive the SAME digest from the same sensor set."""
+    import hashlib
+    import json
+    from demand import structure
+
+    geometry = json.loads(Path(structure.GEO_PATH).read_text())
+    ids = sorted(feature['properties']['id'] for feature in geometry['features']
+                 if feature.get('geometry', {}).get('type') == 'LineString'
+                 and feature.get('properties', {}).get('sensor_id'))
+    expected = hashlib.sha256(
+        ''.join(f'{edge}\n' for edge in ids).encode('utf-8')).hexdigest()
+
+    identity = profiler.structure_input_identity()
+
+    assert identity['measured_sensor_edge_identity'] == expected
+    # A bare join is a different digest for identical edges; pin the difference.
+    assert expected != hashlib.sha256('\n'.join(ids).encode('utf-8')).hexdigest()

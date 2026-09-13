@@ -18,11 +18,13 @@ import argparse
 from collections import Counter
 from contextlib import contextmanager
 import gzip
+import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
 import time
+import xml.etree.ElementTree as ET
 
 import numpy as np
 
@@ -97,10 +99,16 @@ class CallCostProfiler:
         return measured
 
     def report(self) -> dict:
+        # Every instrumented name appears, including the ones never called:
+        # a missing row and a zero row mean different things, and only one of
+        # them is evidence.
+        empty = {'calls': 0, 'cumulative_s': 0.0, 'exclusive_s': 0.0}
         return {name: {'calls': row['calls'],
                        'cumulative_s': round(row['cumulative_s'], 6),
                        'exclusive_s': round(max(row['exclusive_s'], 0.0), 6)}
-                for name, row in sorted(self._totals.items())}
+                for name, row in sorted(
+                    (name, self._totals.get(name, empty))
+                    for name in STRUCTURE_CALL_NAMES)}
 
 
 @contextmanager
@@ -128,17 +136,82 @@ def route_shape_inventory(route_path: Path) -> dict:
     This is the quantity step 2 is about: repeated geometry is only worth
     computing once per unique route if the repetition is real. Measured here,
     not cached — no route-facts table exists yet.
+
+    A vehicle may carry its route inline OR reference a shared
+    ``<route id=...>``. ``demand.structure`` resolves both and refuses an
+    unresolvable one, so an inventory that reads only the inline form would
+    under-count exactly the pool files the report handles. The two forms are
+    counted separately because which one a file uses is itself a fact about
+    the workload.
     """
-    vehicles = passage.read_route_vehicles(route_path)
-    edge_tuples = {vehicle.edges for vehicle in vehicles}
-    endpoints = {(vehicle.edges[0], vehicle.edges[-1])
-                 for vehicle in vehicles if vehicle.edges}
+    root = ET.parse(route_path).getroot()
+    named_routes = {route.get('id'): route.get('edges', '')
+                    for route in root.iter('route') if route.get('id')}
+    edge_tuples: set[tuple[str, ...]] = set()
+    endpoints: set[tuple[str, str]] = set()
+    vehicles = inline = referenced = 0
+    for vehicle in root.iter('vehicle'):
+        route = vehicle.find('route')
+        if route is not None and route.get('edges'):
+            edges_text, is_inline = route.get('edges'), True
+        else:
+            edges_text, is_inline = named_routes.get(vehicle.get('route'), ''), False
+        if not edges_text:
+            raise ReplayRefused(
+                f'vehicle {vehicle.get("id")!r} in {route_path} has no resolvable '
+                'route: neither an inline <route edges=...> nor a reference to a '
+                'shared <route id=...> in the same file')
+        edges = tuple(edges_text.split())
+        vehicles += 1
+        inline += is_inline
+        referenced += not is_inline
+        edge_tuples.add(edges)
+        endpoints.add((edges[0], edges[-1]))
+    if not vehicles:
+        raise ReplayRefused(f'route file has no vehicles: {route_path}')
     return {
-        'vehicles': len(vehicles),
+        'vehicles': vehicles,
+        'inline_route_vehicles': inline,
+        'named_reference_vehicles': referenced,
+        'named_route_definitions': len(named_routes),
         'unique_edge_tuples': len(edge_tuples),
         'unique_endpoint_pairs': len(endpoints),
         'vehicles_per_unique_edge_tuple': (
-            round(len(vehicles) / len(edge_tuples), 3) if edge_tuples else None),
+            round(vehicles / len(edge_tuples), 3) if edge_tuples else None),
+    }
+
+
+def structure_input_identity() -> dict:
+    """Bind a structure measurement to the geometry CONTENT it was taken on.
+
+    Read directly, never through ``load_edge_geometry``: a diagnostic must not
+    warm or replace ``demand.structure._EDGE_GEOMETRY_CACHE`` and so change the
+    very timings the next phase reports. mtime and size are deliberately not
+    the identity — only the bytes and the measured-sensor set are.
+    """
+    from demand import structure
+    path = Path(structure.GEO_PATH)
+    if not path.is_file():
+        raise ReplayRefused(f'structure geometry is unavailable: {path}')
+    with open(path, encoding='utf-8') as handle:
+        geometry = json.load(handle)
+    sensor_edges = sorted(
+        feature['properties']['id'] for feature in geometry.get('features', ())
+        if feature.get('geometry', {}).get('type') == 'LineString'
+        and feature.get('properties', {}).get('sensor_id'))
+    # Convention, fixed so two machines produce the SAME identity for the same
+    # sensor set: every sorted id newline-TERMINATED, UTF-8. A bare join gives a
+    # different digest for identical edges, which is a content identity that
+    # silently fails to compare.
+    digest = hashlib.sha256(
+        ''.join(f'{edge}\n' for edge in sensor_edges).encode('utf-8')).hexdigest()
+    return {
+        'geo_path': str(structure.GEO_PATH),
+        'geometry_sha256': sha256_file(path),
+        'measured_sensor_edges': len(sensor_edges),
+        'measured_sensor_edge_identity': digest,
+        'basis': ('geometry bytes and newline-terminated sorted measured-sensor '
+                  'edge ids; never mtime or size'),
     }
 
 
@@ -457,18 +530,25 @@ def replay(source: Path, out: Path, *, label: str | None = None,
            solver_time_limit_s: float = 60, archive: Path | None = None,
            demand_spec: Path | None = None, archive_repeats: int = 3,
            preparation_only: bool = False,
-           solver_cache_dir: Path | None = None) -> dict:
+           _solver_cache_dir: Path | None = None) -> dict:
     """Replay preparation, solving, staging and structure over saved traces."""
     source, out = _resolve_isolation(source, out)
     # Checked by the call that will WRITE it, before any directory is created:
     # profile() guards the cache it makes, but a direct replay() accepts one
-    # from its caller and must not be the hole in that guarantee.
-    if solver_cache_dir is not None:
-        solver_cache_dir = Path(solver_cache_dir).resolve()
-        if _overlaps(solver_cache_dir, source):
+    # from its caller and must not be the hole in that guarantee. Ownership is
+    # checked as well as overlap — the cache belongs to THIS profile's layout,
+    # profile-root/solver-cache beside profile-root/repeat-N, so it cannot be
+    # aimed at an unrelated directory the profile does not own.
+    if _solver_cache_dir is not None:
+        _solver_cache_dir = Path(_solver_cache_dir).resolve()
+        if _overlaps(_solver_cache_dir, source):
             raise ReplayRefused(
-                f'solver cache {solver_cache_dir} must be outside '
+                f'solver cache {_solver_cache_dir} must be outside '
                 f'the source evidence root {source}')
+        if _solver_cache_dir.parent != out.parent:
+            raise ReplayRefused(
+                f'solver cache {_solver_cache_dir} must sit beside the replay '
+                f'output {out}, under the same profile root {out.parent}')
     out.mkdir(parents=True, exist_ok=False)
     variant = source.name
     context = {'variant': variant, 'date': None, 'input_identity': None}
@@ -601,7 +681,7 @@ def replay(source: Path, out: Path, *, label: str | None = None,
             # profile, so repeat 1 is cold and later repeats reproduce the
             # cache hit production itself gets. A lone replay keeps a private
             # cache under its own output.
-            cache_root = (Path(solver_cache_dir) if solver_cache_dir is not None
+            cache_root = (_solver_cache_dir if _solver_cache_dir is not None
                           else out / 'solver-cache')
             cache_root.mkdir(parents=True, exist_ok=True)
             with recorder.phase('solver') as solver:
@@ -641,6 +721,7 @@ def replay(source: Path, out: Path, *, label: str | None = None,
                 'basis': ('observational; measured outside every semantic '
                           'fingerprint and never fed back into a report'),
                 'route_facts_cache': 'not_implemented',
+                'input_identity': structure_input_identity(),
                 'source_route': source_shape,
                 'candidate_route': candidate_shape,
                 'structure_source_calls': source_calls.report(),
@@ -758,7 +839,7 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
             f'shared solver cache {cache_root} must be outside {source}')
     cache_root.mkdir(parents=True, exist_ok=False)
     runs = [replay(source, out / f'repeat-{index + 1}',
-                   solver_cache_dir=cache_root, **options)
+                   _solver_cache_dir=cache_root, **options)
             for index in range(repeats)]
     walls = [_phase_walls(run) for run in runs]
     names = sorted({name for row in walls for name in row})
