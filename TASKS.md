@@ -10,11 +10,11 @@ owners, states and approval formulas are not active workflow rules. See
 
 - Mode: `FLEXIBLE — simulation quality and performance research`
 - Current focus: `Steps 0-4 of the passage-speed plan are complete. Step 5 has complete, content-safe instrumentation across metric groups 1-7; production timing is blocked by zero current-source archives.`
-- Status: `Step 5 INSTRUMENTATION COMPLETE, PRODUCTION UNMEASURED. Three process-global stat-authorised content caches were proved unsafe under preserved st_mtime_ns and removed. ArchiveInputs reuse is now operationslokal. Assembly remains streaming, the resolver counts semantic route tuples, and full provider identities use the existing content-bound cache key. No optimisation is proposed or implemented.`
-- Suggested next action: `Freeze the source series, then run one planned targeted warm so a current-source qualified archive exists. Measure Step 5 production with tools/profile_monthly_cost_ledger.py before selecting a hypothesis. Do not start Step 6 or launch a broad month search merely to obtain timing.`
+- Status: `Step 5 INSTRUMENTATION COMPLETE, PRODUCTION UNMEASURED. Independent review of d221797/1eedc04 passed seven of eight checks; the eighth found the assembly measurement hiding 45.8% of its own observed run and is fixed in 977712a. The production one-day build is REJECTED by the catalog rule: this branch drifts the catalog at source_files.build_sumo_demand and source_files.closure_disruption, so it would miss and generate a new pool.`
+- Suggested next action: `Freeze this code series, requalify and re-adopt the route catalog against the frozen sources, then build the single date 2027-06-25 with --candidate-source catalog and measure with tools/profile_monthly_cost_ledger.py. Do not warm the year. Do not start step 6. No optimisation hypothesis until production is measured.`
 - Eligible actors: `Any capable actor.`
 - Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation or expensive catalog/demand run without explicit scope; keep unrelated local changes outside this delivery.`
-- Updated: `2026-09-13. Step 5 instrumentation completed and reviewed; production remains unmeasured.`
+- Updated: `2026-09-13. Step 5 reviewed and repaired; production build rejected by the catalog gate.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- WORKFLOW_HISTORY_START -->

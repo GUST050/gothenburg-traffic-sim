@@ -93,7 +93,7 @@
       ]
     }
   },
-  "measurement_revision": "d221797bd21c8945acf8c0a69e925553c58be443",
+  "measurement_revision": "977712a04538ec122513dceebf4d6f4badd835eb",
   "metric_groups": {
     "group_1_to_4_archive_chain": "instrumented; fixture counts in hermetic_fixture_measurement",
     "group_5_assemble_window": {
@@ -341,6 +341,83 @@
     "method": "compared each archive's build_fingerprint.source_files with demand_source_fingerprints(project_root), which is the exact equality validate_demand_archive requires",
     "question": "does any existing archive pass validate_demand_archive against the current source identity?"
   },
+  "production_measurement_preflight": {
+    "catalog_gate": {
+      "cause_separated": "The three inputs.* entries are gitignored artifacts absent from the isolated worktree and could be copied. The two source_files.* entries are REAL branch drift and cannot be: build_sumo_demand changed in 6d76ffe (_tracked_main instrumentation) and closure_disruption in this series (disruption.py resolver counters). A build on this branch would therefore MISS the catalog and generate a new pool, which the rule forbids.",
+      "main_checkout_its_own_code": {
+        "weekday": "serves_current_inputs true, zero drift",
+        "weekend": "serves_current_inputs true, zero drift"
+      },
+      "this_branch": {
+        "drift": [
+          "source_files.build_sumo_demand",
+          "source_files.closure_disruption",
+          "inputs.assignment_priors",
+          "inputs.osm_buildings",
+          "inputs.poi"
+        ],
+        "weekday": {
+          "adopted_key": "70fcff97032d930db2032a770ef4a555",
+          "current_key": "49f2eac7ddcfff02b63205f8416c1b95",
+          "serves_current_inputs": false
+        },
+        "weekend": {
+          "adopted_key": "611cce94dd56e63993cbf3e9fb923739",
+          "current_key": "687a958d98470784fa33d4d9360349a8",
+          "serves_current_inputs": false
+        }
+      }
+    },
+    "date": "2026-09-13",
+    "demand_source_fingerprints": {
+      "assignment_priors": "2d5e7201120bfcb0beaf0fe5e36ade8d57664230bc56825a1a5add3aef5ad92d",
+      "build_candidates": "1c1ee4cd22fd7a049e209c00dbd4ad145dc14081d2ecfeb066f4964f005d5602",
+      "build_data": "b3f395cebffd309d3e4130cf7cf8fd200323918b372e90af9f6bfa206fdfe8f7",
+      "build_sumo_demand": "3b1eddc09f3309487ea819fbc1e041dc02e749c6e9ef1ee0666040929acc21f8",
+      "build_sumo_net": "f2c0d830cf5173093639ccc2b767e5bc08735f6b4cfa7ac5669aca14dc319594",
+      "calibrated_provenance": "3fe34be7a2cdbebd34f29a78d7688a9d9e5dff762c7f6744a51dd3eb561c9898",
+      "candidate_cache": "5809c21df7d9d1eaf8c18d5b8e5cb1f276e4ff01e84cf4c7f6853a5a52e7cc98",
+      "demand/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "demand/calibration.py": "458ca86c1d58024136106b198f18a91ee687f1267257544024fbdb98438ceb74",
+      "demand/day_library.py": "b1776fd8d320b5568c981b7dd552b904cc9440e30cbcaa88cb5f659d1f3fec21",
+      "demand/feedback.py": "4e558de35352d9c6970d8b169299ddd0d33e9c38dbd6ccc3ecd587a6feede0fe",
+      "demand/intake.py": "2bd7034b25c603c48477be10ed6575b595d5c523dc43b37378ed3f3aa0095479",
+      "demand/locations.py": "5d33ada5933d7d178de9795ed2265cee07f4dd140122d53874802949a8b56af2",
+      "demand/priors.py": "17c82d9e823158b10b9181501031caceb4ceb26f74fbbc9b981d8d9b9598e542",
+      "demand/publication.py": "c9ab04738308b5cbd2de2f4e22d23a4ab6330d32dd930449f31af56f6db829da",
+      "demand/structure.py": "50bd3d376e609725dee1614bbc895d926bee04477409de0a98736849048e5b1f",
+      "demand_source_identity": "e0dc75e0ad26de0bc205deb82635c3cdecc6d59dfb9c0aad5d658b6a18684866",
+      "direction_anchor": "2015a304a9ca435208ca9c624ef135a9c24e9a0a8078cd41512ce9e1a8416f33",
+      "dynamic_assignment": "a3feb97c517c07252176b729a88bbba40eb2bfffff3936dd2b7af054e329b13c",
+      "dynamic_passage_adapter": "5f1e440e095a8090b73c3b46dc31c60f0de99d4ff0d503775c8413d2e4486ecb",
+      "observability": "dd1cb62ad6252df7f09e795c7a57bad3e715a5d76f9f6d7751fac47b7fc22465",
+      "passage_accuracy": "8d44c5fde6ec38954daf8237a13d487571d339de75116ef0af1b1f486e6891e2",
+      "passage_measurement": "9abd801d4ac6b786e173d4eb09e9b42877f0f27e17a0d5efe7cc27020f696437",
+      "pfe": "93e9b6cceaafff43c687d54ccdf547a75f92b6e68aadbd8d12388d6a959ab55c",
+      "pfe_kernel": "50b6aed2bfb06037e2865c360a39012c49321e4a49bb184c08e007b87007060e",
+      "pipeline_fingerprint": "71baf5b88a9466c9834bedc89b96fca1f1cc3ac5aab85796dbe1c730a7c2dfd9",
+      "prior_flows": "359257cc5250a0318f41492864bc404bcebded80a158e17139eefd059c809f01",
+      "sensor_registry": "3746cf937300dee8af9f8047fa0b512d31c34dd30a4a344b6f6dc35df5d8a4a7",
+      "sensor_registry_data": "41db5d452cb104405d8bd6ac6b78e2c7748dcfe641a9266c7229a4fc7edf1f20",
+      "traffic_sim/demand/__init__.py": "c7a052308425fa340c33ae85b1ab937c68ecc228e527868337ae1e7c9cb5ffaf",
+      "traffic_sim/demand/automatic_passage.py": "8e421ef2adbdfe330352f5a4afb1c6762372da63f70c188e1953af3bc227ef41",
+      "traffic_sim/demand/build_lock.py": "82bf7dfaf0d2ef52684d008ed42bc1e9d46171b3efab4e79376ad18bec27ee14",
+      "traffic_sim/demand/catalog_qualification.py": "ccf0534e807fa6ba311a9155027c90a0ff425b9cdba48dd9416526cd2150827c",
+      "traffic_sim/demand/passage_solver.py": "ba9e9ebdd6eb358c644cc6bd3e4ee88c7526fd99c212a335ed215430c5342c78",
+      "traffic_sim/demand/route_catalog.py": "5ea4d3090e86d2d3b32d77a4ece7709465140f21fcfcdee599dd2dce4fe75609",
+      "traffic_sim/demand/route_support.py": "027d93a3f30197d2866bfda22a5079758d6d10133fd52542b02bff0b0802aacb",
+      "traffic_sim/demand/sensor_route_contract.py": "7eac854dc3ae1ac4a4d3c4471687e7b656692202bdee1b9c609ed94de4730d2b",
+      "traffic_sim/demand/structure_caps.py": "c7ee61ab4afeb29111b5fe8268d8d8b17db7db9cd0ab800454e40585c668658b"
+    },
+    "estimated_cost_as_the_branch_stands": "materially longer, because a catalog miss regenerates assignment priors and the candidate pool before any calibration. Not estimated further, because the run is not permitted.",
+    "estimated_cost_if_the_catalog_were_a_hit": "about 6 minutes for a full-day three-variant build on this machine, from the measured 336.69 s flat quarter-parallel figure",
+    "exact_one_day_command_when_unblocked": "python3 build_sumo_demand.py --source forecast --date 2027-06-25 --begin 00:00 --end 24:00 --candidate-source catalog --keep-scenarios",
+    "resource_lock": "free; no demand, catalog, warming or monthly process running",
+    "rule_applied": "the one-day build is only permitted when every catalog_cache_event is a hit; a catalog miss that would build a new pool must be refused",
+    "sumo_home": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo",
+    "unblocking_condition": "freeze this code series, requalify and re-adopt the route catalog against the frozen sources, then build the single date 2027-06-25. Do not warm the year or every date.",
+    "verdict": "REJECTED before starting; no build was run"
+  },
   "production_timings": null,
   "production_timings_note": "null on purpose: no archive matches the current demand source identity, so no production number exists. Never estimated from synthetic data.",
   "purpose": "Step 5 measurement contract across archive discovery, assembly, costing, resolver accounting and final decision identity",
@@ -357,7 +434,7 @@
     "verdict": "rejected_as_complete"
   },
   "schema_version": 1,
-  "status": "instrumentation_complete_production_unmeasured",
+  "status": "INSTRUMENTATION COMPLETE, PRODUCTION UNMEASURED",
   "still_unmeasured_in_production": [
     "every archive-chain timing: 0 of 142 archives match the current source identity",
     "assemble_window on real current-source day archives",
@@ -372,5 +449,5 @@
     "warning": "pre-existing urllib3 LibreSSL compatibility warning",
     "warnings": 1
   },
-  "why_no_optimization": "All seven groups are instrumented, but no production measurement is available. Synthetic fixture time is not used to select or project an optimization."
+  "why_no_optimization": "Production is unmeasured. No hypothesis is chosen from fixture counts, and no monthly gain is computed from synthetic data."
 }
