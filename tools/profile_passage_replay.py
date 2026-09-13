@@ -1175,6 +1175,8 @@ def _retention_repeat(root: Path, original: dict, work: Path,
     # the ORIGINAL root, not against the copy it was made from, so a copy that
     # was already wrong cannot certify itself.
     mismatches, verified = [], 0
+    compressed_source_bytes = 0
+    compressed_payload_bytes = 0
     for path in packed:
         relative = str(path.relative_to(copy))[:-len('.gz')]
         expected = original.get(relative)
@@ -1185,6 +1187,8 @@ def _retention_repeat(root: Path, original: dict, work: Path,
             mismatches.append({'file': relative, 'reason': 'digest differs'})
             continue
         verified += 1
+        compressed_source_bytes += expected[0]
+        compressed_payload_bytes += path.stat().st_size
 
     result = {
         'repeat': index + 1,
@@ -1201,8 +1205,19 @@ def _retention_repeat(root: Path, original: dict, work: Path,
                   for key, value in measurement['phases'][name]['bytes'].items()},
         'bytes_on_disk_before': bytes_before,
         'bytes_on_disk_after': bytes_after,
+        # Preserve the original field with an explicit basis, and separately
+        # report the actual gzip payload ratio. The retained tree also contains
+        # manifests and solver evidence that are never gzip inputs.
         'compression_ratio': round(bytes_after / bytes_before, 6)
         if bytes_before else None,
+        'compression_ratio_basis': 'retained_tree_bytes/original_tree_bytes',
+        'retained_tree_ratio': round(bytes_after / bytes_before, 6)
+        if bytes_before else None,
+        'gzip_payload_ratio': round(
+            compressed_payload_bytes / compressed_source_bytes, 6)
+        if compressed_source_bytes else None,
+        'compressed_source_bytes': compressed_source_bytes,
+        'compressed_payload_bytes': compressed_payload_bytes,
         'gz_verified_against_original': verified,
         'gz_digest_mismatches': mismatches,
         'candidate_dirs_removed': not list(copy.glob('*/candidate*')),

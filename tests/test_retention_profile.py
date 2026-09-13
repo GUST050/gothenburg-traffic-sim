@@ -146,6 +146,12 @@ class TestTheMeasurementIsHonest:
         assert run['bytes']['written'] > 0
         assert run['bytes']['verified'] > 0
         assert 0 < run['compression_ratio'] < 1
+        assert run['compression_ratio'] == run['retained_tree_ratio']
+        assert run['compression_ratio_basis'] == \
+            'retained_tree_bytes/original_tree_bytes'
+        assert run['gzip_payload_ratio'] == pytest.approx(
+            run['compressed_payload_bytes'] / run['compressed_source_bytes'],
+            abs=1e-6)
 
     def test_every_compressed_file_matches_the_original_when_decompressed(
             self, report):

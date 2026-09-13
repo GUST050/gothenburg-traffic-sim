@@ -722,25 +722,26 @@ repeat, aldrig hårdlänkad, originalet orört). Roten
 
 | Repeat | Kopiering | Retention root wall | Residual |
 |---|---|---|---|
-| 1 (kall) | 0,840 s | **4,158 s** | 0,000 s |
-| 2 | 0,739 s | 5,405 s | 0,000 s |
-| 3 | 0,586 s | 5,092 s | 0,000 s |
+| 1 | 0,677 s | **5,137 s** | 0,000 s |
+| 2 | 0,446 s | 5,811 s | 0,000 s |
+| 3 | 0,465 s | 5,709 s | 0,000 s |
 
-118 råa XML → 0, 114 `.gz` skrivna, kompressionsgrad 0,1923, 114 verifierade
+118 råa XML → 0, 114 `.gz` skrivna, kvarvarande trädkvot 0,1923 och
+gzip-payloadkvot 0,1737, 114 verifierade
 mot ORIGINALET via dekomprimerad digest, noll avvikelser. Bytes: 805,3 MB
 lästa, 139,9 MB skrivna, 805,3 MB hashade, 805,3 MB verifierade.
 Originalrotens alla paths, storlekar och SHA-256 var identiska efter varje
 repeat.
 
-Rankingen för repeat 1: `retention_compress` 99,74 %
-(`concurrent_region_wall`), `retention_cleanup` 0,17 %,
-`retention_inventory` 0,09 %. Inuti regionen: 12,281 s trådtid komprimerad
-till 4,147 s väggtid — **2,96× parallell effektivitet på tre arbetare**, med
-`gzip_compress` 8,923 s, `gzip_target_verify` 2,334 s och `gzip_source_hash`
-0,697 s av trådtiden.
+Rankingen för repeat 1: `retention_compress` 99,81 %
+(`concurrent_region_wall`), `retention_cleanup` 0,12 %,
+`retention_inventory` 0,06 %. Inuti regionen: 15,197 s trådtid i
+5,127 s väggtid — **2,96× samtidighetsfaktor på tre arbetare**, med
+`gzip_compress` 10,717 s, `gzip_target_verify` 2,991 s och
+`gzip_source_hash` 0,817 s av trådtiden.
 
 **Planens 128,5 s för retention reproduceras inte.** En färdig trevariantsrot
-retentioneras på 4,16 s kallt och 5,25 s varm median. Vad den siffran än
+retentioneras på 5,14 s i repeat 1 och 5,76 s median i repeat 2–3. Vad den siffran än
 aggregerar är det inte detta. Retention är alltså INTE den stora posten, och
 parsingförslaget skjuts därmed upp enligt planens egen regel.
 
