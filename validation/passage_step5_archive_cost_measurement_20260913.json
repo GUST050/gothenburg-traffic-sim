@@ -1,40 +1,51 @@
 {
   "conditional_next_hypothesis": {
-    "expected_upper_bound": "unknown; the fixture chain shows zero avoidable validations, so no time saving may be projected from this measurement",
-    "gate": "only after a current-source qualified archive exists",
-    "required_evidence": "RED/GREEN on repetition counters plus an A/B preserving the exact cost ledger, sorted cost list, winner, disqualifications and stop proof",
-    "shape_if_repetition_appears": "an operation-local frozen descriptor carrying the parsed metadata and the full content digests already computed by the first validation, with a snapshot lifetime bounded by the operation and a re-check at every new read boundary; never a global path -> valid cache"
+    "gate": "finish metric groups 5-7 and measure a current-source qualified archive before proposing one bounded optimization",
+    "reason": "production is unmeasured and assemble_window, costing, resolver and final decision measurements are incomplete",
+    "status": "withheld"
   },
   "date": "2026-09-13",
   "diagnostic_only": true,
   "findings": [
-    "On the fixture chain there is NO unnecessary repetition to remove: find_demand_archives performs exactly one full validation per unique archive path (1.00 per path), and repeated calls within one verified snapshot perform zero reads, zero parses and zero digests.",
-    "The warm state guard is keyed on path, size and mtime, but it is not fooled by them: an archive whose bytes changed with the size preserved and the mtime restored is excluded on the next call. Pinned by a test.",
-    "validate_demand_archive itself also rejects a same-size, same-mtime content change, because demand_meta.json is inside _REQUIRED_ARCHIVE_FILES and is digested. Pinned by a test."
+    "The committed warm-cache safety claim is false: exact preservation of size and st_mtime_ns lets changed bytes reuse global stat-authorized cache entries.",
+    "Every new disk entry must read the metadata index and full-validate candidates; only the metadata index may be shared inside one controlled resolver operation.",
+    "No current-source qualified archive exists, so production timing remains unavailable.",
+    "Metric groups 5-7 are absent, so Step 5 is not complete and no optimization is selected."
   ],
   "hermetic_fixture_measurement": {
-    "WARNING": "FIXTURE TIMES, NOT PRODUCTION TIMES. Three synthetic archives, 23676 bytes hashed in total.",
-    "cold_first_entry": {
+    "WARNING": "FIXTURE TIMES AND COUNTS, NOT PRODUCTION RESULTS. Three synthetic archives.",
+    "cold_new_disk_entry": {
+      "archive_index_build": 1,
       "archive_json_read": 12,
       "archive_sha256": 30,
-      "archive_state_probe": 3,
       "archive_validate": 3,
       "archives": 3,
       "bytes_hashed": 23676,
-      "find_demand_archives_calls": 1,
-      "json_read_exclusive_s": 0.001,
-      "sha256_exclusive_s": 0.001488,
-      "unique_archive_paths": 3,
+      "bytes_read": 48186,
+      "json_read_exclusive_s": 0.000989,
+      "sha256_exclusive_s": 0.001461,
       "validations_per_unique_path": 1.0
     },
-    "purpose": "verify the measurement contract only",
-    "warm_reuse_same_snapshot": {
-      "archive_json_read": 0,
-      "archive_sha256": 0,
-      "archive_state_probe": 9,
-      "archive_validate": 0,
+    "purpose": "verify safe archive accounting after review repair",
+    "three_lookups_one_operation_local_index": {
+      "archive_index_build": 0,
+      "archive_json_read": 27,
+      "archive_sha256": 90,
+      "archive_validate": 9,
+      "bytes_hashed": 71028,
+      "bytes_read": 79704,
       "find_demand_archives_calls": 3,
-      "note": "the existing state guard absorbed every repeat entirely"
+      "note": "only metadata indexing is reused; candidate content is fully validated"
+    },
+    "three_new_disk_entries": {
+      "archive_index_build": 3,
+      "archive_json_read": 36,
+      "archive_sha256": 90,
+      "archive_validate": 9,
+      "bytes_hashed": 71028,
+      "bytes_read": 144558,
+      "find_demand_archives_calls": 3,
+      "note": "a new disk entry never reuses a prior validation result"
     }
   },
   "instrumented": {
@@ -44,15 +55,15 @@
         "hashed on every digest"
       ],
       "counters": [
+        "archive_index_build",
         "archive_validate",
         "archive_json_read",
-        "archive_sha256",
-        "archive_state_probe"
+        "archive_sha256"
       ],
       "sites": [
+        "monthly_demand._archives_for_build_key",
         "monthly_demand._read",
         "monthly_demand.validate_demand_archive",
-        "monthly_demand._archive_validation_state",
         "the sha256 loop over _REQUIRED_ARCHIVE_FILES"
       ],
       "unique_counts": [
@@ -86,9 +97,20 @@
     "method": "compared each archive's build_fingerprint.source_files with demand_source_fingerprints(project_root), which is the exact equality validate_demand_archive requires",
     "question": "does any existing archive pass validate_demand_archive against the current source identity?"
   },
-  "purpose": "Step 5: measure archive discovery, validation and costing before changing anything",
+  "purpose": "Step 5 archive measurement only; costing and assemble_window remain unmeasured",
   "release_evidence": false,
+  "review_of_294c75a": {
+    "finding": "the same-stat tests restored float st_mtime although both global caches keyed nanosecond stat values; exact os.utime(ns=...) reproduces unsafe reuse",
+    "focused_green_tests": 59,
+    "red_tests": 2,
+    "repair": "remove both global stat-authorized caches; rebuild the metadata index on each new disk entry, share it only inside _resolve_new_release, and full-validate every candidate",
+    "unsafe_behaviors_reproduced": [
+      "changed calibrated route bytes served from _VALIDATED_ARCHIVE_CACHE",
+      "changed demand_meta build key hidden by _ARCHIVE_METADATA_INDEX"
+    ],
+    "verdict": "rejected_as_complete"
+  },
   "schema_version": 1,
-  "status": "instrumented_unmeasured",
-  "why_no_optimization": "The plan assumes repeated validation per archive during resolver setup. The measurement does not find it in find_demand_archives, and the plan itself forbids building a cache where the measurement shows each unit is already handled once. The production phase that could still show repetition -- prepare() over a real qualified manifest -- cannot be measured until an archive exists under the current source identity. Proposing an optimisation now would be inventing one."
+  "status": "partial_measurement_review_repair_required",
+  "why_no_optimization": "The original no-repetition result depended on unsafe global stat caches and is superseded. Production remains unmeasured and metric groups 5-7 are absent."
 }

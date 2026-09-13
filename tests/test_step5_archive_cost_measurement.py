@@ -140,21 +140,16 @@ class TestContentChangesSurviveStatPreservation:
         edited[index] = original[index] ^ 0x01
         assert len(edited) == len(original)
         target.write_bytes(bytes(edited))
-        os.utime(target, (before.st_atime, before.st_mtime))
+        os.utime(target, ns=(before.st_atime_ns, before.st_mtime_ns))
         assert target.stat().st_size == before.st_size
-        assert target.stat().st_mtime == before.st_mtime
+        assert target.stat().st_mtime_ns == before.st_mtime_ns
 
         with pytest.raises(ValueError):
             md.validate_demand_archive(archive, spec)
 
 
-class TestTheWarmDiscoveryCacheIsNotFooledByStatInformation:
-    """find_demand_archives reuses a state keyed on path, size and mtime.
-
-    That is the exact shape the plan warns about: if a content change with a
-    preserved size and a restored mtime survived it, a stale archive could be
-    selected without a single byte being re-read.
-    """
+class TestEveryNewDiskEntryRevalidatesContent:
+    """Stat metadata cannot authorize reuse across separate operations."""
 
     def test_a_content_change_under_preserved_stat_is_not_served_from_cache(
             self, tmp_path):
@@ -172,12 +167,69 @@ class TestTheWarmDiscoveryCacheIsNotFooledByStatInformation:
         edited[index] = original[index] ^ 0x01
         assert len(edited) == len(original)
         target.write_bytes(bytes(edited))
-        os.utime(target, (before.st_atime, before.st_mtime))
+        os.utime(target, ns=(before.st_atime_ns, before.st_mtime_ns))
         assert target.stat().st_size == before.st_size
-        assert target.stat().st_mtime == before.st_mtime
+        assert target.stat().st_mtime_ns == before.st_mtime_ns
 
         again = md.find_demand_archives(tmp_path, required)
 
         assert not again, (
             'a tampered archive was still offered: the warm state was reused '
             'although the bytes changed under identical stat information')
+
+    def test_the_metadata_index_does_not_hide_a_same_stat_build_key_change(
+            self, tmp_path):
+        from traffic_sim.simulation import monthly_demand as md
+
+        archive = tmp_path / 'demand-indexed'
+        archive.mkdir()
+        metadata = archive / 'demand_meta.json'
+        metadata.write_text(json.dumps({'demand_build_key': 'a' * 16}))
+        before = metadata.stat()
+
+        first = md._archives_for_build_key(tmp_path)
+        assert first == {'a' * 16: (archive,)}
+
+        metadata.write_text(json.dumps({'demand_build_key': 'b' * 16}))
+        os.utime(metadata, ns=(before.st_atime_ns, before.st_mtime_ns))
+        assert metadata.stat().st_size == before.st_size
+        assert metadata.stat().st_mtime_ns == before.st_mtime_ns
+
+        again = md._archives_for_build_key(tmp_path)
+
+        assert again == {'b' * 16: (archive,)}
+
+    def test_repeated_public_discovery_revalidates_the_same_archive(self,
+                                                                    tmp_path):
+        from traffic_sim.simulation import monthly_demand as md
+
+        archive, required = _valid_archive(tmp_path)
+        collector = io_phases.PhaseCollector()
+
+        with io_phases.observe(collector):
+            assert md.find_demand_archives(tmp_path, required)
+            assert md.find_demand_archives(tmp_path, required)
+
+        report = collector.report()
+        assert report['counters']['archive_index_build'] == 2
+        assert report['counters']['archive_validate'] == 2
+        assert report['unique_counts']['archive_validated_path'] == 1
+
+    def test_an_operation_local_index_skips_only_the_metadata_rescan(
+            self, tmp_path):
+        from traffic_sim.simulation import monthly_demand as md
+
+        archive, required = _valid_archive(tmp_path)
+        index = md._archives_for_build_key(tmp_path)
+        collector = io_phases.PhaseCollector()
+
+        with io_phases.observe(collector):
+            assert md.find_demand_archives(
+                tmp_path, required, _archive_index=index)
+            assert md.find_demand_archives(
+                tmp_path, required, _archive_index=index)
+
+        report = collector.report()
+        assert report['counters'].get('archive_index_build', 0) == 0
+        assert report['counters']['archive_validate'] == 2
+        assert report['unique_counts']['archive_validated_path'] == 1

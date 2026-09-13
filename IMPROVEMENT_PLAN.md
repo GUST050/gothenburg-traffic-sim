@@ -826,7 +826,7 @@ utfall; identisk kostnadslista, vinnare och stoppbevis. Ingen liveträdsmutation
 **Prioritet:** villkorad av steg 0; exempelvalidering på 0,35 s är inte bevis
 för många minuters möjlig vinst.
 
-#### Steg 5 mätning — instrumenterad men OMÄTT i produktion, 2026-09-13
+#### Steg 5 DELVIS MÄTT — reviewreparation krävs, 2026-09-13
 
 **Preflight avgjorde saken först.** Av 142 arkiv med metadata matchar **noll**
 `demand_source_fingerprints` för det aktuella trädet; varje arkiv skiljer sig i
@@ -835,27 +835,38 @@ Ingen produktionstid rapporteras, ingen gammal evidens bands om till nya
 source-hashar, och inget ersättningsarkiv byggdes. Exakt lokalt kommando när
 ett kvalificerat arkiv finns står i evidensfilen.
 
-**Instrumenterat:** `_read`, `validate_demand_archive`,
-`_archive_validation_state` och digest-loopen, med räknare för valideringar,
-JSON-läsningar, SHA-256-beräkningar och stat-sonderingar, unika arkivsökvägar
-samt lästa och hashade bytes.
+Commit `294c75a` instrumenterade `_read`, `validate_demand_archive`,
+`_archive_validation_state` och digest-loopen, men dess slutsats om säker varm
+återanvändning var fel. Testet återställde `st_mtime` som flyttal medan
+cache-nyckeln använde `st_mtime_ns`; nanosekunderna ändrades och testet skapade
+en cachemiss. Med exakt återställda nanosekunder serverades ändrade route-bytes
+från `_VALIDATED_ARCHIVE_CACHE`, och ändrad `demand_meta.json` låg kvar under
+gammal build-key i `_ARCHIVE_METADATA_INDEX`. Båda var processglobala
+`path/stat -> valid/index`-cacher av den form steg 5 uttryckligen förbjuder.
 
-**Hermetiskt fixturresultat — uttryckligen INTE produktionstid** (tre
-syntetiska arkiv, 23 676 hashade byte): kallt gör en `find_demand_archives`
-över tre arkiv exakt tre valideringar, **1,00 per unik sökväg**. Varmt gör tre
-ytterligare anrop **noll** valideringar, läsningar och digests — bara nio
-stat-sonderingar.
+Reviewreparationen tar bort båda globala cacherna. Varje ny diskentré bygger
+indexet från `demand_meta.json`-innehåll och fullvaliderar kandidaterna. Inom
+`_resolve_new_release` kan samma index skickas vidare anropslokalt till flera
+build-keys och byggs om efter varje demand-builder-anrop; valideringsresultat
+återanvänds aldrig över en ny läsgräns.
 
-**Ingen optimering föreslås.** Planens antagande om upprepad validering per
-arkiv återfinns inte i mätningen, och planen förbjuder själv att bygga en cache
-där varje enhet redan hanteras en gång. Två säkerhetsegenskaper är dessutom
-bekräftade och pinnade: en innehållsändring med bevarad storlek och återställd
-mtime avvisas både av `validate_demand_archive` och av den varma stat-nycklade
-grinden.
+**Hermetiskt reviewresultat — uttryckligen INTE produktionstid** (tre
+syntetiska arkiv): en kall diskentré gör tre fullvalideringar, 12 JSON-läsningar
+och 30 digests. Tre nya diskentréer gör nio valideringar, 36 JSON-läsningar och
+90 digests. Tre uppslag som delar ett operationslokalt index gör fortfarande
+nio valideringar och 90 digests men bara 27 JSON-läsningar, eftersom enbart
+metadataindexeringen återanvänds.
 
-**Inte instrumenterat denna omgång:** `assemble_window`-detaljerna och
-costing-/resolver-räknarna. `tools/profile_monthly_cost_ledger.py` binder redan
-ledger-, vinnar- och stoppbevisidentiteter och dubblerades inte.
+Den ursprungliga slutsatsen “ingen onödig upprepning” är därmed inte giltig:
+den mätte en osäker global cacheträff. Ingen optimering får väljas från denna
+fixturmätning. Först måste den verkliga `prepare`-kedjan mätas när ett
+current-source-arkiv finns; en ny diskentré ska fortsatt fullvalidera.
+
+**Steg 5 är inte komplett.** `assemble_window`-detaljerna,
+costing-/`ClosureRouteResolver`-räknarna och en samlad jämförelse av exakt
+ledger, vinnare, disqualifications och stop proof saknas fortfarande.
+`tools/profile_monthly_cost_ledger.py` kan utökas eller återanvändas; att den
+redan binder identiteter ersätter inte de saknade räknarna och tiderna.
 
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 

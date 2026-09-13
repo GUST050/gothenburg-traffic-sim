@@ -67,17 +67,6 @@ _REQUIRED_ARCHIVE_FILES = (
     "calibrated_v2.agents.json",
 )
 
-# Archive validation hashes several immutable route files.  A monthly
-# preparation resolves many daily units against the same archive set, so
-# repeating those hashes for every required build key can dominate the cold
-# profile before the ledger starts.  Cache only successful validations and
-# key them by the stat state of every input that validation binds; a replaced
-# or edited archive therefore cannot reuse an old validated record.
-_VALIDATED_ARCHIVE_CACHE: dict[tuple[str, str, str, tuple[tuple[str, int, int], ...]], dict[str, Any]] = {}
-_ARCHIVE_METADATA_INDEX: dict[
-    str, tuple[tuple[tuple[str, int, int], ...], dict[str, tuple[Path, ...]]]
-] = {}
-
 def _incomplete_day_library_accounting(
     requested_days: int,
     reason: str,
@@ -255,36 +244,19 @@ def aggregate_day_library_accounting(
     return result
 
 
-def _archive_validation_state(archive: Path) -> tuple[tuple[str, int, int], ...] | None:
-    paths = (
-        archive / "manifest.json",
-        archive / "demand_build_spec.json",
-        archive / "demand_meta.json",
-        *(archive / name for name in _REQUIRED_ARCHIVE_FILES),
-    )
-    io_phases.count("archive_state_probe")
-    state = []
-    try:
-        for path in paths:
-            stat = path.stat()
-            state.append((str(path.name), int(stat.st_mtime_ns), int(stat.st_size)))
-    except OSError:
-        return None
-    return tuple(state)
-
-
 def _archives_for_build_key(runs_root: Path) -> dict[str, tuple[Path, ...]]:
-    """Index archive candidates from metadata before expensive validation."""
+    """Build one content-read candidate index for the caller's operation.
+
+    A prior module-global index reused entries from directory stat metadata.
+    Rewriting ``demand_meta.json`` with the same size and restored mtime could
+    therefore leave an archive under its old build key forever.  Callers that
+    need several keys may pass this returned index within their one controlled
+    operation; a new entry from disk always rebuilds it from file contents.
+    """
     root = Path(runs_root).resolve()
     archives = tuple(sorted(path for path in root.glob("demand-*")
                             if path.is_dir()))
-    signature = tuple(
-        (path.name, int(path.stat().st_mtime_ns), int(path.stat().st_size))
-        for path in archives
-    )
-    cached = _ARCHIVE_METADATA_INDEX.get(str(root))
-    if cached is not None and cached[0] == signature:
-        return cached[1]
+    io_phases.count("archive_index_build")
     by_key: dict[str, list[Path]] = {}
     for archive in archives:
         try:
@@ -295,7 +267,6 @@ def _archives_for_build_key(runs_root: Path) -> dict[str, tuple[Path, ...]]:
         if isinstance(build_key, str) and build_key:
             by_key.setdefault(build_key, []).append(archive)
     result = {key: tuple(value) for key, value in by_key.items()}
-    _ARCHIVE_METADATA_INDEX[str(root)] = (signature, result)
     return result
 # The tracked demand builder writes THROUGH the live release paths (sumo/
 # demand products, web/data OD export) even when it is only materializing a
@@ -874,6 +845,7 @@ def find_demand_archives(
     *,
     qualified_manifest: Mapping[str, Any] | None = None,
     qualified_manifest_net_path: Path | None = None,
+    _archive_index: Mapping[str, tuple[Path, ...]] | None = None,
 ) -> tuple[dict[str, Any], ...]:
     """Return all valid succeeded archives for ``required``, newest first.
 
@@ -888,34 +860,20 @@ def find_demand_archives(
     if qualified_manifest is not None:
         validate_qualified_demand_manifest_shape(qualified_manifest)
     matches: list[dict[str, Any]] = []
-    candidates = _archives_for_build_key(Path(runs_root)).get(
-        required.build_key, ())
+    archive_index = (_archives_for_build_key(Path(runs_root))
+                     if _archive_index is None else _archive_index)
+    candidates = archive_index.get(required.build_key, ())
     for archive in candidates:
-        state = _archive_validation_state(archive)
-        cache_key = None
-        if state is not None:
-            cache_key = (str(Path(runs_root).resolve()), str(archive.resolve()),
-                         required.build_key, state)
-            cached = _VALIDATED_ARCHIVE_CACHE.get(cache_key)
-            if cached is not None:
-                record = cached
-            else:
-                record = None
-        else:
-            record = None
-        if record is None:
-            try:
-                record = validate_demand_archive(archive, required)
-            except (
-                FileNotFoundError,
-                json.JSONDecodeError,
-                KeyError,
-                TypeError,
-                ValueError,
-            ):
-                continue
-            if cache_key is not None:
-                _VALIDATED_ARCHIVE_CACHE[cache_key] = record
+        try:
+            record = validate_demand_archive(archive, required)
+        except (
+            FileNotFoundError,
+            json.JSONDecodeError,
+            KeyError,
+            TypeError,
+            ValueError,
+        ):
+            continue
         if qualified_manifest is not None and qualified_manifest_archive_mismatch(
                 record, qualified_manifest,
                 net_path=qualified_manifest_net_path) is not None:
@@ -1251,6 +1209,7 @@ class MonthlyDemandResolverRunner:
         with demand_build_lock():
             live_snapshot: dict[str, Any] | None = None
             try:
+                archive_index = _archives_for_build_key(self.runs_root)
                 # Recheck under the inter-process lock: another search may have
                 # completed the same immutable archive while this one waited.
                 for key in sorted(required_by_key):
@@ -1258,7 +1217,8 @@ class MonthlyDemandResolverRunner:
                     matches = find_demand_archives(
                         self.runs_root, required,
                         qualified_manifest=self.qualified_demand_manifest,
-                        qualified_manifest_net_path=self.qualified_demand_net_path)
+                        qualified_manifest_net_path=self.qualified_demand_net_path,
+                        _archive_index=archive_index)
                     if not matches and self.build_missing:
                         if live_snapshot is None:
                             live_snapshot = snapshot_live_demand_release(
@@ -1266,10 +1226,12 @@ class MonthlyDemandResolverRunner:
                                 products=self.live_release_products,
                             )
                         self.demand_builder(required)
+                        archive_index = _archives_for_build_key(self.runs_root)
                         matches = find_demand_archives(
                             self.runs_root, required,
                             qualified_manifest=self.qualified_demand_manifest,
-                            qualified_manifest_net_path=self.qualified_demand_net_path)
+                            qualified_manifest_net_path=self.qualified_demand_net_path,
+                            _archive_index=archive_index)
                     if not matches:
                         manifest_note = (
                             " matching the bound qualified-demand manifest"
