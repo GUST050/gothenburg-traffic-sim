@@ -23,6 +23,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import resource
 import shutil
 import sys
 import time
@@ -1052,6 +1053,9 @@ def main() -> int:
     parser.add_argument('--retention-root', type=Path,
                         help='measure prune_evidence on an owned copy of this '
                              'finished multi-variant evidence root')
+    parser.add_argument('--retention-workers', type=int, default=None,
+                        help='diagnostic: measure retention with this worker '
+                             'cap instead of the production constant')
     parser.add_argument('--io-phases', action='store_true',
                         help='also measure evidence I/O phases: reads, gzip, '
                              'writes, hashing, verification and publication')
@@ -1073,7 +1077,8 @@ def main() -> int:
     if args.retention_root is not None:
         try:
             report = profile_retention(args.retention_root, args.out,
-                                       repeats=args.repeats)
+                                       repeats=args.repeats,
+                                       max_workers=args.retention_workers)
         except ReplayRefused as error:
             print(json.dumps({'status': 'refused', 'reason': str(error)},
                              indent=2))
@@ -1154,6 +1159,11 @@ def _retention_repeat(root: Path, original: dict, work: Path,
 
     files = [path for path in copy.rglob('*') if path.is_file()]
     hardlink_free = all(path.stat().st_nlink == 1 for path in files)
+    compressible = [path for path in files if path.suffix == '.xml'
+                    and any(part.startswith(automatic_passage._COMPRESSED)
+                            for part in path.relative_to(copy).parts)]
+    requested, workers_actual = automatic_passage._retention_worker_count(
+        len(compressible))
     raw_before = sum(1 for path in files if path.suffix == '.xml')
     bytes_before = sum(path.stat().st_size for path in files)
 
@@ -1192,6 +1202,8 @@ def _retention_repeat(root: Path, original: dict, work: Path,
 
     result = {
         'repeat': index + 1,
+        'workers_requested': requested,
+        'workers_actual': workers_actual,
         'copy_s': round(copy_s, 6),
         'copy_is_hardlink_free': hardlink_free,
         'retention_root_wall_s': round(wall, 6),
@@ -1224,6 +1236,11 @@ def _retention_repeat(root: Path, original: dict, work: Path,
         'rollback_files_removed': not list(copy.glob('original-*')),
         'source_reports_removed': not (copy / 'source_reports.json').exists(),
         'source_unchanged': _retention_fingerprint(root) == original,
+        # The copy is deleted once its numbers are read, so the retained tree
+        # is fingerprinted here. Two arms are then comparable byte for byte
+        # without keeping a gigabyte of evidence per arm.
+        'retained_tree': {name: list(value) for name, value
+                          in _retention_fingerprint(copy).items()},
     }
     # Aggregate the byte counters across phases rather than per phase, so the
     # summary answers "how many bytes moved" without hiding where.
@@ -1235,7 +1252,8 @@ def _retention_repeat(root: Path, original: dict, work: Path,
     return result
 
 
-def profile_retention(root: Path, out: Path, *, repeats: int = 3) -> dict:
+def profile_retention(root: Path, out: Path, *, repeats: int = 3,
+                      max_workers: int | None = None) -> dict:
     """Measure the real prune_evidence path on an owned copy of ``root``.
 
     A single-variant replay never runs retention: it compresses one copied
@@ -1254,15 +1272,25 @@ def profile_retention(root: Path, out: Path, *, repeats: int = 3) -> dict:
 
     original = _retention_fingerprint(root)
     runs_out = []
-    for index in range(repeats):
-        work = out / f'repeat-{index + 1}'
-        work.mkdir(parents=True, exist_ok=False)
-        try:
-            runs_out.append(_retention_repeat(root, original, work, index))
-        finally:
-            # Only this tool's own copy is removed, and only after its numbers
-            # are in hand.
-            shutil.rmtree(work / 'copy', ignore_errors=True)
+    # A diagnostic override, never an environment contract: the production
+    # constant is set for the duration of this profile and restored whatever
+    # happens, so an experiment can measure a different cap without shipping
+    # a second way to configure retention.
+    previous_cap = automatic_passage.RETENTION_MAX_WORKERS
+    if max_workers is not None:
+        automatic_passage.RETENTION_MAX_WORKERS = int(max_workers)
+    try:
+        for index in range(repeats):
+            work = out / f'repeat-{index + 1}'
+            work.mkdir(parents=True, exist_ok=False)
+            try:
+                runs_out.append(_retention_repeat(root, original, work, index))
+            finally:
+                # Only this tool's own copy is removed, and only after its
+                # numbers are in hand.
+                shutil.rmtree(work / 'copy', ignore_errors=True)
+    finally:
+        automatic_passage.RETENTION_MAX_WORKERS = previous_cap
 
     def spread(key):
         return _spread([run[key] for run in runs_out[1:]]) if len(runs_out) > 1 else {}
@@ -1276,6 +1304,11 @@ def profile_retention(root: Path, out: Path, *, repeats: int = 3) -> dict:
         'source_evidence_root': str(root),
         'output_root': str(out),
         'repeats': repeats,
+        'workers_requested': (previous_cap if max_workers is None
+                              else int(max_workers)),
+        'peak_rss_bytes': resource.getrusage(
+            resource.RUSAGE_SELF).ru_maxrss * (
+                1 if sys.platform == 'darwin' else 1024),
         'process_state': ('all repeats run in one process after imports; each '
                           'gets its own fresh copy and its own collector'),
         'source_inventory': {

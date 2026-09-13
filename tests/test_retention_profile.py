@@ -198,3 +198,121 @@ class TestTheRetentionModeIsReachableFromTheCommandLine:
 
         assert result.returncode == 0, result.stdout + result.stderr
         assert (tmp_path / 'out' / 'retention_profile.json').is_file()
+
+
+class TestTheWorkerPolicyIsExplicit:
+    """The cap was an inline literal. An experiment needs it addressable."""
+
+    def test_the_cap_is_the_value_the_a_b_experiment_accepted(self):
+        """Six, decided by measurement, not by taste.
+
+        A/B/B/A on the real 1075 MB three-variant root: three workers gave a
+        5.4473 s median retention root wall, six gave 3.9178 s, 28.08% faster,
+        with the worst six-worker measurement below the best three-worker one.
+        Every produced byte was identical. See
+        validation/passage_step4_retention_workers_ab_20260913.json.
+        """
+        from traffic_sim.demand import automatic_passage as auto
+
+        requested, _actual = auto._retention_worker_count(100)
+
+        assert requested == auto.RETENTION_MAX_WORKERS == 6
+
+    def test_the_cap_is_still_bounded_by_the_machine_and_the_work(self):
+        from traffic_sim.demand import automatic_passage as auto
+
+        assert auto._retention_worker_count(4)[1] == 4
+
+    def test_the_actual_count_never_exceeds_the_work_available(self):
+        from traffic_sim.demand import automatic_passage as auto
+
+        assert auto._retention_worker_count(1)[1] == 1
+        assert auto._retention_worker_count(2)[1] == 2
+
+    def test_the_actual_count_never_exceeds_the_machine(self, monkeypatch):
+        from traffic_sim.demand import automatic_passage as auto
+
+        monkeypatch.setattr(auto.os, 'cpu_count', lambda: 2)
+
+        assert auto._retention_worker_count(100)[1] == 2
+
+    def test_a_machine_that_reports_no_cpus_still_gets_one_worker(
+            self, monkeypatch):
+        from traffic_sim.demand import automatic_passage as auto
+
+        monkeypatch.setattr(auto.os, 'cpu_count', lambda: None)
+
+        assert auto._retention_worker_count(100)[1] == 1
+
+    def test_retention_asks_the_pool_for_exactly_that_many(self, tmp_path,
+                                                           monkeypatch):
+        from traffic_sim.demand import automatic_passage as auto
+
+        root = _root(tmp_path / 'evidence')
+        seen = []
+        real = auto.ThreadPoolExecutor
+
+        def spy(*args, **kwargs):
+            seen.append(kwargs.get('max_workers'))
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(auto, 'ThreadPoolExecutor', spy)
+        auto.prune_evidence(root)
+
+        assert seen == [auto._retention_worker_count(9)[1]]
+
+
+class TestTheProfilerCanMeasureADifferentCap:
+    def test_the_override_is_reported_and_restored(self, tmp_path):
+        from traffic_sim.demand import automatic_passage as auto
+
+        before = auto.RETENTION_MAX_WORKERS
+        report = profiler.profile_retention(
+            _root(tmp_path / 'evidence'), tmp_path / 'out', repeats=1,
+            max_workers=6)
+
+        assert report['workers_requested'] == 6
+        assert report['runs'][0]['workers_actual'] >= 1
+        assert auto.RETENTION_MAX_WORKERS == before
+
+    def test_the_override_is_restored_even_when_a_repeat_raises(self, tmp_path,
+                                                               monkeypatch):
+        from traffic_sim.demand import automatic_passage as auto
+
+        before = auto.RETENTION_MAX_WORKERS
+        monkeypatch.setattr(
+            auto, 'prune_evidence',
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError('boom')))
+
+        with pytest.raises(RuntimeError):
+            profiler.profile_retention(_root(tmp_path / 'evidence'),
+                                       tmp_path / 'out', repeats=1,
+                                       max_workers=6)
+
+        assert auto.RETENTION_MAX_WORKERS == before
+
+    def test_the_default_profile_still_requests_the_production_cap(self,
+                                                                  tmp_path):
+        from traffic_sim.demand import automatic_passage as auto
+
+        report = profiler.profile_retention(_root(tmp_path / 'evidence'),
+                                            tmp_path / 'out', repeats=1)
+
+        assert report['workers_requested'] == auto.RETENTION_MAX_WORKERS
+
+    def test_peak_rss_is_reported(self, tmp_path):
+        report = profiler.profile_retention(_root(tmp_path / 'evidence'),
+                                            tmp_path / 'out', repeats=1)
+
+        assert report['peak_rss_bytes'] > 0
+
+
+def test_the_retained_tree_is_fingerprinted_so_arms_can_be_compared(tmp_path):
+    """The copy is deleted, so the comparison needs the digests kept."""
+    report = profiler.profile_retention(_root(tmp_path / 'evidence'),
+                                        tmp_path / 'out', repeats=1)
+
+    tree = report['runs'][0]['retained_tree']
+    assert tree
+    assert all(len(entry) == 2 for entry in tree.values())
+    assert any(name.endswith('.gz') for name in tree)

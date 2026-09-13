@@ -445,6 +445,32 @@ KEEP_EVIDENCE_ENV = 'TRAFFIC_SIM_KEEP_PASSAGE_EVIDENCE'
 _COMPRESSED = ('input', 'evidence', 'before-', 'after-')
 
 
+#: How many files retention may compress at once. An explicit constant
+#: rather than a literal inside the call, so an experiment can address it and
+#: a reader can find it. It is NOT an environment contract: nothing outside
+#: this module reads a variable to change it.
+#:
+#: Six, chosen by a counterbalanced A/B/B/A on the real 1075 MB three-variant
+#: root, not by taste: three workers gave a 5.4473 s median retention root
+#: wall and six gave 3.9178 s, 28.08% faster, with the worst six-worker
+#: measurement below the best three-worker one. The retained tree was
+#: byte-identical across all twelve repeats, every one of the 114 compressed
+#: files still decompressed to its original digest, and peak RSS rose about
+#: 20 MB. Evidence:
+#: validation/passage_step4_retention_workers_ab_20260913.json
+RETENTION_MAX_WORKERS = 6
+
+
+def _retention_worker_count(path_count: int) -> tuple[int, int]:
+    """The requested cap and the count actually usable for ``path_count``.
+
+    Both are reported so a measurement can never confuse "we asked for six"
+    with "six ran": fewer files or fewer cores silently lower the second.
+    """
+    requested = RETENTION_MAX_WORKERS
+    return requested, max(1, min(requested, path_count, os.cpu_count() or 1))
+
+
 def _gzip_verified(source: Path) -> bool:
     """Write ``source``.gz deterministically and prove it round-trips.
 
@@ -525,8 +551,8 @@ def prune_evidence(evidence_root: Path, *, keep_all: bool = False) -> None:
         # report into the collector that is measuring this call.
         with io_phases.phase('retention_compress', concurrent=True):
             worker = io_phases.in_current_context(_gzip_verified)
-            with ThreadPoolExecutor(
-                    max_workers=min(3, len(paths), os.cpu_count() or 1)) as pool:
+            _requested, workers = _retention_worker_count(len(paths))
+            with ThreadPoolExecutor(max_workers=workers) as pool:
                 for path, verified in zip(paths, pool.map(worker, paths)):
                     if not verified:
                         raise ValueError(

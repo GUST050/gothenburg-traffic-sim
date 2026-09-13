@@ -14,7 +14,7 @@ owners, states and approval formulas are not active workflow rules. See
 - Suggested next action: `Run a counterbalanced 3-worker versus 6-worker retention A/B/B/A on owned copies of the same complete q50/_v1/_v2 root. Keep 3 unless 6 improves retention root wall by at least 15%, preserves byte-identical compressed outputs and source integrity, and does not create excessive memory or load. Do not implement the proposed trace parse cache: repeat-profile hits do not establish a dagsbygge speedup.`
 - Eligible actors: `Any capable actor.`
 - Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation or expensive catalog/demand run without explicit scope; keep unrelated local changes outside this delivery.`
-- Updated: `2026-09-13. Step 3 closed; step 4 replay and full retention measured, reporting corrections reviewed, bounded worker-count A/B next.`
+- Updated: `2026-09-13. Step 4 closed: reporting corrected, retention workers measured and raised to 6.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- WORKFLOW_HISTORY_START -->

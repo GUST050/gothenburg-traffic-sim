@@ -745,6 +745,46 @@ retentioneras på 5,14 s i repeat 1 och 5,76 s median i repeat 2–3. Vad den si
 aggregerar är det inte detta. Retention är alltså INTE den stora posten, och
 parsingförslaget skjuts därmed upp enligt planens egen regel.
 
+#### Steg 4 KLART — worker-experimentet, 2026-09-13
+
+Retentionens komprimeringsregion var 99,74 % av retention och kördes med högst
+tre arbetare trots tio logiska kärnor. Taket är nu en uttrycklig konstant,
+`RETENTION_MAX_WORKERS`, med en privat policyfunktion som rapporterar både
+BEGÄRT och FAKTISKT antal — färre filer eller färre kärnor sänker tyst det
+andra. Inget miljövariabelkontrakt tillkom.
+
+A/B/B/A på den verkliga roten (156 filer, 1 075 071 455 byte, 118 råa XML,
+877 499 944 råa XML-byte, alla fyra verifierade före mätning), tre repeats per
+arm, egen process och egen outputrot per arm, egen vanlig kopia per repeat:
+
+| | Baslinje (3) | Kandidat (6) |
+|---|---|---|
+| retention root wall, median | 5,4473 s | **3,9178 s** |
+| spridning | 5,2144–5,6531 s | 3,6136–4,0173 s |
+| child thread sum, median | ~15,8 s | ~21,8 s |
+| peak RSS | 100–116 MB | 126–129 MB |
+
+**28,08 % snabbare**, och sämsta kandidatmätningen (4,0173 s) ligger under
+bästa baslinjemätningen (5,2144 s) — fördelningarna överlappar inte.
+
+Exakthet, alla tolv repeats: originalrotens paths, storlekar och SHA-256
+oförändrade; alla 114 gzipfiler dekomprimerar till originalets digest, noll
+avvikelser; hela det kvarvarande filträdet (137 filer) byte-identiskt mellan
+tre och sex arbetare; identiska counts, `retained_tree_ratio` 0,192312 och
+`gzip_payload_ratio` 0,173675; identiska kontraktsutfall; rankad väggtid
+översteg aldrig root wall (max differens 0,000000 s).
+
+**Vinsten är ca 1,53 s per färdig trevariantsrot.** Trådtiden STEG från ~15,8
+till ~21,8 s — den är diagnostik och får inte multipliceras till en
+månadssiffra. Åtta eller fler arbetare är inte mätta. Gzipnivå, mtime,
+verifiering, tempfil/publicering och städsemantik är orörda.
+
+**Steg 4 är därmed stängt.** `_tracked_main` är instrumenterad men dess
+produktionstid är uppskjuten till nästa redan motiverade demand-canary; ingen
+separat dyr körning startas för den timern. Processcachen för
+`source_trace_xml` implementeras inte.
+
+
 
 ### Steg 5 — underlag, arkiv och kostnadsberäkning
 

@@ -1,0 +1,235 @@
+{
+  "action_taken": "RETENTION_MAX_WORKERS raised from 3 to 6 in traffic_sim/demand/automatic_passage.py, still bounded by len(paths) and os.cpu_count(); gzip level, mtime, verification, temp-file publication and cleanup semantics are untouched",
+  "arms": {
+    "A1": {
+      "bytes": {
+        "hashed": 805331251,
+        "read": 805331251,
+        "verified": 805331251,
+        "written": 139865918
+      },
+      "child_thread_sum_s": [
+        16.058418,
+        15.36591,
+        15.432586
+      ],
+      "compressed_files_after": 114,
+      "compressed_payload_bytes": 139865918,
+      "compressed_source_bytes": 805331251,
+      "concurrent_region_wall_s": [
+        5.422582,
+        5.202813,
+        5.228718
+      ],
+      "copy_s": [
+        0.720877,
+        1.288624,
+        0.547672
+      ],
+      "gzip_payload_ratio": 0.173675,
+      "peak_rss_bytes": 100171776,
+      "raw_xml_files_after": 0,
+      "raw_xml_files_before": 118,
+      "retained_tree_ratio": 0.192312,
+      "retention_root_wall_s": [
+        5.433186,
+        5.214424,
+        5.243266
+      ],
+      "workers_actual": 3,
+      "workers_requested": 3
+    },
+    "A2": {
+      "bytes": {
+        "hashed": 805331251,
+        "read": 805331251,
+        "verified": 805331251,
+        "written": 139865918
+      },
+      "child_thread_sum_s": [
+        16.200501,
+        16.1031,
+        16.69102
+      ],
+      "compressed_files_after": 114,
+      "compressed_payload_bytes": 139865918,
+      "compressed_source_bytes": 805331251,
+      "concurrent_region_wall_s": [
+        5.486077,
+        5.449984,
+        5.642977
+      ],
+      "copy_s": [
+        0.504252,
+        0.425052,
+        0.480623
+      ],
+      "gzip_payload_ratio": 0.173675,
+      "peak_rss_bytes": 116359168,
+      "raw_xml_files_after": 0,
+      "raw_xml_files_before": 118,
+      "retained_tree_ratio": 0.192312,
+      "retention_root_wall_s": [
+        5.50415,
+        5.461323,
+        5.653104
+      ],
+      "workers_actual": 3,
+      "workers_requested": 3
+    },
+    "B1": {
+      "bytes": {
+        "hashed": 805331251,
+        "read": 805331251,
+        "verified": 805331251,
+        "written": 139865918
+      },
+      "child_thread_sum_s": [
+        22.197125,
+        20.930429,
+        21.067277
+      ],
+      "compressed_files_after": 114,
+      "compressed_payload_bytes": 139865918,
+      "compressed_source_bytes": 805331251,
+      "concurrent_region_wall_s": [
+        3.889233,
+        3.602747,
+        3.661433
+      ],
+      "copy_s": [
+        0.452903,
+        0.408944,
+        0.44596
+      ],
+      "gzip_payload_ratio": 0.173675,
+      "peak_rss_bytes": 128991232,
+      "raw_xml_files_after": 0,
+      "raw_xml_files_before": 118,
+      "retained_tree_ratio": 0.192312,
+      "retention_root_wall_s": [
+        3.90141,
+        3.613643,
+        3.694182
+      ],
+      "workers_actual": 6,
+      "workers_requested": 6
+    },
+    "B2": {
+      "bytes": {
+        "hashed": 805331251,
+        "read": 805331251,
+        "verified": 805331251,
+        "written": 139865918
+      },
+      "child_thread_sum_s": [
+        22.529666,
+        23.054728,
+        22.593149
+      ],
+      "compressed_files_after": 114,
+      "compressed_payload_bytes": 139865918,
+      "compressed_source_bytes": 805331251,
+      "concurrent_region_wall_s": [
+        3.932268,
+        4.004201,
+        3.919705
+      ],
+      "copy_s": [
+        0.515232,
+        0.527499,
+        0.795058
+      ],
+      "gzip_payload_ratio": 0.173675,
+      "peak_rss_bytes": 125730816,
+      "raw_xml_files_after": 0,
+      "raw_xml_files_before": 118,
+      "retained_tree_ratio": 0.192312,
+      "retention_root_wall_s": [
+        3.945624,
+        4.017291,
+        3.934097
+      ],
+      "workers_actual": 6,
+      "workers_requested": 6
+    }
+  },
+  "baseline_revision": "27238f7",
+  "date": "2026-09-13",
+  "design": {
+    "A": "RETENTION_MAX_WORKERS = 3",
+    "B": "RETENTION_MAX_WORKERS = 6",
+    "copy_excluded": true,
+    "decision_metric": "retention root wall; summed thread time is diagnostic only",
+    "isolation": "one process and one output root per arm; a plain owned copytree per repeat, never a hard link; no arm shares mutable output with another",
+    "order": [
+      "A1",
+      "B1",
+      "B2",
+      "A2"
+    ],
+    "repeats_per_arm": 3
+  },
+  "diagnostic_only": true,
+  "exactness": {
+    "contract_outcomes_identical": true,
+    "counts_and_ratios_identical": true,
+    "gz_digest_mismatches": 0,
+    "gz_verified_against_original_per_repeat": 114,
+    "max_ranked_minus_root_wall_s": 0.0,
+    "ranked_wall_never_exceeds_root_wall": true,
+    "retained_tree_files": 137,
+    "retained_tree_identical_across_all_12_repeats": true,
+    "source_unchanged_after_every_repeat": true
+  },
+  "honest_limits": [
+    "one machine with 10 logical cores; a smaller host is bounded by os.cpu_count() and simply gets fewer workers",
+    "the saving is about 1.5 s per finished three-variant root, not a monthly figure; summed thread time rose from ~15.8 s to ~21.8 s and must not be multiplied into a claim",
+    "eight or more workers were not measured"
+  ],
+  "measurement_revision": "27238f71a12692d1965f187e2c1c577772442c53",
+  "note_on_revisions": "both arms ran at the same code except the worker cap, which the profiler sets explicitly and restores; no environment variable is involved",
+  "purpose": "Bounded A/B/B/A: three versus six retention compression workers",
+  "release_evidence": false,
+  "result": {
+    "baseline_median_s": 5.4472545,
+    "baseline_walls_s": [
+      5.214424,
+      5.243266,
+      5.433186,
+      5.461323,
+      5.50415,
+      5.653104
+    ],
+    "best_baseline_s": 5.214424,
+    "candidate_median_s": 3.9177535,
+    "candidate_walls_s": [
+      3.613643,
+      3.694182,
+      3.90141,
+      3.934097,
+      3.945624,
+      4.017291
+    ],
+    "distributions_overlap": false,
+    "improvement_percent": 28.08,
+    "peak_rss_increase_bytes": 12632064,
+    "saving_per_finished_three_variant_root_s": 1.5295,
+    "worst_candidate_s": 4.017291
+  },
+  "schema_version": 1,
+  "source_root": {
+    "bytes": 1075071455,
+    "files": 156,
+    "path": "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a",
+    "raw_xml_bytes": 877499944,
+    "raw_xml_files": 118,
+    "variants": [
+      "q50",
+      "_v1",
+      "_v2"
+    ],
+    "verified_before_measuring": true
+  },
+  "verdict": "accepted"
+}
