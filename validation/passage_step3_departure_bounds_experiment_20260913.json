@@ -28,7 +28,7 @@
   "exactness": {
     "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
     "key_change_reason": "the solver cache deliberately hashes dynamic_assignment.py source bytes, so a changed revision cannot reuse a cache entry",
-    "request_npz_sha256_all_arms": "d1cf64e0f6decd4f (first 16, identical in A1/A2/B1/B2)",
+    "request_npz_sha256_all_arms": "d1cf64e0f6decd4fa2d822bae6ec61c4395b7871ea4ab6e2696dd7d26a38653a",
     "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
     "selection_reproduced_state": "identical in all 12 replays",
     "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",

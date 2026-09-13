@@ -577,8 +577,8 @@ profil** (aldrig delad mellan revisioner — nyckeln hashar källan med flit):
 | `fit_integer_flows` median | 0,762698 s | 0,575360 s | 24,56 % |
 
 Sämsta kandidatmätningen ligger 51,61 % under bästa baslinjemätningen, så
-fördelningarna överlappar inte. Kall `fit_integer_flows` är oförändrad
-(+0,59 %) eftersom den är ~3 s MILP.
+fördelningarna överlappar inte. Kall `fit_integer_flows` är praktiskt oförändrad; kandidatmedianen är 0,59 %
+snabbare eftersom den domineras av ~3 s MILP.
 
 **Exakthet.** Alla 11 solver-request-arrayer (`c`, `data`, `indices`,
 `indptr`, `integrality`, `lower`, `options`, `row_lower`, `row_upper`,

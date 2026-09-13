@@ -634,13 +634,15 @@ def departure_bound_constraints(system: PassageSystem, bounds) -> tuple:
     incidence: dict[tuple[int, tuple[str, ...]], tuple[int, ...]] = {}
     for column, option in enumerate(system.options):
         quarter = math.floor(option.departure_s / system.interval_s)
-        cached = incidence.get((quarter, option.edges))
+        route = (option.edges if isinstance(option.edges, tuple)
+                 else tuple(option.edges))
+        cached = incidence.get((quarter, route))
         if cached is None:
             cached = tuple(
                 row for row in
-                (keys.get((quarter, edge)) for edge in set(option.edges))
+                (keys.get((quarter, edge)) for edge in set(route))
                 if row is not None)
-            incidence[quarter, option.edges] = cached
+            incidence[quarter, route] = cached
         rows.extend(cached)
         columns.extend([column] * len(cached))
     matrix = coo_matrix((np.ones(len(rows)), (rows, columns)),

@@ -729,6 +729,16 @@ def _random_bounds(rng, system):
 
 
 class TestDepartureBoundIncidenceReuse:
+    def test_list_backed_route_keeps_the_previous_public_behavior(self):
+        route = dynamic.RouteDeparture(
+            'list-route', 'od', 0.0, ['a', 's'],
+            {'fit': (0.0, 10.0)}, 1.0, 1)
+        system = dynamic.build_passage_system([route], ['s'], 2)
+        bounds = [{'a': (0.0, 1.0)}, {}]
+
+        _assert_identical(dynamic.departure_bound_constraints(system, bounds),
+                          _frozen_departure_bound_constraints(system, bounds))
+
     def test_one_route_and_quarter_is_walked_once_not_once_per_option(self):
         counter = [0]
         routes = [
