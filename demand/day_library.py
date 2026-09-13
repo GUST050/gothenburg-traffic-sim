@@ -559,6 +559,17 @@ def assemble_window(
     which is precisely what a monolithic writer produces for the same days —
     it emits quarters in order and numbers vehicles as it goes.
     """
+    with io_phases.phase("assemble_window"):
+        return _assemble_window_body(days, route_out, agents_out, names)
+
+
+def _assemble_window_body(
+    days: Iterable[Path],
+    route_out: Path,
+    agents_out: Path,
+    names: tuple[str, str],
+) -> dict[str, Any]:
+    """The assembly itself; the public name owns the root measurement phase."""
     day_paths = [Path(day) for day in days]
     vehicle_id = 0
     agents: list[dict[str, Any]] = []
@@ -626,10 +637,16 @@ def assemble_window(
         io_phases.add_bytes(written=agents_tmp.stat().st_size)
         os.replace(agents_tmp, agents_out)
     if measuring:
-        io_phases.record_digest("assembled_routes_sha256",
-                                sha256_bytes(Path(route_out)))
-        io_phases.record_digest("assembled_agents_sha256",
-                                sha256_bytes(Path(agents_out)))
+        # Hashing the outputs is the MEASUREMENT's work, not production's. It
+        # is timed in its own named phase and marked, so a reader can
+        # subtract it instead of it silently inflating the observed run: on
+        # 12000 vehicles it was 45.8% of that run and sat in no phase at all.
+        io_phases.mark_measurement_only("assemble_output_digest")
+        with io_phases.phase("assemble_output_digest"):
+            io_phases.record_digest("assembled_routes_sha256",
+                                    sha256_bytes(Path(route_out)))
+            io_phases.record_digest("assembled_agents_sha256",
+                                    sha256_bytes(Path(agents_out)))
     return {"vehicles": vehicle_id, "days": len(day_paths)}
 
 

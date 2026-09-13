@@ -71,11 +71,19 @@ class PhaseCollector:
         # Identities of what was produced, so a measured run can be proved
         # byte-identical to an unmeasured one without keeping the artifacts.
         self._digests: dict[str, str] = {}
+        # Phases the INSTRUMENTATION performs and production does not. They
+        # are timed and ranked like any other, but named so a reader can
+        # subtract them instead of mistaking them for production cost.
+        self._measurement_only: set[str] = set()
         self.unmeasured_categories = list(unmeasured_categories)
 
     def count(self, name: str, amount: int = 1) -> None:
         with self._lock:
             self._counters[name] = self._counters.get(name, 0) + int(amount)
+
+    def mark_measurement_only(self, name: str) -> None:
+        with self._lock:
+            self._measurement_only.add(name)
 
     def record_digest(self, name: str, value: str) -> None:
         with self._lock:
@@ -188,6 +196,7 @@ class PhaseCollector:
         with self._lock:
             counters = dict(self._counters)
             digests = dict(self._digests)
+            measurement_only = sorted(self._measurement_only)
             unique_counts = {name: len(values)
                              for name, values in self._unique.items()}
         report = {
@@ -197,6 +206,7 @@ class PhaseCollector:
             'counters': counters,
             'unique_counts': unique_counts,
             'digests': digests,
+            'measurement_only_phases': measurement_only,
             'unmeasured_categories': unmeasured,
         }
         if root is not None:
@@ -389,3 +399,10 @@ def record_digest(name: str, value: str) -> None:
     collector = _COLLECTOR.get()
     if collector is not None:
         collector.record_digest(name, value)
+
+
+def mark_measurement_only(name: str) -> None:
+    """Name a phase the instrumentation itself performs."""
+    collector = _COLLECTOR.get()
+    if collector is not None:
+        collector.mark_measurement_only(name)

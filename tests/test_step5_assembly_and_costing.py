@@ -409,3 +409,69 @@ class TestMeasuringChangesNoCostResult:
         assert result['stop_proof']['stop_reason'] == 'band_exhausted'
         assert record['provider_identity']
         assert record['cursor']['cursor'] == result['cursor']
+
+
+class TestTheAssemblyMeasurementAccountsForItsOwnCost:
+    """A profile that hides its own work misreports what it measures.
+
+    The output digests are computed by the instrumentation, not by
+    production. Measured on 12000 vehicles they were 45.8% of the observed
+    run and appeared in no phase at all, so a reader saw 0.1147 s of phases
+    for a run that took 0.2115 s and could not tell the difference.
+    """
+
+    def test_the_digest_work_is_a_named_phase_marked_as_measurement_only(
+            self, tmp_path):
+        days = [_day(tmp_path, i, vehicles=50) for i in range(2)]
+        collector = io_phases.PhaseCollector()
+
+        with io_phases.observe(collector):
+            dl.assemble_window(days, tmp_path / 'o.rou.xml',
+                               tmp_path / 'o.agents.json')
+
+        report = collector.report()
+        assert 'assemble_output_digest' in report['phases']
+        assert 'assemble_output_digest' in report['measurement_only_phases']
+
+    def test_the_root_phase_publishes_a_residual(self, tmp_path):
+        days = [_day(tmp_path, i, vehicles=50) for i in range(2)]
+        collector = io_phases.PhaseCollector()
+
+        with io_phases.observe(collector):
+            dl.assemble_window(days, tmp_path / 'o.rou.xml',
+                               tmp_path / 'o.agents.json')
+
+        report = collector.report(root='assemble_window')
+        assert report['residual_s'] is not None
+        assert 'assemble_window' in report['phases']
+
+    def test_the_ranked_phases_account_for_the_whole_observed_region(
+            self, tmp_path):
+        days = [_day(tmp_path, i, vehicles=400) for i in range(3)]
+        collector = io_phases.PhaseCollector()
+
+        with io_phases.observe(collector):
+            dl.assemble_window(days, tmp_path / 'o.rou.xml',
+                               tmp_path / 'o.agents.json')
+
+        report = collector.report()
+        root = report['phases']['assemble_window']['inclusive_s']
+        ranked = sum(entry['wall_s'] for entry in report['ranking'])
+        # Everything the observed region spent is now inside a named phase.
+        # Every reported time is rounded to microseconds, so an identity over
+        # the root plus its rows can be off by half a step per value; the
+        # identity itself is exact.
+        assert ranked == pytest.approx(root, abs=5e-6)
+
+    def test_production_output_is_still_byte_identical(self, tmp_path):
+        plain_days = [_day(tmp_path / 'a', i, vehicles=20) for i in range(2)]
+        measured_days = [_day(tmp_path / 'b', i, vehicles=20) for i in range(2)]
+        plain = (tmp_path / 'p.rou.xml', tmp_path / 'p.agents.json')
+        measured = (tmp_path / 'm.rou.xml', tmp_path / 'm.agents.json')
+
+        dl.assemble_window(plain_days, *plain)
+        with io_phases.observe(io_phases.PhaseCollector()):
+            dl.assemble_window(measured_days, *measured)
+
+        assert _sha(measured[0]) == _sha(plain[0])
+        assert _sha(measured[1]) == _sha(plain[1])
