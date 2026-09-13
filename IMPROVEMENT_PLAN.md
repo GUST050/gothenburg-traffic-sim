@@ -349,6 +349,55 @@ den med `rg -n 'calibrated_structure_report|under_1km' tests`; kör även
 [ElementTree](https://docs.python.org/3/library/xml.etree.elementtree.html) dokumenterar
 parseralternativen; streaming ger inte automatiskt mindre CPU-tid.
 
+#### Steg 2 — mätinstrumentering klar 2026-09-13, ingen cache byggd
+
+Endast punkt 1 i steg 2 är gjord: att mäta hur mycket upprepad geometri som
+faktiskt finns och vad rutt- och avståndsfunktionerna kostar. Ingen
+route-facts-tabell finns; `route_facts_cache: not_implemented` står i varje
+rapport.
+
+`route_shape_inventory()` läser en konkret ruttfil med produktionens egen
+`read_route_vehicles` och rapporterar fordon, unika edge-tupler, unika
+endpoint-par och kvoten fordon per unik rutt — för både källrutten och den
+stagade kandidaten, i en egen fas så att parsningen inte hamnar i
+strukturfasens tid.
+
+`measure_structure_calls()` räknar anrop och EXKLUSIV tid för
+`_route_structure_metrics`, `purpose_lengths_km`, `purpose_length_bins`,
+`route_od_distance_km`, `gravity_distance_km` och `load_edge_geometry`.
+Exklusiv tid är egen tid: förfluten tid minus instrumenterade barns tid, så
+`_route_structure_metrics` och dess avståndsanrop aldrig dubbelräknas.
+Funktionerna byts tillbaka i ett `finally`, även när rapporten kastar, och ett
+test kräver att den instrumenterade rapporten är identisk med den
+oinstrumenterade. Mätdata ligger bara i profilerns diagnostiska rapport, som
+ingen pipeline läser och som inte ingår i någon semantisk fingeravtryck.
+
+**Ingen produktionssiffra finns här.** Molncontainern har varken
+katalogartefakter eller POI-cache, så ingen dag kunde byggas. På
+enfordonsfixturen stänger redovisningen: summan av exklusiva tider för
+källrapporten var 0,3016 s mot fasens väggtid 0,3017 s, och `load_edge_geometry`
+syns som 0,153 s första gången mot 0,000014 s när cachen är varm. Det är
+instrumenteringens egen verifiering, inte ett mått på produktionen.
+
+Exakt lokalt mätkommando, på maskinen med artefakterna och mot en q50-rot som
+redan har `passage_replay_contract.json`:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR=/tmp/gs-mpl \
+python3 -m tools.profile_passage_replay \
+  --source runs/automatic-passage-<id>/q50 \
+  --out runs/profile-structure-<stamp> \
+  --pool sumo/candidates.rou.xml \
+  --label forecast-weekend-full-day \
+  --repeats 3
+```
+
+Läs `structure_measurement` i `runs/profile-structure-<stamp>/repeat-1/replay_report.json`:
+`source_route.vehicles` mot `source_route.unique_edge_tuples` säger hur mycket
+upprepning som finns, och `structure_source_calls` säger vad den kostar per
+funktion. Först med de siffrorna är det avgjort om en route-facts-tabell är
+värd att bygga, och för vilka funktioner.
+
 ### Steg 3 — lösar- och supportkostnad, endast efter mätning
 
 **Filer:** `dynamic_assignment.py:fit_integer_flows`,

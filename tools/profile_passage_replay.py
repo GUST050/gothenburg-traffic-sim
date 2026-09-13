@@ -30,6 +30,7 @@ from demand.structure import calibrated_structure_report
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.demand import automatic_passage
 from traffic_sim.experimental import dynamic_assignment as dynamic
+from tools import departure_reconciliation as passage
 from tools import trial_dynamic_passage as trial
 
 SCHEMA_VERSION = 2
@@ -53,6 +54,92 @@ UNMEASURED_CATEGORIES = {
     'archive_validation': 'not requested; pass --archive together with --demand-spec',
     'costing_and_resolver': 'cost-ordered execution needs a monthly workspace, not this root',
 }
+
+
+#: The route and distance machinery behind ``calibrated_structure_report``.
+#: Instrumented by name on the module, so a call made through the module's own
+#: globals is counted wherever inside the report it happens.
+STRUCTURE_CALL_NAMES = (
+    '_route_structure_metrics', 'purpose_lengths_km', 'purpose_length_bins',
+    'route_od_distance_km', 'gravity_distance_km', 'load_edge_geometry',
+)
+
+
+class CallCostProfiler:
+    """Count calls and EXCLUSIVE time for wrapped functions.
+
+    ``_route_structure_metrics`` calls the distance helpers, so adding every
+    function's total would count the same seconds several times. Each frame
+    reports its own time only: elapsed minus the time its instrumented
+    children took.
+    """
+
+    def __init__(self):
+        self._totals: dict[str, dict] = {}
+        self._children_s: list[float] = []
+
+    def wrap(self, name: str, function):
+        def measured(*args, **kwargs):
+            row = self._totals.setdefault(
+                name, {'calls': 0, 'cumulative_s': 0.0, 'exclusive_s': 0.0})
+            row['calls'] += 1
+            self._children_s.append(0.0)
+            began = time.perf_counter()
+            try:
+                return function(*args, **kwargs)
+            finally:
+                elapsed = time.perf_counter() - began
+                children = self._children_s.pop()
+                row['cumulative_s'] += elapsed
+                row['exclusive_s'] += elapsed - children
+                if self._children_s:
+                    self._children_s[-1] += elapsed
+        return measured
+
+    def report(self) -> dict:
+        return {name: {'calls': row['calls'],
+                       'cumulative_s': round(row['cumulative_s'], 6),
+                       'exclusive_s': round(max(row['exclusive_s'], 0.0), 6)}
+                for name, row in sorted(self._totals.items())}
+
+
+@contextmanager
+def measure_structure_calls():
+    """Count the structure report's route/distance work, changing nothing.
+
+    The originals are restored even when the report raises, so an instrumented
+    replay leaves the production module exactly as it found it.
+    """
+    from demand import structure
+    counter = CallCostProfiler()
+    originals = {name: getattr(structure, name) for name in STRUCTURE_CALL_NAMES}
+    try:
+        for name, function in originals.items():
+            setattr(structure, name, counter.wrap(name, function))
+        yield counter
+    finally:
+        for name, function in originals.items():
+            setattr(structure, name, function)
+
+
+def route_shape_inventory(route_path: Path) -> dict:
+    """How many vehicles share how few distinct routes and endpoint pairs.
+
+    This is the quantity step 2 is about: repeated geometry is only worth
+    computing once per unique route if the repetition is real. Measured here,
+    not cached — no route-facts table exists yet.
+    """
+    vehicles = passage.read_route_vehicles(route_path)
+    edge_tuples = {vehicle.edges for vehicle in vehicles}
+    endpoints = {(vehicle.edges[0], vehicle.edges[-1])
+                 for vehicle in vehicles if vehicle.edges}
+    return {
+        'vehicles': len(vehicles),
+        'unique_edge_tuples': len(edge_tuples),
+        'unique_endpoint_pairs': len(endpoints),
+        'vehicles_per_unique_edge_tuple': (
+            round(len(vehicles) / len(edge_tuples), 3) if edge_tuples else None),
+    }
 
 
 class ReplayRefused(RuntimeError):
@@ -500,9 +587,13 @@ def replay(source: Path, out: Path, *, label: str | None = None,
                     'saved result used boundary fallback or structural repair; '
                     'this replay path cannot reproduce that solver branch')
 
-            with recorder.phase('structure_source'):
-                before = calibrated_structure_report(
-                    replay_root / 'input/calibrated.rou.xml', pool_path=pool)
+            source_route = replay_root / 'input/calibrated.rou.xml'
+            with recorder.phase('route_shape_inventory', route='source') as shape:
+                source_shape = route_shape_inventory(source_route)
+                shape.update(source_shape)
+            with measure_structure_calls() as source_calls, \
+                    recorder.phase('structure_source'):
+                before = calibrated_structure_report(source_route, pool_path=pool)
             if before is None:
                 raise ReplayRefused('source structural report is unavailable')
 
@@ -537,10 +628,24 @@ def replay(source: Path, out: Path, *, label: str | None = None,
                 candidate = automatic_passage._stage_selection(
                     replay_root / 'input', selected, out / 'candidate')
 
-            with recorder.phase('structure_candidate', pool_path=str(pool) if pool else None):
+            with recorder.phase('route_shape_inventory', route='candidate') as shape:
+                candidate_shape = route_shape_inventory(candidate)
+                shape.update(candidate_shape)
+            with measure_structure_calls() as candidate_calls, \
+                    recorder.phase('structure_candidate',
+                                   pool_path=str(pool) if pool else None):
                 after = calibrated_structure_report(candidate, pool_path=pool)
             if after is None:
                 raise ReplayRefused('candidate structural report is unavailable')
+            report['structure_measurement'] = {
+                'basis': ('observational; measured outside every semantic '
+                          'fingerprint and never fed back into a report'),
+                'route_facts_cache': 'not_implemented',
+                'source_route': source_shape,
+                'candidate_route': candidate_shape,
+                'structure_source_calls': source_calls.report(),
+                'structure_candidate_calls': candidate_calls.report(),
+            }
             report['structure_flags_source'] = sorted(
                 automatic_passage._structure_flag_names(before or {}))
             report['structure_flags_candidate'] = sorted(
@@ -673,6 +778,7 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
                   'residual_s': run['timing']['residual_s'],
                   'solver_cache_hit': run.get('solver_cache_hit'),
                   'solver_request_key': run.get('solver_request_key'),
+                  'structure_measurement': run.get('structure_measurement'),
                   'phase_wall_s': wall}
                  for index, (run, wall) in enumerate(zip(runs, walls))],
         'first_repeat_phase_wall_s': walls[0],

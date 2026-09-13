@@ -627,6 +627,83 @@ class TestDirectReplayCacheIsolation:
         assert _tree_state(source) == before
 
 
+class TestStructureMeasurement:
+    """Step 2 instrumentation ONLY: measure the structure cost, change nothing.
+
+    The June replay found 51,640 vehicles behind 491 distinct edge sequences,
+    and 229,444 distance calls in one report. Before any route-facts cache is
+    written, the profile must state those counts and what the route and
+    distance functions actually cost.
+    """
+
+    def test_the_route_shape_of_each_measured_file_is_reported(self, tmp_path):
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        shape = report['structure_measurement']['source_route']
+        assert shape['vehicles'] == len(DEPARTURES)
+        # Every fixture vehicle drives the same o->s->d route.
+        assert shape['unique_edge_tuples'] == 1
+        assert shape['unique_endpoint_pairs'] == 1
+        assert shape['vehicles_per_unique_edge_tuple'] == float(len(DEPARTURES))
+        assert report['structure_measurement']['candidate_route']['vehicles'] \
+            == len(DEPARTURES)
+
+    def test_the_route_and_distance_functions_are_counted_and_timed(self, tmp_path):
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        measured = report['structure_measurement']
+        for key in ('structure_source_calls', 'structure_candidate_calls'):
+            rows = measured[key]
+            assert rows['_route_structure_metrics']['calls'] == 1
+            for name, row in rows.items():
+                assert row['calls'] >= 0
+                assert 0 <= row['exclusive_s'] <= row['cumulative_s'] + 1e-9, name
+
+    def test_exclusive_time_never_double_counts_a_nested_distance_call(self, tmp_path):
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        rows = report['structure_measurement']['structure_source_calls']
+        phases = {row['phase']: row for row in report['timing']['phases']}
+        total_exclusive = sum(row['exclusive_s'] for row in rows.values())
+        assert total_exclusive <= phases['structure_source']['wall_s'] + 1e-6
+
+    def test_the_instrumentation_is_removed_again(self, tmp_path):
+        from demand import structure
+
+        originals = {name: getattr(structure, name)
+                     for name in profiler.STRUCTURE_CALL_NAMES}
+
+        profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        for name, function in originals.items():
+            assert getattr(structure, name) is function, name
+
+    def test_measuring_does_not_change_what_the_structure_report_says(self, tmp_path):
+        from demand.structure import calibrated_structure_report
+        source = evidence_root(tmp_path)
+        route = source / 'input/calibrated.rou.xml'
+
+        plain = calibrated_structure_report(route)
+        with profiler.measure_structure_calls() as measured:
+            instrumented = calibrated_structure_report(route)
+
+        assert instrumented == plain
+        assert measured.report()['_route_structure_metrics']['calls'] == 1
+
+    def test_the_measurement_is_declared_observational(self, tmp_path):
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        assert 'fingerprint' in report['structure_measurement']['basis']
+
+    def test_no_route_facts_cache_is_written(self, tmp_path):
+        """Step 2 is measurement only; nothing may be reused between reports."""
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        rows = report['structure_measurement']
+        assert rows['structure_source_calls']['_route_structure_metrics']['calls'] \
+            == rows['structure_candidate_calls']['_route_structure_metrics']['calls'] == 1
+
+
 class TestArchiveValidationPhase:
     def _stub(self, monkeypatch, calls):
         from traffic_sim.simulation import monthly_demand
@@ -830,3 +907,13 @@ def test_a_verified_system_that_does_not_match_the_saved_targets_is_refused(
 
     with pytest.raises(profiler.ReplayRefused, match='does not match the saved targets'):
         profiler.replay(source, tmp_path / 'out')
+
+
+def test_each_repeat_carries_its_own_structure_measurement(tmp_path):
+    summary = profiler.profile(evidence_root(tmp_path), tmp_path / 'out', repeats=2)
+
+    for run in summary['runs']:
+        measured = run['structure_measurement']
+        assert measured['route_facts_cache'] == 'not_implemented'
+        assert measured['source_route']['unique_edge_tuples'] == 1
+        assert measured['structure_source_calls']['_route_structure_metrics']['calls'] == 1

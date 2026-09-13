@@ -9,12 +9,12 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — simulation quality and performance research`
-- Current focus: `Speed step 1 is implemented behind identity gates. Codex runs the local A/B/B/A on the frozen 2027-06-25 input; nothing is adopted until every semantic hash and matrix gate is identical.`
+- Current focus: `Step 1 awaits the local A/B/B/A verdict. Step 2 is instrumentation only: measure repeated route geometry and the structure call costs on the local artifacts before deciding whether a route-facts table is worth building.`
 - Status: `H1 and speed step 1 are committed on claude/exciting-rubin-1e6k5m. H1: profile() now creates ONE empty solver cache under the profile output and shares it across repeats, reads solver/state.json per repeat and fails closed on a missing or non-boolean cache_hit; the regression requires [false, true, true] with one request key, and solver_cache_basis plus process_state name both the process and the solver cache. A lone replay keeps its own private cache. Step 1: trial.load_verified_source returns a frozen VerifiedSource carrying options, groups, metadata and the base system whose projection reconstructed the raw entered cells; _refine reuses exactly that system and refuses a sensor/quarter mismatch; expand_departure_support_verified takes the built system instead of a public skip flag, so the dummy validation system is gone while the public entry point still validates arbitrary callers. Measured on the test fixture only: four system builds became two ([1,4],[1,4],[1,1],[6,4] to [1,4],[6,4]) with byte-identical selection/routes/agents digests before and after. No production timing was measured in the cloud container, which has neither catalog artifacts nor the POI cache.`
-- Suggested next action: `Codex runs the local A/B/B/A on the frozen 2027-06-25 input and adopts only if every selection/routes/agents digest, the base and boundary CSR shape/indptr/indices/data and the solver request key are identical. Do not start speed step 2 before that verdict, and do not warm all dates or regenerate candidates.`
+- Suggested next action: `Run the step-2 measurement command in IMPROVEMENT_PLAN.md on a q50 root that already carries passage_replay_contract.json, and read structure_measurement in the repeat-1 report. Only those counts decide whether a route-facts table is built, and for which functions. Codex's A/B/B/A on step 1 is still outstanding.`
 - Eligible actors: `Any capable actor.`
 - Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation or expensive catalog/demand run without explicit scope; keep unrelated local changes outside this delivery.`
-- Updated: `2026-09-13. H1 and step 1 implemented test-first; production equivalence still owed by the local A/B/B/A.`
+- Updated: `2026-09-13. H1 review corrections plus step-2 instrumentation; no route-facts cache and no production timing yet.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- WORKFLOW_HISTORY_START -->
