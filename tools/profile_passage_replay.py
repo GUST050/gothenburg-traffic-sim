@@ -339,11 +339,33 @@ def profile_archive_validation(archive: Path, spec_path: Path, out: Path,
     return report
 
 
+def _solver_checkpoint_state(checkpoint_dir: Path) -> dict:
+    """Read the solver's OWN record of whether it reused this exact request.
+
+    Production hits this cache, so a profile that cannot say whether its own
+    solve was a hit is measuring an unknown workload. Fail closed instead.
+    """
+    path = Path(checkpoint_dir) / 'state.json'
+    try:
+        state = json.loads(path.read_text())
+    except (OSError, ValueError) as error:
+        raise ReplayRefused(f'unreadable solver checkpoint state: {error}') from error
+    cache_hit = state.get('cache_hit')
+    if not isinstance(cache_hit, bool):
+        raise ReplayRefused(
+            f'solver checkpoint cache_hit is not a boolean: {cache_hit!r}')
+    key = state.get('key')
+    if not isinstance(key, str) or not key:
+        raise ReplayRefused('solver checkpoint state carries no request key')
+    return {'cache_hit': cache_hit, 'key': key}
+
+
 def replay(source: Path, out: Path, *, label: str | None = None,
            pool: Path | None = None, allow_compressed: bool = False,
            solver_time_limit_s: float = 60, archive: Path | None = None,
            demand_spec: Path | None = None, archive_repeats: int = 3,
-           preparation_only: bool = False) -> dict:
+           preparation_only: bool = False,
+           solver_cache_dir: Path | None = None) -> dict:
     """Replay preparation, solving, staging and structure over saved traces."""
     source, out = _resolve_isolation(source, out)
     out.mkdir(parents=True, exist_ok=False)
@@ -390,7 +412,9 @@ def replay(source: Path, out: Path, *, label: str | None = None,
 
             with recorder.phase('baseline_reproduction') as baseline:
                 with recorder.phase('load_source'):
-                    options, groups, metadata = trial.load_source(replay_root)
+                    verified = trial.load_verified_source(replay_root)
+                options = list(verified.options)
+                groups, metadata = dict(verified.groups), verified.metadata
                 baseline['vehicles'] = len(options)
                 baseline['od_purpose_groups'] = len(groups)
             # This verifies the saved learning measurement only. Exact output
@@ -413,8 +437,15 @@ def replay(source: Path, out: Path, *, label: str | None = None,
                 else 'targets_groups_and_retained_pfe_bounds')
 
             with recorder.phase('system_construction') as construction:
-                with recorder.phase('build_passage_system_base'):
-                    base = dynamic.build_passage_system(options, edges, quarters)
+                # Production reuses the system load_source already proved
+                # against the raw entered cells; mirror that here so the phase
+                # rows stay comparable with the builder's own timings.
+                with recorder.phase('build_passage_system_base') as built:
+                    base = verified.system
+                    if base.sensors != tuple(edges) or base.n_intervals != quarters:
+                        raise ReplayRefused(
+                            'verified passage system does not match the saved targets')
+                    built['source'] = 'reused_from_load_source'
                 if bounds is not None:
                     with recorder.phase('departure_bound_constraints'):
                         matrix, lower, upper = dynamic.departure_bound_constraints(base, bounds)
@@ -423,8 +454,8 @@ def replay(source: Path, out: Path, *, label: str | None = None,
                             raise ReplayRefused(
                                 'source violates the retained PFE structural bounds')
                 with recorder.phase('expand_departure_support'):
-                    expanded = dynamic.expand_departure_support(
-                        options, SHIFT_SUPPORT_S, begin_s=0, end_s=quarters * 900,
+                    expanded = dynamic.expand_departure_support_verified(
+                        base, SHIFT_SUPPORT_S, begin_s=0, end_s=quarters * 900,
                         guard_s=GUARD_S)
                 with recorder.phase('build_passage_system_expanded'):
                     system = dynamic.build_passage_system(expanded, edges, quarters)
@@ -461,14 +492,26 @@ def replay(source: Path, out: Path, *, label: str | None = None,
             if before is None:
                 raise ReplayRefused('source structural report is unavailable')
 
+            # A profile of repeats shares ONE cache created empty for the
+            # profile, so repeat 1 is cold and later repeats reproduce the
+            # cache hit production itself gets. A lone replay keeps a private
+            # cache under its own output.
+            cache_root = (Path(solver_cache_dir) if solver_cache_dir is not None
+                          else out / 'solver-cache')
+            cache_root.mkdir(parents=True, exist_ok=True)
             with recorder.phase('solver') as solver:
                 with recorder.phase('fit_integer_flows'):
                     fit = dynamic.fit_integer_flows(
                         system, targets, groups, time_limit_s=solver_time_limit_s,
                         departure_bounds=bounds,
                         checkpoint_dir=out / 'solver',
-                        cache_dir=out / 'solver-cache')
+                        cache_dir=cache_root)
                 solver['status'] = fit.status
+            checkpoint = _solver_checkpoint_state(out / 'solver')
+            solver['cache_hit'] = checkpoint['cache_hit']
+            report['solver_cache_root'] = str(cache_root)
+            report['solver_cache_hit'] = checkpoint['cache_hit']
+            report['solver_request_key'] = checkpoint['key']
             report['fit_status'] = fit.status
             selected = [option for option, count in zip(expanded, fit.counts) if count == 1]
             report['selected_vehicles'] = len(selected)
@@ -587,7 +630,17 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
         raise ReplayRefused('at least one replay is required')
     source, out = _resolve_isolation(source, out)
     out.mkdir(parents=True, exist_ok=False)
-    runs = [replay(source, out / f'repeat-{index + 1}', **options)
+    # One empty cache for the whole profile: repeat 1 pays the cold solve and
+    # later repeats reproduce production's cache hit. It lives under the
+    # profile output, never in or around the evidence being read.
+    cache_root = out / 'solver-cache'
+    if cache_root == source or source in cache_root.parents \
+            or cache_root in source.parents:
+        raise ReplayRefused(
+            f'shared solver cache {cache_root} must be outside {source}')
+    cache_root.mkdir(parents=True, exist_ok=False)
+    runs = [replay(source, out / f'repeat-{index + 1}',
+                   solver_cache_dir=cache_root, **options)
             for index in range(repeats)]
     walls = [_phase_walls(run) for run in runs]
     names = sorted({name for row in walls for name in row})
@@ -597,11 +650,16 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
         'source_evidence_root': str(source), 'output_root': str(out),
         'repeats': repeats,
         'process_state': ('all repeats run after module imports; the first may populate lazy '
-                          'and filesystem caches, later repeats reuse this process'),
+                          'and filesystem caches, later repeats reuse this process and the '
+                          'shared solver cache this profile created empty'),
+        'solver_cache_root': str(cache_root),
+        'solver_cache_basis': 'empty_output_local_cache_then_shared_across_repeats',
         'runs': [{'repeat': index + 1, 'status': run['status'],
                   'report': str(out / f'repeat-{index + 1}/replay_report.json'),
                   'root_wall_s': run['timing']['root_wall_s'],
                   'residual_s': run['timing']['residual_s'],
+                  'solver_cache_hit': run.get('solver_cache_hit'),
+                  'solver_request_key': run.get('solver_request_key'),
                   'phase_wall_s': wall}
                  for index, (run, wall) in enumerate(zip(runs, walls))],
         'first_repeat_phase_wall_s': walls[0],

@@ -257,14 +257,20 @@ def _refine(data, source_report, network, work, candidate_pool):
             path = directory / name
             manifest['evidence_sha256'][str(path.relative_to(work))] = sha256_file(path)
     (work / 'report.json').write_text(json.dumps(manifest))
-    options, groups, _ = trial.load_source(work)
-    original = dynamic.build_passage_system(options, edges, quarters)
+    # The loader already built and PROVED this system: its projection
+    # reconstructed the raw entered cells. Rebuilding an identical one here was
+    # pure duplication, so the verified object is carried through instead.
+    verified = trial.load_verified_source(work)
+    options, groups = list(verified.options), dict(verified.groups)
+    original = verified.system
+    if original.sensors != tuple(edges) or original.n_intervals != quarters:
+        raise ValueError('verified passage system does not match the calibrated targets')
     matrix, lower, upper = dynamic.departure_bound_constraints(original, bounds)
     counts = matrix @ np.ones(len(options))
     if np.any(counts < lower) or np.any(counts > upper):
         raise ValueError('source violates retained PFE structural bounds')
-    expanded = dynamic.expand_departure_support(
-        options, [-900, -600, -300, 0, 300, 600, 900],
+    expanded = dynamic.expand_departure_support_verified(
+        original, [-900, -600, -300, 0, 300, 600, 900],
         begin_s=0, end_s=quarters*900, guard_s=60)
     before_structure = calibrated_structure_report(route, pool_path=candidate_pool)
     if before_structure is None:

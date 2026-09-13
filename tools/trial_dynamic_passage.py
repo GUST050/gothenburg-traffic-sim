@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 import copy
+from dataclasses import dataclass
 import json
 import math
 from pathlib import Path
@@ -25,7 +26,21 @@ VALIDATION_ARMS = (4000, 4001, 4002)
 INPUT_NAMES = ('calibrated.rou.xml', 'calibrated.agents.json', 'demand_meta.json', 'net.net.xml')
 
 
-def load_source(source: Path) -> tuple[list[dynamic.RouteDeparture], dict[str, int], dict]:
+@dataclass(frozen=True)
+class VerifiedSource:
+    """One loaded evidence root, with the base system that verified it.
+
+    ``system`` is the very system whose projection reconstructed the raw
+    ``entered`` cells, so a caller that reuses it is provably working with the
+    checked observations rather than an equal-looking rebuild.
+    """
+    options: tuple[dynamic.RouteDeparture, ...]
+    groups: dict[str, int]
+    metadata: dict
+    system: dynamic.PassageSystem
+
+
+def load_verified_source(source: Path) -> VerifiedSource:
     """Require complete, hashed route/time evidence and source OD/purpose identity."""
     manifest = json.loads((source / 'report.json').read_text())
     for name in INPUT_NAMES:
@@ -91,7 +106,13 @@ def load_source(source: Path) -> tuple[list[dynamic.RouteDeparture], dict[str, i
         actual = passage._parse_entered(source / relative, metadata['n_intervals'], sensors)
         if projected[str(arm)] != actual:
             raise ValueError('route-time projection does not reconstruct raw entered cells')
-    return options, dict(groups), metadata
+    return VerifiedSource(system.options, dict(groups), metadata, system)
+
+
+def load_source(source: Path) -> tuple[list[dynamic.RouteDeparture], dict[str, int], dict]:
+    """The established tuple contract, in fresh containers callers may edit."""
+    verified = load_verified_source(source)
+    return list(verified.options), dict(verified.groups), verified.metadata
 
 
 def materialize_selection(source_route: Path, source_agents: Path,

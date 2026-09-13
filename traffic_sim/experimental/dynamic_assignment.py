@@ -359,6 +359,19 @@ def fit_integer_flows(
                    float(np.abs(counts - prior).sum()), result.message)
 
 
+def _validated_shift_grid(shifts_s: Sequence[int], begin_s: float,
+                          end_s: float, guard_s: float) -> list[int]:
+    """Check the grid and horizon, independently of who validated the options."""
+    shifts = sorted(shifts_s)
+    if not shifts or 0 not in shifts or len(set(shifts)) != len(shifts) or any(
+            isinstance(v, bool) or not isinstance(v, int) for v in shifts):
+        raise ValueError('unique integer shifts including zero are required')
+    if not all(math.isfinite(v) for v in (begin_s, end_s, guard_s)) \
+            or begin_s >= end_s or guard_s < 0:
+        raise ValueError('finite horizon and nonnegative guard are required')
+    return shifts
+
+
 def expand_departure_support(
     base_options: Sequence[RouteDeparture], shifts_s: Sequence[int], *,
     begin_s: float, end_s: float, guard_s: float = 0,
@@ -369,18 +382,49 @@ def expand_departure_support(
     loading. Envelope scenarios use each route's observed spread plus the
     declared guard; they do not force all its sensors into the same quarter.
     All generated alternatives have capacity one to avoid point-mass cloning.
+
+    Callers holding a system that already validated these exact options use
+    ``expand_departure_support_verified`` instead of paying for the throwaway
+    validation system below.
     """
-    shifts = sorted(shifts_s)
-    if not shifts or 0 not in shifts or len(set(shifts)) != len(shifts) or any(
-            isinstance(v, bool) or not isinstance(v, int) for v in shifts):
-        raise ValueError('unique integer shifts including zero are required')
-    if not all(math.isfinite(v) for v in (begin_s, end_s, guard_s)) \
-            or begin_s >= end_s or guard_s < 0:
-        raise ValueError('finite horizon and nonnegative guard are required')
+    shifts = _validated_shift_grid(shifts_s, begin_s, end_s, guard_s)
     # Reuse the observation builder's complete travel-time validation.
     if not base_options:
         raise ValueError('base alternatives are required')
     build_passage_system(base_options, [base_options[0].edges[0]], 1)
+    return _shifted_alternatives(base_options, shifts, begin_s=begin_s,
+                                 end_s=end_s, guard_s=guard_s)
+
+
+def expand_departure_support_verified(
+    system: PassageSystem, shifts_s: Sequence[int], *,
+    begin_s: float, end_s: float, guard_s: float = 0,
+) -> list[RouteDeparture]:
+    """Expand the options a built system has ALREADY validated.
+
+    ``build_passage_system`` checks every option it accepts — identity, group,
+    physical edges, complete finite monotone offsets per named scenario,
+    capacity and prior — so the throwaway system the public entry point builds
+    cannot fail for options that are already inside one. Taking the system
+    rather than a skip flag makes that proof unforgeable: a ``PassageSystem``
+    cannot exist without its options having passed. Every per-option envelope
+    rule that belongs to the EXPANSION (unit capacity, declared horizon,
+    reserved scenario names) is still enforced here.
+    """
+    if not isinstance(system, PassageSystem):
+        raise ValueError('a built passage system is required')
+    shifts = _validated_shift_grid(shifts_s, begin_s, end_s, guard_s)
+    if not system.options:
+        raise ValueError('base alternatives are required')
+    return _shifted_alternatives(system.options, shifts, begin_s=begin_s,
+                                 end_s=end_s, guard_s=guard_s)
+
+
+def _shifted_alternatives(
+    base_options: Sequence[RouteDeparture], shifts: Sequence[int], *,
+    begin_s: float, end_s: float, guard_s: float,
+) -> list[RouteDeparture]:
+    """Build the alternatives themselves; the options are already validated."""
     scale = max(1, max(abs(v) for v in shifts))
     result = []
     for option in base_options:

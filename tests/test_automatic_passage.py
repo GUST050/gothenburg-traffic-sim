@@ -347,3 +347,121 @@ def test_measurements_use_bounded_available_parallelism(tmp_path, monkeypatch, c
     monkeypatch.setattr(auto, '_measure', lambda value: value)
     assert auto._measure_batch([(i,) for i in range(6)]) == list(range(6))
     assert workers == [expected]
+
+
+def _system_build_spy(monkeypatch):
+    """Record every passage-system build the production path performs."""
+    from traffic_sim.experimental import dynamic_assignment as dynamic
+    real = dynamic.build_passage_system
+    calls = []
+
+    def spy(options, sensors, n_intervals, **kwargs):
+        calls.append({'options': len(options), 'sensors': tuple(sorted(sensors)),
+                      'n_intervals': n_intervals})
+        return real(options, sensors, n_intervals, **kwargs)
+
+    monkeypatch.setattr(auto.dynamic, 'build_passage_system', spy)
+    monkeypatch.setattr(auto.trial.dynamic, 'build_passage_system', spy)
+    monkeypatch.setattr(dynamic, 'build_passage_system', spy)
+    return calls
+
+
+def test_refine_builds_the_base_system_once_and_skips_the_dummy_validation(
+        tmp_path, monkeypatch):
+    """Step 1: load_source built and verified the base system already.
+
+    ``_refine`` rebuilt exactly the same system, and
+    ``expand_departure_support`` built a third throwaway system only to repeat
+    the per-option validation. Both are removed; the expanded candidate matrix
+    is a different system and must still be built.
+    """
+    inputs, reports, network, _calls = fixture(tmp_path, monkeypatch)
+    builds = _system_build_spy(monkeypatch)
+
+    auto.refine_variants(inputs, reports, network, tmp_path / 'evidence')
+
+    assert [b for b in builds if b['n_intervals'] == 1] == []
+    base = [b for b in builds if b['options'] == 1]
+    assert len(base) == 1, base
+    assert base[0]['sensors'] == ('s',) and base[0]['n_intervals'] == 4
+    assert [b for b in builds if b['options'] > 1], 'expanded system must still be built'
+
+
+def test_refine_reuses_the_verified_system_for_the_bound_check(tmp_path, monkeypatch):
+    """The bounds must be checked against the system that verified the traces."""
+    inputs, reports, network, _calls = fixture(tmp_path, monkeypatch)
+    seen = []
+    real = auto.dynamic.departure_bound_constraints
+
+    def spy(system, bounds):
+        seen.append(system)
+        return real(system, bounds)
+
+    monkeypatch.setattr(auto.dynamic, 'departure_bound_constraints', spy)
+    loaded = []
+    real_load = auto.trial.load_verified_source
+    monkeypatch.setattr(auto.trial, 'load_verified_source',
+                        lambda source: loaded.append(real_load(source)) or loaded[-1])
+
+    auto.refine_variants(inputs, reports, network, tmp_path / 'evidence')
+
+    # The solver checks its own expanded system too; the FIRST check is the
+    # source bound check, and it must use the verified base system.
+    assert len(loaded) == 1
+    assert seen[0] is loaded[0].system
+    assert all(later is not loaded[0].system for later in seen[1:])
+
+
+def test_the_replayed_base_and_boundary_matrices_are_bit_identical(tmp_path):
+    """CSR gate: reuse must not change shape, indptr, indices or data."""
+    from traffic_sim.experimental import dynamic_assignment as dynamic
+    from tests.test_trial_dynamic_passage import fixture as trial_fixture
+
+    source = trial_fixture(tmp_path)
+    verified = auto.trial.load_verified_source(source)
+    rebuilt = dynamic.build_passage_system(
+        list(verified.options), sorted(verified.system.sensors),
+        verified.metadata['n_intervals'])
+
+    for name in ('matrix', 'boundary_matrix'):
+        a, b = getattr(verified.system, name), getattr(rebuilt, name)
+        assert a.shape == b.shape
+        assert a.indptr.tolist() == b.indptr.tolist()
+        assert a.indices.tolist() == b.indices.tolist()
+        assert a.data.tolist() == b.data.tolist()
+
+
+def test_the_solver_request_key_is_unchanged_by_reuse(tmp_path):
+    """The solver must be handed byte-identical inputs either way."""
+    import json
+    from traffic_sim.experimental import dynamic_assignment as dynamic
+    from tests.test_trial_dynamic_passage import fixture as trial_fixture
+
+    source = trial_fixture(tmp_path)
+    verified = auto.trial.load_verified_source(source)
+    options, groups, metadata = auto.trial.load_source(source)
+    quarters = metadata['n_intervals']
+    targets = {'s': [int(round(v)) for v in
+                     metadata['sensor_targets']['variants']['edge_shares']['s']]}
+    bounds = [{} for _ in range(quarters)]
+    shifts = [-900, 0, 900]
+    # No guard band: this fixture's uncertainty scenarios would straddle a
+    # quarter boundary and make the fit infeasible. The request key, not
+    # feasibility, is what this gate measures.
+    guard_s = 0
+
+    keys = []
+    for index, support in enumerate((
+            dynamic.expand_departure_support(
+                options, shifts, begin_s=0, end_s=quarters * 900, guard_s=guard_s),
+            dynamic.expand_departure_support_verified(
+                verified.system, shifts, begin_s=0, end_s=quarters * 900,
+                guard_s=guard_s))):
+        work = tmp_path / f'solve-{index}'
+        dynamic.fit_integer_flows(
+            dynamic.build_passage_system(support, ['s'], quarters),
+            targets, groups, departure_bounds=bounds,
+            checkpoint_dir=work / 'solver', cache_dir=work / 'cache')
+        keys.append(json.loads((work / 'solver/state.json').read_text())['key'])
+
+    assert keys[0] == keys[1]

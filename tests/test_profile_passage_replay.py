@@ -504,6 +504,91 @@ class TestRepeatedProfile:
         assert (tmp_path / 'out/profile_report.json').is_file()
 
 
+class TestSharedSolverCache:
+    """H1: three repeats measured three COLD solves, then called them reuse.
+
+    Production hit its solver cache, so a profile whose every repeat starts
+    from an empty cache ranks the solver far above what production pays.
+    """
+
+    def test_repeat_one_is_cold_and_later_repeats_hit_the_shared_cache(self, tmp_path):
+        summary = profiler.profile(evidence_root(tmp_path), tmp_path / 'out', repeats=3)
+
+        assert [run['solver_cache_hit'] for run in summary['runs']] == [False, True, True]
+        keys = {run['solver_request_key'] for run in summary['runs']}
+        assert len(keys) == 1 and all(isinstance(key, str) and key for key in keys)
+
+    def test_the_shared_cache_is_created_under_the_profile_output(self, tmp_path):
+        source = evidence_root(tmp_path)
+        before = _tree_state(source)
+
+        summary = profiler.profile(source, tmp_path / 'out', repeats=2)
+
+        cache = Path(summary['solver_cache_root'])
+        assert cache.is_dir()
+        assert cache.parent == (tmp_path / 'out').resolve()
+        assert source.resolve() not in cache.parents and cache not in source.resolve().parents
+        assert _tree_state(source) == before
+
+    def test_the_cache_starts_empty_so_the_first_solve_cannot_inherit(self, tmp_path):
+        summary = profiler.profile(evidence_root(tmp_path), tmp_path / 'out', repeats=1)
+
+        assert summary['runs'][0]['solver_cache_hit'] is False
+        assert summary['solver_cache_basis'] \
+            == 'empty_output_local_cache_then_shared_across_repeats'
+
+    def test_the_summary_describes_process_and_solver_cache_separately(self, tmp_path):
+        summary = profiler.profile(evidence_root(tmp_path), tmp_path / 'out', repeats=2)
+
+        assert 'after module imports' in summary['process_state']
+        assert 'solver cache' in summary['process_state']
+
+    def test_a_single_replay_keeps_its_own_private_cache(self, tmp_path):
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        assert report['solver_cache_hit'] is False
+        assert (tmp_path / 'out/solver-cache').is_dir()
+
+    def test_a_missing_solver_state_is_refused(self, tmp_path, monkeypatch):
+        source = evidence_root(tmp_path)
+        real = profiler.dynamic.fit_integer_flows
+
+        def _fit_without_state(*args, **kwargs):
+            fit = real(*args, **kwargs)
+            Path(kwargs['checkpoint_dir'], 'state.json').unlink()
+            return fit
+
+        monkeypatch.setattr(profiler.dynamic, 'fit_integer_flows', _fit_without_state)
+
+        with pytest.raises(profiler.ReplayRefused, match='solver checkpoint state'):
+            profiler.replay(source, tmp_path / 'out')
+
+    def test_a_non_boolean_cache_status_is_refused(self, tmp_path, monkeypatch):
+        source = evidence_root(tmp_path)
+        real = profiler.dynamic.fit_integer_flows
+
+        def _fit_with_bad_state(*args, **kwargs):
+            fit = real(*args, **kwargs)
+            path = Path(kwargs['checkpoint_dir'], 'state.json')
+            state = json.loads(path.read_text())
+            state['cache_hit'] = 'yes'
+            path.write_text(json.dumps(state))
+            return fit
+
+        monkeypatch.setattr(profiler.dynamic, 'fit_integer_flows', _fit_with_bad_state)
+
+        with pytest.raises(profiler.ReplayRefused, match='cache_hit'):
+            profiler.replay(source, tmp_path / 'out')
+
+    def test_preparation_only_reports_no_solver_cache_status(self, tmp_path):
+        source = evidence_root(tmp_path, with_contract=False, with_result=False)
+
+        report = profiler.replay(source, tmp_path / 'out', preparation_only=True)
+
+        assert report['status'] == 'profiled_preparation_only'
+        assert 'solver_cache_hit' not in report
+
+
 class TestArchiveValidationPhase:
     def _stub(self, monkeypatch, calls):
         from traffic_sim.simulation import monthly_demand
@@ -677,3 +762,33 @@ def test_a_refusal_is_recorded_as_a_refusal_not_a_failure(tmp_path):
     assert report['trace_state'] == 'incomplete'
     assert report['timing']['phases'][1]['phase'] == 'inventory'
     assert report['timing']['phases'][1]['files'] == len(report['inventory']['files'])
+
+
+def test_the_replay_mirrors_production_and_reuses_the_verified_base_system(tmp_path):
+    """The profile must measure the path production actually runs."""
+    source = evidence_root(tmp_path)
+
+    report = profiler.replay(source, tmp_path / 'out')
+
+    rows = {row['phase']: row for row in report['timing']['phases']}
+    assert rows['build_passage_system_base']['source'] == 'reused_from_load_source'
+    assert report['status'] == 'replayed'
+    assert report['selection_reproduced']['state'] == 'identical'
+
+
+def test_a_verified_system_that_does_not_match_the_saved_targets_is_refused(
+        tmp_path, monkeypatch):
+    source = evidence_root(tmp_path)
+    real = profiler.trial.load_verified_source
+
+    def _mismatched(path):
+        verified = real(path)
+        return profiler.trial.VerifiedSource(
+            verified.options, verified.groups, verified.metadata,
+            profiler.dynamic.build_passage_system(
+                list(verified.options), [SENSOR], QUARTERS + 1))
+
+    monkeypatch.setattr(profiler.trial, 'load_verified_source', _mismatched)
+
+    with pytest.raises(profiler.ReplayRefused, match='does not match the saved targets'):
+        profiler.replay(source, tmp_path / 'out')

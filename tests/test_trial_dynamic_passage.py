@@ -91,3 +91,46 @@ def test_trace_projection_must_reconstruct_raw_entered_cells(tmp_path):
     (source / 'report.json').write_text(json.dumps(report))
     with pytest.raises(ValueError, match='reconstruct'):
         trial.load_source(source)
+
+
+def test_verified_load_exposes_the_system_that_checked_the_entered_cells(tmp_path):
+    """Step 1: the loader already built and used a base system; expose it."""
+    from traffic_sim.experimental import dynamic_assignment as dynamic
+    from tools import departure_reconciliation as passage
+
+    source = fixture(tmp_path)
+    verified = trial.load_verified_source(source)
+
+    assert isinstance(verified.system, dynamic.PassageSystem)
+    assert verified.system.options == verified.options
+    assert verified.system.sensors == ('s',)
+    assert verified.system.n_intervals == verified.metadata['n_intervals']
+    projected = verified.system.project([1] * len(verified.options))
+    measured = passage._parse_entered(
+        source / 'evidence/learning-0-arm-1000/edge.xml',
+        verified.metadata['n_intervals'], ['s'])
+    assert projected['1000'] == measured
+
+
+def test_the_public_loader_contract_is_unchanged(tmp_path):
+    source = fixture(tmp_path)
+    verified = trial.load_verified_source(source)
+
+    options, groups, metadata = trial.load_source(source)
+
+    assert isinstance(options, list) and isinstance(groups, dict)
+    assert [o.option_id for o in options] == [o.option_id for o in verified.options]
+    assert groups == verified.groups and metadata == verified.metadata
+    # Callers must never be handed the verified tuple's own containers.
+    options.append('scratch')
+    groups['scratch'] = 1
+    assert len(verified.options) == 1 and 'scratch' not in verified.groups
+
+
+def test_a_changed_trace_still_fails_the_verified_load(tmp_path):
+    source = fixture(tmp_path)
+    path = source / 'evidence/learning-0-arm-1000/vehroute.xml'
+    path.write_text(path.read_text().replace('910', '911'))
+
+    with pytest.raises(ValueError, match='hash'):
+        trial.load_verified_source(source)

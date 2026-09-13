@@ -345,3 +345,87 @@ def test_shared_observations_do_not_skip_per_alternative_validation():
     base.entry_offsets_s['fit'] = (0, -1)
     with pytest.raises(ValueError, match='monotone'):
         dynamic.build_passage_system([base], ['s'], 1)
+
+
+class TestVerifiedExpansion:
+    """Step 1: a built system already validated its options.
+
+    ``expand_departure_support`` re-validates them by building a throwaway
+    one-sensor, one-interval system. That check cannot fail for options a real
+    system already accepted, so the verified entry point skips it — and must
+    produce exactly the same alternatives.
+    """
+
+    def _options(self):
+        return [option('a', 850, ['o', 's', 'd'], [0, 100, 120]),
+                option('b', 1900, ['o', 's', 'd'], [0, 90, 130], prior=0)]
+
+    def _fields(self, alternatives):
+        return [(o.option_id, o.group, o.departure_s, o.edges, o.prior,
+                 o.capacity, o.preference_cost,
+                 {name: values for name, values in sorted(o.entry_offsets_s.items())})
+                for o in alternatives]
+
+    def test_the_verified_expansion_equals_the_public_expansion(self):
+        options = self._options()
+        system = dynamic.build_passage_system(options, ['s'], 4)
+
+        public = dynamic.expand_departure_support(
+            options, [-900, 0, 900], begin_s=0, end_s=3600, guard_s=60)
+        verified = dynamic.expand_departure_support_verified(
+            system, [-900, 0, 900], begin_s=0, end_s=3600, guard_s=60)
+
+        assert self._fields(verified) == self._fields(public)
+
+    def test_both_expansions_build_the_same_matrices(self):
+        options = self._options()
+        system = dynamic.build_passage_system(options, ['s'], 4)
+        public = dynamic.build_passage_system(dynamic.expand_departure_support(
+            options, [-900, 0, 900], begin_s=0, end_s=3600, guard_s=60), ['s'], 4)
+        verified = dynamic.build_passage_system(
+            dynamic.expand_departure_support_verified(
+                system, [-900, 0, 900], begin_s=0, end_s=3600, guard_s=60), ['s'], 4)
+
+        for name in ('matrix', 'boundary_matrix'):
+            a, b = getattr(public, name), getattr(verified, name)
+            assert a.shape == b.shape
+            assert a.indptr.tolist() == b.indptr.tolist()
+            assert a.indices.tolist() == b.indices.tolist()
+            assert a.data.tolist() == b.data.tolist()
+
+    def test_the_verified_expansion_refuses_anything_but_a_built_system(self):
+        options = self._options()
+
+        with pytest.raises(ValueError, match='built passage system'):
+            dynamic.expand_departure_support_verified(
+                options, [0], begin_s=0, end_s=3600)
+
+    def test_the_verified_expansion_still_checks_shifts_and_horizon(self):
+        system = dynamic.build_passage_system(self._options(), ['s'], 4)
+
+        with pytest.raises(ValueError, match='shifts including zero'):
+            dynamic.expand_departure_support_verified(
+                system, [300], begin_s=0, end_s=3600)
+        with pytest.raises(ValueError, match='finite horizon'):
+            dynamic.expand_departure_support_verified(
+                system, [0], begin_s=3600, end_s=0)
+
+    def test_the_verified_expansion_still_checks_the_per_option_envelope(self):
+        options = [option('a', 850, ['o', 's', 'd'], [0, 100, 120], prior=2)]
+        system = dynamic.build_passage_system(options, ['s'], 4)
+
+        with pytest.raises(ValueError, match='unit capacity'):
+            dynamic.expand_departure_support_verified(
+                system, [0], begin_s=0, end_s=3600)
+
+    def test_the_public_expansion_still_validates_unverified_options(self):
+        backwards = dynamic.RouteDeparture(
+            'x', 'od', 850, ('o', 's'), {'fit': (100, 10)}, 1, 1)
+
+        with pytest.raises(ValueError, match='monotone entry offsets'):
+            dynamic.expand_departure_support(
+                [backwards], [0], begin_s=0, end_s=3600)
+
+    def test_the_public_expansion_still_rejects_empty_input(self):
+        with pytest.raises(ValueError, match='base alternatives are required'):
+            dynamic.expand_departure_support([], [0], begin_s=0, end_s=3600)

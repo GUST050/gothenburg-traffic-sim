@@ -277,6 +277,48 @@ koppla det till q50-replayen eller starta ett nytt trevariantsbygge.
 **Stöd:** konkret dubbelarbete i repot. [SciPy sparse](https://docs.scipy.org/doc/scipy/reference/sparse.html)
 stöder formatvalet; CSR och delade observationer används REDAN och är inte nya förslag.
 
+#### H1 + steg 1 — utfört 2026-09-13 (molnklon; ingen produktionsvinst mätt här)
+
+**H1, repetitionsmätningen.** Varje repeat fick tidigare sin egen
+`out/repeat-N/solver-cache`, så alla tre solve-körningarna var kalla medan
+rapporten kallade repeat 2–3 återanvänd process. Produktionen hade cacheträff,
+så prioriteringen pekade fel. `profile()` skapar nu EN tom cache i profilens
+egen utmapp, delad mellan repeats, och vägrar en cache som ligger i eller runt
+källevidensen. Efter varje solve läses solverns eget `solver/state.json`:
+`solver_cache_hit` och request key rapporteras per repeat, och en saknad,
+oläsbar eller icke-boolesk status är en refusal, inte ett tyst antagande.
+Summeringen bär `solver_cache_basis:
+empty_output_local_cache_then_shared_across_repeats`, och `process_state`
+beskriver process- och solvercache var för sig. En ensam `replay()` behåller
+sin privata cache under sin egen utmapp. Regressionstestet kräver
+`[false, true, true]` och samma request key i alla tre.
+
+**Steg 1, återanvänt grundsystem.** Tre systembyggen mättes lokalt; två av dem
+var dubbelarbete. `trial.load_verified_source` är den interna loadern och
+returnerar en frusen `VerifiedSource` med options, groups, metadata och det
+grundsystem vars projektion rekonstruerade de råa `entered`-cellerna. Publika
+`load_source` behåller sitt tuple-kontrakt och ger nya, redigerbara behållare.
+`_refine` använder exakt det verifierade systemet och avvisar om dess
+sensoruppsättning eller kvartantal inte matchar de kalibrerade målen.
+`expand_departure_support_verified(system, …)` hoppar över dummy-systemet som
+bara upprepade optionsvalideringen — systemet ÄR beviset, eftersom en
+`PassageSystem` inte kan existera utan att dess options passerat, och det
+undviker en publik `skip_validation` som kan användas fel. Publika
+`expand_departure_support` validerar fortfarande godtyckliga anropare, och
+expansionens egna regler (enhetskapacitet, deklarerad horisont, reserverade
+scenarionamn) gäller i båda vägarna. Den expanderade kandidatmatrisen byggs
+fortfarande.
+
+**Mätt här, på testfixturen och inte i produktion:** produktionsvägen gick från
+fyra till två systembyggen — `[1 option, 4 kvart]`, `[1, 4]`, `[1, 1]`, `[6, 4]`
+blev `[1, 4]`, `[6, 4]`. De två som försvann är `_refine`:s omkonstruktion och
+dummy-valideringen; det expanderade systemet är kvar. En A/B på samma fixtur
+före och efter gav byteidentiska `selection_sha256`, `routes_sha256` och
+`agents_sha256`. Det är en strukturell räkning på en enfordonsfixtur, inte en
+tidsvinst: molncontainern har varken katalogartefakter eller POI-cache, så
+ingen produktionsdag kunde byggas här. Den lokala A/B/B/A på det frysta
+underlaget är det som avgör.
+
 ### Steg 2 — beräkna fasta ruttegenskaper per unik rutt
 
 **Filer:** `demand/structure.py:calibrated_structure_report`,
