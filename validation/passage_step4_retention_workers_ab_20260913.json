@@ -189,6 +189,13 @@
   ],
   "measurement_revision": "27238f71a12692d1965f187e2c1c577772442c53",
   "note_on_revisions": "both arms ran at the same code except the worker cap, which the profiler sets explicitly and restores; no environment variable is involved",
+  "post_measurement_review": {
+    "effect_on_measurement": "none: every A/B arm ran in a separate process and output root, so no arm could observe another arm's temporary process-global value",
+    "finding": "the profiler selected an experimental cap by temporarily mutating automatic_passage.RETENTION_MAX_WORKERS",
+    "repair": "pass the diagnostic worker cap call-locally through profile_retention, _retention_repeat and prune_evidence; production calls still use RETENTION_MAX_WORKERS",
+    "source_identity_effect": "the repair edits traffic_sim/demand/automatic_passage.py, which is in demand_source_paths; freeze final source bytes before a later targeted warm",
+    "verdict_changed": false
+  },
   "purpose": "Bounded A/B/B/A: three versus six retention compression workers",
   "release_evidence": false,
   "result": {

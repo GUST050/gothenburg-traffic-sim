@@ -1144,7 +1144,7 @@ def _decompressed_digest(path: Path) -> str:
 
 
 def _retention_repeat(root: Path, original: dict, work: Path,
-                      index: int) -> dict:
+                      index: int, worker_cap: int | None = None) -> dict:
     """One measured retention pass over an owned copy of ``root``.
 
     The copy is timed and reported SEPARATELY: it is this tool's own cost, not
@@ -1163,7 +1163,7 @@ def _retention_repeat(root: Path, original: dict, work: Path,
                     and any(part.startswith(automatic_passage._COMPRESSED)
                             for part in path.relative_to(copy).parts)]
     requested, workers_actual = automatic_passage._retention_worker_count(
-        len(compressible))
+        len(compressible), worker_cap)
     raw_before = sum(1 for path in files if path.suffix == '.xml')
     bytes_before = sum(path.stat().st_size for path in files)
 
@@ -1172,7 +1172,7 @@ def _retention_repeat(root: Path, original: dict, work: Path,
     started = time.perf_counter()
     with io_phases.observe(collector):
         with io_phases.phase('retention_root'):
-            automatic_passage.prune_evidence(copy)
+            automatic_passage.prune_evidence(copy, _worker_cap=worker_cap)
     wall = time.perf_counter() - started
     measurement = collector.report(root='retention_root')
 
@@ -1272,25 +1272,18 @@ def profile_retention(root: Path, out: Path, *, repeats: int = 3,
 
     original = _retention_fingerprint(root)
     runs_out = []
-    # A diagnostic override, never an environment contract: the production
-    # constant is set for the duration of this profile and restored whatever
-    # happens, so an experiment can measure a different cap without shipping
-    # a second way to configure retention.
-    previous_cap = automatic_passage.RETENTION_MAX_WORKERS
-    if max_workers is not None:
-        automatic_passage.RETENTION_MAX_WORKERS = int(max_workers)
-    try:
-        for index in range(repeats):
-            work = out / f'repeat-{index + 1}'
-            work.mkdir(parents=True, exist_ok=False)
-            try:
-                runs_out.append(_retention_repeat(root, original, work, index))
-            finally:
-                # Only this tool's own copy is removed, and only after its
-                # numbers are in hand.
-                shutil.rmtree(work / 'copy', ignore_errors=True)
-    finally:
-        automatic_passage.RETENTION_MAX_WORKERS = previous_cap
+    if max_workers is not None and int(max_workers) < 1:
+        raise ReplayRefused('retention worker cap must be positive')
+    for index in range(repeats):
+        work = out / f'repeat-{index + 1}'
+        work.mkdir(parents=True, exist_ok=False)
+        try:
+            runs_out.append(_retention_repeat(
+                root, original, work, index, max_workers))
+        finally:
+            # Only this tool's own copy is removed, and only after its numbers
+            # are in hand.
+            shutil.rmtree(work / 'copy', ignore_errors=True)
 
     def spread(key):
         return _spread([run[key] for run in runs_out[1:]]) if len(runs_out) > 1 else {}
@@ -1304,7 +1297,8 @@ def profile_retention(root: Path, out: Path, *, repeats: int = 3,
         'source_evidence_root': str(root),
         'output_root': str(out),
         'repeats': repeats,
-        'workers_requested': (previous_cap if max_workers is None
+        'workers_requested': (automatic_passage.RETENTION_MAX_WORKERS
+                              if max_workers is None
                               else int(max_workers)),
         'peak_rss_bytes': resource.getrusage(
             resource.RUSAGE_SELF).ru_maxrss * (

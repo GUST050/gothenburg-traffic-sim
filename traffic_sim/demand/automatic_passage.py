@@ -461,13 +461,16 @@ _COMPRESSED = ('input', 'evidence', 'before-', 'after-')
 RETENTION_MAX_WORKERS = 6
 
 
-def _retention_worker_count(path_count: int) -> tuple[int, int]:
+def _retention_worker_count(path_count: int,
+                            worker_cap: int | None = None) -> tuple[int, int]:
     """The requested cap and the count actually usable for ``path_count``.
 
     Both are reported so a measurement can never confuse "we asked for six"
     with "six ran": fewer files or fewer cores silently lower the second.
     """
-    requested = RETENTION_MAX_WORKERS
+    requested = RETENTION_MAX_WORKERS if worker_cap is None else int(worker_cap)
+    if requested < 1:
+        raise ValueError('retention worker cap must be positive')
     return requested, max(1, min(requested, path_count, os.cpu_count() or 1))
 
 
@@ -521,7 +524,8 @@ def _gzip_verified(source: Path) -> bool:
         temporary.unlink(missing_ok=True)
 
 
-def prune_evidence(evidence_root: Path, *, keep_all: bool = False) -> None:
+def prune_evidence(evidence_root: Path, *, keep_all: bool = False,
+                   _worker_cap: int | None = None) -> None:
     """Shrink one finished evidence root without weakening its record.
 
     Nothing here is read by the pipeline: ``evidence_directory`` is written and
@@ -551,7 +555,8 @@ def prune_evidence(evidence_root: Path, *, keep_all: bool = False) -> None:
         # report into the collector that is measuring this call.
         with io_phases.phase('retention_compress', concurrent=True):
             worker = io_phases.in_current_context(_gzip_verified)
-            _requested, workers = _retention_worker_count(len(paths))
+            _requested, workers = _retention_worker_count(
+                len(paths), _worker_cap)
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 for path, verified in zip(paths, pool.map(worker, paths)):
                     if not verified:

@@ -784,6 +784,19 @@ produktionstid är uppskjuten till nästa redan motiverade demand-canary; ingen
 separat dyr körning startas för den timern. Processcachen för
 `source_trace_xml` implementeras inte.
 
+Eftergranskning av profileraren hittade en isoleringslucka: dess experimentella
+worker-tak ändrade tillfälligt den processglobala produktionskonstanten. Det
+påverkade inte A/B-resultatet eftersom varje arm kördes i en separat process,
+men två samtidiga profiler i samma process kunde påverka varandra. Taket skickas
+nu som en privat, anropslokal parameter genom profileraren till
+`prune_evidence`; produktionsanrop använder fortfarande exakt
+`RETENTION_MAX_WORKERS`. Ett samtidighetstest låser att 3- och 6-workerprofiler
+ser sina egna tak medan produktionspolicyn förblir oförändrad, även vid fel.
+Steg 4:s verdict och tidsvärden är oförändrade. Eftersom
+`automatic_passage.py` ingår i `demand_source_paths` flyttar reparationen
+arkivens källidentitet igen; ingen mellanliggande re-warm ska göras enbart för
+denna fix. Bygg biblioteket först när den avsedda kodserien är frusen.
+
 
 
 ### Steg 5 — underlag, arkiv och kostnadsberäkning

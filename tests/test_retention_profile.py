@@ -9,7 +9,9 @@ ranked wall cannot exceed the wall that really elapsed.
 import gzip
 import hashlib
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import threading
 
 import pytest
 
@@ -263,7 +265,8 @@ class TestTheWorkerPolicyIsExplicit:
 
 
 class TestTheProfilerCanMeasureADifferentCap:
-    def test_the_override_is_reported_and_restored(self, tmp_path):
+    def test_the_override_is_reported_without_mutating_production_policy(
+            self, tmp_path):
         from traffic_sim.demand import automatic_passage as auto
 
         before = auto.RETENTION_MAX_WORKERS
@@ -275,20 +278,56 @@ class TestTheProfilerCanMeasureADifferentCap:
         assert report['runs'][0]['workers_actual'] >= 1
         assert auto.RETENTION_MAX_WORKERS == before
 
-    def test_the_override_is_restored_even_when_a_repeat_raises(self, tmp_path,
-                                                               monkeypatch):
+    def test_the_override_never_mutates_policy_even_when_a_repeat_raises(
+            self, tmp_path, monkeypatch):
         from traffic_sim.demand import automatic_passage as auto
 
         before = auto.RETENTION_MAX_WORKERS
-        monkeypatch.setattr(
-            auto, 'prune_evidence',
-            lambda *a, **k: (_ for _ in ()).throw(RuntimeError('boom')))
+        seen = []
+
+        def explode(*args, **kwargs):
+            seen.append(kwargs.get('_worker_cap'))
+            raise RuntimeError('boom')
+
+        monkeypatch.setattr(auto, 'prune_evidence', explode)
 
         with pytest.raises(RuntimeError):
             profiler.profile_retention(_root(tmp_path / 'evidence'),
                                        tmp_path / 'out', repeats=1,
                                        max_workers=6)
 
+        assert auto.RETENTION_MAX_WORKERS == before
+        assert seen == [6]
+
+    def test_concurrent_explicit_caps_do_not_share_global_state(
+            self, tmp_path, monkeypatch):
+        from traffic_sim.demand import automatic_passage as auto
+
+        seen = []
+        lock = threading.Lock()
+        both_profiles_reached_retention = threading.Barrier(2)
+
+        def record(_root, *, _worker_cap=None, **_kwargs):
+            both_profiles_reached_retention.wait(timeout=5)
+            with lock:
+                seen.append((_worker_cap, auto.RETENTION_MAX_WORKERS))
+
+        monkeypatch.setattr(auto, 'prune_evidence', record)
+        before = auto.RETENTION_MAX_WORKERS
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            profiles = [
+                pool.submit(profiler.profile_retention,
+                            _root(tmp_path / 'a'), tmp_path / 'out-a',
+                            repeats=1, max_workers=3),
+                pool.submit(profiler.profile_retention,
+                            _root(tmp_path / 'b'), tmp_path / 'out-b',
+                            repeats=1, max_workers=6),
+            ]
+            for profile in profiles:
+                profile.result(timeout=10)
+
+        assert sorted(seen) == [(3, before), (6, before)]
         assert auto.RETENTION_MAX_WORKERS == before
 
     def test_the_default_profile_still_requests_the_production_cap(self,
