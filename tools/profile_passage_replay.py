@@ -270,9 +270,14 @@ def _validate_archive(archive: Path, spec_path: Path, recorder: PhaseRecorder,
     The import is local: this tool must stay a leaf of the demand graph, and
     the monthly resolver is not needed to replay a passage root.
     """
+    if repeats < 1:
+        raise ReplayRefused('at least one archive validation is required')
     from traffic_sim.simulation.monthly_demand import (DemandBuildSpec,
                                                        validate_demand_archive)
-    required = DemandBuildSpec.from_dict(json.loads(Path(spec_path).read_text()))
+    try:
+        required = DemandBuildSpec.from_dict(json.loads(Path(spec_path).read_text()))
+    except (OSError, TypeError, ValueError) as error:
+        raise ReplayRefused(f'invalid demand build spec: {error}') from error
     calls = []
     with recorder.phase('archive_validation', archive=str(archive)):
         for index in range(repeats):
@@ -286,6 +291,52 @@ def _validate_archive(archive: Path, spec_path: Path, recorder: PhaseRecorder,
     return {'archive': str(archive), 'calls': calls,
             'call_basis': ('all calls occur after module imports; later calls may reuse '
                            'validation caches in this process')}
+
+
+def profile_archive_validation(archive: Path, spec_path: Path, out: Path,
+                               *, repeats: int = 3) -> dict:
+    """Measure archive validation independently from passage variant replay."""
+    archive = Path(archive).resolve()
+    spec_path = Path(spec_path).resolve()
+    out = Path(out).resolve()
+    if not archive.is_dir():
+        raise ReplayRefused(f'demand archive does not exist: {archive}')
+    if not spec_path.is_file():
+        raise ReplayRefused(f'demand build spec does not exist: {spec_path}')
+    if archive == out or archive in out.parents or out in archive.parents:
+        raise ReplayRefused(f'output {out} must be outside demand archive {archive}')
+    out.mkdir(parents=True, exist_ok=False)
+    recorder = PhaseRecorder({'variant': None, 'date': None, 'input_identity': None})
+    report = {
+        'schema_version': SCHEMA_VERSION,
+        'policy': POLICY,
+        'diagnostic_only': True,
+        'active_production': False,
+        'status': 'refused',
+        'archive': str(archive),
+        'demand_spec': str(spec_path),
+        'output_root': str(out),
+    }
+    try:
+        with recorder.phase('archive_validation_profile'):
+            report['archive_validation'] = _validate_archive(
+                archive, spec_path, recorder, repeats)
+        if any(call != 'valid' for call in report['archive_validation']['calls']):
+            raise ReplayRefused('demand archive validation was rejected')
+        report['status'] = 'profiled_archive_validation'
+    except ReplayRefused as error:
+        report['status'] = 'refused'
+        report['reason'] = str(error)
+        raise
+    except BaseException as error:
+        report['status'] = 'failed'
+        report['reason'] = f'{type(error).__name__}: {error}'
+        raise
+    finally:
+        report['timing'] = recorder.summary()
+        (out / 'archive_validation_report.json').write_text(
+            json.dumps(report, indent=2) + '\n')
+    return report
 
 
 def replay(source: Path, out: Path, *, label: str | None = None,
@@ -564,7 +615,7 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source', type=Path, required=True,
+    parser.add_argument('--source', type=Path,
                         help='one variant root, e.g. runs/automatic-passage-<id>/q50')
     parser.add_argument('--out', type=Path, required=True,
                         help='a new directory outside the evidence root')
@@ -578,12 +629,33 @@ def main() -> int:
     parser.add_argument('--demand-spec', type=Path,
                         help='demand_build_spec.json the archive must satisfy')
     parser.add_argument('--archive-repeats', type=int, default=3)
+    parser.add_argument('--archive-only', action='store_true',
+                        help='time archive validation without coupling it to a passage replay')
     parser.add_argument('--repeats', type=int, default=1,
                         help='replay N times after imports to expose reusable process caches')
     parser.add_argument('--preparation-only', action='store_true',
                         help='profile parsing/system construction on legacy evidence; do not solve')
     parser.add_argument('--inventory-only', action='store_true')
     args = parser.parse_args()
+    if args.archive_only:
+        if args.archive is None or args.demand_spec is None:
+            print(json.dumps({'status': 'refused', 'reason':
+                              '--archive-only requires --archive and --demand-spec'}, indent=2))
+            return 2
+        try:
+            report = profile_archive_validation(
+                args.archive, args.demand_spec, args.out,
+                repeats=args.archive_repeats)
+        except ReplayRefused as error:
+            print(json.dumps({'status': 'refused', 'reason': str(error)}, indent=2))
+            return 2
+        print(json.dumps(report, indent=2))
+        return 0
+    if args.source is None:
+        print(json.dumps({'status': 'refused',
+                          'reason': '--source is required unless --archive-only is used'},
+                         indent=2))
+        return 2
     if args.inventory_only:
         print(json.dumps(inventory(args.source), indent=2))
         return 0

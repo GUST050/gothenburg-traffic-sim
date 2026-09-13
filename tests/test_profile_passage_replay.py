@@ -567,6 +567,82 @@ class TestArchiveValidationPhase:
         assert profiler.main() == 2
         assert '--demand-spec' in json.loads(capsys.readouterr().out)['reason']
 
+    def test_archive_validation_can_be_profiled_without_a_passage_source(
+            self, tmp_path, monkeypatch):
+        calls = []
+        self._stub(monkeypatch, calls)
+        archive = tmp_path / 'archive'
+        archive.mkdir()
+        spec = tmp_path / 'spec.json'
+        spec.write_text(json.dumps({'days': 1}))
+
+        report = profiler.profile_archive_validation(
+            archive, spec, tmp_path / 'out', repeats=3)
+
+        assert report['status'] == 'profiled_archive_validation'
+        assert report['archive_validation']['calls'] == ['valid'] * 3
+        assert len(calls) == 3
+
+    def test_archive_only_cli_does_not_require_source(self, tmp_path, capsys, monkeypatch):
+        self._stub(monkeypatch, [])
+        archive = tmp_path / 'archive'
+        archive.mkdir()
+        spec = tmp_path / 'spec.json'
+        spec.write_text(json.dumps({'days': 1}))
+        monkeypatch.setattr('sys.argv', [
+            'profile', '--archive-only', '--archive', str(archive),
+            '--demand-spec', str(spec), '--out', str(tmp_path / 'out')])
+
+        assert profiler.main() == 0
+        assert json.loads(capsys.readouterr().out)['status'] \
+            == 'profiled_archive_validation'
+
+    def test_archive_only_refusal_is_written_and_returns_nonzero(
+            self, tmp_path, capsys, monkeypatch):
+        from traffic_sim.simulation import monthly_demand
+        self._stub(monkeypatch, [])
+        monkeypatch.setattr(monthly_demand, 'validate_demand_archive',
+                            lambda *_args: (_ for _ in ()).throw(ValueError('wrong variants')))
+        archive = tmp_path / 'archive'
+        archive.mkdir()
+        spec = tmp_path / 'spec.json'
+        spec.write_text(json.dumps({'days': 1}))
+        monkeypatch.setattr('sys.argv', [
+            'profile', '--archive-only', '--archive', str(archive),
+            '--demand-spec', str(spec), '--out', str(tmp_path / 'out')])
+
+        assert profiler.main() == 2
+        assert json.loads(capsys.readouterr().out)['status'] == 'refused'
+        saved = json.loads((tmp_path / 'out/archive_validation_report.json').read_text())
+        assert saved['status'] == 'refused'
+        assert 'wrong variants' in saved['archive_validation']['calls'][0]
+
+    def test_zero_archive_repeats_is_refused_in_combined_mode(self, tmp_path, monkeypatch):
+        self._stub(monkeypatch, [])
+        archive = tmp_path / 'archive'
+        archive.mkdir()
+        spec = tmp_path / 'spec.json'
+        spec.write_text(json.dumps({'days': 1}))
+
+        with pytest.raises(profiler.ReplayRefused, match='at least one'):
+            profiler.replay(evidence_root(tmp_path), tmp_path / 'out',
+                            archive=archive, demand_spec=spec, archive_repeats=0)
+
+    def test_archive_only_invalid_spec_is_a_structured_refusal(
+            self, tmp_path, capsys, monkeypatch):
+        archive = tmp_path / 'archive'
+        archive.mkdir()
+        spec = tmp_path / 'spec.json'
+        spec.write_text('{')
+        monkeypatch.setattr('sys.argv', [
+            'profile', '--archive-only', '--archive', str(archive),
+            '--demand-spec', str(spec), '--out', str(tmp_path / 'out')])
+
+        assert profiler.main() == 2
+        payload = json.loads(capsys.readouterr().out)
+        assert payload['status'] == 'refused'
+        assert 'invalid demand build spec' in payload['reason']
+
 
 def test_a_failed_replay_still_leaves_the_phases_it_did_measure(tmp_path):
     """Losing the measurement is the one thing a measuring tool must not do."""

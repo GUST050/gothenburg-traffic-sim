@@ -236,6 +236,20 @@ evidens. Kör sedan verktyget mot dess
 selection/routes/agents innan steg 1 ändrar produktionskoden. Ingen hel
 datumuppvärmning behövs för denna mätning.
 
+**Körkorrigering 2026-09-13.** Försöket i en ren molnklon använde builderns
+standardväg och startade därför `assignment_priors.py` och
+`build_candidates.py`. Det var fel experiment: den vägen behöver den lokala
+POI-cachen eller Overpass, och mäter ny kandidatgenerering i stället för den
+redan kvalificerade katalog som hastighetsprovet ska hålla fast. Kör provet på
+maskinen med katalogartefakterna och ange explicit `--candidate-source catalog`.
+Den deklarerade endagsprovdagen är 2027-06-25 med `--source forecast`, inte
+builderns historiska standarddatum.
+
+Arkivvalidering är en separat mätning. Ett vanligt q50-bygge har en variant,
+medan closure-arkivets validator kräver q10/q50/q90. Verktygets
+`--archive-only` mäter därför ett befintligt giltigt trevariantsarkiv utan att
+koppla det till q50-replayen eller starta ett nytt trevariantsbygge.
+
 ### Steg 1 — återanvänd verifierat passagesystem
 
 **Filer:** `tools/trial_dynamic_passage.py:load_source`,
