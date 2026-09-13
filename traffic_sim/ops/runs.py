@@ -34,6 +34,8 @@ import secrets
 import shutil
 import subprocess
 import sys
+
+from traffic_sim.ops import io_phases
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -99,12 +101,17 @@ class Run:
             self._flush()
             return None
         dest = self.dir / (name or source.name)
-        shutil.copy2(source, dest)
+        with io_phases.phase("run_output_copy"):
+            shutil.copy2(source, dest)
+            io_phases.add_bytes(written=dest.stat().st_size)
+        with io_phases.phase("run_output_verify"):
+            digest = _sha256_file(dest)
+            io_phases.add_bytes(hashed=dest.stat().st_size)
         self.manifest.setdefault("outputs", []).append({
             "name": dest.name,
             "source_path": str(source),
             "bytes": dest.stat().st_size,
-            "sha256": _sha256_file(dest),
+            "sha256": digest,
         })
         self._flush()
         return dest

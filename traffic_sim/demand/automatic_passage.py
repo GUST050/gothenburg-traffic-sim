@@ -28,6 +28,7 @@ from traffic_sim.demand.structure_caps import integer_structure_cap
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.demand.provenance import _validate_variant
 from traffic_sim.experimental import dynamic_assignment as dynamic
+from traffic_sim.ops import io_phases
 from traffic_sim.simulation.sensor_fit import assess_passage_accuracy
 from tools import trial_dynamic_passage as trial
 from tools import departure_reconciliation as passage
@@ -200,13 +201,17 @@ def _stage_selection(inputs: Path, selected, stage: Path) -> Path:
         inputs / 'calibrated.rou.xml', inputs / 'calibrated.agents.json',
         selected, stage)
     candidate = stage / 'calibrated.rou.xml'
-    _validate_variant(candidate, stage / 'calibrated.agents.json')
+    with io_phases.phase('stage_validate'):
+        _validate_variant(candidate, stage / 'calibrated.agents.json')
     # Day assembly consumes one complete vehicle element per line. Preserve
     # this established format, including the absence of an XML declaration.
-    root = ET.parse(candidate).getroot()
-    candidate.write_text('<routes>\n' + ''.join(
-        ET.tostring(child, encoding='unicode').strip()+'\n' for child in root)
-        + '</routes>\n')
+    with io_phases.phase('stage_reformat_xml'):
+        io_phases.add_bytes(read=candidate.stat().st_size)
+        root = ET.parse(candidate).getroot()
+        candidate.write_text('<routes>\n' + ''.join(
+            ET.tostring(child, encoding='unicode').strip()+'\n' for child in root)
+            + '</routes>\n')
+        io_phases.add_bytes(written=candidate.stat().st_size)
     return candidate
 
 
@@ -441,22 +446,48 @@ _COMPRESSED = ('input', 'evidence', 'before-', 'after-')
 
 
 def _gzip_verified(source: Path) -> bool:
-    """Write ``source``.gz deterministically and prove it round-trips."""
+    """Write ``source``.gz deterministically and prove it round-trips.
+
+    The phase marks are diagnostic and inert unless a tool installs a
+    collector (see ``traffic_sim.ops.io_phases``). Reading, compressing and
+    writing share one streaming pass, so the two ends are timed at the stream
+    and compression is what remains of the enclosing phase. Nothing about the
+    bytes written, the verification or the publication changes.
+    """
     packed = source.with_name(source.name + '.gz')
     temporary = packed.with_name(packed.name + '.prune-tmp')
     try:
-        with open(source, 'rb') as raw, open(temporary, 'wb') as packed_stream, \
-                gzip.GzipFile(filename='', mode='wb', fileobj=packed_stream,
-                              compresslevel=3, mtime=0) as out:
-            shutil.copyfileobj(raw, out)
-        original = sha256_file(source)
-        digest = hashlib.sha256()
-        with gzip.open(temporary, 'rb') as handle:
-            for chunk in iter(lambda: handle.read(1 << 20), b''):
-                digest.update(chunk)
+        with io_phases.phase('gzip_compress'):
+            with open(source, 'rb') as raw, open(temporary, 'wb') as target:
+                measured_raw = io_phases.measured_stream(
+                    raw, 'gzip_source_read', 'read')
+                measured_target = io_phases.measured_stream(
+                    target, 'gzip_target_write', 'written')
+                with gzip.GzipFile(filename='', mode='wb',
+                                   fileobj=measured_target,
+                                   compresslevel=3, mtime=0) as out:
+                    shutil.copyfileobj(measured_raw, out)
+            io_phases.record_derived(
+                'gzip_source_read', io_phases.stream_elapsed(measured_raw),
+                read=io_phases.stream_bytes(measured_raw))
+            io_phases.record_derived(
+                'gzip_target_write', io_phases.stream_elapsed(measured_target),
+                written=io_phases.stream_bytes(measured_target))
+        with io_phases.phase('gzip_source_hash'):
+            original = sha256_file(source)
+            io_phases.add_bytes(hashed=source.stat().st_size)
+        with io_phases.phase('gzip_target_verify'):
+            digest = hashlib.sha256()
+            verified = 0
+            with gzip.open(temporary, 'rb') as handle:
+                for chunk in iter(lambda: handle.read(1 << 20), b''):
+                    digest.update(chunk)
+                    verified += len(chunk)
+            io_phases.add_bytes(verified=verified)
         if digest.hexdigest() != original:
             return False
-        os.replace(temporary, packed)
+        with io_phases.phase('gzip_publish'):
+            os.replace(temporary, packed)
         return True
     except (OSError, EOFError, gzip.BadGzipFile):
         return False
@@ -483,20 +514,31 @@ def prune_evidence(evidence_root: Path, *, keep_all: bool = False) -> None:
     root = Path(evidence_root)
     if keep_all or os.environ.get(KEEP_EVIDENCE_ENV):
         return
-    paths = [path for path in sorted(root.rglob('*.xml'))
-             if any(part.startswith(_COMPRESSED) for part in path.relative_to(root).parts)]
+    with io_phases.phase('retention_inventory'):
+        paths = [path for path in sorted(root.rglob('*.xml'))
+                 if any(part.startswith(_COMPRESSED)
+                        for part in path.relative_to(root).parts)]
     if paths:
-        with ThreadPoolExecutor(max_workers=min(3, len(paths), os.cpu_count() or 1)) as pool:
-            for path, verified in zip(paths, pool.map(_gzip_verified, paths)):
-                if not verified:
-                    raise ValueError(f'passage evidence did not survive compression: {path}')
-                path.unlink()
-    for arm in sorted(p for p in root.iterdir() if p.is_dir()):
-        for stage in sorted(arm.glob('candidate*')):
-            shutil.rmtree(stage, ignore_errors=True)
-    (root / 'source_reports.json').unlink(missing_ok=True)
-    for backup in sorted(root.glob('original-*')):
-        backup.unlink(missing_ok=True)
+        # Declared concurrent: these children overlap, so their times must
+        # never be summed into a wall-clock claim. The worker is wrapped so
+        # the pool threads, which start from empty context variables, still
+        # report into the collector that is measuring this call.
+        with io_phases.phase('retention_compress', concurrent=True):
+            worker = io_phases.in_current_context(_gzip_verified)
+            with ThreadPoolExecutor(
+                    max_workers=min(3, len(paths), os.cpu_count() or 1)) as pool:
+                for path, verified in zip(paths, pool.map(worker, paths)):
+                    if not verified:
+                        raise ValueError(
+                            f'passage evidence did not survive compression: {path}')
+                    path.unlink()
+    with io_phases.phase('retention_cleanup'):
+        for arm in sorted(p for p in root.iterdir() if p.is_dir()):
+            for stage in sorted(arm.glob('candidate*')):
+                shutil.rmtree(stage, ignore_errors=True)
+        (root / 'source_reports.json').unlink(missing_ok=True)
+        for backup in sorted(root.glob('original-*')):
+            backup.unlink(missing_ok=True)
 
 
 def refine_variants(variant_inputs: dict, reports: dict, network: Path,

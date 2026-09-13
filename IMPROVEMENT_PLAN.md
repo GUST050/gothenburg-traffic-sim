@@ -622,6 +622,62 @@ run-registry-tester. Testa avbruten komprimering, korrupt mål och saknad eviden
 **Vinstområde:** retention 128,5 s; övrig parsing ingår i andra poster och får
 inte dubbelräknas. Kompakt atomisk demand_meta-skrivning finns redan.
 
+#### Steg 4 utfall — measurement complete, 2026-09-13
+
+**Ingen optimering är implementerad.** Detta är enbart mätning, enligt planens
+egen ordning.
+
+**Instrumenteringen.** `traffic_sim/ops/io_phases.py` är ny och ligger utanför
+både `demand_source_paths` och `replay_source_sha256`: en diagnostik som
+adderas till någon av de inventarierna skulle ändra vad varje lagrat arkiv och
+varje sparad replay påstår om koden som skapade dem. Den är inert tills ett
+verktyg installerar en `PhaseCollector`, installationen är kontextlokal och
+återställs alltid i `finally`, och två samtidiga profiler kan inte mötas.
+Två redovisningsregler har egen maskinell hantering: en sekventiell förälder
+redovisar väggtid MINUS sina direkta barn, och en förälder vars barn kördes
+SAMTIDIGT redovisar `exclusive_s: null` med barnens summa och max var för sig.
+Retention komprimerar upp till tre filer i en trådpool; att addera dem som om
+de kört sekventiellt skulle uppfinna väggtid som aldrig förflutit. Trådarna
+startar med tomma kontextvariabler, så arbetaren lindas explicit.
+
+**Ström-uppdelningen.** `shutil.copyfileobj` läser, komprimerar och skriver i
+ett svep. De tre kostnaderna är inte separerbara genom att linda ANROPET, men
+väl vid strömmen: varje `read` och varje `write` tidtas, och komprimeringen är
+vad som återstår av den omslutande fasen. Inga bytes ändras.
+
+**Mätt på sparad q50-evidens för 2027-06-25** (9 675 fordon, 67 463 kolumner,
+3 repeats i samma process, kall + två varma). Rangordning på de varma
+repeats:
+
+| Fas | Varm median | Andel | Bytes |
+|---|---|---|---|
+| `source_trace_xml` | 0,9146 s | **47,02 %** | 40,8 MB lästa |
+| `stage_reformat_xml` | 0,1826 s | 9,39 % | 9,5 MB in, 9,5 MB ut |
+| `selection_transform` | 0,1648 s | 8,47 % | — |
+| `stage_validate` | 0,1542 s | 7,93 % | — |
+| `selection_write` | 0,1349 s | 6,94 % | 14,9 MB skrivna |
+| `source_routes_xml` | 0,1264 s | 6,50 % | 9,5 MB lästa |
+| `gzip_compress` | 0,0620 s | 3,19 % | — |
+
+Alla gzip-faser tillsammans är under 5 %. **Komprimering är inte kostnaden i
+den här formen** — läsning och parsning av sparade vehroute-spår är det.
+
+**Vad som INTE mättes, uttryckligen.** En envariantsreplay anropar
+`_gzip_verified` direkt på en kopierad fil och kör aldrig `prune_evidence`, så
+filinventeringen, den tredelade trådpoolen och städpasset är TESTADE men inte
+uppmätta här. Detsamma gäller `traffic_sim/ops/runs.py` och de instrumenterade
+ställena kring `build_sumo_demand.py::_tracked_main`: de kräver ett riktigt
+demand-bygge, vilket ligger utanför detta steg. Planens `retention 128,5 s`
+avser ett fullt bygge, inte den här replayen; siffrorna ovan motsäger den inte.
+
+**Driftfix.** `tools/profile_passage_replay.py` startar nu från repo-roten utan
+`PYTHONPATH=.`; ett subprocess-test kör `--help` med `PYTHONPATH` borttaget.
+
+**Evidens:** `validation/passage_step4_io_measurement_20260913.json`,
+`release_evidence: false`. Källkopian skiljer sig från originalet i exakt två
+filer, båda från ombindningen av replaykontraktet, och alla tre replays
+reproducerar frysta selection/routes/agents-hashar.
+
 ### Steg 5 — underlag, arkiv och kostnadsberäkning
 
 **Filer:** `monthly_demand.py:find_demand_archives/validate_demand_archive/prepare`,

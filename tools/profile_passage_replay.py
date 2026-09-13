@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+import contextlib
 from contextlib import contextmanager
 import gzip
 import hashlib
@@ -23,8 +24,17 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sys
 import time
 import xml.etree.ElementTree as ET
+
+# Run as a script, sys.path[0] is this file's own directory, so the repository
+# packages are not importable and `import demand` fails before argparse ever
+# runs. Anchor to this file's repository the way build_sumo_demand._source_files
+# already requires, rather than making every caller export PYTHONPATH.
+_REPO_ROOT = str(Path(__file__).resolve().parent.parent)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 import numpy as np
 
@@ -32,6 +42,7 @@ from demand.structure import calibrated_structure_report, structure_context
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.demand import automatic_passage
 from traffic_sim.experimental import dynamic_assignment as dynamic
+from traffic_sim.ops import io_phases
 from tools import trial_dynamic_passage as trial
 
 SCHEMA_VERSION = 2
@@ -578,7 +589,7 @@ def replay(source: Path, out: Path, *, label: str | None = None,
            pool: Path | None = None, allow_compressed: bool = False,
            solver_time_limit_s: float = 60, archive: Path | None = None,
            demand_spec: Path | None = None, archive_repeats: int = 3,
-           preparation_only: bool = False,
+           preparation_only: bool = False, io_phase_measurement: bool = False,
            _solver_cache_dir: Path | None = None) -> dict:
     """Replay preparation, solving, staging and structure over saved traces."""
     source, out = _resolve_isolation(source, out)
@@ -615,6 +626,15 @@ def replay(source: Path, out: Path, *, label: str | None = None,
                           for path in (__file__, automatic_passage.__file__,
                                        dynamic.__file__, trial.__file__)},
     }
+    # Diagnostic only, and off unless asked for. The stack is closed in the
+    # same finally that writes the report, so an observer cannot outlive this
+    # call however the replay ends.
+    io_stack = contextlib.ExitStack()
+    io_collector = None
+    if io_phase_measurement:
+        io_collector = io_phases.PhaseCollector(
+            unmeasured_categories=sorted(UNMEASURED_CATEGORIES))
+        io_stack.enter_context(io_phases.observe(io_collector))
     try:
         with recorder.phase('replay') as root:
             # Hashing every stored file is real work, so it is timed where it
@@ -836,6 +856,13 @@ def replay(source: Path, out: Path, *, label: str | None = None,
     finally:
         # A failed replay still measured real phases; write what was
         # measured, labelled as a failure, instead of losing it.
+        io_stack.close()
+        if io_collector is not None:
+            report['io_measurement'] = io_collector.report()
+            report['io_measurement']['basis'] = (
+                'observational; outside every demand, passage, solver and '
+                'replay identity. Concurrent parents report exclusive_s null '
+                'with the children sum and max stated separately.')
         report['timing'] = recorder.summary()
         report['date'] = context['date']
         report['input_identity'] = context['input_identity']
@@ -889,6 +916,29 @@ def _spread(values: list[float]) -> dict:
             'min_s': round(ordered[0], 6), 'max_s': round(ordered[-1], 6)}
 
 
+def _io_phase_walls(run: dict) -> dict:
+    """One run's measured I/O phases, as wall contribution plus bytes.
+
+    A concurrent parent contributes the wall its slowest child occupied, never
+    the sum of children that overlapped, so this number can be compared and
+    ranked without inventing time.
+    """
+    measurement = run.get('io_measurement') or {}
+    result = {}
+    for name, entry in (measurement.get('phases') or {}).items():
+        wall = (entry['exclusive_s'] if entry['exclusive_s'] is not None
+                else entry['children_max_s'])
+        result[name] = {
+            'wall_s': wall,
+            'calls': entry['calls'],
+            'concurrent': entry['concurrent'],
+            'basis': ('exclusive' if entry['exclusive_s'] is not None
+                      else 'concurrent_children_max'),
+            'bytes': entry['bytes'],
+        }
+    return result
+
+
 def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
     """Replay repeatedly in one already-imported process.
 
@@ -937,6 +987,35 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
             name: _spread([row[name] for row in walls[1:] if name in row])
             for name in names if len(walls) > 1 and any(name in row for row in walls[1:])},
     }
+    io_walls = [_io_phase_walls(run) for run in runs]
+    if any(io_walls):
+        io_names = sorted({name for row in io_walls for name in row})
+        summary['first_repeat_io_phase_s'] = io_walls[0]
+        summary['reused_process_io_phase_s'] = {
+            name: _spread([row[name]['wall_s'] for row in io_walls[1:]
+                           if name in row])
+            for name in io_names
+            if len(io_walls) > 1 and any(name in row for row in io_walls[1:])}
+        # Rank on the reused repeats when they exist: production hits a warm
+        # process, and the first repeat also pays lazy imports and page cache.
+        ranked_source = (summary['reused_process_io_phase_s']
+                         or {name: {'median_s': entry['wall_s']}
+                             for name, entry in io_walls[0].items()})
+        def _median(entry):
+            return entry['median_s'] if isinstance(entry, dict) else entry
+        total = sum(_median(entry) for entry in ranked_source.values()) or 1.0
+        summary['io_phase_ranking'] = [
+            {'phase': name,
+             'wall_s': round(_median(entry), 6),
+             'share_percent': round(_median(entry) / total * 100, 2),
+             'basis': io_walls[0].get(name, {}).get('basis', 'exclusive'),
+             'bytes': io_walls[0].get(name, {}).get('bytes', {})}
+            for name, entry in sorted(ranked_source.items(),
+                                      key=lambda item: -_median(item[1]))]
+        summary['io_measurement_basis'] = (
+            'observational; outside every demand, passage, solver and replay '
+            'identity. Ranked on the reused repeats; a concurrent parent '
+            'contributes its slowest child, never the sum of overlapping ones.')
     (out / 'profile_report.json').write_text(json.dumps(summary, indent=2) + '\n')
     return summary
 
@@ -964,6 +1043,9 @@ def main() -> int:
     parser.add_argument('--preparation-only', action='store_true',
                         help='profile parsing/system construction on legacy evidence; do not solve')
     parser.add_argument('--inventory-only', action='store_true')
+    parser.add_argument('--io-phases', action='store_true',
+                        help='also measure evidence I/O phases: reads, gzip, '
+                             'writes, hashing, verification and publication')
     args = parser.parse_args()
     if args.archive_only:
         if args.archive is None or args.demand_spec is None:
@@ -992,7 +1074,8 @@ def main() -> int:
                    solver_time_limit_s=args.solver_time_limit_s,
                    archive=args.archive, demand_spec=args.demand_spec,
                    archive_repeats=args.archive_repeats,
-                   preparation_only=args.preparation_only)
+                   preparation_only=args.preparation_only,
+                   io_phase_measurement=args.io_phases)
     if args.archive is not None and args.demand_spec is None:
         print(json.dumps({'status': 'refused',
                           'reason': '--archive requires --demand-spec'}, indent=2))

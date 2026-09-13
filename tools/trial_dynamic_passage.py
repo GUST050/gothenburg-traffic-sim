@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.experimental import dynamic_assignment as dynamic
+from traffic_sim.ops import io_phases
 from traffic_sim.simulation.runtime import sumo_home
 from tools import departure_reconciliation as passage
 
@@ -42,14 +43,24 @@ class VerifiedSource:
 
 def load_verified_source(source: Path) -> VerifiedSource:
     """Require complete, hashed route/time evidence and source OD/purpose identity."""
-    manifest = json.loads((source / 'report.json').read_text())
-    for name in INPUT_NAMES:
-        expected = manifest['input_sha256'].get(name)
-        if not expected or sha256_file(source / 'input' / name) != expected:
-            raise ValueError(f'input hash differs: {name}')
-    vehicles = passage.read_route_vehicles(source / 'input/calibrated.rou.xml')
+    with io_phases.phase('source_manifest_json'):
+        manifest = json.loads((source / 'report.json').read_text())
+        io_phases.add_bytes(read=(source / 'report.json').stat().st_size)
+    with io_phases.phase('source_input_hash'):
+        for name in INPUT_NAMES:
+            expected = manifest['input_sha256'].get(name)
+            if not expected or sha256_file(source / 'input' / name) != expected:
+                raise ValueError(f'input hash differs: {name}')
+            io_phases.add_bytes(hashed=(source / 'input' / name).stat().st_size)
+    with io_phases.phase('source_routes_xml'):
+        vehicles = passage.read_route_vehicles(source / 'input/calibrated.rou.xml')
+        io_phases.add_bytes(
+            read=(source / 'input/calibrated.rou.xml').stat().st_size)
     by_id = {v.vehicle_id: v for v in vehicles}
-    agents_list = json.loads((source / 'input/calibrated.agents.json').read_text())['agents']
+    with io_phases.phase('source_agents_json'):
+        agents_path = source / 'input/calibrated.agents.json'
+        agents_list = json.loads(agents_path.read_text())['agents']
+        io_phases.add_bytes(read=agents_path.stat().st_size)
     agents = {a['vehicle_id']: a for a in agents_list}
     if len(agents) != len(agents_list) or set(agents) != set(by_id):
         raise ValueError('agent identities differ from route population')
@@ -57,28 +68,33 @@ def load_verified_source(source: Path) -> VerifiedSource:
     for arm in LEARNING_ARMS:
         relative = f'evidence/learning-0-arm-{arm}/vehroute.xml'
         expected = manifest['evidence_sha256'].get(relative)
-        if not expected or sha256_file(source / relative) != expected:
-            raise ValueError(f'trace hash differs: {relative}')
+        with io_phases.phase('source_trace_hash'):
+            if not expected or sha256_file(source / relative) != expected:
+                raise ValueError(f'trace hash differs: {relative}')
+            io_phases.add_bytes(hashed=(source / relative).stat().st_size)
         offsets = {}
-        for _, element in ET.iterparse(source / relative, events=('end',)):
-            if element.tag != 'vehicle':
-                continue
-            vehicle_id = element.attrib['id']
-            if vehicle_id not in by_id or vehicle_id in offsets:
-                raise ValueError('trace has unknown or duplicated vehicle')
-            original = by_id[vehicle_id]
-            route = element.find('route')
-            if route is None or tuple(route.attrib['edges'].split()) != original.edges:
-                raise ValueError('trace route differs from source')
-            exits = tuple(float(x) for x in route.attrib['exitTimes'].split())
-            actual_depart = float(element.attrib['depart'])
-            if not math.isfinite(actual_depart) or any(not math.isfinite(x) for x in exits) \
-                    or len(exits) != len(original.edges) or any(x < actual_depart for x in exits) \
-                    or any(a > b for a, b in zip(exits, exits[1:])):
-                raise ValueError('trace has incomplete or backwards route times')
-            offsets[vehicle_id] = (actual_depart - original.depart_s,) + tuple(
-                x - original.depart_s for x in exits[:-1])
-            element.clear()
+        with io_phases.phase('source_trace_xml'):
+            io_phases.add_bytes(read=(source / relative).stat().st_size)
+            for _, element in ET.iterparse(source / relative, events=('end',)):
+                if element.tag != 'vehicle':
+                    continue
+                vehicle_id = element.attrib['id']
+                if vehicle_id not in by_id or vehicle_id in offsets:
+                    raise ValueError('trace has unknown or duplicated vehicle')
+                original = by_id[vehicle_id]
+                route = element.find('route')
+                if route is None or tuple(route.attrib['edges'].split()) != original.edges:
+                    raise ValueError('trace route differs from source')
+                exits = tuple(float(x) for x in route.attrib['exitTimes'].split())
+                actual_depart = float(element.attrib['depart'])
+                if not math.isfinite(actual_depart) or any(not math.isfinite(x) for x in exits) \
+                        or len(exits) != len(original.edges) \
+                        or any(x < actual_depart for x in exits) \
+                        or any(a > b for a, b in zip(exits, exits[1:])):
+                    raise ValueError('trace has incomplete or backwards route times')
+                offsets[vehicle_id] = (actual_depart - original.depart_s,) + tuple(
+                    x - original.depart_s for x in exits[:-1])
+                element.clear()
         if set(offsets) != set(by_id):
             raise ValueError('trace population is incomplete')
         traces[str(arm)] = offsets
@@ -123,35 +139,46 @@ def materialize_selection(source_route: Path, source_agents: Path,
     a source template is recorded explicitly; total OD/purpose flows are checked
     by the solver. Default SUMO driver randomness remains active for validation.
     """
-    root = ET.parse(source_route).getroot()
+    with io_phases.phase('selection_source_routes_xml'):
+        root = ET.parse(source_route).getroot()
+        io_phases.add_bytes(read=Path(source_route).stat().st_size)
     templates = {e.attrib['id']: e for e in root.findall('vehicle')}
-    source_document = json.loads(source_agents.read_text())
+    with io_phases.phase('selection_source_agents_json'):
+        source_document = json.loads(source_agents.read_text())
+        io_phases.add_bytes(read=Path(source_agents).stat().st_size)
     agents = {a['vehicle_id']: a for a in source_document['agents']}
-    candidate = ET.Element('routes', root.attrib)
-    for child in root:
-        if child.tag != 'vehicle':
-            candidate.append(copy.deepcopy(child))
-    result_agents, mapping = [], []
-    for index, option in enumerate(sorted(selected, key=lambda o: (o.departure_s, o.option_id))):
-        base_id = option.option_id.rsplit('@', 1)[0]
-        element = copy.deepcopy(templates[base_id])
-        if tuple(element.find('route').attrib['edges'].split()) != option.edges:
-            raise ValueError('selected route lost source provenance')
-        vehicle_id = f'dynamic{index}'
-        element.set('id', vehicle_id)
-        element.set('depart', f'{option.departure_s:.1f}')
-        # Templates come from original demand, not the fitted profile-arm XML.
-        candidate.append(element)
-        agent = dict(agents[base_id], vehicle_id=vehicle_id,
-                     departure_s=round(option.departure_s, 1))
-        result_agents.append(agent)
-        mapping.append({'vehicle_id': vehicle_id, 'source_vehicle_id': base_id,
-                        'option_id': option.option_id})
+    with io_phases.phase('selection_transform'):
+        candidate = ET.Element('routes', root.attrib)
+        for child in root:
+            if child.tag != 'vehicle':
+                candidate.append(copy.deepcopy(child))
+        result_agents, mapping = [], []
+        for index, option in enumerate(
+                sorted(selected, key=lambda o: (o.departure_s, o.option_id))):
+            base_id = option.option_id.rsplit('@', 1)[0]
+            element = copy.deepcopy(templates[base_id])
+            if tuple(element.find('route').attrib['edges'].split()) != option.edges:
+                raise ValueError('selected route lost source provenance')
+            vehicle_id = f'dynamic{index}'
+            element.set('id', vehicle_id)
+            element.set('depart', f'{option.departure_s:.1f}')
+            # Templates come from original demand, not the fitted profile-arm XML.
+            candidate.append(element)
+            agent = dict(agents[base_id], vehicle_id=vehicle_id,
+                         departure_s=round(option.departure_s, 1))
+            result_agents.append(agent)
+            mapping.append({'vehicle_id': vehicle_id, 'source_vehicle_id': base_id,
+                            'option_id': option.option_id})
     output.mkdir(exist_ok=False)
-    ET.ElementTree(candidate).write(output / 'calibrated.rou.xml', encoding='utf-8', xml_declaration=True)
-    source_document['agents'] = result_agents
-    (output / 'calibrated.agents.json').write_text(json.dumps(source_document))
-    (output / 'selection.json').write_text(json.dumps(mapping))
+    with io_phases.phase('selection_write'):
+        ET.ElementTree(candidate).write(output / 'calibrated.rou.xml',
+                                        encoding='utf-8', xml_declaration=True)
+        source_document['agents'] = result_agents
+        (output / 'calibrated.agents.json').write_text(json.dumps(source_document))
+        (output / 'selection.json').write_text(json.dumps(mapping))
+        io_phases.add_bytes(written=sum(
+            (output / name).stat().st_size for name in
+            ('calibrated.rou.xml', 'calibrated.agents.json', 'selection.json')))
 
 
 def simulate_counts(route: Path, network: Path, directory: Path, seed: int,
