@@ -33,6 +33,7 @@ from traffic_sim.core.contracts import (
 from traffic_sim.core.fingerprint import sha256_file, sumo_version
 from traffic_sim.demand.build_lock import child_environment, demand_build_lock
 from traffic_sim.demand.source_identity import demand_source_fingerprints
+from traffic_sim.ops import io_phases
 from demand.day_library import valid_day_library_diagnostic
 from traffic_sim.simulation.envelope import (
     EnvelopePolicy,
@@ -261,6 +262,7 @@ def _archive_validation_state(archive: Path) -> tuple[tuple[str, int, int], ...]
         archive / "demand_meta.json",
         *(archive / name for name in _REQUIRED_ARCHIVE_FILES),
     )
+    io_phases.count("archive_state_probe")
     state = []
     try:
         for path in paths:
@@ -348,7 +350,13 @@ LIVE_RELEASE_SNAPSHOT_MARKER = Path("runs") / ".live-demand-release-snapshot.jso
 
 
 def _read(path: Path) -> dict[str, Any]:
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    # Diagnostic only: inert unless a profiler installs a collector, and it
+    # changes neither what is read nor what is returned.
+    with io_phases.phase("archive_json_read"):
+        io_phases.count("archive_json_read")
+        raw = Path(path).read_text(encoding="utf-8")
+        io_phases.add_bytes(read=len(raw.encode("utf-8")))
+        payload = json.loads(raw)
     if not isinstance(payload, dict):
         raise ValueError(f"JSON input must be an object: {path}")
     return payload
@@ -659,6 +667,8 @@ def validate_demand_archive(
 ) -> dict[str, Any]:
     """Validate one immutable run archive against an exact envelope contract."""
     archive = Path(archive).resolve()
+    io_phases.count("archive_validate")
+    io_phases.count_unique("archive_validated_path", str(archive))
     manifest = _read(archive / "manifest.json")
     if manifest.get("kind") != "demand" or manifest.get("status") != "succeeded":
         raise ValueError(f"demand archive is not a succeeded demand run: {archive}")
@@ -697,7 +707,13 @@ def validate_demand_archive(
     for name in _REQUIRED_ARCHIVE_FILES:
         path = archive / name
         expected = outputs.get(name)
-        digest = sha256_file(path)
+        with io_phases.phase("archive_sha256"):
+            io_phases.count("archive_sha256")
+            digest = sha256_file(path)
+            try:
+                io_phases.add_bytes(hashed=path.stat().st_size)
+            except OSError:
+                pass
         if (
             digest is None
             or expected is None

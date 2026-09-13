@@ -14,7 +14,7 @@ owners, states and approval formulas are not active workflow rules. See
 - Suggested next action: `Apply the call-local worker-cap review fix, commit and push it separately, then perform Step 5 measurement only on existing archives and saved outputs. Count actual archive reads and validations, route parsing and resolver work, and assemble_window time before proposing any cache or optimisation. Do not start SUMO, a monthly search, a demand build, catalog generation or warming for this measurement.`
 - Eligible actors: `Any capable actor.`
 - Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation or expensive catalog/demand run without explicit scope; keep unrelated local changes outside this delivery.`
-- Updated: `2026-09-13. Step 4 closed after worker-cap isolation review; Step 5 measurement is next.`
+- Updated: `2026-09-13. Step 5 instrumented for archive validation; production measurement blocked on a current-source archive.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- WORKFLOW_HISTORY_START -->

@@ -1,0 +1,94 @@
+{
+  "conditional_next_hypothesis": {
+    "expected_upper_bound": "unknown; the fixture chain shows zero avoidable validations, so no time saving may be projected from this measurement",
+    "gate": "only after a current-source qualified archive exists",
+    "required_evidence": "RED/GREEN on repetition counters plus an A/B preserving the exact cost ledger, sorted cost list, winner, disqualifications and stop proof",
+    "shape_if_repetition_appears": "an operation-local frozen descriptor carrying the parsed metadata and the full content digests already computed by the first validation, with a snapshot lifetime bounded by the operation and a re-check at every new read boundary; never a global path -> valid cache"
+  },
+  "date": "2026-09-13",
+  "diagnostic_only": true,
+  "findings": [
+    "On the fixture chain there is NO unnecessary repetition to remove: find_demand_archives performs exactly one full validation per unique archive path (1.00 per path), and repeated calls within one verified snapshot perform zero reads, zero parses and zero digests.",
+    "The warm state guard is keyed on path, size and mtime, but it is not fooled by them: an archive whose bytes changed with the size preserved and the mtime restored is excluded on the next call. Pinned by a test.",
+    "validate_demand_archive itself also rejects a same-size, same-mtime content change, because demand_meta.json is inside _REQUIRED_ARCHIVE_FILES and is digested. Pinned by a test."
+  ],
+  "hermetic_fixture_measurement": {
+    "WARNING": "FIXTURE TIMES, NOT PRODUCTION TIMES. Three synthetic archives, 23676 bytes hashed in total.",
+    "cold_first_entry": {
+      "archive_json_read": 12,
+      "archive_sha256": 30,
+      "archive_state_probe": 3,
+      "archive_validate": 3,
+      "archives": 3,
+      "bytes_hashed": 23676,
+      "find_demand_archives_calls": 1,
+      "json_read_exclusive_s": 0.001,
+      "sha256_exclusive_s": 0.001488,
+      "unique_archive_paths": 3,
+      "validations_per_unique_path": 1.0
+    },
+    "purpose": "verify the measurement contract only",
+    "warm_reuse_same_snapshot": {
+      "archive_json_read": 0,
+      "archive_sha256": 0,
+      "archive_state_probe": 9,
+      "archive_validate": 0,
+      "find_demand_archives_calls": 3,
+      "note": "the existing state guard absorbed every repeat entirely"
+    }
+  },
+  "instrumented": {
+    "archive_discovery_and_validation": {
+      "bytes": [
+        "read on every JSON parse",
+        "hashed on every digest"
+      ],
+      "counters": [
+        "archive_validate",
+        "archive_json_read",
+        "archive_sha256",
+        "archive_state_probe"
+      ],
+      "sites": [
+        "monthly_demand._read",
+        "monthly_demand.validate_demand_archive",
+        "monthly_demand._archive_validation_state",
+        "the sha256 loop over _REQUIRED_ARCHIVE_FILES"
+      ],
+      "unique_counts": [
+        "archive_validated_path"
+      ]
+    }
+  },
+  "measurement_revision": "aef1cccd2602783885541152e532c363aee7c8e3",
+  "missing_precondition": "current-source qualified archive",
+  "not_instrumented_this_round": [
+    "day_library.assemble_window: days, route rows, agents, bytes and exclusive wall (metric group 5)",
+    "cost_ordered_execution.build_cost_ledger and disruption.ClosureRouteResolver: parent candidates, daily units, cache hits/misses, route identities, XML parses, resolver instances and resolve calls (metric group 6)",
+    "final ledger/winner/stop-proof digest (metric group 7): tools/profile_monthly_cost_ledger.py already binds these and was not duplicated"
+  ],
+  "optimization_proposed": false,
+  "preflight": {
+    "always_differing_files": [
+      "traffic_sim/demand/route_catalog.py",
+      "dynamic_assignment",
+      "dynamic_passage_adapter",
+      "traffic_sim/demand/automatic_passage.py",
+      "demand/day_library.py",
+      "build_sumo_demand",
+      "demand/structure.py",
+      "traffic_sim/demand/passage_solver.py"
+    ],
+    "archives_matching_current_source_identity": 0,
+    "archives_with_metadata": 142,
+    "conclusion": "every archive is correctly invalidated by steps 1-4. No production time is reported, no old evidence was rebound to new source hashes, and no replacement was built.",
+    "exact_local_command_when_an_archive_qualifies": "python3 tools/profile_monthly_cost_ledger.py --out runs/profile-step5 --spec <closure spec> --runs-root runs --qualified-demand-manifest <subhour_qualified_demand_manifest_v1.json> --evidence-out validation/passage_step5_archive_cost_measurement_20260913.json",
+    "method": "compared each archive's build_fingerprint.source_files with demand_source_fingerprints(project_root), which is the exact equality validate_demand_archive requires",
+    "question": "does any existing archive pass validate_demand_archive against the current source identity?"
+  },
+  "purpose": "Step 5: measure archive discovery, validation and costing before changing anything",
+  "release_evidence": false,
+  "schema_version": 1,
+  "status": "instrumented_unmeasured",
+  "why_no_optimization": "The plan assumes repeated validation per archive during resolver setup. The measurement does not find it in find_demand_archives, and the plan itself forbids building a cache where the measurement shows each unit is already handled once. The production phase that could still show repetition -- prepare() over a real qualified manifest -- cannot be measured until an archive exists under the current source identity. Proposing an optimisation now would be inventing one."
+}

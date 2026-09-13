@@ -826,6 +826,37 @@ utfall; identisk kostnadslista, vinnare och stoppbevis. Ingen liveträdsmutation
 **Prioritet:** villkorad av steg 0; exempelvalidering på 0,35 s är inte bevis
 för många minuters möjlig vinst.
 
+#### Steg 5 mätning — instrumenterad men OMÄTT i produktion, 2026-09-13
+
+**Preflight avgjorde saken först.** Av 142 arkiv med metadata matchar **noll**
+`demand_source_fingerprints` för det aktuella trädet; varje arkiv skiljer sig i
+minst åtta inventariefiler som steg 1–4 rörde. De är korrekt invaliderade.
+Ingen produktionstid rapporteras, ingen gammal evidens bands om till nya
+source-hashar, och inget ersättningsarkiv byggdes. Exakt lokalt kommando när
+ett kvalificerat arkiv finns står i evidensfilen.
+
+**Instrumenterat:** `_read`, `validate_demand_archive`,
+`_archive_validation_state` och digest-loopen, med räknare för valideringar,
+JSON-läsningar, SHA-256-beräkningar och stat-sonderingar, unika arkivsökvägar
+samt lästa och hashade bytes.
+
+**Hermetiskt fixturresultat — uttryckligen INTE produktionstid** (tre
+syntetiska arkiv, 23 676 hashade byte): kallt gör en `find_demand_archives`
+över tre arkiv exakt tre valideringar, **1,00 per unik sökväg**. Varmt gör tre
+ytterligare anrop **noll** valideringar, läsningar och digests — bara nio
+stat-sonderingar.
+
+**Ingen optimering föreslås.** Planens antagande om upprepad validering per
+arkiv återfinns inte i mätningen, och planen förbjuder själv att bygga en cache
+där varje enhet redan hanteras en gång. Två säkerhetsegenskaper är dessutom
+bekräftade och pinnade: en innehållsändring med bevarad storlek och återställd
+mtime avvisas både av `validate_demand_archive` och av den varma stat-nycklade
+grinden.
+
+**Inte instrumenterat denna omgång:** `assemble_window`-detaljerna och
+costing-/resolver-räknarna. `tools/profile_monthly_cost_ledger.py` binder redan
+ledger-, vinnar- och stoppbevisidentiteter och dubblerades inte.
+
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 
 **Filer:** `build_sumo_demand.py`, `monthly_demand.py:_resolve_new_release`,

@@ -64,7 +64,26 @@ class PhaseCollector:
     def __init__(self, unmeasured_categories: Sequence[str] = ()) -> None:
         self._lock = threading.Lock()
         self._phases: dict[str, dict] = {}
+        # Counters answer "how many times", which is the step-5 question:
+        # a repeated validation costs the same whether or not it is slow.
+        self._counters: dict[str, int] = {}
+        self._unique: dict[str, set] = {}
         self.unmeasured_categories = list(unmeasured_categories)
+
+    def count(self, name: str, amount: int = 1) -> None:
+        with self._lock:
+            self._counters[name] = self._counters.get(name, 0) + int(amount)
+
+    def count_unique(self, name: str, value) -> None:
+        """Record an occurrence AND whether the value was already seen.
+
+        Repetition is the finding: five validations of one path is a very
+        different fact from one validation of five paths.
+        """
+        with self._lock:
+            events = f'{name}_events'
+            self._counters[events] = self._counters.get(events, 0) + 1
+            self._unique.setdefault(name, set()).add(value)
 
     def _entry(self, name: str) -> dict:
         return self._phases.setdefault(name, {
@@ -159,10 +178,16 @@ class PhaseCollector:
                 phases.items(), key=lambda item: -contribution(item[1]))
             if contribution(entry) > 0
         ]
+        with self._lock:
+            counters = dict(self._counters)
+            unique_counts = {name: len(values)
+                             for name, values in self._unique.items()}
         report = {
             'schema_version': 1,
             'phases': phases,
             'ranking': ranking,
+            'counters': counters,
+            'unique_counts': unique_counts,
             'unmeasured_categories': unmeasured,
         }
         if root is not None:
@@ -334,3 +359,17 @@ def record_derived(name: str, seconds: float, **counts: int) -> None:
                     max(seconds, 0.0))
     if counts:
         collector.add_bytes(name, counts)
+
+
+def count(name: str, amount: int = 1) -> None:
+    """Count one diagnostic event; a no-op in production."""
+    collector = _COLLECTOR.get()
+    if collector is not None:
+        collector.count(name, amount)
+
+
+def count_unique(name: str, value) -> None:
+    """Count an event and remember whether its value repeated."""
+    collector = _COLLECTOR.get()
+    if collector is not None:
+        collector.count_unique(name, value)
