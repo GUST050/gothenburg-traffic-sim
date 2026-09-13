@@ -454,7 +454,7 @@ def test_the_solver_request_key_is_unchanged_by_reuse(tmp_path):
     for index, support in enumerate((
             dynamic.expand_departure_support(
                 options, shifts, begin_s=0, end_s=quarters * 900, guard_s=guard_s),
-            dynamic.expand_departure_support_verified(
+            dynamic._expand_departure_support_verified(
                 verified.system, shifts, begin_s=0, end_s=quarters * 900,
                 guard_s=guard_s))):
         work = tmp_path / f'solve-{index}'

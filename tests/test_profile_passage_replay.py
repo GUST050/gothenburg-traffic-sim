@@ -589,6 +589,44 @@ class TestSharedSolverCache:
         assert 'solver_cache_hit' not in report
 
 
+class TestDirectReplayCacheIsolation:
+    """A caller-supplied solver cache must be checked by the call that uses it.
+
+    ``profile()`` checked the shared cache, but a direct ``replay()`` accepted
+    any path and created it. The guard belongs in the call that writes.
+    """
+
+    def test_a_cache_inside_the_evidence_is_refused(self, tmp_path):
+        source = evidence_root(tmp_path)
+
+        with pytest.raises(profiler.ReplayRefused, match='solver cache'):
+            profiler.replay(source, tmp_path / 'out',
+                            solver_cache_dir=source / 'stolen-cache')
+
+    def test_a_cache_containing_the_evidence_is_refused(self, tmp_path):
+        source = evidence_root(tmp_path)
+
+        with pytest.raises(profiler.ReplayRefused, match='solver cache'):
+            profiler.replay(source, tmp_path / 'out', solver_cache_dir=source.parent)
+
+    def test_the_cache_may_not_be_the_evidence_root_itself(self, tmp_path):
+        source = evidence_root(tmp_path)
+
+        with pytest.raises(profiler.ReplayRefused, match='solver cache'):
+            profiler.replay(source, tmp_path / 'out', solver_cache_dir=source)
+
+    def test_the_refusal_happens_before_anything_is_written(self, tmp_path):
+        source = evidence_root(tmp_path)
+        before = _tree_state(source)
+
+        with pytest.raises(profiler.ReplayRefused):
+            profiler.replay(source, tmp_path / 'out',
+                            solver_cache_dir=source / 'input')
+
+        assert not (tmp_path / 'out').exists()
+        assert _tree_state(source) == before
+
+
 class TestArchiveValidationPhase:
     def _stub(self, monkeypatch, calls):
         from traffic_sim.simulation import monthly_demand

@@ -384,7 +384,7 @@ def expand_departure_support(
     All generated alternatives have capacity one to avoid point-mass cloning.
 
     Callers holding a system that already validated these exact options use
-    ``expand_departure_support_verified`` instead of paying for the throwaway
+    ``_expand_departure_support_verified`` instead of paying for the throwaway
     validation system below.
     """
     shifts = _validated_shift_grid(shifts_s, begin_s, end_s, guard_s)
@@ -396,11 +396,15 @@ def expand_departure_support(
                                  end_s=end_s, guard_s=guard_s)
 
 
-def expand_departure_support_verified(
+def _expand_departure_support_verified(
     system: PassageSystem, shifts_s: Sequence[int], *,
     begin_s: float, end_s: float, guard_s: float = 0,
 ) -> list[RouteDeparture]:
     """Expand the options a built system has ALREADY validated.
+
+    PRIVATE on purpose. Skipping validation is only sound for a caller that
+    holds the very system which performed it, so this is not advertised as a
+    public entry point that arbitrary code may reach for.
 
     ``build_passage_system`` checks every option it accepts — identity, group,
     physical edges, complete finite monotone offsets per named scenario,

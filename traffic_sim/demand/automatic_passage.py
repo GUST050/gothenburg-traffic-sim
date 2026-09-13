@@ -269,7 +269,7 @@ def _refine(data, source_report, network, work, candidate_pool):
     counts = matrix @ np.ones(len(options))
     if np.any(counts < lower) or np.any(counts > upper):
         raise ValueError('source violates retained PFE structural bounds')
-    expanded = dynamic.expand_departure_support_verified(
+    expanded = dynamic._expand_departure_support_verified(
         original, [-900, -600, -300, 0, 300, 600, 900],
         begin_s=0, end_s=quarters*900, guard_s=60)
     before_structure = calibrated_structure_report(route, pool_path=candidate_pool)

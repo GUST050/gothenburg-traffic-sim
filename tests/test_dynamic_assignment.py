@@ -372,7 +372,7 @@ class TestVerifiedExpansion:
 
         public = dynamic.expand_departure_support(
             options, [-900, 0, 900], begin_s=0, end_s=3600, guard_s=60)
-        verified = dynamic.expand_departure_support_verified(
+        verified = dynamic._expand_departure_support_verified(
             system, [-900, 0, 900], begin_s=0, end_s=3600, guard_s=60)
 
         assert self._fields(verified) == self._fields(public)
@@ -383,7 +383,7 @@ class TestVerifiedExpansion:
         public = dynamic.build_passage_system(dynamic.expand_departure_support(
             options, [-900, 0, 900], begin_s=0, end_s=3600, guard_s=60), ['s'], 4)
         verified = dynamic.build_passage_system(
-            dynamic.expand_departure_support_verified(
+            dynamic._expand_departure_support_verified(
                 system, [-900, 0, 900], begin_s=0, end_s=3600, guard_s=60), ['s'], 4)
 
         for name in ('matrix', 'boundary_matrix'):
@@ -397,17 +397,17 @@ class TestVerifiedExpansion:
         options = self._options()
 
         with pytest.raises(ValueError, match='built passage system'):
-            dynamic.expand_departure_support_verified(
+            dynamic._expand_departure_support_verified(
                 options, [0], begin_s=0, end_s=3600)
 
     def test_the_verified_expansion_still_checks_shifts_and_horizon(self):
         system = dynamic.build_passage_system(self._options(), ['s'], 4)
 
         with pytest.raises(ValueError, match='shifts including zero'):
-            dynamic.expand_departure_support_verified(
+            dynamic._expand_departure_support_verified(
                 system, [300], begin_s=0, end_s=3600)
         with pytest.raises(ValueError, match='finite horizon'):
-            dynamic.expand_departure_support_verified(
+            dynamic._expand_departure_support_verified(
                 system, [0], begin_s=3600, end_s=0)
 
     def test_the_verified_expansion_still_checks_the_per_option_envelope(self):
@@ -415,7 +415,7 @@ class TestVerifiedExpansion:
         system = dynamic.build_passage_system(options, ['s'], 4)
 
         with pytest.raises(ValueError, match='unit capacity'):
-            dynamic.expand_departure_support_verified(
+            dynamic._expand_departure_support_verified(
                 system, [0], begin_s=0, end_s=3600)
 
     def test_the_public_expansion_still_validates_unverified_options(self):
@@ -429,3 +429,10 @@ class TestVerifiedExpansion:
     def test_the_public_expansion_still_rejects_empty_input(self):
         with pytest.raises(ValueError, match='base alternatives are required'):
             dynamic.expand_departure_support([], [0], begin_s=0, end_s=3600)
+
+
+def test_the_verified_support_path_is_not_public():
+    """Only trusted internal callers may skip the option validation."""
+    assert not hasattr(dynamic, 'expand_departure_support_verified')
+    assert hasattr(dynamic, '_expand_departure_support_verified')
+    assert 'expand_departure_support_verified' not in dir(dynamic)

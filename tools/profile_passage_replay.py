@@ -139,11 +139,16 @@ class PhaseRecorder:
         }
 
 
+def _overlaps(path: Path, source: Path) -> bool:
+    """True when writing to ``path`` could touch the evidence being read."""
+    return path == source or source in path.parents or path in source.parents
+
+
 def _resolve_isolation(source: Path, out: Path) -> tuple[Path, Path]:
     """Refuse any output path that would write into the evidence being read."""
     source = Path(source).resolve()
     out = Path(out).resolve()
-    if source == out or source in out.parents or out in source.parents:
+    if _overlaps(out, source):
         raise ReplayRefused(
             f'output {out} must be outside the source evidence root {source}')
     if not source.is_dir():
@@ -368,6 +373,15 @@ def replay(source: Path, out: Path, *, label: str | None = None,
            solver_cache_dir: Path | None = None) -> dict:
     """Replay preparation, solving, staging and structure over saved traces."""
     source, out = _resolve_isolation(source, out)
+    # Checked by the call that will WRITE it, before any directory is created:
+    # profile() guards the cache it makes, but a direct replay() accepts one
+    # from its caller and must not be the hole in that guarantee.
+    if solver_cache_dir is not None:
+        solver_cache_dir = Path(solver_cache_dir).resolve()
+        if _overlaps(solver_cache_dir, source):
+            raise ReplayRefused(
+                f'solver cache {solver_cache_dir} must be outside '
+                f'the source evidence root {source}')
     out.mkdir(parents=True, exist_ok=False)
     variant = source.name
     context = {'variant': variant, 'date': None, 'input_identity': None}
@@ -454,7 +468,7 @@ def replay(source: Path, out: Path, *, label: str | None = None,
                             raise ReplayRefused(
                                 'source violates the retained PFE structural bounds')
                 with recorder.phase('expand_departure_support'):
-                    expanded = dynamic.expand_departure_support_verified(
+                    expanded = dynamic._expand_departure_support_verified(
                         base, SHIFT_SUPPORT_S, begin_s=0, end_s=quarters * 900,
                         guard_s=GUARD_S)
                 with recorder.phase('build_passage_system_expanded'):
@@ -634,8 +648,7 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
     # later repeats reproduce production's cache hit. It lives under the
     # profile output, never in or around the evidence being read.
     cache_root = out / 'solver-cache'
-    if cache_root == source or source in cache_root.parents \
-            or cache_root in source.parents:
+    if _overlaps(cache_root, source):
         raise ReplayRefused(
             f'shared solver cache {cache_root} must be outside {source}')
     cache_root.mkdir(parents=True, exist_ok=False)
