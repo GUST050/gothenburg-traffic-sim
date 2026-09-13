@@ -15,7 +15,6 @@ from pathlib import Path
 import time
 import xml.etree.ElementTree as ET
 from typing import Callable, Iterable, Mapping, Optional, Sequence, Union
-from traffic_sim.ops import io_phases
 
 
 Adjacency = Mapping[str, Sequence[str]]
@@ -508,10 +507,6 @@ class ClosureRouteResolver:
         # `edge_length` is optional because the route writer needs routes and
         # reasons but never metres. Asking it for a length it does not have
         # fails loudly in `path_cost` rather than silently costing zero.
-        # Diagnostic only and inert without an installed collector. Full
-        # provider identity is recorded where archive, network and schedule
-        # content are all available; this seam only counts resolver objects.
-        io_phases.count("closure_resolver_instances")
         self.adjacency = adjacency
         self.edge_time = edge_time
         self.edge_length = edge_length
@@ -683,9 +678,6 @@ class ClosureRouteResolver:
         closures: Sequence[Mapping] | None,
     ) -> VehicleClosureOutcome | None:
         """Decide one vehicle, or None when the closure never reaches it."""
-        if io_phases.current_collector() is not None:
-            io_phases.count("closure_resolve_calls")
-            io_phases.count_unique("closure_route_edges", tuple(edges))
         if not self.closed_edges.intersection(edges):
             return None
         applicable = self.applicable_on(edges, depart_s, closures)

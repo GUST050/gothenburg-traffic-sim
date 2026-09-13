@@ -1426,6 +1426,8 @@ def test_profile_accounts_unique_daily_units_and_never_starts_sumo(tmp_path):
         "daily_variant_records": 6,
         "parents": 2,
     }
+    assert record["io_measurement"]["counters"][
+        "cost_parent_candidates"] == 2
     assert (tmp_path / "profile" / "cost-ledger.json").is_file()
 
 

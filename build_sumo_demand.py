@@ -102,6 +102,26 @@ def _digest_payload(payload) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def write_demand_metadata(path: Path, payload: dict) -> None:
+    """Atomically write lossless compact demand metadata.
+
+    Whole-day metadata is dominated by repeated per-vehicle evidence. Compact
+    JSON preserves the parsed document and its fingerprint contract while
+    avoiding tens of megabytes of indentation in every archived build.
+    """
+    path = Path(path)
+    temporary = path.with_name(path.name + ".tmp")
+    try:
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"))
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def record_day_library_lookup(
     library: DayLibrary,
     identity: DayIdentity,
@@ -2255,13 +2275,7 @@ def main() -> None:
     )
     meta["build_id"] = meta["build_fingerprint"]["build_id"]
     meta_path = SUMO_DIR / "demand_meta.json"
-    meta_tmp = meta_path.with_name(meta_path.name + ".tmp")
-    with open(meta_tmp, "w") as f:
-        json.dump(meta, f, indent=2)
-        f.write("\n")
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(meta_tmp, meta_path)
+    write_demand_metadata(meta_path, meta)
     print(f"\nWrote {calib_path} + demand_meta.json")
 
     if args.keep_scenarios:
@@ -2284,20 +2298,15 @@ def _tracked_main() -> None:
     products, and a latest_demand pointer flipped only on success — so a
     finished-looking artifact can never again be separated from the code
     and inputs that made it."""
-    from traffic_sim.ops import io_phases, runs
+    from traffic_sim.ops import runs
 
     run = runs.start_run("demand", inputs={"argv": sys.argv[1:]})
     try:
         from traffic_sim.demand.automatic_passage import preserve_demand_on_failure
-        # The phase marks below are diagnostic and inert unless a tool
-        # installs a collector; none of them changes what is preserved,
-        # archived, recorded or reported.
         with preserve_demand_on_failure(SUMO_DIR):
-            with io_phases.phase("demand_main"):
-                main()
+            main()
     except BaseException as exc:
-        with io_phases.phase("demand_run_finish_failed"):
-            run.finish("failed", error=f"{type(exc).__name__}: {exc}")
+        run.finish("failed", error=f"{type(exc).__name__}: {exc}")
         raise
     meta_path = SUMO_DIR / "demand_meta.json"
     # Archive only the files this build can produce.  A glob here is unsafe:
@@ -2305,32 +2314,25 @@ def _tracked_main() -> None:
     # so earlier runs accidentally archived unrelated files as if they were
     # part of the new demand build. Missing optional q10/q90 variants are
     # omitted rather than recorded as phantom outputs.
-    with io_phases.phase("demand_product_listing"):
-        products = demand_run_products(SUMO_DIR)
-    with io_phases.phase("demand_add_outputs"):
-        for product in products:
-            run.add_output(product)
-    with io_phases.phase("demand_meta_read"):
-        if meta_path.exists():
-            io_phases.add_bytes(read=meta_path.stat().st_size)
-            with open(meta_path) as f:
-                meta = json.load(f)
-            run.record("calibrated_structure",
-                       meta.get("calibrated_structure", {}))
-            run.record("structure_flags", meta.get(
-                "calibrated_structure", {}).get("structure_flags", []))
+    for product in demand_run_products(SUMO_DIR):
+        run.add_output(product)
+    if meta_path.exists():
+        with open(meta_path) as f:
+            meta = json.load(f)
+        run.record("calibrated_structure",
+                   meta.get("calibrated_structure", {}))
+        run.record("structure_flags", meta.get(
+            "calibrated_structure", {}).get("structure_flags", []))
     # G3: refresh the assembled validation report whenever demand changes;
     # never let reporting fail the build it reports on.
-    with io_phases.phase("demand_validation_report"):
-        try:
-            from traffic_sim.confidence import report as validation_report
-            report = validation_report.write_report()
-            run.record("validation_overall", report["overall"])
-            run.add_output(validation_report.OUT_PATH)
-        except Exception as exc:
-            print(f"validation report: {type(exc).__name__}: {exc}")
-    with io_phases.phase("demand_run_finish"):
-        run.finish("succeeded")
+    try:
+        from traffic_sim.confidence import report as validation_report
+        report = validation_report.write_report()
+        run.record("validation_overall", report["overall"])
+        run.add_output(validation_report.OUT_PATH)
+    except Exception as exc:
+        print(f"validation report: {type(exc).__name__}: {exc}")
+    run.finish("succeeded")
 
 
 def demand_run_products(sumo_dir: Path = SUMO_DIR) -> list[Path]:

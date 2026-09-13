@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 from demand import day_library as dl
+from tools import profile_monthly_cost_ledger as monthly_profile
 from traffic_sim.ops import io_phases
 
 
@@ -232,7 +233,7 @@ class TestCostingAndTheResolverAccountForThemselves:
         times = {'a': 1.0, 'b': 1.0}
         collector = io_phases.PhaseCollector()
 
-        with io_phases.observe(collector):
+        with monthly_profile._observe_resolver_activity(collector):
             first = disruption.ClosureRouteResolver(
                 adjacency, times, None, frozenset({'b'}))
             second = disruption.ClosureRouteResolver(
@@ -253,7 +254,7 @@ class TestCostingAndTheResolverAccountForThemselves:
         times = {'a': 1.0, 'b': 1.0}
         collector = io_phases.PhaseCollector()
 
-        with io_phases.observe(collector):
+        with monthly_profile._observe_resolver_activity(collector):
             disruption.ClosureRouteResolver(
                 adjacency, times, None, frozenset({'b'}))
             disruption.ClosureRouteResolver(

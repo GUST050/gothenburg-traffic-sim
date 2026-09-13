@@ -8,7 +8,9 @@ exactly 1,950 daily units x 3 variants and 1,690 parent candidates.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager, nullcontext
 import copy
+from functools import wraps
 import hashlib
 import json
 import os
@@ -16,6 +18,7 @@ import platform
 import resource
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -28,6 +31,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from traffic_sim.core.fingerprint import sha256_file
+from traffic_sim.ops import io_phases
 from traffic_sim.simulation.cost_ordered_execution import build_cost_ledger
 from traffic_sim.simulation.monthly_search import MonthlySearchPolicy
 from tools.product_arm import ProcessCensusUnavailable, ProcessTreeRSSSampler
@@ -36,6 +40,7 @@ EXPECTED_DAILY_UNITS = 1950
 EXPECTED_VARIANTS = 3
 EXPECTED_PARENTS = 1690
 PROFILE_SCHEMA = "monthly_cost_ledger_profile_v1"
+_RESOLVER_PATCH_LOCK = threading.RLock()
 
 # A Phase 4 profile is evidence produced by this complete import/runtime
 # surface, not just by the four numeric costing files.  Keep this list explicit
@@ -193,6 +198,43 @@ def _rss_bytes() -> int:
     return int(value) * (1 if os.uname().sysname == "Darwin" else 1024)
 
 
+@contextmanager
+def _observe_resolver_activity(collector: io_phases.PhaseCollector):
+    """Count resolver work only inside the isolated profiling operation.
+
+    Route-catalog identity binds ``disruption.py`` byte for byte. Keeping this
+    diagnostic wrapper here avoids changing production routing or adding a
+    per-vehicle observer lookup when no profile is running. The lock makes the
+    temporary class patch process-safe; the CLI runs in its own process.
+    """
+    from traffic_sim.simulation import disruption
+
+    cls = disruption.ClosureRouteResolver
+    with _RESOLVER_PATCH_LOCK:
+        original_init = cls.__init__
+        original_resolve = cls.resolve
+
+        @wraps(original_init)
+        def measured_init(instance, *args, **kwargs):
+            result = original_init(instance, *args, **kwargs)
+            collector.count("closure_resolver_instances")
+            return result
+
+        @wraps(original_resolve)
+        def measured_resolve(instance, edges, *args, **kwargs):
+            collector.count("closure_resolve_calls")
+            collector.count_unique("closure_route_edges", tuple(edges))
+            return original_resolve(instance, edges, *args, **kwargs)
+
+        cls.__init__ = measured_init
+        cls.resolve = measured_resolve
+        try:
+            yield
+        finally:
+            cls.__init__ = original_init
+            cls.resolve = original_resolve
+
+
 def profile_ledger(
     spec: Any,
     parents: Sequence[Any],
@@ -215,6 +257,8 @@ def profile_ledger(
     producer_binding: Mapping[str, Any] | None = None,
     qualified_demand_manifest: Mapping[str, Any] | None = None,
     qualified_demand_manifest_path: Path | None = None,
+    io_collector: io_phases.PhaseCollector | None = None,
+    _resolver_observer_installed: bool = False,
 ) -> dict[str, Any]:
     """Run and account for a cold deterministic ledger profile."""
     from traffic_sim.simulation.monthly_demand import validate_qualified_demand_manifest_shape
@@ -283,8 +327,13 @@ def profile_ledger(
             sumo_before = int(sumo_start_probe())
         except (OSError, RuntimeError, TypeError, ValueError) as error:
             sumo_probe_error = str(error)
+    collector = io_collector or io_phases.PhaseCollector()
+    resolver_scope = (nullcontext() if _resolver_observer_installed
+                      else _observe_resolver_activity(collector))
     try:
-        ledger = build_cost_ledger(spec, parents, source, progress=on_progress)
+        with resolver_scope, io_phases.observe(collector):
+            ledger = build_cost_ledger(
+                spec, parents, source, progress=on_progress)
     finally:
         if rss_sampler is None:
             peak_rss_bytes = None
@@ -464,6 +513,7 @@ def profile_ledger(
         "population_complete": population_complete,
         "variant_population_complete": variant_population_complete,
         "phases": phases,
+        "io_measurement": collector.report(),
         "progress_events": progress,
         "cache": {
             "root": str(fresh_roots.get("cache", "")),
@@ -476,7 +526,9 @@ def profile_ledger(
             "disk_cache_hits": disk_hits,
             "disk_cache_misses": disk_misses,
             "unique_unit_misses": int(daily_units),
-            "accounting": "parent-to-daily-unit lookups are memory hits or misses; disk lookups are disk hits or misses",
+            "accounting": (
+                "parent-to-daily-unit lookups are memory hits or misses; "
+                "disk lookups are disk hits or misses"),
             "accounting_consistent": cache_accounting_complete,
         },
         "wall_time_s": elapsed,
@@ -622,27 +674,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         sumo_before_prepare = sumo_start_probe()
         if sumo_before_prepare != 0:
             raise RuntimeError("cold profile runner already has SUMO launches")
-        runner.prepare(parents)
-        sumo_after_prepare = sumo_start_probe()
-        if sumo_after_prepare != 0:
-            raise RuntimeError(
-                "cold profile preparation launched SUMO; refusing profile")
+        io_collector = io_phases.PhaseCollector()
+        with _observe_resolver_activity(io_collector):
+            with io_phases.observe(io_collector):
+                runner.prepare(parents)
+            sumo_after_prepare = sumo_start_probe()
+            if sumo_after_prepare != 0:
+                raise RuntimeError(
+                    "cold profile preparation launched SUMO; refusing profile")
 
-        record = profile_ledger(spec, parents, source, output_root=output_root,
-                                cache_root=cache_root,
-                                release_root=release_root,
-                                sumo_start_probe=sumo_start_probe,
-                                daily_results_root=daily_results_root,
-                                release_root_prepared=True,
-                                evidence_id=args.evidence_id,
-                                bound_spec=bound_spec,
-                                sumo_start_before=sumo_after_prepare,
-                                runs_root=args.runs_root,
-                                policy_path=policy_path,
-                                producer_binding=producer_binding,
-                                qualified_demand_manifest=qualified_manifest,
-                                qualified_demand_manifest_path=(
-                                    args.qualified_demand_manifest))
+            record = profile_ledger(
+                spec, parents, source, output_root=output_root,
+                cache_root=cache_root, release_root=release_root,
+                sumo_start_probe=sumo_start_probe,
+                daily_results_root=daily_results_root,
+                release_root_prepared=True, evidence_id=args.evidence_id,
+                bound_spec=bound_spec,
+                sumo_start_before=sumo_after_prepare,
+                runs_root=args.runs_root, policy_path=policy_path,
+                producer_binding=producer_binding,
+                qualified_demand_manifest=qualified_manifest,
+                qualified_demand_manifest_path=(
+                    args.qualified_demand_manifest),
+                io_collector=io_collector,
+                _resolver_observer_installed=True)
         (output_root / "profile.json").write_text(
             json.dumps(record, indent=2, sort_keys=True) + "\n",
             encoding="utf-8")

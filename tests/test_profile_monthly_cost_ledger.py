@@ -62,3 +62,39 @@ def test_publish_is_atomic_and_refuses_to_overwrite(monkeypatch, tmp_path):
 
     assert destination.read_bytes() == first
     assert json.loads(first)["status"] == "PASS"
+
+
+def test_resolver_measurement_is_scoped_and_restores_production_methods():
+    from traffic_sim.ops import io_phases
+    from traffic_sim.simulation import disruption
+
+    original_init = disruption.ClosureRouteResolver.__init__
+    original_resolve = disruption.ClosureRouteResolver.resolve
+    collector = io_phases.PhaseCollector()
+    adjacency = {"a": ("b",), "b": ()}
+
+    with profile._observe_resolver_activity(collector):
+        resolver = disruption.ClosureRouteResolver(
+            adjacency, {"a": 1.0, "b": 1.0}, None, frozenset({"b"}))
+        resolver.resolve(("a", "b"), 0.0, None, None)
+
+    report = collector.report()
+    assert report["counters"]["closure_resolver_instances"] == 1
+    assert report["counters"]["closure_resolve_calls"] == 1
+    assert report["unique_counts"]["closure_route_edges"] == 1
+    assert disruption.ClosureRouteResolver.__init__ is original_init
+    assert disruption.ClosureRouteResolver.resolve is original_resolve
+
+
+def test_resolver_measurement_restores_methods_after_failure():
+    from traffic_sim.ops import io_phases
+    from traffic_sim.simulation import disruption
+
+    original_init = disruption.ClosureRouteResolver.__init__
+    collector = io_phases.PhaseCollector()
+
+    with pytest.raises(RuntimeError, match="profile failed"):
+        with profile._observe_resolver_activity(collector):
+            raise RuntimeError("profile failed")
+
+    assert disruption.ClosureRouteResolver.__init__ is original_init
