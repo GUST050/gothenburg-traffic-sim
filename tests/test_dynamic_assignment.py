@@ -480,7 +480,43 @@ class TestSolverPhaseInstrumentation:
             return _measure()
 
     def test_the_hook_is_absent_unless_a_tool_installs_it(self):
-        assert dynamic._SOLVER_PHASE_OBSERVER is None
+        assert dynamic._SOLVER_PHASE_OBSERVER.get() is None
+
+    def test_concurrent_observers_are_context_local(self):
+        import threading
+
+        first, second = self._Observer(), self._Observer()
+        first_entered = threading.Event()
+        second_entered = threading.Event()
+        first_exited = threading.Event()
+
+        def run_first():
+            with dynamic._observe_solver_phases(first):
+                first_entered.set()
+                assert second_entered.wait(2)
+                with dynamic._solver_phase('milp_solve'):
+                    pass
+            first_exited.set()
+
+        def run_second():
+            assert first_entered.wait(2)
+            with dynamic._observe_solver_phases(second):
+                second_entered.set()
+                assert first_exited.wait(2)
+                with dynamic._solver_phase('milp_solve'):
+                    pass
+
+        threads = [threading.Thread(target=run_first),
+                   threading.Thread(target=run_second)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(3)
+
+        assert all(not thread.is_alive() for thread in threads)
+        assert first.rows['milp_solve']['calls'] == 1
+        assert second.rows['milp_solve']['calls'] == 1
+        assert dynamic._SOLVER_PHASE_OBSERVER.get() is None
 
     def test_instrumentation_changes_neither_request_nor_result(self, tmp_path):
         import json
@@ -557,7 +593,7 @@ class TestSolverPhaseInstrumentation:
                                           checkpoint_dir=tmp_path / 'e',
                                           cache_dir=tmp_path / 'cache-e')
 
-        assert dynamic._SOLVER_PHASE_OBSERVER is None
+        assert dynamic._SOLVER_PHASE_OBSERVER.get() is None
 
     def test_an_arbitrary_exception_restores_the_hook(self):
         class _Boom(Exception):
@@ -567,7 +603,7 @@ class TestSolverPhaseInstrumentation:
             with dynamic._observe_solver_phases(self._Observer()):
                 raise _Boom()
 
-        assert dynamic._SOLVER_PHASE_OBSERVER is None
+        assert dynamic._SOLVER_PHASE_OBSERVER.get() is None
 
     def test_a_validation_failure_restores_the_hook(self):
         system, _targets, groups = self._system()
@@ -576,4 +612,4 @@ class TestSolverPhaseInstrumentation:
             with dynamic._observe_solver_phases(self._Observer()):
                 dynamic.fit_integer_flows(system, {'other': [0, 0, 0]}, groups)
 
-        assert dynamic._SOLVER_PHASE_OBSERVER is None
+        assert dynamic._SOLVER_PHASE_OBSERVER.get() is None

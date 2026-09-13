@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from contextlib import contextmanager
+from contextvars import ContextVar
 import math
 import warnings
 from typing import AbstractSet, Mapping, Sequence
@@ -43,10 +44,10 @@ SOLVER_PHASE_NAMES = (
     'reexpansion_and_verification',
 )
 
-#: DIAGNOSTIC ONLY, and None in production. A tool installs an observer for the
-#: duration of one measured call; nothing here changes the model, the solver
-#: options, the column order, the cache identity or the checkpoint format.
-_SOLVER_PHASE_OBSERVER = None
+#: DIAGNOSTIC ONLY; its context-local value is None in production. A tool
+#: installs an observer for one measured call. Nothing here changes the model,
+#: solver options, column order, cache identity or checkpoint format.
+_SOLVER_PHASE_OBSERVER = ContextVar('solver_phase_observer', default=None)
 
 
 @contextmanager
@@ -56,19 +57,17 @@ def _observe_solver_phases(observer):
     Removal is unconditional: a timeout, an infeasible model or any other
     exception must not leave production code reporting into a dead collector.
     """
-    global _SOLVER_PHASE_OBSERVER
-    previous = _SOLVER_PHASE_OBSERVER
-    _SOLVER_PHASE_OBSERVER = observer
+    token = _SOLVER_PHASE_OBSERVER.set(observer)
     try:
         yield observer
     finally:
-        _SOLVER_PHASE_OBSERVER = previous
+        _SOLVER_PHASE_OBSERVER.reset(token)
 
 
 @contextmanager
 def _solver_phase(name: str):
     """Time one solver phase when observed; do nothing at all otherwise."""
-    observer = _SOLVER_PHASE_OBSERVER
+    observer = _SOLVER_PHASE_OBSERVER.get()
     if observer is None:
         yield
         return

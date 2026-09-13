@@ -475,7 +475,7 @@ def test_production_calibration_installs_no_solver_observer(tmp_path, monkeypatc
     real = dynamic.fit_integer_flows
     monkeypatch.setattr(
         auto.dynamic, 'fit_integer_flows',
-        lambda *args, **kwargs: (seen.append(dynamic._SOLVER_PHASE_OBSERVER),
+        lambda *args, **kwargs: (seen.append(dynamic._SOLVER_PHASE_OBSERVER.get()),
                                  real(*args, **kwargs))[1])
     inputs, reports, network, _calls = fixture(tmp_path, monkeypatch)
 
@@ -485,4 +485,4 @@ def test_production_calibration_installs_no_solver_observer(tmp_path, monkeypatc
     evidence = result['']['passage_calibration']
     assert 'solver_measurement' not in evidence
     assert 'solver_phases' not in evidence
-    assert dynamic._SOLVER_PHASE_OBSERVER is None
+    assert dynamic._SOLVER_PHASE_OBSERVER.get() is None

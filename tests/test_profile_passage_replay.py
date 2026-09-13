@@ -460,6 +460,7 @@ def test_the_replayed_system_is_the_production_system(tmp_path):
 
 
 def test_production_evidence_persists_the_exact_replay_contract(tmp_path, monkeypatch):
+    from traffic_sim.demand import passage_solver
     from tests.test_automatic_passage import fixture
 
     inputs, reports, network, _calls = fixture(tmp_path, monkeypatch)
@@ -472,6 +473,8 @@ def test_production_evidence_persists_the_exact_replay_contract(tmp_path, monkey
     manifest = json.loads((tmp_path / 'evidence/q50/report.json').read_text())
     assert contract['retained_bounds_pq'] == [{}, {}, {}, {}]
     assert contract['source_sha256'] == profiler.automatic_passage.replay_source_sha256()
+    assert contract['source_sha256']['passage_solver'] \
+        == sha256_file(Path(passage_solver.__file__))
     assert manifest['input_sha256'][contract_path.name] == sha256_file(contract_path)
 
 
@@ -1145,7 +1148,7 @@ class TestSolverMeasurement:
     def test_the_hook_is_uninstalled_after_the_replay(self, tmp_path):
         profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
 
-        assert profiler.dynamic._SOLVER_PHASE_OBSERVER is None
+        assert profiler.dynamic._SOLVER_PHASE_OBSERVER.get() is None
 
     def test_the_hook_is_uninstalled_after_a_refusal(self, tmp_path):
         source = evidence_root(tmp_path)
@@ -1154,7 +1157,7 @@ class TestSolverMeasurement:
         with pytest.raises(profiler.ReplayRefused):
             profiler.replay(source, tmp_path / 'out')
 
-        assert profiler.dynamic._SOLVER_PHASE_OBSERVER is None
+        assert profiler.dynamic._SOLVER_PHASE_OBSERVER.get() is None
 
     def test_measurement_does_not_reach_the_solver_checkpoint(self, tmp_path):
         report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')

@@ -42,11 +42,13 @@ def replay_source_sha256() -> dict[str, str]:
     # gate publication, so a saved replay means something different when it
     # changes.
     from demand import structure as _structure
+    from traffic_sim.demand import passage_solver
     return {
         'automatic_passage': sha256_file(Path(__file__)),
         'dynamic_assignment': sha256_file(Path(dynamic.__file__)),
         'trial_dynamic_passage': sha256_file(Path(trial.__file__)),
         'departure_reconciliation': sha256_file(Path(passage.__file__)),
+        'passage_solver': sha256_file(Path(passage_solver.__file__)),
         'structure': sha256_file(Path(_structure.__file__)),
     }
 
