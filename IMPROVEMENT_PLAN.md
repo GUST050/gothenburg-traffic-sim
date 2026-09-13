@@ -398,6 +398,69 @@ upprepning som finns, och `structure_source_calls` säger vad den kostar per
 funktion. Först med de siffrorna är det avgjort om en route-facts-tabell är
 värd att bygga, och för vilka funktioner.
 
+#### Steg 2 — experimentet byggt 2026-09-13, inte aktiverat som standard
+
+Den lokala mätningen på 2027-06-25 (9 675 fordon, 296 unika edge-tupler, 296
+unika endpoint-par, 32,686 fordon per unik rutt, 108 094 `gravity_distance_km`-
+anrop, observerad omfattning 0,691741 s för de två strukturfaserna) motiverar
+ett avgränsat experiment. Den motiverar inget globalt eller månatligt
+prestandaanspråk, och 0,691741 s är hela den observerade övre gränsen för just
+det fasparet.
+
+`demand/structure.py` har nu en `StructureContext`: en operationsbunden,
+icke-global memo som binds till geometrins INNEHÅLL (SHA-256) och den sorterade
+mätsensoridentiteten, aldrig till mtime eller storlek. Per unik full edge-tupel
+beräknas en gång: endpoint-avstånd med samma formel och flyttalsordning,
+destinationskant och dess near-sensor-utfall, antal sensorpassager inklusive
+återbesök, sista sensorposition och onward-sträcka. Varje FORDON behåller sin
+egen observation i dokumentordning, så antal, medianer, andelar och per-kvart-
+fält är oförändrade — det är BERÄKNINGAR som dedupliceras, aldrig fordon.
+Endpoint-avstånd delas med agent-/ändamålssidecars utan att deras iterations-
+eller reduktionsordning ändras. En delad parser löser både inline-rutter och
+namngivna `<route id=...>`; oupplösliga och tomma rutter avvisas som förut.
+Poolens fakta beräknas en gång per `_refine`-operation och varje anropare får
+en djup kopia, så två rapporter delar ingen muterbar struktur. Kandidatens
+kvart- och ändamålsaggregat räknas alltid om efter tidsflytt.
+
+Publika `calibrated_structure_report(route_path, pool_path)` är oförändrad; en
+kontext skickas bara via det privata `_context`-nyckelordet från kontrollerade
+produktionsanropare, och `structure_context()` är den interna fabriken.
+
+**Störst repetition låg inte där planen antog.** Den dominerande dubbleringen
+var inte per fordon utan per RAPPORT: `destination_sensor_proximity` beräknade
+`baseline_pct_within` över HELA nätet varje gång en rapport togs fram — ett
+avståndsanrop per kant i nätet, per rapport. På enfordonsfixturen mot den
+riktiga 7 125-kantsgeometrin föll `gravity_distance_km` från 21 441 till 14 294
+anrop, en minskning på 33,3%, med byteidentiska selection-, route- och
+agenthashar. Där kan per-rutt-dedupliceringen inte hjälpa alls (ett fordon, en
+rutt), så hela minskningen kommer från baslinjen. Med 296 unika rutter bakom
+9 675 fordon tillkommer per-rutt-effekten ovanpå den.
+
+**Ingen tidsvinst hävdas.** Anropsräkning är inte väggtid, och fixturen är inte
+produktionen. Kör den motviktade A/B:n lokalt innan detta blir standard:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR=/tmp/gs-mpl \
+python3 -m tools.profile_passage_replay \
+  --source runs/automatic-passage-<id>/q50 \
+  --out runs/profile-structure-<arm>-<stamp> \
+  --pool sumo/candidates.rou.xml \
+  --label forecast-weekend-full-day \
+  --repeats 3
+```
+
+Kör det på `d10361b` (arm A) och på den här commiten (arm B), i ordningen
+A/B/B/A i samma miljö. Godkänn endast om `selection_reproduced.state` är
+`identical` i alla körningar, `selection_sha256`/`routes_sha256`/
+`agents_sha256` är oförändrade mot steg 1:s accepterade utfall, och
+`structure_measurement.input_identity` är samma i båda armarna. Jämför sedan
+`structure_source_calls` och `structure_candidate_calls` samt fasernas
+väggtider.
+
+OBS för steg 8: `demand/structure.py` ingår i `demand_source_paths`, så den här
+ändringen ger demandarkiven en ny källidentitet. Den ingår INTE i
+`CATALOG_SOURCE_LABELS`, så den adopterade ruttkatalogen påverkas inte.
+
 ### Steg 3 — lösar- och supportkostnad, endast efter mätning
 
 **Filer:** `dynamic_assignment.py:fit_integer_flows`,

@@ -10,6 +10,9 @@ them must target this module.
 """
 from __future__ import annotations
 
+import copy
+from dataclasses import dataclass
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -129,6 +132,231 @@ def destination_sensor_proximity(dest_edge_ids: list[str],
             "baseline_pct_within": round(100 * all_near / len(edge_latlon), 1),
             "n": n_known}
 
+@dataclass(frozen=True)
+class _RouteVehicle:
+    """One vehicle's resolved contract: identity, departure and edge sequence."""
+    vehicle_id: str | None
+    depart_s: float
+    edges: tuple[str, ...]
+
+
+def _parse_route_file(route_path: Path) -> list[_RouteVehicle]:
+    """Resolve inline AND shared named routes once, in document order.
+
+    A vehicle may carry its route inline OR reference a shared
+    ``<route id=...>`` defined once in the same file. Silently skipping the
+    referencing form would drop those vehicles from EVERY metric — trip-length
+    fit, destination proximity, sensor passages, onward distance and the
+    under-1km cap — and report the remainder as if it were the whole
+    population. Inert while the publisher emits inline routes only, but the
+    candidate pool already uses the shared form, so resolve it here and refuse
+    rather than under-report.
+
+    ONE parser for every helper in this module: the report used to walk the
+    same file three times, and three walks can disagree about what a file says.
+    """
+    root = ET.parse(route_path).getroot()
+    named_routes = {route.get("id"): route.get("edges", "")
+                    for route in root.iter("route") if route.get("id")}
+    vehicles: list[_RouteVehicle] = []
+    for veh in root.iter("vehicle"):
+        route = veh.find("route")
+        if route is not None and route.get("edges"):
+            edges_text = route.get("edges")
+        else:
+            edges_text = named_routes.get(veh.get("route"), "")
+        if not edges_text:
+            raise ValueError(
+                f"vehicle {veh.get('id')!r} in {route_path} has no resolvable "
+                "route: neither an inline <route edges=...> nor a reference to "
+                "a shared <route id=...> in the same file")
+        vehicles.append(_RouteVehicle(
+            veh.get("id"), float(veh.get("depart", "0")),
+            tuple(edges_text.split())))
+    return vehicles
+
+
+@dataclass(frozen=True)
+class RouteFacts:
+    """What an edge sequence implies, independent of time, purpose or vehicle.
+
+    Everything here is a function of the route and the geometry alone, so it is
+    computed once per distinct sequence. Departure quarter, purpose and every
+    count, median and share stay per VEHICLE: this deduplicates CALCULATIONS,
+    never observations.
+    """
+    distance_km: float | None
+    destination_edge: str
+    sensor_passages: int
+    last_sensor_index: int | None
+    onward_m: float | None
+
+
+def _sensor_edge_identity(sensor_edge_ids) -> str:
+    """Newline-TERMINATED sorted ids, so two processes agree on the digest."""
+    return hashlib.sha256(
+        "".join(f"{edge}\n" for edge in sorted(sensor_edge_ids)).encode("utf-8")
+    ).hexdigest()
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+class StructureContext:
+    """One operation's memo of geometry-only facts, bound to geometry CONTENT.
+
+    Deliberately NOT a module-level cache. It lives for one report or one
+    ``automatic_passage._refine`` operation and is bound to the geometry bytes
+    and the sorted measured-sensor identity, so it can never be applied to a
+    network it was not built for. mtime and size are not the identity:
+    ``serve.py`` can rewrite ``network.geojson`` while a process lives, and a
+    stat-based key can miss a same-size rewrite.
+    """
+
+    def __init__(self):
+        self.edge_latlon, self.sensor_edge_ids, self.edge_len_m = load_edge_geometry()
+        self.geometry_sha256 = _file_sha256(GEO_PATH)
+        self.sensor_identity = _sensor_edge_identity(self.sensor_edge_ids)
+        self._sorted_sensors = sorted(self.sensor_edge_ids)
+        self._route_facts: dict[tuple[str, ...], RouteFacts] = {}
+        self._endpoint_km: dict[tuple[str, str], float | None] = {}
+        self._near_edge: dict[str, bool] = {}
+        self._sensor_points: tuple | None = None
+        self._baseline_near: int | None = None
+        self._pool_reports: dict[Path, dict] = {}
+
+    def is_current(self) -> bool:
+        """True while the geometry on disk is still the one this was built on."""
+        if not GEO_PATH.exists():
+            return False
+        if _file_sha256(GEO_PATH) != self.geometry_sha256:
+            return False
+        _latlon, sensors, _lengths = load_edge_geometry()
+        return _sensor_edge_identity(sensors) == self.sensor_identity
+
+    def endpoint_km(self, origin_edge: str | None,
+                    destination_edge: str | None) -> float | None:
+        """Straight-line endpoint distance, computed once per endpoint pair."""
+        key = (origin_edge, destination_edge)
+        if key in self._endpoint_km:
+            return self._endpoint_km[key]
+        origin = self.edge_latlon.get(origin_edge)
+        destination = self.edge_latlon.get(destination_edge)
+        value = None
+        if origin is not None and destination is not None:
+            value = float(gravity_distance_km(
+                np.array([destination[0]]), np.array([destination[1]]),
+                origin[0], origin[1])[0])
+        self._endpoint_km[key] = value
+        return value
+
+    def route_facts(self, edges: tuple[str, ...]) -> RouteFacts:
+        """The geometry facts of one distinct edge sequence."""
+        facts = self._route_facts.get(edges)
+        if facts is not None:
+            return facts
+        passages = sum(1 for edge in edges if edge in self.sensor_edge_ids)
+        last_index = (max(index for index, edge in enumerate(edges)
+                          if edge in self.sensor_edge_ids) if passages else None)
+        onward = (sum(self.edge_len_m.get(edge, 0.0)
+                      for edge in edges[last_index + 1:])
+                  if last_index is not None else None)
+        facts = RouteFacts(
+            distance_km=self.endpoint_km(edges[0], edges[-1]) if edges else None,
+            destination_edge=edges[-1],
+            sensor_passages=passages,
+            last_sensor_index=last_index,
+            onward_m=onward)
+        self._route_facts[edges] = facts
+        return facts
+
+    def _near(self, lat: float, lon: float) -> bool:
+        s_lats, s_lons = self._sensor_points
+        return bool((gravity_distance_km(s_lats, s_lons, lat, lon) * 1000.0).min()
+                    <= NEAR_SENSOR_RADIUS_M)
+
+    def destination_proximity(self, dest_edge_ids: list[str]) -> dict:
+        """``destination_sensor_proximity`` with its repeated work removed.
+
+        The network-wide baseline depends only on the geometry and the sensor
+        set, so it is computed once per context instead of once per report —
+        measured as one distance call per edge in the whole network, every
+        single time a report was produced.
+        """
+        if self._sensor_points is None:
+            points = [self.edge_latlon[edge_id] for edge_id in self._sorted_sensors
+                      if edge_id in self.edge_latlon]
+            if not points:
+                self._sensor_points = ()
+            else:
+                self._sensor_points = (np.array([p[0] for p in points]),
+                                       np.array([p[1] for p in points]))
+        if not self._sensor_points:
+            return {"radius_m": NEAR_SENSOR_RADIUS_M, "pct_within": None,
+                    "baseline_pct_within": None, "n": len(dest_edge_ids)}
+        if self._baseline_near is None:
+            self._baseline_near = sum(1 for point in self.edge_latlon.values()
+                                      if self._near(*point))
+        n_near = n_known = 0
+        for edge_id in dest_edge_ids:
+            point = self.edge_latlon.get(edge_id)
+            if point is None:
+                continue
+            n_known += 1
+            near = self._near_edge.get(edge_id)
+            if near is None:
+                near = self._near(*point)
+                self._near_edge[edge_id] = near
+            n_near += near
+        return {"radius_m": NEAR_SENSOR_RADIUS_M,
+                "pct_within": round(100 * n_near / n_known, 1) if n_known else None,
+                "baseline_pct_within": round(
+                    100 * self._baseline_near / len(self.edge_latlon), 1),
+                "n": n_known}
+
+    def pool_report(self, pool_path: Path) -> dict | None:
+        """The pool's metrics and bins, computed once per operation.
+
+        ``_refine`` compares the SAME pool against the source and then against
+        every staged candidate. Each caller gets its own deep copy, so no two
+        reports share a mutable structure.
+        """
+        key = Path(pool_path)
+        if key not in self._pool_reports:
+            metrics = _route_structure_metrics(key, _context=self)
+            if metrics is not None:
+                bins = purpose_length_bins(key, _context=self)
+                if bins:
+                    metrics["purpose_length_bins"] = bins
+            self._pool_reports[key] = metrics
+        stored = self._pool_reports[key]
+        return copy.deepcopy(stored) if stored is not None else None
+
+
+def structure_context() -> StructureContext:
+    """Build one operation-scoped context. Internal helper for production."""
+    return StructureContext()
+
+
+def _structure_context(context: StructureContext | None) -> "StructureContext | None":
+    """Adopt a supplied context only while it still describes the geometry.
+
+    Returns None when there is no geometry to build one from, so a missing
+    ``GEO_PATH`` keeps reaching each helper's own fail-closed guard instead of
+    raising from a context constructor.
+    """
+    if context is not None and context.is_current():
+        return context
+    if not GEO_PATH.exists():
+        return None
+    return StructureContext()
+
+
 def calibrated_agent_summary(route_path: Path, n_intervals: int) -> dict | None:
     """Summarise the individual demand agents emitted beside a PFE route file.
 
@@ -233,7 +461,8 @@ def route_od_distance_km(
         origin[0], origin[1])[0])
 
 
-def _route_structure_metrics(route_path: Path) -> dict | None:
+def _route_structure_metrics(route_path: Path, *,
+                             _context: "StructureContext | None" = None) -> dict | None:
     """Per-vehicle structure metrics for one SUMO route file — the shared
     machinery behind calibrated_structure_report (below). Emits the
     destination-integrity guards described in IMPROVEMENT_PLAN.md:
@@ -252,7 +481,7 @@ def _route_structure_metrics(route_path: Path) -> dict | None:
     report never has to import OSMnx/Shapely."""
     if not route_path.exists() or not GEO_PATH.exists():
         return None
-    edge_latlon, sensor_edge_ids, edge_len_m = load_edge_geometry()
+    context = _structure_context(_context)
 
     lengths_km: list[float] = []
     dest_edges: list[str] = []
@@ -261,47 +490,22 @@ def _route_structure_metrics(route_path: Path) -> dict | None:
     quarter_totals = Counter()
     under_1km_by_quarter = Counter()
     n_no_sensor = 0
-    root = ET.parse(route_path).getroot()
-    # A vehicle may carry its route inline OR reference a shared
-    # <route id=...> defined once in the same file. Silently skipping the
-    # referencing form would drop those vehicles from EVERY metric below —
-    # trip-length fit, destination proximity, sensor passages, onward
-    # distance and the under-1km cap — and report the remainder as if it
-    # were the whole population. Inert while the publisher emits inline
-    # routes only, but the candidate pool already uses the shared form and
-    # DEMAND_PIPELINE_REVIEW's S4 proposes it for the pool file, so resolve
-    # it here and refuse rather than under-report.
-    named_routes = {
-        route.get("id"): route.get("edges", "")
-        for route in root.iter("route") if route.get("id")
-    }
-    for veh in root.iter("vehicle"):
-        route = veh.find("route")
-        if route is not None and route.get("edges"):
-            edges_text = route.get("edges")
-        else:
-            edges_text = named_routes.get(veh.get("route"), "")
-        if not edges_text:
-            raise ValueError(
-                f"vehicle {veh.get('id')!r} in {route_path} has no resolvable "
-                "route: neither an inline <route edges=...> nor a reference to "
-                "a shared <route id=...> in the same file")
-        edges = edges_text.split()
-        dest_edges.append(edges[-1])
-        distance_km = route_od_distance_km(edges, edge_latlon)
-        if distance_km is not None:
-            lengths_km.append(distance_km)
-            quarter = int(float(veh.get("depart", "0")) // 900)
+    # One observation per VEHICLE, in document order. Only the geometry facts
+    # behind it are shared between vehicles that drive the same route.
+    for vehicle in _parse_route_file(route_path):
+        facts = context.route_facts(vehicle.edges)
+        dest_edges.append(facts.destination_edge)
+        if facts.distance_km is not None:
+            lengths_km.append(facts.distance_km)
+            quarter = int(vehicle.depart_s // 900)
             quarter_totals[quarter] += 1
-            if distance_km <= RVU_SHORT_BIN_EDGES_KM[0]:
+            if facts.distance_km <= RVU_SHORT_BIN_EDGES_KM[0]:
                 under_1km_by_quarter[quarter] += 1
-        n_pass = sum(1 for e in edges if e in sensor_edge_ids)
-        passages[min(n_pass, 3)] += 1   # 3 == "3 or more"
-        if n_pass == 0:
+        passages[min(facts.sensor_passages, 3)] += 1   # 3 == "3 or more"
+        if facts.sensor_passages == 0:
             n_no_sensor += 1
         else:
-            last = max(k for k, e in enumerate(edges) if e in sensor_edge_ids)
-            onward_m.append(sum(edge_len_m.get(e, 0.0) for e in edges[last + 1:]))
+            onward_m.append(facts.onward_m)
 
     if not dest_edges:
         return None
@@ -312,8 +516,7 @@ def _route_structure_metrics(route_path: Path) -> dict | None:
             "quarter_totals": dict(sorted(quarter_totals.items())),
             "under_1km_by_quarter": dict(sorted(under_1km_by_quarter.items())),
         },
-        "dest_sensor_proximity": destination_sensor_proximity(
-            dest_edges, edge_latlon, sorted(sensor_edge_ids)),
+        "dest_sensor_proximity": context.destination_proximity(dest_edges),
         "onward_after_last_sensor": {
             "median_m": round(onward_sorted[len(onward_sorted) // 2], 1)
                         if onward_sorted else None,
@@ -326,7 +529,8 @@ def _route_structure_metrics(route_path: Path) -> dict | None:
     }
 
 
-def purpose_length_bins(route_path: Path) -> dict | None:
+def purpose_length_bins(route_path: Path, *,
+                        _context: "StructureContext | None" = None) -> dict | None:
     """P(length bin | purpose) for one route file, pool or calibrated.
 
     The two stages carry purpose in different sidecars -- a calibrated file
@@ -339,7 +543,7 @@ def purpose_length_bins(route_path: Path) -> dict | None:
     """
     if not GEO_PATH.exists():
         return None
-    edge_latlon, _sensor_ids, _len_m = load_edge_geometry()
+    context = _structure_context(_context)
     agent_path = route_path.with_name(
         route_path.name.replace(".rou.xml", ".agents.json"))
     meta_path = route_path.with_name(
@@ -365,12 +569,11 @@ def purpose_length_bins(route_path: Path) -> dict | None:
     counts: dict[str, list[int]] = {}
     n_bins = len(LENGTH_BIN_EDGES_KM) + 1
     for purpose, origin, destination in records:
-        o = edge_latlon.get(origin)
-        d = edge_latlon.get(destination)
-        if o is None or d is None:
+        # Same endpoint pair, same distance: computed once per pair, while the
+        # iteration and reduction order below stay exactly as they were.
+        km = context.endpoint_km(origin, destination)
+        if km is None:
             continue
-        km = float(gravity_distance_km(
-            np.array([d[0]]), np.array([d[1]]), o[0], o[1])[0])
         index = n_bins - 1
         for i, edge in enumerate(LENGTH_BIN_EDGES_KM):
             if km <= edge:
@@ -386,7 +589,8 @@ def purpose_length_bins(route_path: Path) -> dict | None:
     return out or None
 
 
-def purpose_lengths_km(route_path: Path) -> dict | None:
+def purpose_lengths_km(route_path: Path, *,
+                       _context: "StructureContext | None" = None) -> dict | None:
     """Straight-line O→D length per PURPOSE for the agents emitted beside a
     calibrated route file.
 
@@ -401,7 +605,7 @@ def purpose_lengths_km(route_path: Path) -> dict | None:
         route_path.name.replace(".rou.xml", ".agents.json"))
     if not agent_path.exists() or not GEO_PATH.exists():
         return None
-    edge_latlon, _sensor_ids, _len_m = load_edge_geometry()
+    context = _structure_context(_context)
     with open(agent_path) as f:
         agents = json.load(f).get("agents", [])
     by_p: dict[str, list[float]] = {}
@@ -411,12 +615,9 @@ def purpose_lengths_km(route_path: Path) -> dict | None:
         # Keep it in simulated route metrics, but out of P(length|purpose).
         if a.get("support_only") is True:
             continue
-        o = edge_latlon.get(a.get("origin_edge"))
-        d = edge_latlon.get(a.get("destination_edge"))
-        if o is None or d is None:
+        km = context.endpoint_km(a.get("origin_edge"), a.get("destination_edge"))
+        if km is None:
             continue
-        km = float(gravity_distance_km(
-            np.array([d[0]]), np.array([d[1]]), o[0], o[1])[0])
         by_p.setdefault(a.get("purpose", "unknown"), []).append(km)
     out = {}
     for p, lens in sorted(by_p.items()):
@@ -482,7 +683,9 @@ def _generation_length_target() -> list[float] | None:
 
 
 def calibrated_structure_report(route_path: Path,
-                                pool_path: Path | None = None) -> dict | None:
+                                pool_path: Path | None = None, *,
+                                _context: "StructureContext | None" = None
+                                ) -> dict | None:
     """Structure metrics of the CALIBRATED output + drift FLAGS vs the
     candidate pool it was calibrated from — the permanent validation gate
     for the 2026-07-12 destination-clustering bug (the consolidated plan's
@@ -496,7 +699,12 @@ def calibrated_structure_report(route_path: Path,
     structure invisibly, because the only fit ever computed ran at
     candidate-generation time. Flags compare calibrated vs pool (the seed
     structure PFE is supposed to preserve), not vs an absolute number."""
-    report = _route_structure_metrics(route_path)
+    # One context per report unless a production caller supplies an
+    # operation-scoped one; the pool is then measured once for the whole
+    # operation instead of once per comparison. It is None when there is no
+    # geometry, and each helper below keeps its own fail-closed guard.
+    context = _structure_context(_context)
+    report = _route_structure_metrics(route_path, _context=context)
     if report is None:
         return None
     flags = []
@@ -505,7 +713,7 @@ def calibrated_structure_report(route_path: Path,
     # LONGEST (see purpose_lengths_km). The pool respects it via
     # PURPOSE_LENGTH_SCALE; an inversion in the calibrated output means the
     # calibration/purpose-allocation stage decohered P(length | purpose).
-    lengths = purpose_lengths_km(route_path)
+    lengths = purpose_lengths_km(route_path, _context=context)
     if lengths:
         report["purpose_length_km"] = lengths
         arb, fri = lengths.get("arbete"), lengths.get("fritid")
@@ -525,17 +733,19 @@ def calibrated_structure_report(route_path: Path,
                 "Tabell 3) orders fritid longest; P(length|purpose) decohered "
                 "in calibration")
 
-    cal_bins = purpose_length_bins(route_path)
+    cal_bins = purpose_length_bins(route_path, _context=context)
     if cal_bins:
         report["purpose_length_bins"] = cal_bins
 
     if pool_path is not None:
-        pool = _route_structure_metrics(pool_path)
+        pool = (context.pool_report(pool_path) if context is not None
+                else _route_structure_metrics(pool_path))
         if pool is not None:
+            if context is None:
+                pool_bins = purpose_length_bins(pool_path)
+                if pool_bins:
+                    pool["purpose_length_bins"] = pool_bins
             report["pool"] = pool
-            pool_bins = purpose_length_bins(pool_path)
-            if pool_bins:
-                pool["purpose_length_bins"] = pool_bins
 
             def ratio_flag(name: str, calibrated_v, pool_v) -> None:
                 if calibrated_v is None or pool_v is None:

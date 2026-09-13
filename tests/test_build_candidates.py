@@ -2743,7 +2743,7 @@ class TestLengthBinDepletionIsDetectable:
     def _flags(self, tmp_path, monkeypatch, pool_bins, cal_bins, cal_shares):
         from demand import structure as ds
 
-        def fake_metrics(path):
+        def fake_metrics(path, **_kwargs):
             return {"trip_length_fit": {"shares": cal_shares},
                     "dest_sensor_proximity": {"pct_within": 1.0,
                                               "baseline_pct_within": 1.0,
@@ -2754,10 +2754,10 @@ class TestLengthBinDepletionIsDetectable:
                     "sensor_passages": {}, "purpose_length_km": {}}
 
         monkeypatch.setattr(ds, "_route_structure_metrics", fake_metrics)
-        monkeypatch.setattr(ds, "purpose_lengths_km", lambda path: None)
+        monkeypatch.setattr(ds, "purpose_lengths_km", lambda path, **_kw: None)
         monkeypatch.setattr(
             ds, "purpose_length_bins",
-            lambda path: pool_bins if "pool" in str(path) else cal_bins)
+            lambda path, **_kw: pool_bins if "pool" in str(path) else cal_bins)
         report = ds.calibrated_structure_report(
             tmp_path / "calib.rou.xml", tmp_path / "pool.rou.xml")
         return [f for f in report["structure_flags"] if "length_bin_depleted" in f]

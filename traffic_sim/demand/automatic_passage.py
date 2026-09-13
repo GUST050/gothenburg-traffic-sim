@@ -23,7 +23,7 @@ import xml.etree.ElementTree as ET
 import numpy as np
 
 from demand.structure import (DEST_GROUP_CAP_MULT, calibrated_structure_report,
-                              route_od_distance_km)
+                              route_od_distance_km, structure_context)
 from traffic_sim.demand.structure_caps import integer_structure_cap
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.demand.provenance import _validate_variant
@@ -272,7 +272,12 @@ def _refine(data, source_report, network, work, candidate_pool):
     expanded = dynamic._expand_departure_support_verified(
         original, [-900, -600, -300, 0, 300, 600, 900],
         begin_s=0, end_s=quarters*900, guard_s=60)
-    before_structure = calibrated_structure_report(route, pool_path=candidate_pool)
+    # ONE context for this whole calibration: the candidate pool is compared
+    # against the source and against every staged candidate, and its geometry
+    # facts are the same every time.
+    structure = structure_context()
+    before_structure = calibrated_structure_report(
+        route, pool_path=candidate_pool, _context=structure)
     if before_structure is None:
         raise ValueError('automatic passage calibration lacks structural evidence')
 
@@ -292,11 +297,11 @@ def _refine(data, source_report, network, work, candidate_pool):
             raise ValueError('dynamic fit changed OD/purpose population')
         chosen_stage = work / name
         chosen_candidate = _stage_selection(inputs, chosen, chosen_stage)
-        structure = calibrated_structure_report(
-            chosen_candidate, pool_path=candidate_pool)
-        if structure is None:
+        chosen_structure = calibrated_structure_report(
+            chosen_candidate, pool_path=candidate_pool, _context=structure)
+        if chosen_structure is None:
             raise ValueError('automatic passage calibration lacks structural evidence')
-        return fitted, chosen, chosen_stage, chosen_candidate, structure
+        return fitted, chosen, chosen_stage, chosen_candidate, chosen_structure
 
     initial_boundary = False
     try:
