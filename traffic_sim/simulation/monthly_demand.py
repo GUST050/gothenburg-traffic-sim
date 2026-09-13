@@ -1135,6 +1135,7 @@ class MonthlyDemandResolverRunner:
         self.live_release_products = tuple(live_release_products)
         self._schedule_build_keys: dict[str, str] = {}
         self._runners: dict[str, ArchivedDemandSumoRunner] = {}
+        self._archive_inputs: dict[Path, Any] = {}
         self._release: dict[str, Any] | None = None
         self._prepared_schedule_ids: tuple[str, ...] | None = None
 
@@ -1495,14 +1496,20 @@ class MonthlyDemandResolverRunner:
         """
         from traffic_sim.simulation.deterministic_disruption import (
             ArchiveDisruptionProvider,
+            ArchiveInputs,
         )
-
+        archive = self.archive_for(schedule).resolve()
+        inputs = self._archive_inputs.get(archive)
+        if inputs is None:
+            inputs = ArchiveInputs.from_archive(archive)
+            self._archive_inputs[archive] = inputs
         return ArchiveDisruptionProvider(
             self.spec,
-            archive=self.archive_for(schedule),
+            archive=archive,
             network=network,
             cache=cache,
             unit_identity=unit_identity,
+            inputs=inputs,
         )
 
     def run_candidate(

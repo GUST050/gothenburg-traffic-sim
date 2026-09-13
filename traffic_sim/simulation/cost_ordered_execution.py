@@ -46,6 +46,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
+from traffic_sim.ops import io_phases
 from traffic_sim.core.contracts import ClosureSchedule, ClosureSearchSpec
 from traffic_sim.simulation.closure_ranking import (
     CLOSURE_COST_OBJECTIVES,
@@ -472,6 +473,9 @@ def build_cost_ledger(
     candidates are priced and how many daily units came from the cache — rather
     than a spinner.
     """
+    measuring = io_phases.current_collector() is not None
+    if measuring:
+        io_phases.count("cost_parent_candidates", len(parents))
     costs: list[ParentCost] = []
     total = len(parents)
     for index, parent in enumerate(parents):
@@ -481,7 +485,11 @@ def build_cost_ledger(
                 "cost_total": total,
                 "cache_hits": getattr(source, "cache_hits", 0),
             })
-        costs.append(source.parent_cost(parent))
+        if measuring:
+            with io_phases.phase("cost_parent"):
+                costs.append(source.parent_cost(parent))
+        else:
+            costs.append(source.parent_cost(parent))
     if progress is not None:
         progress("cost_parents", total, total, {
             "costed": total,
@@ -490,6 +498,18 @@ def build_cost_ledger(
         })
     cache = (dict(source.cache_snapshot())
              if callable(getattr(source, "cache_snapshot", None)) else {})
+    population = (dict(source.population_snapshot())
+                  if callable(getattr(source, "population_snapshot", None))
+                  else {})
+    if measuring:
+        io_phases.count(
+            "cost_daily_units", int(population.get("daily_units", 0)))
+        io_phases.count("cost_unit_cache_hits", int(
+            cache.get("memory_cache_hits", 0) +
+            cache.get("disk_cache_hits", 0)))
+        io_phases.count("cost_unit_cache_misses", int(
+            cache.get("memory_cache_misses", 0) +
+            cache.get("disk_cache_misses", 0)))
     memory_hits = int(cache.get("memory_cache_hits", getattr(
         source, "cache_hits", 0)))
     memory_misses = int(cache.get("memory_cache_misses", 0))

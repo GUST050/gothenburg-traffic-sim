@@ -68,11 +68,18 @@ class PhaseCollector:
         # a repeated validation costs the same whether or not it is slow.
         self._counters: dict[str, int] = {}
         self._unique: dict[str, set] = {}
+        # Identities of what was produced, so a measured run can be proved
+        # byte-identical to an unmeasured one without keeping the artifacts.
+        self._digests: dict[str, str] = {}
         self.unmeasured_categories = list(unmeasured_categories)
 
     def count(self, name: str, amount: int = 1) -> None:
         with self._lock:
             self._counters[name] = self._counters.get(name, 0) + int(amount)
+
+    def record_digest(self, name: str, value: str) -> None:
+        with self._lock:
+            self._digests[name] = value
 
     def count_unique(self, name: str, value) -> None:
         """Record an occurrence AND whether the value was already seen.
@@ -180,6 +187,7 @@ class PhaseCollector:
         ]
         with self._lock:
             counters = dict(self._counters)
+            digests = dict(self._digests)
             unique_counts = {name: len(values)
                              for name, values in self._unique.items()}
         report = {
@@ -188,6 +196,7 @@ class PhaseCollector:
             'ranking': ranking,
             'counters': counters,
             'unique_counts': unique_counts,
+            'digests': digests,
             'unmeasured_categories': unmeasured,
         }
         if root is not None:
@@ -373,3 +382,10 @@ def count_unique(name: str, value) -> None:
     collector = _COLLECTOR.get()
     if collector is not None:
         collector.count_unique(name, value)
+
+
+def record_digest(name: str, value: str) -> None:
+    """Record what a measured run produced; a no-op in production."""
+    collector = _COLLECTOR.get()
+    if collector is not None:
+        collector.record_digest(name, value)

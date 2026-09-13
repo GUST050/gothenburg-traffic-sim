@@ -36,6 +36,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable, Literal, Mapping, Sequence
 
+from traffic_sim.ops import io_phases
+
 SCHEMA_VERSION = 1
 DEFAULT_ROOT = Path("runs") / "demand-days"
 DAY_SECONDS = 86400
@@ -531,6 +533,19 @@ def _shift_route_line(line: str, offset_s: float, vehicle_id: int) -> str:
             f"{depart:.1f}{match.group('tail')}\n")
 
 
+def _measured_route_lines(handle):
+    """Iterate a route stream while timing the reads that drive iteration."""
+    iterator = iter(handle)
+    while True:
+        with io_phases.phase("assemble_route_read"):
+            try:
+                line = next(iterator)
+            except StopIteration:
+                return
+            io_phases.add_bytes(read=len(line.encode("utf-8")))
+        yield line
+
+
 def assemble_window(
     days: Iterable[Path],
     route_out: Path,
@@ -549,37 +564,72 @@ def assemble_window(
     agents: list[dict[str, Any]] = []
     route_tmp = Path(route_out).with_name(Path(route_out).name + ".tmp")
     route_tmp.parent.mkdir(parents=True, exist_ok=True)
+    # Phase marks are diagnostic and inert unless a tool installs a collector.
+    # Reading and transforming are separated so a future decision can tell
+    # decompression from line rewriting instead of guessing.
+    measuring = io_phases.current_collector() is not None
+    if measuring:
+        io_phases.count("assemble_days", len(day_paths))
     with open(route_tmp, "w") as out:
         out.write("<routes>\n")
         for day_index, day in enumerate(day_paths):
             offset_s = day_index * DAY_SECONDS
+            day_vehicle_start = vehicle_id
             with _open_day_text(day, names[0]) as handle:
-                for line in handle:
-                    stripped = line.strip()
-                    if not stripped or stripped in {"<routes>", "</routes>"}:
-                        continue
-                    out.write(_shift_route_line(line, offset_s, vehicle_id))
-                    vehicle_id += 1
-            with _open_day_text(day, names[1]) as handle:
-                day_agents = json.load(handle)["agents"]
+                if not measuring:
+                    for line in handle:
+                        stripped = line.strip()
+                        if not stripped or stripped in {"<routes>", "</routes>"}:
+                            continue
+                        out.write(_shift_route_line(line, offset_s, vehicle_id))
+                        vehicle_id += 1
+                else:
+                    for line in _measured_route_lines(handle):
+                        with io_phases.phase("assemble_route_transform"):
+                            stripped = line.strip()
+                            if not stripped or stripped in {
+                                    "<routes>", "</routes>"}:
+                                continue
+                            out.write(_shift_route_line(
+                                line, offset_s, vehicle_id))
+                            vehicle_id += 1
+            if measuring:
+                io_phases.count(
+                    "assemble_route_rows", vehicle_id - day_vehicle_start)
+            with io_phases.phase("assemble_agents_json"):
+                with _open_day_text(day, names[1]) as handle:
+                    day_agents = json.load(handle)["agents"]
+                io_phases.add_bytes(
+                    read=_day_file(day, names[1]).stat().st_size)
             for agent in day_agents:
                 shifted = dict(agent)
                 shifted["vehicle_id"] = f"pfe{len(agents)}"
                 shifted["departure_s"] = round(
                     float(agent["departure_s"]) + offset_s, 1)
                 agents.append(shifted)
+            if measuring:
+                io_phases.count("assemble_agents", len(day_agents))
         out.write("</routes>\n")
     if len(agents) != vehicle_id:
         raise ValueError(
             f"assembled {vehicle_id} vehicles but {len(agents)} agents; "
             "a day's route and provenance files disagree")
-    os.replace(route_tmp, route_out)
+    with io_phases.phase("assemble_route_publish"):
+        io_phases.add_bytes(written=route_tmp.stat().st_size)
+        os.replace(route_tmp, route_out)
 
     agents_tmp = Path(agents_out).with_name(Path(agents_out).name + ".tmp")
-    with open(agents_tmp, "w") as out:
-        json.dump({"schema_version": 1, "agents": agents}, out,
-                  separators=(",", ":"))
-    os.replace(agents_tmp, agents_out)
+    with io_phases.phase("assemble_agents_publish"):
+        with open(agents_tmp, "w") as out:
+            json.dump({"schema_version": 1, "agents": agents}, out,
+                      separators=(",", ":"))
+        io_phases.add_bytes(written=agents_tmp.stat().st_size)
+        os.replace(agents_tmp, agents_out)
+    if measuring:
+        io_phases.record_digest("assembled_routes_sha256",
+                                sha256_bytes(Path(route_out)))
+        io_phases.record_digest("assembled_agents_sha256",
+                                sha256_bytes(Path(agents_out)))
     return {"vehicles": vehicle_id, "days": len(day_paths)}
 
 

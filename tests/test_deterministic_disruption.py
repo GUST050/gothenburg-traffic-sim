@@ -19,6 +19,7 @@ equivalence benchmark, which needs the real q10/q50/q90 archives.
 from __future__ import annotations
 
 import json
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -776,6 +777,23 @@ class TestDailyCostCache:
 
 
 class TestArchiveResolution:
+    def test_a_new_open_rehashes_content_even_when_stat_is_preserved(
+            self, tmp_path):
+        archive = _archive(tmp_path / "a")
+        first = dd.ArchiveInputs.from_archive(archive)
+        target = archive / dd.VARIANT_FILENAMES["q10"]
+        before = target.stat()
+        changed = bytearray(target.read_bytes())
+        changed[-2] ^= 1
+        target.write_bytes(changed)
+        os.utime(target, ns=(before.st_atime_ns, before.st_mtime_ns))
+
+        second = dd.ArchiveInputs.from_archive(archive)
+
+        assert target.stat().st_size == before.st_size
+        assert target.stat().st_mtime_ns == before.st_mtime_ns
+        assert second.variant_sha256["q10"] != first.variant_sha256["q10"]
+
     def test_a_missing_variant_route_fails_closed(self, tmp_path):
         archive = _archive(tmp_path / "a")
         (archive / dd.VARIANT_FILENAMES["q90"]).unlink()

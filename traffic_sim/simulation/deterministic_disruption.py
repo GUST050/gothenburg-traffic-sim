@@ -50,6 +50,7 @@ from typing import Any, Mapping, Protocol, Sequence
 
 from traffic_sim.core.contracts import ClosureSchedule, ClosureSearchSpec
 from traffic_sim.core.fingerprint import sha256_file
+from traffic_sim.ops import io_phases
 from traffic_sim.simulation.closure_ranking import (
     ClosureCost,
     LEGACY_WORST_COST_OBJECTIVE,
@@ -372,19 +373,6 @@ class DailyCostCache:
         return path
 
 
-# Archive route files are immutable inputs, but an independent daily cost
-# source creates one provider per unique daily unit.  Re-hashing the same
-# three large XML files for every provider made the cold ledger profiler spend
-# its budget in input fingerprinting before it measured any pricing.  The
-# cache key includes every file stat tuple, so a replacement or in-place edit
-# cannot reuse a digest; ``verify_current`` still performs the cheap stat
-# check on every use and fails closed if bytes move after construction.
-_ARCHIVE_INPUTS_CACHE: dict[
-    tuple[str, tuple[int, int, int, int], tuple[tuple[str, tuple[int, int, int, int]], ...]],
-    "ArchiveInputs",
-] = {}
-
-
 @dataclass(frozen=True)
 class ArchiveInputs:
     """One immutable demand archive, resolved to exactly three route files."""
@@ -427,14 +415,6 @@ class ArchiveInputs:
         if meta_state is None:
             raise DisruptionUnavailable(
                 f"demand archive cannot fingerprint demand_meta: {meta_path}")
-        cache_key = (
-            str(archive),
-            meta_state,
-            tuple(sorted(variant_states.items())),
-        )
-        cached = _ARCHIVE_INPUTS_CACHE.get(cache_key)
-        if cached is not None:
-            return cached
         for variant, path in variant_paths.items():
             digest = sha256_file(path)
             if digest is None:
@@ -463,7 +443,6 @@ class ArchiveInputs:
             demand_meta_state=meta_state,
             variant_states=variant_states,
         )
-        _ARCHIVE_INPUTS_CACHE[cache_key] = result
         return result
 
     def verify_current(self) -> None:
@@ -511,9 +490,16 @@ class ArchiveDisruptionProvider:
         network: NetworkCostModel | None = None,
         cache: DailyCostCache | None = None,
         unit_identity: Mapping[str, Any] | None = None,
+        inputs: ArchiveInputs | None = None,
     ) -> None:
         self.spec = ClosureSearchSpec.from_dict(spec.to_dict())
-        self.inputs = ArchiveInputs.from_archive(archive)
+        requested_archive = Path(archive).resolve()
+        if inputs is not None:
+            if inputs.archive != requested_archive:
+                raise DisruptionUnavailable(
+                    "verified archive inputs belong to another archive")
+            inputs.verify_current()
+        self.inputs = inputs or ArchiveInputs.from_archive(requested_archive)
         self.network = network if network is not None else NetworkCostModel()
         self.cache = cache
         self._unit_identity = (
@@ -530,6 +516,7 @@ class ArchiveDisruptionProvider:
     def _record_timing(self, phase: str, elapsed_s: float) -> None:
         if phase in self._timings:
             self._timings[phase] += max(0.0, float(elapsed_s))
+            io_phases.record_derived(f"cost_{phase}", elapsed_s)
 
     def timing_snapshot(self) -> Mapping[str, float]:
         """Return exclusive deterministic-cost timings for cold profiling."""
@@ -571,6 +558,7 @@ class ArchiveDisruptionProvider:
         identity["schedule"] = schedule.to_dict()
         if self._unit_identity is not None:
             identity["daily_unit"] = dict(self._unit_identity)
+        io_phases.count_unique("costing_provider_identity", _digest(identity))
         return identity
 
     # -- computation ------------------------------------------------------
