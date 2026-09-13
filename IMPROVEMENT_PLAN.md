@@ -622,7 +622,7 @@ run-registry-tester. Testa avbruten komprimering, korrupt mål och saknad eviden
 **Vinstområde:** retention 128,5 s; övrig parsing ingår i andra poster och får
 inte dubbelräknas. Kompakt atomisk demand_meta-skrivning finns redan.
 
-#### Steg 4 utfall — measurement complete, 2026-09-13
+#### Steg 4 utfall — replay-baslinje mätt, retention-baslinje återstår, 2026-09-13
 
 **Ingen optimering är implementerad.** Detta är enbart mätning, enligt planens
 egen ordning.
@@ -669,6 +669,29 @@ uppmätta här. Detsamma gäller `traffic_sim/ops/runs.py` och de instrumenterad
 ställena kring `build_sumo_demand.py::_tracked_main`: de kräver ett riktigt
 demand-bygge, vilket ligger utanför detta steg. Planens `retention 128,5 s`
 avser ett fullt bygge, inte den här replayen; siffrorna ovan motsäger den inte.
+
+**Reviewkorrigering.** Den första rapportören lade både den samtidiga
+förälderns kritiska tid och barnens summerade trådtid i den globala rankingen.
+Tre parallella 50 ms-barn kunde därför redovisas som cirka 220 ms för en region
+vars uppmätta väggtid var cirka 55 ms. Barnen ska finnas kvar som diagnostisk
+detalj, men bara den samtidiga regionens direkt uppmätta väggtid får bidra till
+rankingen. q50-replayen ovan anropade inte `prune_evidence`, så dess befintliga
+fasvärden påverkas inte av felet. Instrumenteringen måste korrigeras och den
+fulla trevariants-retentionen mätas på en kopia innan steg 4 kan stängas.
+
+En innehållsnycklad cache för `source_trace_xml` är inte ännu en godkänd
+produktionsoptimering. Varje av de tre spårfilerna i den mätta varianten hade en
+egen digest och lästes en gång i ett normalt `_refine`-anrop. Profilens varma
+repeats läser däremot samma evidens igen. En cachevinst där riskerar därför att
+mäta profilverktygets upprepning i stället för dagsbyggets kritiska väg.
+
+`build_sumo_demand.py::_tracked_main` instrumenterades inte i `90c0675` trots
+att den ingår i steg 4:s fil- och mätlista. `traffic_sim/ops/runs.py` mäter
+kopiering och målhashning när en observerare finns, men det finns ännu ingen
+fas för bygganropet, produktarkiveringen, metadata-parsningen,
+valideringsrapporten eller slutpubliceringen runt `_tracked_main`. Det ska
+läggas till och testas, men produktionstid får inte hävdas utan en avgränsad
+riktig byggmätning.
 
 **Driftfix.** `tools/profile_passage_replay.py` startar nu från repo-roten utan
 `PYTHONPATH=.`; ett subprocess-test kör `--help` med `PYTHONPATH` borttaget.

@@ -118,6 +118,32 @@ def test_a_concurrent_parent_refuses_to_pretend_its_children_were_sequential():
     assert entry['inclusive_s'] < entry['children_sum_s']
 
 
+def test_concurrent_children_are_detail_not_extra_ranked_wall_time():
+    collector = io_phases.PhaseCollector()
+
+    def worker():
+        with io_phases.phase('compress'):
+            time.sleep(0.05)
+
+    with io_phases.observe(collector):
+        with io_phases.phase('retention', concurrent=True):
+            _run_together(io_phases.in_current_context(worker), 3)
+
+    report = collector.report()
+    retention = report['phases']['retention']
+    compress = report['phases']['compress']
+    ranked = {entry['phase']: entry for entry in report['ranking']}
+
+    assert retention['wall_contribution_s'] == pytest.approx(
+        retention['inclusive_s'], abs=ROUNDING_TOLERANCE_S)
+    assert compress['inclusive_s'] > retention['inclusive_s']
+    assert compress['wall_contribution_s'] == 0
+    assert 'compress' not in ranked
+    assert ranked['retention']['basis'] == 'concurrent_region_wall'
+    assert sum(entry['wall_s'] for entry in report['ranking']) == \
+        pytest.approx(retention['inclusive_s'], abs=ROUNDING_TOLERANCE_S)
+
+
 def test_children_started_in_worker_threads_still_find_their_parent():
     collector = io_phases.PhaseCollector()
 

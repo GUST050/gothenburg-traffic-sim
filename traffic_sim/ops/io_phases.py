@@ -17,9 +17,10 @@ Two accounting rules earn their own machinery:
 * A parent reports wall time MINUS its direct children, so instrumenting a
   nested call can never make the same second count twice.
 * A parent whose children ran AT THE SAME TIME reports ``exclusive_s: None``
-  and publishes the children's sum and max separately. Retention compresses
-  up to three files in a thread pool; adding those as if they had run in
-  sequence would invent wall time that never elapsed.
+  and publishes its measured region wall time plus the children's sum and max.
+  Descendants remain diagnostic detail and add no second wall contribution.
+  Retention compresses up to three files in a thread pool; adding those as if
+  they had run in sequence would invent wall time that never elapsed.
 """
 from __future__ import annotations
 
@@ -39,11 +40,14 @@ _STACK: ContextVar[tuple] = ContextVar('io_phase_stack', default=())
 class _Frame:
     """One open phase. Shared by reference with any worker thread."""
 
-    __slots__ = ('name', 'started', 'concurrent', 'children_s', 'children_max_s')
+    __slots__ = ('name', 'started', 'concurrent', 'inside_concurrent',
+                 'children_s', 'children_max_s')
 
-    def __init__(self, name: str, concurrent: bool) -> None:
+    def __init__(self, name: str, concurrent: bool,
+                 inside_concurrent: bool = False) -> None:
         self.name = name
         self.concurrent = concurrent
+        self.inside_concurrent = inside_concurrent
         self.started = time.perf_counter()
         self.children_s = 0.0
         self.children_max_s = 0.0
@@ -66,7 +70,8 @@ class PhaseCollector:
         return self._phases.setdefault(name, {
             'calls': 0, 'inclusive_s': 0.0, 'exclusive_s': 0.0,
             'children_sum_s': 0.0, 'children_max_s': 0.0,
-            'concurrent': False, 'parents': set(), 'bytes': {},
+            'wall_contribution_s': 0.0, 'concurrent': False,
+            'inside_concurrent': False, 'parents': set(), 'bytes': {},
         })
 
     def close(self, frame: _Frame, parent: _Frame | None,
@@ -79,11 +84,21 @@ class PhaseCollector:
             entry['children_sum_s'] += frame.children_s
             entry['children_max_s'] = max(entry['children_max_s'],
                                           frame.children_max_s)
+            entry['inside_concurrent'] |= frame.inside_concurrent
             if frame.concurrent:
                 entry['concurrent'] = True
                 entry['exclusive_s'] = None
             elif entry['exclusive_s'] is not None:
                 entry['exclusive_s'] += max(elapsed - frame.children_s, 0.0)
+            # A concurrent boundary contributes its measured wall duration.
+            # Work below that boundary remains visible as diagnostic thread
+            # time, but contributes zero to the global wall-time ranking.
+            if not frame.inside_concurrent:
+                if frame.concurrent:
+                    entry['wall_contribution_s'] += elapsed
+                else:
+                    entry['wall_contribution_s'] += max(
+                        elapsed - frame.children_s, 0.0)
             if parent is not None:
                 parent.children_s += elapsed
                 parent.children_max_s = max(parent.children_max_s, elapsed)
@@ -114,27 +129,35 @@ class PhaseCollector:
                     'concurrent': entry['concurrent'],
                     'children_sum_s': round(entry['children_sum_s'], 6),
                     'children_max_s': round(entry['children_max_s'], 6),
+                    'wall_contribution_s': round(
+                        entry['wall_contribution_s'], 6),
+                    'inside_concurrent': entry['inside_concurrent'],
                     'parent': parent,
                     'bytes': dict(entry['bytes']),
                 }
             unmeasured = list(self.unmeasured_categories)
 
-        # A concurrent parent contributes the wall time its slowest child
-        # actually occupied, never the sum of what overlapped.
         def contribution(entry: dict) -> float:
-            if entry['exclusive_s'] is not None:
-                return entry['exclusive_s']
-            return entry['children_max_s']
+            return entry['wall_contribution_s']
+
+        def basis(entry: dict) -> str:
+            if entry['inside_concurrent'] and contribution(entry) == 0:
+                return 'concurrent_detail_only'
+            if entry['inside_concurrent']:
+                return 'mixed_exclusive_and_concurrent_detail'
+            if entry['concurrent']:
+                return 'concurrent_region_wall'
+            return 'exclusive'
 
         total = sum(contribution(entry) for entry in phases.values()) or 1.0
         ranking = [
             {'phase': name,
              'wall_s': round(contribution(entry), 6),
              'share_percent': round(contribution(entry) / total * 100, 2),
-             'basis': 'exclusive' if entry['exclusive_s'] is not None
-                      else 'concurrent_children_max'}
+             'basis': basis(entry)}
             for name, entry in sorted(
                 phases.items(), key=lambda item: -contribution(item[1]))
+            if contribution(entry) > 0
         ]
         report = {
             'schema_version': 1,
@@ -175,7 +198,10 @@ def phase(name: str, *, concurrent: bool = False):
         return
     stack = _STACK.get()
     parent = stack[-1] if stack else None
-    frame = _Frame(name, concurrent)
+    inside_concurrent = any(
+        ancestor.concurrent or ancestor.inside_concurrent
+        for ancestor in stack)
+    frame = _Frame(name, concurrent, inside_concurrent)
     token = _STACK.set(stack + (frame,))
     try:
         yield frame
@@ -302,6 +328,9 @@ def record_derived(name: str, seconds: float, **counts: int) -> None:
         return
     stack = _STACK.get()
     parent = stack[-1] if stack else None
-    collector.close(_Frame(name, False), parent, max(seconds, 0.0))
+    inside_concurrent = bool(
+        parent and (parent.concurrent or parent.inside_concurrent))
+    collector.close(_Frame(name, False, inside_concurrent), parent,
+                    max(seconds, 0.0))
     if counts:
         collector.add_bytes(name, counts)

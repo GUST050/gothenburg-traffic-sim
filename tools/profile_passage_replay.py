@@ -862,7 +862,8 @@ def replay(source: Path, out: Path, *, label: str | None = None,
             report['io_measurement']['basis'] = (
                 'observational; outside every demand, passage, solver and '
                 'replay identity. Concurrent parents report exclusive_s null '
-                'with the children sum and max stated separately.')
+                'and their measured region wall; descendants remain detail '
+                'with zero additional wall contribution.')
         report['timing'] = recorder.summary()
         report['date'] = context['date']
         report['input_identity'] = context['input_identity']
@@ -919,21 +920,22 @@ def _spread(values: list[float]) -> dict:
 def _io_phase_walls(run: dict) -> dict:
     """One run's measured I/O phases, as wall contribution plus bytes.
 
-    A concurrent parent contributes the wall its slowest child occupied, never
-    the sum of children that overlapped, so this number can be compared and
-    ranked without inventing time.
+    A concurrent boundary contributes its measured region wall. Descendants
+    remain visible as diagnostic thread time but contribute zero additional
+    ranked wall time.
     """
     measurement = run.get('io_measurement') or {}
     result = {}
     for name, entry in (measurement.get('phases') or {}).items():
-        wall = (entry['exclusive_s'] if entry['exclusive_s'] is not None
-                else entry['children_max_s'])
+        wall = entry['wall_contribution_s']
         result[name] = {
             'wall_s': wall,
             'calls': entry['calls'],
             'concurrent': entry['concurrent'],
-            'basis': ('exclusive' if entry['exclusive_s'] is not None
-                      else 'concurrent_children_max'),
+            'basis': next(
+                (row['basis'] for row in measurement.get('ranking', [])
+                 if row['phase'] == name),
+                'concurrent_detail_only'),
             'bytes': entry['bytes'],
         }
     return result
@@ -1003,6 +1005,10 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
                              for name, entry in io_walls[0].items()})
         def _median(entry):
             return entry['median_s'] if isinstance(entry, dict) else entry
+        ranked_source = {
+            name: entry for name, entry in ranked_source.items()
+            if _median(entry) > 0
+        }
         total = sum(_median(entry) for entry in ranked_source.values()) or 1.0
         summary['io_phase_ranking'] = [
             {'phase': name,
@@ -1014,8 +1020,8 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
                                       key=lambda item: -_median(item[1]))]
         summary['io_measurement_basis'] = (
             'observational; outside every demand, passage, solver and replay '
-            'identity. Ranked on the reused repeats; a concurrent parent '
-            'contributes its slowest child, never the sum of overlapping ones.')
+            'identity. Ranked on the reused repeats; a concurrent boundary '
+            'contributes its measured region wall and descendants add zero.')
     (out / 'profile_report.json').write_text(json.dumps(summary, indent=2) + '\n')
     return summary
 
