@@ -1,452 +1,448 @@
 {
-  "accounting": {
-    "basis": "observational; outside every demand, passage, solver and replay identity. Ranked on the reused repeats; a concurrent parent contributes its slowest child, never the sum of overlapping ones.",
-    "concurrent_parents": "exclusive_s is null; the children sum and max are reported separately and the ranking uses the max, never the sum",
-    "derived_phases": "gzip_source_read and gzip_target_write are timed at the stream inside one copyfileobj pass and recorded as children of gzip_compress, whose exclusive time is therefore the compression itself",
-    "sequential_parents": "wall time minus direct children"
-  },
+  "baseline_revision": "1f1f2c8",
+  "baseline_revision_note": "the branch state before any step-4 instrumentation existed",
   "date": "2026-09-13",
   "diagnostic_only": true,
-  "finding": "Reading and parsing the saved vehroute traces dominates measured I/O: source_trace_xml is 47.02% of the ranked warm total at 0.9146 s for 40.8 MB across three learning arms. Compression is not the cost in this shape: every gzip phase together is under 5%.",
+  "full_retention_measurement": {
+    "accounting": "one global wall contribution for the concurrent region; every descendant keeps full diagnostic detail and contributes zero additional ranked wall",
+    "cold_repeat": {
+      "bytes": {
+        "hashed": 805331251,
+        "read": 805331251,
+        "verified": 805331251,
+        "written": 139865918
+      },
+      "copy_s": 0.677043,
+      "ranking": [
+        {
+          "basis": "concurrent_region_wall",
+          "phase": "retention_compress",
+          "share_percent": 99.81,
+          "wall_s": 5.127441
+        },
+        {
+          "basis": "exclusive",
+          "phase": "retention_cleanup",
+          "share_percent": 0.12,
+          "wall_s": 0.006197
+        },
+        {
+          "basis": "exclusive",
+          "phase": "retention_inventory",
+          "share_percent": 0.06,
+          "wall_s": 0.003337
+        },
+        {
+          "basis": "exclusive",
+          "phase": "retention_root",
+          "share_percent": 0.0,
+          "wall_s": 0.000183
+        }
+      ],
+      "residual_s": 0.000183,
+      "retention_root_wall_s": 5.137247
+    },
+    "concurrent_region_detail": {
+      "child_thread_max_s": 0.472311,
+      "child_thread_sum_s": 15.197181,
+      "cpu_count_on_this_machine": 10,
+      "parallel_efficiency_x": 2.96,
+      "region_wall_s": 5.127441,
+      "thread_time_breakdown_s": {
+        "gzip_compress": 10.716631,
+        "gzip_publish": 0.030891,
+        "gzip_source_hash": 0.817196,
+        "gzip_source_read": 0.350423,
+        "gzip_target_verify": 2.991105,
+        "gzip_target_write": 0.290936
+      },
+      "worker_cap": "min(3, len(paths), os.cpu_count())"
+    },
+    "evidence_root": "/Users/gt/Documents/gs-project/runs/automatic-passage-97f1ab116a8e48d8a05621247431715a",
+    "per_repeat": [
+      {
+        "bytes": {
+          "hashed": 805331251,
+          "read": 805331251,
+          "verified": 805331251,
+          "written": 139865918
+        },
+        "candidate_dirs_removed": true,
+        "compressed_files_after": 114,
+        "compression_ratio": 0.192312,
+        "copy_s": 0.677043,
+        "gz_digest_mismatches": [],
+        "gz_verified_against_original": 114,
+        "raw_xml_files_after": 0,
+        "raw_xml_files_before": 118,
+        "repeat": 1,
+        "residual_s": 0.000183,
+        "retention_root_wall_s": 5.137247,
+        "rollback_files_removed": true,
+        "source_reports_removed": true,
+        "source_unchanged": true
+      },
+      {
+        "bytes": {
+          "hashed": 805331251,
+          "read": 805331251,
+          "verified": 805331251,
+          "written": 139865918
+        },
+        "candidate_dirs_removed": true,
+        "compressed_files_after": 114,
+        "compression_ratio": 0.192312,
+        "copy_s": 0.446238,
+        "gz_digest_mismatches": [],
+        "gz_verified_against_original": 114,
+        "raw_xml_files_after": 0,
+        "raw_xml_files_before": 118,
+        "repeat": 2,
+        "residual_s": 0.000426,
+        "retention_root_wall_s": 5.811303,
+        "rollback_files_removed": true,
+        "source_reports_removed": true,
+        "source_unchanged": true
+      },
+      {
+        "bytes": {
+          "hashed": 805331251,
+          "read": 805331251,
+          "verified": 805331251,
+          "written": 139865918
+        },
+        "candidate_dirs_removed": true,
+        "compressed_files_after": 114,
+        "compression_ratio": 0.192312,
+        "copy_s": 0.464685,
+        "gz_digest_mismatches": [],
+        "gz_verified_against_original": 114,
+        "raw_xml_files_after": 0,
+        "raw_xml_files_before": 118,
+        "repeat": 3,
+        "residual_s": 0.000235,
+        "retention_root_wall_s": 5.708821,
+        "rollback_files_removed": true,
+        "source_reports_removed": true,
+        "source_unchanged": true
+      }
+    ],
+    "repeats": 3,
+    "scope": "the complete prune_evidence contract on a real finished three-variant root, measured on an owned copy",
+    "source_inventory": {
+      "bytes": 1075071455,
+      "files": 156,
+      "raw_xml_bytes": 877499944,
+      "raw_xml_files": 118
+    },
+    "source_unchanged_after_every_repeat": true,
+    "unmeasured_categories": [
+      "sumo_subprocess: retention runs after every simulation has finished",
+      "demand_build: this mode measures retention alone, never a calibration",
+      "filesystem_cache_state: the first repeat pays cold page cache for a copy this tool just wrote, which is not the state a finished build meets"
+    ],
+    "warm_repeats": {
+      "copy_s": {
+        "max_s": 0.464685,
+        "median_s": 0.455462,
+        "min_s": 0.446238,
+        "n": 2
+      },
+      "retention_root_wall_s": {
+        "max_s": 5.811303,
+        "median_s": 5.760062,
+        "min_s": 5.708821,
+        "n": 2
+      }
+    }
+  },
+  "instrumentation_revision": "a08915f659d21c0f21059b92444e1c89e9e5f161",
+  "instrumentation_revision_note": "the exact revision the retention profile below was run at; it includes the concurrent-ranking review fix 34f989d and the _tracked_main instrumentation 6d76ffe",
   "measurement_only": true,
   "optimization_implemented": false,
-  "phases": {
-    "gzip_compress": {
-      "accounting_basis": "exclusive",
-      "bytes": {},
-      "calls_cold": 1,
-      "cold_s": 0.060956,
-      "concurrent": false,
-      "warm_max_s": 0.062144,
-      "warm_median_s": 0.062044,
-      "warm_min_s": 0.061944
-    },
-    "gzip_publish": {
-      "accounting_basis": "exclusive",
-      "bytes": {},
-      "calls_cold": 1,
-      "cold_s": 0.000265,
-      "concurrent": false,
-      "warm_max_s": 0.000283,
-      "warm_median_s": 0.000271,
-      "warm_min_s": 0.000258
-    },
-    "gzip_source_hash": {
-      "accounting_basis": "exclusive",
-      "bytes": {
-        "hashed": 9485436
+  "plan_expectation_vs_measurement": "IMPROVEMENT_PLAN named retention as a 128.5 s win area. One finished three-variant root, 1075.1 MB with 877.5 MB of raw XML, retains in 4.16 s cold and a 5.25 s median warm. The measurement does not reproduce 128.5 s for a single root; whatever that figure aggregates, it is not this.",
+  "purpose": "Step 4: evidence I/O, parsing, serialization and real retention",
+  "q50_replay_measurement": {
+    "evidence": "runs/automatic-passage-8cae0ea6442b427db04a46d2b4108430/q50",
+    "phases": {
+      "gzip_compress": {
+        "accounting_basis": "exclusive",
+        "bytes": {},
+        "calls_cold": 1,
+        "cold_s": 0.060956,
+        "concurrent": false,
+        "warm_max_s": 0.062144,
+        "warm_median_s": 0.062044,
+        "warm_min_s": 0.061944
       },
-      "calls_cold": 1,
-      "cold_s": 0.00787,
-      "concurrent": false,
-      "warm_max_s": 0.008296,
-      "warm_median_s": 0.007982,
-      "warm_min_s": 0.007668
-    },
-    "gzip_source_read": {
-      "accounting_basis": "exclusive",
-      "bytes": {
-        "read": 9485436
+      "gzip_publish": {
+        "accounting_basis": "exclusive",
+        "bytes": {},
+        "calls_cold": 1,
+        "cold_s": 0.000265,
+        "concurrent": false,
+        "warm_max_s": 0.000283,
+        "warm_median_s": 0.000271,
+        "warm_min_s": 0.000258
       },
-      "calls_cold": 1,
-      "cold_s": 0.001863,
-      "concurrent": false,
-      "warm_max_s": 0.001822,
-      "warm_median_s": 0.00178,
-      "warm_min_s": 0.001739
-    },
-    "gzip_target_verify": {
-      "accounting_basis": "exclusive",
-      "bytes": {
-        "verified": 9485436
+      "gzip_source_hash": {
+        "accounting_basis": "exclusive",
+        "bytes": {
+          "hashed": 9485436
+        },
+        "calls_cold": 1,
+        "cold_s": 0.00787,
+        "concurrent": false,
+        "warm_max_s": 0.008296,
+        "warm_median_s": 0.007982,
+        "warm_min_s": 0.007668
       },
-      "calls_cold": 1,
-      "cold_s": 0.017431,
-      "concurrent": false,
-      "warm_max_s": 0.017752,
-      "warm_median_s": 0.017361,
-      "warm_min_s": 0.01697
-    },
-    "gzip_target_write": {
-      "accounting_basis": "exclusive",
-      "bytes": {
-        "written": 1088539
+      "gzip_source_read": {
+        "accounting_basis": "exclusive",
+        "bytes": {
+          "read": 9485436
+        },
+        "calls_cold": 1,
+        "cold_s": 0.001863,
+        "concurrent": false,
+        "warm_max_s": 0.001822,
+        "warm_median_s": 0.00178,
+        "warm_min_s": 0.001739
       },
-      "calls_cold": 1,
-      "cold_s": 0.00064,
-      "concurrent": false,
-      "warm_max_s": 0.000654,
-      "warm_median_s": 0.000637,
-      "warm_min_s": 0.00062
-    },
-    "selection_source_agents_json": {
-      "accounting_basis": "exclusive",
-      "bytes": {
-        "read": 4201302
+      "gzip_target_verify": {
+        "accounting_basis": "exclusive",
+        "bytes": {
+          "verified": 9485436
+        },
+        "calls_cold": 1,
+        "cold_s": 0.017431,
+        "concurrent": false,
+        "warm_max_s": 0.017752,
+        "warm_median_s": 0.017361,
+        "warm_min_s": 0.01697
       },
-      "calls_cold": 1,
-      "cold_s": 0.028056,
-      "concurrent": false,
-      "warm_max_s": 0.028548,
-      "warm_median_s": 0.028365,
-      "warm_min_s": 0.028182
-    },
-    "selection_source_routes_xml": {
-      "accounting_basis": "exclusive",
-      "bytes": {
-        "read": 9456425
+      "gzip_target_write": {
+        "accounting_basis": "exclusive",
+        "bytes": {
+          "written": 1088539
+        },
+        "calls_cold": 1,
+        "cold_s": 0.00064,
+        "concurrent": false,
+        "warm_max_s": 0.000654,
+        "warm_median_s": 0.000637,
+        "warm_min_s": 0.00062
       },
-      "calls_cold": 1,
-      "cold_s": 0.06432,
-      "concurrent": false,
-      "warm_max_s": 0.062038,
-      "warm_median_s": 0.061341,
-      "warm_min_s": 0.060643
-    },
-    "selection_transform": {
-      "accounting_basis": "exclusive",
-      "bytes": {},
-      "calls_cold": 1,
-      "cold_s": 0.167047,
-      "concurrent": false,
-      "warm_max_s": 0.165049,
-      "warm_median_s": 0.164752,
-      "warm_min_s": 0.164456
-    },
-    "selection_write": {
-      "accounting_basis": "exclusive",
-      "bytes": {
-        "written": 14875454
+      "selection_source_agents_json": {
+        "accounting_basis": "exclusive",
+        "bytes": {
+          "read": 4201302
+        },
+        "calls_cold": 1,
+        "cold_s": 0.028056,
+        "concurrent": false,
+        "warm_max_s": 0.028548,
+        "warm_median_s": 0.028365,
+        "warm_min_s": 0.028182
       },
-      "calls_cold": 1,
-      "cold_s": 0.14005,
-      "concurrent": false,
-      "warm_max_s": 0.137303,
-      "warm_median_s": 0.134916,
-      "warm_min_s": 0.132529
-    },
-    "source_agents_json": {
-      "accounting_basis": "exclusive",
-      "bytes": {
-        "read": 4201302
+      "selection_source_routes_xml": {
+        "accounting_basis": "exclusive",
+        "bytes": {
+          "read": 9456425
+        },
+        "calls_cold": 1,
+        "cold_s": 0.06432,
+        "concurrent": false,
+        "warm_max_s": 0.062038,
+        "warm_median_s": 0.061341,
+        "warm_min_s": 0.060643
       },
-      "calls_cold": 1,
-      "cold_s": 0.028745,
-      "concurrent": false,
-      "warm_max_s": 0.028752,
-      "warm_median_s": 0.028432,
-      "warm_min_s": 0.028112
-    },
-    "source_input_hash": {
-      "accounting_basis": "exclusive",
-      "bytes": {
-        "hashed": 29713004
+      "selection_transform": {
+        "accounting_basis": "exclusive",
+        "bytes": {},
+        "calls_cold": 1,
+        "cold_s": 0.167047,
+        "concurrent": false,
+        "warm_max_s": 0.165049,
+        "warm_median_s": 0.164752,
+        "warm_min_s": 0.164456
       },
-      "calls_cold": 1,
-      "cold_s": 0.024323,
-      "concurrent": false,
-      "warm_max_s": 0.02569,
-      "warm_median_s": 0.025452,
-      "warm_min_s": 0.025213
-    },
-    "source_manifest_json": {
-      "accounting_basis": "exclusive",
-      "bytes": {
-        "read": 1219
+      "selection_write": {
+        "accounting_basis": "exclusive",
+        "bytes": {
+          "written": 14875454
+        },
+        "calls_cold": 1,
+        "cold_s": 0.14005,
+        "concurrent": false,
+        "warm_max_s": 0.137303,
+        "warm_median_s": 0.134916,
+        "warm_min_s": 0.132529
       },
-      "calls_cold": 1,
-      "cold_s": 0.000103,
-      "concurrent": false,
-      "warm_max_s": 0.000133,
-      "warm_median_s": 0.000129,
-      "warm_min_s": 0.000124
-    },
-    "source_routes_xml": {
-      "accounting_basis": "exclusive",
-      "bytes": {
-        "read": 9456425
+      "source_agents_json": {
+        "accounting_basis": "exclusive",
+        "bytes": {
+          "read": 4201302
+        },
+        "calls_cold": 1,
+        "cold_s": 0.028745,
+        "concurrent": false,
+        "warm_max_s": 0.028752,
+        "warm_median_s": 0.028432,
+        "warm_min_s": 0.028112
       },
-      "calls_cold": 1,
-      "cold_s": 0.125392,
-      "concurrent": false,
-      "warm_max_s": 0.126981,
-      "warm_median_s": 0.126403,
-      "warm_min_s": 0.125825
-    },
-    "source_trace_hash": {
-      "accounting_basis": "exclusive",
-      "bytes": {
-        "hashed": 40820717
+      "source_input_hash": {
+        "accounting_basis": "exclusive",
+        "bytes": {
+          "hashed": 29713004
+        },
+        "calls_cold": 1,
+        "cold_s": 0.024323,
+        "concurrent": false,
+        "warm_max_s": 0.02569,
+        "warm_median_s": 0.025452,
+        "warm_min_s": 0.025213
       },
-      "calls_cold": 3,
-      "cold_s": 0.034653,
-      "concurrent": false,
-      "warm_max_s": 0.034651,
-      "warm_median_s": 0.033869,
-      "warm_min_s": 0.033087
-    },
-    "source_trace_xml": {
-      "accounting_basis": "exclusive",
-      "bytes": {
-        "read": 40820717
+      "source_manifest_json": {
+        "accounting_basis": "exclusive",
+        "bytes": {
+          "read": 1219
+        },
+        "calls_cold": 1,
+        "cold_s": 0.000103,
+        "concurrent": false,
+        "warm_max_s": 0.000133,
+        "warm_median_s": 0.000129,
+        "warm_min_s": 0.000124
       },
-      "calls_cold": 3,
-      "cold_s": 0.938496,
-      "concurrent": false,
-      "warm_max_s": 0.917146,
-      "warm_median_s": 0.914616,
-      "warm_min_s": 0.912085
-    },
-    "stage_reformat_xml": {
-      "accounting_basis": "exclusive",
-      "bytes": {
-        "read": 9504823,
-        "written": 9485436
+      "source_routes_xml": {
+        "accounting_basis": "exclusive",
+        "bytes": {
+          "read": 9456425
+        },
+        "calls_cold": 1,
+        "cold_s": 0.125392,
+        "concurrent": false,
+        "warm_max_s": 0.126981,
+        "warm_median_s": 0.126403,
+        "warm_min_s": 0.125825
       },
-      "calls_cold": 1,
-      "cold_s": 0.187086,
-      "concurrent": false,
-      "warm_max_s": 0.183902,
-      "warm_median_s": 0.182642,
-      "warm_min_s": 0.181382
+      "source_trace_hash": {
+        "accounting_basis": "exclusive",
+        "bytes": {
+          "hashed": 40820717
+        },
+        "calls_cold": 3,
+        "cold_s": 0.034653,
+        "concurrent": false,
+        "warm_max_s": 0.034651,
+        "warm_median_s": 0.033869,
+        "warm_min_s": 0.033087
+      },
+      "source_trace_xml": {
+        "accounting_basis": "exclusive",
+        "bytes": {
+          "read": 40820717
+        },
+        "calls_cold": 3,
+        "cold_s": 0.938496,
+        "concurrent": false,
+        "warm_max_s": 0.917146,
+        "warm_median_s": 0.914616,
+        "warm_min_s": 0.912085
+      },
+      "stage_reformat_xml": {
+        "accounting_basis": "exclusive",
+        "bytes": {
+          "read": 9504823,
+          "written": 9485436
+        },
+        "calls_cold": 1,
+        "cold_s": 0.187086,
+        "concurrent": false,
+        "warm_max_s": 0.183902,
+        "warm_median_s": 0.182642,
+        "warm_min_s": 0.181382
+      },
+      "stage_validate": {
+        "accounting_basis": "exclusive",
+        "bytes": {},
+        "calls_cold": 1,
+        "cold_s": 0.153396,
+        "concurrent": false,
+        "warm_max_s": 0.154897,
+        "warm_median_s": 0.154216,
+        "warm_min_s": 0.153535
+      }
     },
-    "stage_validate": {
-      "accounting_basis": "exclusive",
-      "bytes": {},
-      "calls_cold": 1,
-      "cold_s": 0.153396,
-      "concurrent": false,
-      "warm_max_s": 0.154897,
-      "warm_median_s": 0.154216,
-      "warm_min_s": 0.153535
+    "ranking_note": "v1 ranking was computed under the defective concurrent rule; the per-phase exclusive times and byte counts above are unaffected because only the global contribution formula was wrong",
+    "residual": {
+      "meaning": "the replay root residual is wall time not attributed to any named phase; it is reported, never hidden",
+      "root_residual_s_per_repeat": [
+        0.307325,
+        0.137812,
+        0.142911
+      ],
+      "root_wall_s_per_repeat": [
+        8.833483,
+        5.630679,
+        5.625788
+      ]
+    },
+    "sample": {
+      "date": "2027-06-25",
+      "expanded_columns": 67463,
+      "process_state": "all repeats run after module imports; the first may populate lazy and filesystem caches, later repeats reuse this process and the shared solver cache this profile created empty",
+      "repeats": 3,
+      "solver_cache_hit": [
+        false,
+        true,
+        true
+      ],
+      "vehicles": 9675
+    },
+    "scope": "ONE variant replay of saved evidence; retention NOT exercised",
+    "source_evidence": {
+      "input_sha256": {
+        "/private/tmp/gs-step3-departure-bounds/tools/profile_passage_replay.py": "b96ab3c534e58772ad21ece4e4c7f8f0e4615b87cb0cb877206e6587ac3df522",
+        "/private/tmp/gs-step3-departure-bounds/tools/trial_dynamic_passage.py": "5f1e440e095a8090b73c3b46dc31c60f0de99d4ff0d503775c8413d2e4486ecb",
+        "/private/tmp/gs-step3-departure-bounds/traffic_sim/demand/automatic_passage.py": "9351236172d2b10724c49a95238ee6499a2bff12026bd4f609384d3985c46580",
+        "/private/tmp/gs-step3-departure-bounds/traffic_sim/experimental/dynamic_assignment.py": "a3feb97c517c07252176b729a88bbba40eb2bfffff3936dd2b7af054e329b13c"
+      },
+      "measured_copy": "/private/tmp/step4-evidence",
+      "note": "The instrumentation edits automatic_passage.py and trial_dynamic_passage.py, both inside replay_source_sha256, so an isolated copy was used and its replay contract rebound to the measured revision. retained_bounds_pq is unchanged; the copy differs from the original in exactly two files, input/passage_replay_contract.json and report.json.",
+      "original": "runs/automatic-passage-8cae0ea6442b427db04a46d2b4108430/q50",
+      "replay_contract_source_sha256": {
+        "automatic_passage": "9351236172d2b10724c49a95238ee6499a2bff12026bd4f609384d3985c46580",
+        "departure_reconciliation": "9abd801d4ac6b786e173d4eb09e9b42877f0f27e17a0d5efe7cc27020f696437",
+        "dynamic_assignment": "a3feb97c517c07252176b729a88bbba40eb2bfffff3936dd2b7af054e329b13c",
+        "passage_solver": "ba9e9ebdd6eb358c644cc6bd3e4ee88c7526fd99c212a335ed215430c5342c78",
+        "structure": "50bd3d376e609725dee1614bbc895d926bee04477409de0a98736849048e5b1f",
+        "trial_dynamic_passage": "5f1e440e095a8090b73c3b46dc31c60f0de99d4ff0d503775c8413d2e4486ecb"
+      }
+    },
+    "unchanged": {
+      "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+      "all_repeats_agree": true,
+      "evidence_files_differing_from_original": [
+        "input/passage_replay_contract.json",
+        "report.json"
+      ],
+      "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+      "selection_reproduced_state": [
+        "identical"
+      ],
+      "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af"
     }
   },
-  "purpose": "Step 4 baseline: measure evidence I/O, parsing and serialization",
-  "ranking": [
-    {
-      "basis": "exclusive",
-      "bytes": {
-        "read": 40820717
-      },
-      "phase": "source_trace_xml",
-      "share_percent": 47.02,
-      "wall_s": 0.914616
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {
-        "read": 9504823,
-        "written": 9485436
-      },
-      "phase": "stage_reformat_xml",
-      "share_percent": 9.39,
-      "wall_s": 0.182642
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {},
-      "phase": "selection_transform",
-      "share_percent": 8.47,
-      "wall_s": 0.164752
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {},
-      "phase": "stage_validate",
-      "share_percent": 7.93,
-      "wall_s": 0.154216
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {
-        "written": 14875454
-      },
-      "phase": "selection_write",
-      "share_percent": 6.94,
-      "wall_s": 0.134916
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {
-        "read": 9456425
-      },
-      "phase": "source_routes_xml",
-      "share_percent": 6.5,
-      "wall_s": 0.126403
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {},
-      "phase": "gzip_compress",
-      "share_percent": 3.19,
-      "wall_s": 0.062044
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {
-        "read": 9456425
-      },
-      "phase": "selection_source_routes_xml",
-      "share_percent": 3.15,
-      "wall_s": 0.061341
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {
-        "hashed": 40820717
-      },
-      "phase": "source_trace_hash",
-      "share_percent": 1.74,
-      "wall_s": 0.033869
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {
-        "read": 4201302
-      },
-      "phase": "source_agents_json",
-      "share_percent": 1.46,
-      "wall_s": 0.028432
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {
-        "read": 4201302
-      },
-      "phase": "selection_source_agents_json",
-      "share_percent": 1.46,
-      "wall_s": 0.028365
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {
-        "hashed": 29713004
-      },
-      "phase": "source_input_hash",
-      "share_percent": 1.31,
-      "wall_s": 0.025452
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {
-        "verified": 9485436
-      },
-      "phase": "gzip_target_verify",
-      "share_percent": 0.89,
-      "wall_s": 0.017361
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {
-        "hashed": 9485436
-      },
-      "phase": "gzip_source_hash",
-      "share_percent": 0.41,
-      "wall_s": 0.007982
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {
-        "read": 9485436
-      },
-      "phase": "gzip_source_read",
-      "share_percent": 0.09,
-      "wall_s": 0.00178
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {
-        "written": 1088539
-      },
-      "phase": "gzip_target_write",
-      "share_percent": 0.03,
-      "wall_s": 0.000637
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {},
-      "phase": "gzip_publish",
-      "share_percent": 0.01,
-      "wall_s": 0.000271
-    },
-    {
-      "basis": "exclusive",
-      "bytes": {
-        "read": 1219
-      },
-      "phase": "source_manifest_json",
-      "share_percent": 0.01,
-      "wall_s": 0.000129
-    }
-  ],
   "release_evidence": false,
-  "residual": {
-    "meaning": "the replay root residual is wall time not attributed to any named phase; it is reported, never hidden",
-    "root_residual_s_per_repeat": [
-      0.307325,
-      0.137812,
-      0.142911
-    ],
-    "root_wall_s_per_repeat": [
-      8.833483,
-      5.630679,
-      5.625788
-    ]
-  },
-  "sample": {
-    "date": "2027-06-25",
-    "expanded_columns": 67463,
-    "process_state": "all repeats run after module imports; the first may populate lazy and filesystem caches, later repeats reuse this process and the shared solver cache this profile created empty",
-    "repeats": 3,
-    "solver_cache_hit": [
-      false,
-      true,
-      true
-    ],
-    "vehicles": 9675
-  },
-  "schema_version": 1,
-  "source_evidence": {
-    "input_sha256": {
-      "/private/tmp/gs-step3-departure-bounds/tools/profile_passage_replay.py": "b96ab3c534e58772ad21ece4e4c7f8f0e4615b87cb0cb877206e6587ac3df522",
-      "/private/tmp/gs-step3-departure-bounds/tools/trial_dynamic_passage.py": "5f1e440e095a8090b73c3b46dc31c60f0de99d4ff0d503775c8413d2e4486ecb",
-      "/private/tmp/gs-step3-departure-bounds/traffic_sim/demand/automatic_passage.py": "9351236172d2b10724c49a95238ee6499a2bff12026bd4f609384d3985c46580",
-      "/private/tmp/gs-step3-departure-bounds/traffic_sim/experimental/dynamic_assignment.py": "a3feb97c517c07252176b729a88bbba40eb2bfffff3936dd2b7af054e329b13c"
-    },
-    "measured_copy": "/private/tmp/step4-evidence",
-    "note": "The instrumentation edits automatic_passage.py and trial_dynamic_passage.py, both inside replay_source_sha256, so an isolated copy was used and its replay contract rebound to the measured revision. retained_bounds_pq is unchanged; the copy differs from the original in exactly two files, input/passage_replay_contract.json and report.json.",
-    "original": "runs/automatic-passage-8cae0ea6442b427db04a46d2b4108430/q50",
-    "replay_contract_source_sha256": {
-      "automatic_passage": "9351236172d2b10724c49a95238ee6499a2bff12026bd4f609384d3985c46580",
-      "departure_reconciliation": "9abd801d4ac6b786e173d4eb09e9b42877f0f27e17a0d5efe7cc27020f696437",
-      "dynamic_assignment": "a3feb97c517c07252176b729a88bbba40eb2bfffff3936dd2b7af054e329b13c",
-      "passage_solver": "ba9e9ebdd6eb358c644cc6bd3e4ee88c7526fd99c212a335ed215430c5342c78",
-      "structure": "50bd3d376e609725dee1614bbc895d926bee04477409de0a98736849048e5b1f",
-      "trial_dynamic_passage": "5f1e440e095a8090b73c3b46dc31c60f0de99d4ff0d503775c8413d2e4486ecb"
-    }
-  },
-  "source_revision": "1f1f2c8d654e40c0f97b01c17a89c3d5c37e2e28",
-  "unchanged": {
-    "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
-    "all_repeats_agree": true,
-    "evidence_files_differing_from_original": [
-      "input/passage_replay_contract.json",
-      "report.json"
-    ],
-    "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
-    "selection_reproduced_state": [
-      "identical"
-    ],
-    "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af"
-  },
-  "unmeasured_categories": [
-    "archive_validation",
-    "build_sumo_demand_tracked_main: instrumented sites are not reached by a replay; measuring them needs a real demand build, which is out of scope for this step",
-    "costing_and_resolver",
-    "learning_and_validation_waves",
-    "publication_and_rollback",
-    "retention_inventory_compress_cleanup: a single-variant replay calls _gzip_verified on one copied file directly and never runs prune_evidence, so the file inventory, the three-way thread pool and the cleanup pass are covered by tests but NOT measured here",
-    "run_registry_copy_and_verify: traffic_sim/ops/runs.py is instrumented and unit-tested but no run registry write occurs in a replay",
-    "sumo_subprocess"
-  ]
+  "schema_version": 2,
+  "still_unmeasured": [
+    "build_sumo_demand._tracked_main: instrumented at 6d76ffe but never exercised; measuring it needs a real demand build, out of scope here",
+    "traffic_sim/ops/runs.py: instrumented and unit-tested; a replay and a retention profile both perform no run-registry write"
+  ],
+  "supersedes": {
+    "file": "validation/passage_step4_io_measurement_20260913.json v1",
+    "reason": "v1 carried a single ambiguous source_revision, ranked concurrent regions by summing overlapping thread time, and described _tracked_main as instrumented when it was not"
+  }
 }

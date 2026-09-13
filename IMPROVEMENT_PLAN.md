@@ -701,6 +701,50 @@ riktig byggmätning.
 filer, båda från ombindningen av replaykontraktet, och alla tre replays
 reproducerar frysta selection/routes/agents-hashar.
 
+#### Steg 4 reparation och full retention — 2026-09-13
+
+**Två fel i den föregående rapporten, båda mätta.** Concurrent-rankingen
+räknade en samtidig region två gånger: regionen bidrog med sitt långsammaste
+barn OCH varje ättling bidrog med sin egen exklusiva tid till samma total. Mätt
+direkt: tre 50 ms-barn under en region med 0,0553 s verklig väggtid gav
+0,2165 s rankad tid, 3,91 gånger det som förflöt. Faser bär nu
+`wall_contribution_s`: sekventiella faser utanför en samtidig region bidrar med
+sin exklusiva tid, en samtidig gräns med sin uppmätta inclusive, och allt under
+gränsen med noll — men behåller full diagnostik. Och `_tracked_main` beskrevs
+som instrumenterad utan att vara det; `90c0675` rör inte filen. Den är nu
+instrumenterad på riktigt (`6d76ffe`), men fortfarande OMÄTT: den kräver ett
+riktigt demand-bygge.
+
+**Full trevariants-retention är nu mätt** (`--retention-root`, egen kopia per
+repeat, aldrig hårdlänkad, originalet orört). Roten
+`runs/automatic-passage-97f1ab116a8e48d8a05621247431715a`: 156 filer,
+1 075,1 MB, varav 118 råa XML på 877,5 MB.
+
+| Repeat | Kopiering | Retention root wall | Residual |
+|---|---|---|---|
+| 1 (kall) | 0,840 s | **4,158 s** | 0,000 s |
+| 2 | 0,739 s | 5,405 s | 0,000 s |
+| 3 | 0,586 s | 5,092 s | 0,000 s |
+
+118 råa XML → 0, 114 `.gz` skrivna, kompressionsgrad 0,1923, 114 verifierade
+mot ORIGINALET via dekomprimerad digest, noll avvikelser. Bytes: 805,3 MB
+lästa, 139,9 MB skrivna, 805,3 MB hashade, 805,3 MB verifierade.
+Originalrotens alla paths, storlekar och SHA-256 var identiska efter varje
+repeat.
+
+Rankingen för repeat 1: `retention_compress` 99,74 %
+(`concurrent_region_wall`), `retention_cleanup` 0,17 %,
+`retention_inventory` 0,09 %. Inuti regionen: 12,281 s trådtid komprimerad
+till 4,147 s väggtid — **2,96× parallell effektivitet på tre arbetare**, med
+`gzip_compress` 8,923 s, `gzip_target_verify` 2,334 s och `gzip_source_hash`
+0,697 s av trådtiden.
+
+**Planens 128,5 s för retention reproduceras inte.** En färdig trevariantsrot
+retentioneras på 4,16 s kallt och 5,25 s varm median. Vad den siffran än
+aggregerar är det inte detta. Retention är alltså INTE den stora posten, och
+parsingförslaget skjuts därmed upp enligt planens egen regel.
+
+
 ### Steg 5 — underlag, arkiv och kostnadsberäkning
 
 **Filer:** `monthly_demand.py:find_demand_archives/validate_demand_archive/prepare`,
