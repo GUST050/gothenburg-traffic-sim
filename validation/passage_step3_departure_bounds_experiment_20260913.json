@@ -1,0 +1,124 @@
+{
+  "acceptance": {
+    "exactness_checks_pass": true,
+    "selection_identical_in_all_replays": true,
+    "verdict": "ACCEPTED",
+    "warm_bounds_at_least_15_percent_faster": true,
+    "warm_fit_not_slower": true
+  },
+  "baseline_revision": "7e1a97653447fc8293c8d836a3cb77b2850fdb45",
+  "change": {
+    "function": "traffic_sim/experimental/dynamic_assignment.py::departure_bound_constraints",
+    "mechanism": "call-local memo keyed by (departure quarter, option.edges) VALUE, returning the exact tuple of bound rows; no global, no path, nothing survives the call",
+    "why_order_is_safe": "coo_matrix.tocsr() canonicalises: duplicates are summed and indices sorted, so reusing the first option set-iteration order reproduces the same arrays (verified on scipy 1.13.1)"
+  },
+  "date": "2026-09-13",
+  "design": {
+    "cold_warm": "repeat 1 is a cache miss, repeats 2-3 are hits",
+    "order": [
+      "A1",
+      "B1",
+      "B2",
+      "A2"
+    ],
+    "repeats_per_profile": 3,
+    "solver_cache": "one empty cache per profile, created under that profile output, never shared between revisions because the key hashes the source"
+  },
+  "diagnostic_only": true,
+  "exactness": {
+    "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+    "key_change_reason": "the solver cache deliberately hashes dynamic_assignment.py source bytes, so a changed revision cannot reuse a cache entry",
+    "request_npz_sha256_all_arms": "d1cf64e0f6decd4f (first 16, identical in A1/A2/B1/B2)",
+    "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+    "selection_reproduced_state": "identical in all 12 replays",
+    "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+    "solver_request_arrays": [
+      "c",
+      "data",
+      "indices",
+      "indptr",
+      "integrality",
+      "lower",
+      "options",
+      "row_lower",
+      "row_upper",
+      "shape",
+      "upper"
+    ],
+    "solver_request_arrays_identical": true,
+    "solver_request_key_changed": true
+  },
+  "not_done": [
+    "column_equivalence_reduction was deliberately not optimised",
+    "no SUMO run, monthly search, catalog generation or warming",
+    "no solver, MILP setting or persistent result cache was changed"
+  ],
+  "purpose": "Bounded A/B/B/A optimisation experiment for departure_bound_constraints",
+  "release_evidence": false,
+  "sample": {
+    "date": "2027-06-25",
+    "evidence": "runs/automatic-passage-8cae0ea6442b427db04a46d2b4108430/q50",
+    "note": "Each arm replayed its own isolated evidence copy whose contract was rebound to that arm own source bytes. retained_bounds_pq identical in both copies. No SUMO run occurred.",
+    "unique_edge_tuples": 296,
+    "vehicles": 9675
+  },
+  "schema_version": 1,
+  "timing": {
+    "cold_departure_bound_constraints_s": {
+      "baseline": [
+        0.397601,
+        0.398545
+      ],
+      "candidate": [
+        0.189229,
+        0.18603
+      ]
+    },
+    "cold_fit_integer_flows_s": {
+      "baseline": [
+        3.564918,
+        3.744273
+      ],
+      "candidate": [
+        3.635185,
+        3.631003
+      ]
+    },
+    "departure_bound_constraints": {
+      "baseline_median_s": 0.4002005,
+      "baseline_warm_s": [
+        0.399317,
+        0.400199,
+        0.400202,
+        0.403233
+      ],
+      "candidate_median_s": 0.192282,
+      "candidate_warm_s": [
+        0.186838,
+        0.191376,
+        0.193188,
+        0.193227
+      ],
+      "improvement_percent": 51.95,
+      "worst_candidate_vs_best_baseline_percent": 51.61
+    },
+    "fit_integer_flows": {
+      "baseline_median_s": 0.7626975,
+      "baseline_warm_s": [
+        0.736031,
+        0.761287,
+        0.764108,
+        0.784732
+      ],
+      "candidate_median_s": 0.57536,
+      "candidate_warm_s": [
+        0.572269,
+        0.573324,
+        0.577396,
+        0.582686
+      ],
+      "improvement_percent": 24.56,
+      "worst_candidate_vs_best_baseline_percent": 20.83
+    }
+  }
+}

@@ -623,13 +623,26 @@ def departure_bound_constraints(system: PassageSystem, bounds) -> tuple:
             lower.append(math.ceil(span[0] - .5))
             upper.append(math.floor(span[1] + .5))
     rows, columns = [], []
+    # One departure quarter and one physical route imply the same bound rows
+    # for every option that carries them, so the unique-edge walk is done once
+    # per combination instead of once per column. The memo is local to this
+    # call and keyed by VALUE, never by object identity or by any path, so two
+    # equal routes that are separate objects still share one entry and nothing
+    # survives the return. Append order is irrelevant: tocsr() canonicalises,
+    # summing duplicates and sorting indices, so reusing the first option's
+    # set-iteration order reproduces the same arrays bit for bit.
+    incidence: dict[tuple[int, tuple[str, ...]], tuple[int, ...]] = {}
     for column, option in enumerate(system.options):
         quarter = math.floor(option.departure_s / system.interval_s)
-        for edge in set(option.edges):
-            row = keys.get((quarter, edge))
-            if row is not None:
-                rows.append(row)
-                columns.append(column)
+        cached = incidence.get((quarter, option.edges))
+        if cached is None:
+            cached = tuple(
+                row for row in
+                (keys.get((quarter, edge)) for edge in set(option.edges))
+                if row is not None)
+            incidence[quarter, option.edges] = cached
+        rows.extend(cached)
+        columns.extend([column] * len(cached))
     matrix = coo_matrix((np.ones(len(rows)), (rows, columns)),
                         shape=(len(lower), len(system.options))).tocsr()
     return matrix, np.asarray(lower), np.asarray(upper)

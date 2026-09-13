@@ -537,10 +537,68 @@ en kommentar, gör samma sak. Praktiskt betyder det att **alla befintliga
 passage-solver-cacheposter är ogiltiga från den här commiten**, så arm B i
 nästa A/B startar med kall solvercache. Jämför inte varm arm A mot kall arm B.
 
-**Ingen steg 3-optimering föreslås.** Fixturens faser är mikrosekunder och
-säger ingenting om vilken fas som dominerar i produktion. Kör mätningen på den
-sparade q50-evidensen och läs `solver_measurement.phases`; först då finns
-underlag för att välja åtgärd.
+**Ingen steg 3-optimering föreslogs i det här skedet.** Fixturens faser är
+mikrosekunder och säger ingenting om vilken fas som dominerar i produktion.
+Mätningen måste köras på den sparade q50-evidensen och
+`solver_measurement.phases` läsas; först då finns underlag för att välja
+åtgärd.
+
+#### Steg 3 utfall — mätt och avgjort 2026-09-13
+
+**Reviewfixarna först (`7e1a976`).** `_SOLVER_PHASE_OBSERVER` är en
+`contextvars.ContextVar` som sätts och återställs via token i `finally`, så två
+samtidiga profiler varken blandar observerare eller lämnar någon installerad.
+Det tillagda testet interfolierar två observerare med events och faller på den
+gamla modulglobalen med `KeyError: 'milp_solve'` — fasen hamnade i fel
+insamlare. `passage_solver.py` ingår nu i `replay_source_sha256()`, eftersom
+replaykontraktet måste bindas till filen som styr solvercache,
+feasibility-kontroll och själva solveranropet.
+
+**Mätningen pekade ut avgångsgränserna.** På den sparade q50-evidensen för
+2027-06-25 (9 675 fordon, 296 unika kantsekvenser) går MILP:en redan förbi vid
+cacheträff; det som återstår av varm `fit_integer_flows` är matrisbygge.
+`departure_bound_constraints` var 53,31 % av varm fit.
+
+**Åtgärden.** En anropslokal memo i `departure_bound_constraints`, nycklad på
+VÄRDET av `(avgångskvart, option.edges)` och returnerande exakt tuple av
+bound-rader. Ingen global, ingen sökväg, inget överlever anropet. Ordningen är
+säker därför att `coo_matrix.tocsr()` kanoniserar — dubbletter summeras,
+index sorteras — verifierat direkt på scipy 1.13.1. `option.edges` är tuple i
+hela produktionen: `departure_reconciliation` parsar med `tuple(...)` och
+`_shifted_alternatives` bär samma objekt genom `replace()`, vilket också är
+varför memon träffar så ofta.
+
+**Resultat, A/B/B/A med tre repeats per profil och egen tom solvercache per
+profil** (aldrig delad mellan revisioner — nyckeln hashar källan med flit):
+
+| Mått, varm | Baslinje | Kandidat | Förbättring |
+|---|---|---|---|
+| `departure_bound_constraints` median | 0,400201 s | 0,192282 s | **51,95 %** |
+| `fit_integer_flows` median | 0,762698 s | 0,575360 s | 24,56 % |
+
+Sämsta kandidatmätningen ligger 51,61 % under bästa baslinjemätningen, så
+fördelningarna överlappar inte. Kall `fit_integer_flows` är oförändrad
+(+0,59 %) eftersom den är ~3 s MILP.
+
+**Exakthet.** Alla 11 solver-request-arrayer (`c`, `data`, `indices`,
+`indptr`, `integrality`, `lower`, `options`, `row_lower`, `row_upper`,
+`shape`, `upper`) är identiska i varje par av baslinje- och kandidatrepeat,
+`request.npz` är byte-identisk i alla fyra armar, publicerade
+routes/agents/selection är byte-identiska och `selection_reproduced.state` är
+`identical` i samtliga 12 replays. Enhetsexaktheten är pinnad mot en fryst
+ordagrann kopia av implementationen före ändringen. Evidens:
+`validation/passage_step3_departure_bounds_experiment_20260913.json`.
+
+**Vad som medvetet INTE gjordes.** `column_equivalence_reduction` är nu den
+största varma fasen (median ~0,266 s mot avgångsgränsernas ~0,192 s) och är
+orörd: ingenting är mätt om huruvida dess arbete är återanvändbart. Ingen
+SUMO-körning, månadssökning, kataloggenerering eller uppvärmning. Solver,
+MILP-inställningar och den persistenta resultatcachen är oförändrade.
+
+**Driftanmärkning.** `tools/profile_passage_replay.py` måste köras med
+`PYTHONPATH=.`; som skript är `sys.path[0]` katalogen `tools/`, och importen av
+`demand` misslyckas annars. Verktyget ligger utanför
+`replay_source_sha256()`, så en framtida fix där invaliderar ingen evidens.
 
 ### Steg 4 — bevisfiler, parsing och serialization
 

@@ -613,3 +613,296 @@ class TestSolverPhaseInstrumentation:
                 dynamic.fit_integer_flows(system, {'other': [0, 0, 0]}, groups)
 
         assert dynamic._SOLVER_PHASE_OBSERVER.get() is None
+
+
+# --- departure-bound incidence reuse -------------------------------------
+#
+# The step-3 measurement found departure_bound_constraints to be 53.31% of a
+# warm fit_integer_flows on the saved 2027-06-25 q50 evidence, with 9675
+# vehicles sharing only 296 unique edge tuples. These tests pin what the
+# optimisation may and may not change: the walk over a repeated
+# (departure quarter, route) may happen once per call, and every produced
+# array must stay exactly equal to the implementation frozen below.
+
+import math as _math
+import random as _random
+
+from scipy.sparse import coo_matrix as _coo_matrix, csr_matrix as _csr_matrix
+
+
+def _frozen_departure_bound_constraints(system, bounds):
+    """Verbatim copy of departure_bound_constraints at 450de9b.
+
+    Frozen on purpose: the experiment is only allowed to be faster, so the
+    reference has to be the code being replaced, not a paraphrase of it.
+    """
+    if bounds is None:
+        return _csr_matrix((0, len(system.options))), np.array([]), np.array([])
+    if len(bounds) != system.n_intervals:
+        raise ValueError('departure bounds must cover every interval')
+    keys, lower, upper = {}, [], []
+    for quarter, row in enumerate(bounds):
+        for edge, span in sorted(row.items()):
+            if len(span) != 2 or not all(_math.isfinite(v) for v in span) \
+                    or span[0] < 0 or span[0] > span[1]:
+                raise ValueError('invalid production bound')
+            keys[quarter, edge] = len(lower)
+            lower.append(_math.ceil(span[0] - .5))
+            upper.append(_math.floor(span[1] + .5))
+    rows, columns = [], []
+    for column, option in enumerate(system.options):
+        quarter = _math.floor(option.departure_s / system.interval_s)
+        for edge in set(option.edges):
+            row = keys.get((quarter, edge))
+            if row is not None:
+                rows.append(row)
+                columns.append(column)
+    matrix = _coo_matrix((np.ones(len(rows)), (rows, columns)),
+                         shape=(len(lower), len(system.options))).tocsr()
+    return matrix, np.asarray(lower), np.asarray(upper)
+
+
+class CountingRoute(tuple):
+    """A route whose every full iteration is observable.
+
+    The optimisation is exactly "walk one (quarter, route) once per call
+    instead of once per option", so the walk itself is the observable. Value
+    equality and hashing stay tuple semantics, which is what lets two
+    distinct objects carrying the same edges share one memo entry.
+    """
+
+    def __new__(cls, edges, counter):
+        route = super().__new__(cls, edges)
+        route.counter = counter
+        return route
+
+    def __iter__(self):
+        self.counter[0] += 1
+        return tuple.__iter__(self)
+
+
+def _route(option_id, depart, edges, offsets, *, group='od'):
+    """A RouteDeparture that keeps the exact edges object it was given."""
+    return dynamic.RouteDeparture(option_id, group, depart, edges,
+                                  {'fit': tuple(offsets)}, 1.0, 3)
+
+
+def _assert_identical(produced, expected):
+    matrix, lower, upper = produced
+    reference, reference_lower, reference_upper = expected
+    assert matrix.shape == reference.shape
+    assert np.array_equal(matrix.data, reference.data)
+    assert np.array_equal(matrix.indices, reference.indices)
+    assert np.array_equal(matrix.indptr, reference.indptr)
+    assert matrix.data.dtype == reference.data.dtype
+    assert matrix.indices.dtype == reference.indices.dtype
+    assert matrix.indptr.dtype == reference.indptr.dtype
+    assert np.array_equal(lower, reference_lower)
+    assert np.array_equal(upper, reference_upper)
+    assert lower.dtype == reference_lower.dtype
+    assert upper.dtype == reference_upper.dtype
+
+
+def _random_system(rng, *, n_options=30, n_intervals=4):
+    alphabet = ('a', 'b', 'c', 's', 'd')
+    routes = []
+    for index in range(n_options):
+        length = rng.randint(1, 4)
+        edges = tuple(rng.choice(alphabet) for _ in range(length))
+        offsets = tuple(sorted(rng.uniform(0, 2500) for _ in range(length)))
+        depart = rng.choice([-1800.0, -900.0, 0.0, 900.0, 1800.0, 2700.0,
+                             3600.0, 4500.0])
+        routes.append(_route(f'o{index}', depart, edges, offsets))
+    return dynamic.build_passage_system(routes, ['s'], n_intervals)
+
+
+def _random_bounds(rng, system):
+    rows = []
+    for _ in range(system.n_intervals):
+        row = {}
+        for edge in ('a', 'b', 'c', 's', 'd'):
+            if rng.random() < 0.5:
+                low = float(rng.randint(0, 3))
+                row[edge] = (low, low + float(rng.randint(0, 5)))
+        rows.append(row)
+    return rows
+
+
+class TestDepartureBoundIncidenceReuse:
+    def test_one_route_and_quarter_is_walked_once_not_once_per_option(self):
+        counter = [0]
+        routes = [
+            _route(f'o{index}', 0.0,
+                   CountingRoute(('a', 's', 'b'), counter), (0.0, 10.0, 20.0))
+            for index in range(5)
+        ]
+        system = dynamic.build_passage_system(routes, ['s'], 2)
+        bounds = [{'a': (0.0, 5.0), 'b': (0.0, 5.0)}, {}]
+        before = counter[0]
+
+        dynamic.departure_bound_constraints(system, bounds)
+
+        assert counter[0] - before == 1
+
+    def test_the_same_route_in_two_quarters_is_walked_once_per_quarter(self):
+        counter = [0]
+        routes = [
+            _route('early', 0.0,
+                   CountingRoute(('a', 's'), counter), (0.0, 10.0)),
+            _route('late', 900.0,
+                   CountingRoute(('a', 's'), counter), (0.0, 10.0)),
+            _route('early-twin', 0.0,
+                   CountingRoute(('a', 's'), counter), (0.0, 10.0)),
+        ]
+        system = dynamic.build_passage_system(routes, ['s'], 2)
+        bounds = [{'a': (0.0, 5.0)}, {'a': (0.0, 5.0)}]
+        before = counter[0]
+
+        dynamic.departure_bound_constraints(system, bounds)
+
+        assert counter[0] - before == 2
+
+    def test_options_sharing_a_route_and_quarter_keep_the_frozen_result(self):
+        routes = [
+            _route(f'o{index}', 0.0, ('a', 's', 'b'), (0.0, 10.0, 20.0))
+            for index in range(5)
+        ]
+        system = dynamic.build_passage_system(routes, ['s'], 2)
+        bounds = [{'a': (0.0, 5.0), 'b': (1.0, 4.0)}, {}]
+
+        _assert_identical(dynamic.departure_bound_constraints(system, bounds),
+                          _frozen_departure_bound_constraints(system, bounds))
+
+    def test_the_same_route_in_different_quarters_keeps_the_frozen_result(self):
+        routes = [
+            _route('a-early', 0.0, ('a', 's'), (0.0, 10.0)),
+            _route('a-late', 900.0, ('a', 's'), (0.0, 10.0)),
+            _route('a-later', 1800.0, ('a', 's'), (0.0, 10.0)),
+        ]
+        system = dynamic.build_passage_system(routes, ['s'], 3)
+        bounds = [{'a': (0.0, 2.0)}, {'a': (1.0, 3.0)}, {'a': (0.0, 9.0)}]
+
+        _assert_identical(dynamic.departure_bound_constraints(system, bounds),
+                          _frozen_departure_bound_constraints(system, bounds))
+
+    def test_a_repeated_edge_still_counts_once_for_its_option(self):
+        routes = [_route('loop', 0.0, ('a', 's', 'a', 'a'),
+                         (0.0, 10.0, 20.0, 30.0))]
+        system = dynamic.build_passage_system(routes, ['s'], 2)
+        bounds = [{'a': (0.0, 5.0)}, {}]
+
+        matrix, lower, upper = dynamic.departure_bound_constraints(
+            system, bounds)
+
+        assert matrix.toarray().tolist() == [[1.0]]
+        _assert_identical((matrix, lower, upper),
+                          _frozen_departure_bound_constraints(system, bounds))
+
+    def test_a_repeated_sensor_visit_does_not_change_the_incidence(self):
+        once = [_route('once', 0.0, ('a', 's'), (0.0, 10.0))]
+        twice = [_route('twice', 0.0, ('a', 's', 's'), (0.0, 10.0, 20.0))]
+        bounds = [{'s': (0.0, 5.0)}, {}]
+
+        single = dynamic.departure_bound_constraints(
+            dynamic.build_passage_system(once, ['s'], 2), bounds)
+        repeated = dynamic.departure_bound_constraints(
+            dynamic.build_passage_system(twice, ['s'], 2), bounds)
+
+        assert single[0].toarray().tolist() == repeated[0].toarray().tolist()
+
+    def test_edges_without_a_bound_contribute_no_row(self):
+        routes = [_route('mixed', 0.0, ('a', 'unmeasured', 's'),
+                         (0.0, 10.0, 20.0))]
+        system = dynamic.build_passage_system(routes, ['s'], 2)
+        bounds = [{'a': (0.0, 5.0)}, {}]
+
+        matrix, lower, upper = dynamic.departure_bound_constraints(
+            system, bounds)
+
+        assert matrix.shape == (1, 1)
+        assert matrix.toarray().tolist() == [[1.0]]
+        _assert_identical((matrix, lower, upper),
+                          _frozen_departure_bound_constraints(system, bounds))
+
+    def test_absent_bounds_return_the_frozen_empty_shape(self):
+        routes = [_route('o', 0.0, ('a', 's'), (0.0, 10.0))]
+        system = dynamic.build_passage_system(routes, ['s'], 2)
+
+        _assert_identical(dynamic.departure_bound_constraints(system, None),
+                          _frozen_departure_bound_constraints(system, None))
+
+    def test_empty_bound_rows_produce_no_rows_at_all(self):
+        routes = [_route('o', 0.0, ('a', 's'), (0.0, 10.0))]
+        system = dynamic.build_passage_system(routes, ['s'], 2)
+        bounds = [{}, {}]
+
+        matrix, lower, upper = dynamic.departure_bound_constraints(
+            system, bounds)
+
+        assert matrix.shape == (0, 1)
+        assert lower.tolist() == [] and upper.tolist() == []
+        _assert_identical((matrix, lower, upper),
+                          _frozen_departure_bound_constraints(system, bounds))
+
+    def test_a_zero_bound_is_kept_as_a_zero_row(self):
+        routes = [_route('o', 0.0, ('a', 's'), (0.0, 10.0))]
+        system = dynamic.build_passage_system(routes, ['s'], 2)
+        bounds = [{'a': (0.0, 0.0)}, {}]
+
+        matrix, lower, upper = dynamic.departure_bound_constraints(
+            system, bounds)
+
+        assert lower.tolist() == [0] and upper.tolist() == [0]
+        assert matrix.toarray().tolist() == [[1.0]]
+        _assert_identical((matrix, lower, upper),
+                          _frozen_departure_bound_constraints(system, bounds))
+
+    def test_a_negative_departure_takes_no_bound_row(self):
+        routes = [_route('warmup', -900.0, ('a', 's'), (0.0, 10.0)),
+                  _route('inside', 0.0, ('a', 's'), (0.0, 10.0))]
+        system = dynamic.build_passage_system(routes, ['s'], 2)
+        bounds = [{'a': (0.0, 5.0)}, {}]
+
+        matrix, lower, upper = dynamic.departure_bound_constraints(
+            system, bounds)
+
+        assert matrix.toarray().tolist() == [[0.0, 1.0]]
+        _assert_identical((matrix, lower, upper),
+                          _frozen_departure_bound_constraints(system, bounds))
+
+    def test_a_departure_beyond_the_window_takes_no_bound_row(self):
+        routes = [_route('inside', 0.0, ('a', 's'), (0.0, 10.0)),
+                  _route('beyond', 9000.0, ('a', 's'), (0.0, 10.0))]
+        system = dynamic.build_passage_system(routes, ['s'], 2)
+        bounds = [{'a': (0.0, 5.0)}, {}]
+
+        matrix, lower, upper = dynamic.departure_bound_constraints(
+            system, bounds)
+
+        assert matrix.toarray().tolist() == [[1.0, 0.0]]
+        _assert_identical((matrix, lower, upper),
+                          _frozen_departure_bound_constraints(system, bounds))
+
+    def test_an_invalid_bound_is_still_refused(self):
+        routes = [_route('o', 0.0, ('a', 's'), (0.0, 10.0))]
+        system = dynamic.build_passage_system(routes, ['s'], 2)
+
+        with pytest.raises(ValueError, match='invalid production bound'):
+            dynamic.departure_bound_constraints(
+                system, [{'a': (5.0, 1.0)}, {}])
+
+    def test_bounds_that_miss_an_interval_are_still_refused(self):
+        routes = [_route('o', 0.0, ('a', 's'), (0.0, 10.0))]
+        system = dynamic.build_passage_system(routes, ['s'], 2)
+
+        with pytest.raises(ValueError, match='cover every interval'):
+            dynamic.departure_bound_constraints(system, [{'a': (0.0, 1.0)}])
+
+    @pytest.mark.parametrize('seed', range(12))
+    def test_random_small_systems_match_the_frozen_result_exactly(self, seed):
+        rng = _random.Random(seed)
+        system = _random_system(rng)
+        bounds = _random_bounds(rng, system)
+
+        _assert_identical(dynamic.departure_bound_constraints(system, bounds),
+                          _frozen_departure_bound_constraints(system, bounds))
