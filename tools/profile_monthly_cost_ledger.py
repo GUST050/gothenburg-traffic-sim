@@ -204,8 +204,10 @@ def _observe_resolver_activity(collector: io_phases.PhaseCollector):
 
     Route-catalog identity binds ``disruption.py`` byte for byte. Keeping this
     diagnostic wrapper here avoids changing production routing or adding a
-    per-vehicle observer lookup when no profile is running. The lock makes the
-    temporary class patch process-safe; the CLI runs in its own process.
+    per-vehicle observer lookup when no profile is running. The lock serializes
+    profiler installations, but the class patch remains process-global while
+    installed. Isolation therefore comes from running this CLI in its own
+    process; library callers must not overlap it with production resolver work.
     """
     from traffic_sim.simulation import disruption
 
@@ -213,17 +215,26 @@ def _observe_resolver_activity(collector: io_phases.PhaseCollector):
     with _RESOLVER_PATCH_LOCK:
         original_init = cls.__init__
         original_resolve = cls.resolve
+        measurement_phase = "resolver_observer_measurement"
 
         @wraps(original_init)
         def measured_init(instance, *args, **kwargs):
             result = original_init(instance, *args, **kwargs)
+            started = time.perf_counter()
             collector.count("closure_resolver_instances")
+            io_phases.mark_measurement_only(measurement_phase)
+            io_phases.record_derived(
+                measurement_phase, time.perf_counter() - started)
             return result
 
         @wraps(original_resolve)
         def measured_resolve(instance, edges, *args, **kwargs):
+            started = time.perf_counter()
             collector.count("closure_resolve_calls")
             collector.count_unique("closure_route_edges", tuple(edges))
+            io_phases.mark_measurement_only(measurement_phase)
+            io_phases.record_derived(
+                measurement_phase, time.perf_counter() - started)
             return original_resolve(instance, edges, *args, **kwargs)
 
         cls.__init__ = measured_init

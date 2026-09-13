@@ -74,14 +74,19 @@ def test_resolver_measurement_is_scoped_and_restores_production_methods():
     adjacency = {"a": ("b",), "b": ()}
 
     with profile._observe_resolver_activity(collector):
-        resolver = disruption.ClosureRouteResolver(
-            adjacency, {"a": 1.0, "b": 1.0}, None, frozenset({"b"}))
-        resolver.resolve(("a", "b"), 0.0, None, None)
+        with io_phases.observe(collector):
+            resolver = disruption.ClosureRouteResolver(
+                adjacency, {"a": 1.0, "b": 1.0}, None, frozenset({"b"}))
+            resolver.resolve(("a", "b"), 0.0, None, None)
 
     report = collector.report()
     assert report["counters"]["closure_resolver_instances"] == 1
     assert report["counters"]["closure_resolve_calls"] == 1
     assert report["unique_counts"]["closure_route_edges"] == 1
+    assert "resolver_observer_measurement" in report["measurement_only_phases"]
+    observer = report["phases"]["resolver_observer_measurement"]
+    assert observer["calls"] == 2  # resolver construction + one resolution
+    assert observer["inclusive_s"] > 0.0
     assert disruption.ClosureRouteResolver.__init__ is original_init
     assert disruption.ClosureRouteResolver.resolve is original_resolve
 

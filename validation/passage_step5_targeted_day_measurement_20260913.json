@@ -1,0 +1,1048 @@
+{
+  "archive_validation": [
+    {
+      "archive_content_key": "c2e709b81a5aa34326f54834fdde50ad8a98f17ef9941a2c789befdec743980b",
+      "measurement": {
+        "counters": {
+          "archive_json_read": 3,
+          "archive_sha256": 10,
+          "archive_validate": 1,
+          "archive_validated_path_events": 1
+        },
+        "digests": {},
+        "measurement_only_phases": [],
+        "phases": {
+          "archive_json_read": {
+            "bytes": {
+              "read": 5699894
+            },
+            "calls": 3,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.154169,
+            "inclusive_s": 0.154169,
+            "inside_concurrent": false,
+            "parent": null,
+            "wall_contribution_s": 0.154169
+          },
+          "archive_sha256": {
+            "bytes": {
+              "hashed": 47628420
+            },
+            "calls": 10,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.039379,
+            "inclusive_s": 0.039379,
+            "inside_concurrent": false,
+            "parent": null,
+            "wall_contribution_s": 0.039379
+          }
+        },
+        "ranking": [
+          {
+            "basis": "exclusive",
+            "phase": "archive_json_read",
+            "share_percent": 79.65,
+            "wall_s": 0.154169
+          },
+          {
+            "basis": "exclusive",
+            "phase": "archive_sha256",
+            "share_percent": 20.35,
+            "wall_s": 0.039379
+          }
+        ],
+        "schema_version": 1,
+        "unique_counts": {
+          "archive_validated_path": 1
+        },
+        "unmeasured_categories": []
+      },
+      "repeat": 1,
+      "wall_s": 0.644459
+    },
+    {
+      "archive_content_key": "c2e709b81a5aa34326f54834fdde50ad8a98f17ef9941a2c789befdec743980b",
+      "measurement": {
+        "counters": {
+          "archive_json_read": 3,
+          "archive_sha256": 10,
+          "archive_validate": 1,
+          "archive_validated_path_events": 1
+        },
+        "digests": {},
+        "measurement_only_phases": [],
+        "phases": {
+          "archive_json_read": {
+            "bytes": {
+              "read": 5699894
+            },
+            "calls": 3,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.12259,
+            "inclusive_s": 0.12259,
+            "inside_concurrent": false,
+            "parent": null,
+            "wall_contribution_s": 0.12259
+          },
+          "archive_sha256": {
+            "bytes": {
+              "hashed": 47628420
+            },
+            "calls": 10,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.039217,
+            "inclusive_s": 0.039217,
+            "inside_concurrent": false,
+            "parent": null,
+            "wall_contribution_s": 0.039217
+          }
+        },
+        "ranking": [
+          {
+            "basis": "exclusive",
+            "phase": "archive_json_read",
+            "share_percent": 75.76,
+            "wall_s": 0.12259
+          },
+          {
+            "basis": "exclusive",
+            "phase": "archive_sha256",
+            "share_percent": 24.24,
+            "wall_s": 0.039217
+          }
+        ],
+        "schema_version": 1,
+        "unique_counts": {
+          "archive_validated_path": 1
+        },
+        "unmeasured_categories": []
+      },
+      "repeat": 2,
+      "wall_s": 0.183573
+    },
+    {
+      "archive_content_key": "c2e709b81a5aa34326f54834fdde50ad8a98f17ef9941a2c789befdec743980b",
+      "measurement": {
+        "counters": {
+          "archive_json_read": 3,
+          "archive_sha256": 10,
+          "archive_validate": 1,
+          "archive_validated_path_events": 1
+        },
+        "digests": {},
+        "measurement_only_phases": [],
+        "phases": {
+          "archive_json_read": {
+            "bytes": {
+              "read": 5699894
+            },
+            "calls": 3,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.122682,
+            "inclusive_s": 0.122682,
+            "inside_concurrent": false,
+            "parent": null,
+            "wall_contribution_s": 0.122682
+          },
+          "archive_sha256": {
+            "bytes": {
+              "hashed": 47628420
+            },
+            "calls": 10,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.039387,
+            "inclusive_s": 0.039387,
+            "inside_concurrent": false,
+            "parent": null,
+            "wall_contribution_s": 0.039387
+          }
+        },
+        "ranking": [
+          {
+            "basis": "exclusive",
+            "phase": "archive_json_read",
+            "share_percent": 75.7,
+            "wall_s": 0.122682
+          },
+          {
+            "basis": "exclusive",
+            "phase": "archive_sha256",
+            "share_percent": 24.3,
+            "wall_s": 0.039387
+          }
+        ],
+        "schema_version": 1,
+        "unique_counts": {
+          "archive_validated_path": 1
+        },
+        "unmeasured_categories": []
+      },
+      "repeat": 3,
+      "wall_s": 0.183331
+    }
+  ],
+  "assembly": {
+    "q10": {
+      "identity": {
+        "calibrated_v1.agents.json": {
+          "archive": "ea44d392eb4137387158c9f4251f4c7db380e36c0991933c7fd2feed9bcc71a5",
+          "equal": true,
+          "measured": "ea44d392eb4137387158c9f4251f4c7db380e36c0991933c7fd2feed9bcc71a5"
+        },
+        "calibrated_v1.rou.xml": {
+          "archive": "010ccd00ec1a11df8431fa4e62b269b2613e5c3b418a8c3cb140fbd885a664bc",
+          "equal": true,
+          "measured": "010ccd00ec1a11df8431fa4e62b269b2613e5c3b418a8c3cb140fbd885a664bc"
+        }
+      },
+      "measurement": {
+        "counters": {
+          "assemble_agents": 9374,
+          "assemble_days": 1,
+          "assemble_route_rows": 9374
+        },
+        "digests": {
+          "assembled_agents_sha256": "ea44d392eb4137387158c9f4251f4c7db380e36c0991933c7fd2feed9bcc71a5",
+          "assembled_routes_sha256": "010ccd00ec1a11df8431fa4e62b269b2613e5c3b418a8c3cb140fbd885a664bc"
+        },
+        "measurement_only_phases": [
+          "assemble_output_digest"
+        ],
+        "phases": {
+          "assemble_agents_json": {
+            "bytes": {
+              "read": 345252
+            },
+            "calls": 1,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.030824,
+            "inclusive_s": 0.030824,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.030824
+          },
+          "assemble_agents_publish": {
+            "bytes": {
+              "written": 3989207
+            },
+            "calls": 1,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.128925,
+            "inclusive_s": 0.128925,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.128925
+          },
+          "assemble_output_digest": {
+            "bytes": {},
+            "calls": 1,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.011781,
+            "inclusive_s": 0.011781,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.011781
+          },
+          "assemble_route_publish": {
+            "bytes": {
+              "written": 9207138
+            },
+            "calls": 1,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.000203,
+            "inclusive_s": 0.000203,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.000203
+          },
+          "assemble_route_read": {
+            "bytes": {
+              "read": 9244634
+            },
+            "calls": 9377,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.040054,
+            "inclusive_s": 0.040054,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.040054
+          },
+          "assemble_route_transform": {
+            "bytes": {},
+            "calls": 9376,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.048881,
+            "inclusive_s": 0.048881,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.048881
+          },
+          "assemble_window": {
+            "bytes": {},
+            "calls": 1,
+            "children_max_s": 0.128925,
+            "children_sum_s": 0.260667,
+            "concurrent": false,
+            "exclusive_s": 0.092796,
+            "inclusive_s": 0.353463,
+            "inside_concurrent": false,
+            "parent": null,
+            "wall_contribution_s": 0.092796
+          }
+        },
+        "ranking": [
+          {
+            "basis": "exclusive",
+            "phase": "assemble_agents_publish",
+            "share_percent": 36.47,
+            "wall_s": 0.128925
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_window",
+            "share_percent": 26.25,
+            "wall_s": 0.092796
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_route_transform",
+            "share_percent": 13.83,
+            "wall_s": 0.048881
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_route_read",
+            "share_percent": 11.33,
+            "wall_s": 0.040054
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_agents_json",
+            "share_percent": 8.72,
+            "wall_s": 0.030824
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_output_digest",
+            "share_percent": 3.33,
+            "wall_s": 0.011781
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_route_publish",
+            "share_percent": 0.06,
+            "wall_s": 0.000203
+          }
+        ],
+        "residual_s": 0.092796,
+        "root": "assemble_window",
+        "schema_version": 1,
+        "unique_counts": {},
+        "unmeasured_categories": []
+      },
+      "result": {
+        "days": 1,
+        "vehicles": 9374
+      },
+      "wall_s": 0.35351
+    },
+    "q50": {
+      "identity": {
+        "calibrated.agents.json": {
+          "archive": "c0cf19227ff10309ca31c8a5f49914ed81e83b15985c35546ac35e66ddd9c9f9",
+          "equal": true,
+          "measured": "c0cf19227ff10309ca31c8a5f49914ed81e83b15985c35546ac35e66ddd9c9f9"
+        },
+        "calibrated.rou.xml": {
+          "archive": "1ee81b5076806c101297a0074d9d8278b247d79389d1e136a8dcf789751239be",
+          "equal": true,
+          "measured": "1ee81b5076806c101297a0074d9d8278b247d79389d1e136a8dcf789751239be"
+        }
+      },
+      "measurement": {
+        "counters": {
+          "assemble_agents": 9675,
+          "assemble_days": 1,
+          "assemble_route_rows": 9675
+        },
+        "digests": {
+          "assembled_agents_sha256": "c0cf19227ff10309ca31c8a5f49914ed81e83b15985c35546ac35e66ddd9c9f9",
+          "assembled_routes_sha256": "1ee81b5076806c101297a0074d9d8278b247d79389d1e136a8dcf789751239be"
+        },
+        "measurement_only_phases": [
+          "assemble_output_digest"
+        ],
+        "phases": {
+          "assemble_agents_json": {
+            "bytes": {
+              "read": 373171
+            },
+            "calls": 1,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.032603,
+            "inclusive_s": 0.032603,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.032603
+          },
+          "assemble_agents_publish": {
+            "bytes": {
+              "written": 4201279
+            },
+            "calls": 1,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.135014,
+            "inclusive_s": 0.135014,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.135014
+          },
+          "assemble_output_digest": {
+            "bytes": {},
+            "calls": 1,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.011618,
+            "inclusive_s": 0.011618,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.011618
+          },
+          "assemble_route_publish": {
+            "bytes": {
+              "written": 9446736
+            },
+            "calls": 1,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.000296,
+            "inclusive_s": 0.000296,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.000296
+          },
+          "assemble_route_read": {
+            "bytes": {
+              "read": 9485436
+            },
+            "calls": 9678,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.041358,
+            "inclusive_s": 0.041358,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.041358
+          },
+          "assemble_route_transform": {
+            "bytes": {},
+            "calls": 9677,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.049972,
+            "inclusive_s": 0.049972,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.049972
+          },
+          "assemble_window": {
+            "bytes": {},
+            "calls": 1,
+            "children_max_s": 0.135014,
+            "children_sum_s": 0.270861,
+            "concurrent": false,
+            "exclusive_s": 0.12347,
+            "inclusive_s": 0.394331,
+            "inside_concurrent": false,
+            "parent": null,
+            "wall_contribution_s": 0.12347
+          }
+        },
+        "ranking": [
+          {
+            "basis": "exclusive",
+            "phase": "assemble_agents_publish",
+            "share_percent": 34.24,
+            "wall_s": 0.135014
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_window",
+            "share_percent": 31.31,
+            "wall_s": 0.12347
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_route_transform",
+            "share_percent": 12.67,
+            "wall_s": 0.049972
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_route_read",
+            "share_percent": 10.49,
+            "wall_s": 0.041358
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_agents_json",
+            "share_percent": 8.27,
+            "wall_s": 0.032603
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_output_digest",
+            "share_percent": 2.95,
+            "wall_s": 0.011618
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_route_publish",
+            "share_percent": 0.08,
+            "wall_s": 0.000296
+          }
+        ],
+        "residual_s": 0.12347,
+        "root": "assemble_window",
+        "schema_version": 1,
+        "unique_counts": {},
+        "unmeasured_categories": []
+      },
+      "result": {
+        "days": 1,
+        "vehicles": 9675
+      },
+      "wall_s": 0.39438
+    },
+    "q90": {
+      "identity": {
+        "calibrated_v2.agents.json": {
+          "archive": "af85be75d09b4b3ccb34fd91a751ec9211f798af5629368381a9df8b74366c78",
+          "equal": true,
+          "measured": "af85be75d09b4b3ccb34fd91a751ec9211f798af5629368381a9df8b74366c78"
+        },
+        "calibrated_v2.rou.xml": {
+          "archive": "dcc37fa2d8e656f305d764b93f19d9370a7289905a6f91957fed512c3ed08147",
+          "equal": true,
+          "measured": "dcc37fa2d8e656f305d764b93f19d9370a7289905a6f91957fed512c3ed08147"
+        }
+      },
+      "measurement": {
+        "counters": {
+          "assemble_agents": 9217,
+          "assemble_days": 1,
+          "assemble_route_rows": 9217
+        },
+        "digests": {
+          "assembled_agents_sha256": "af85be75d09b4b3ccb34fd91a751ec9211f798af5629368381a9df8b74366c78",
+          "assembled_routes_sha256": "dcc37fa2d8e656f305d764b93f19d9370a7289905a6f91957fed512c3ed08147"
+        },
+        "measurement_only_phases": [
+          "assemble_output_digest"
+        ],
+        "phases": {
+          "assemble_agents_json": {
+            "bytes": {
+              "read": 331211
+            },
+            "calls": 1,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.030673,
+            "inclusive_s": 0.030673,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.030673
+          },
+          "assemble_agents_publish": {
+            "bytes": {
+              "written": 3910346
+            },
+            "calls": 1,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.128919,
+            "inclusive_s": 0.128919,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.128919
+          },
+          "assemble_output_digest": {
+            "bytes": {},
+            "calls": 1,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.011742,
+            "inclusive_s": 0.011742,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.011742
+          },
+          "assemble_route_publish": {
+            "bytes": {
+              "written": 9323281
+            },
+            "calls": 1,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.000231,
+            "inclusive_s": 0.000231,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.000231
+          },
+          "assemble_route_read": {
+            "bytes": {
+              "read": 9360149
+            },
+            "calls": 9220,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.040738,
+            "inclusive_s": 0.040738,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.040738
+          },
+          "assemble_route_transform": {
+            "bytes": {},
+            "calls": 9219,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 0.049467,
+            "inclusive_s": 0.049467,
+            "inside_concurrent": false,
+            "parent": "assemble_window",
+            "wall_contribution_s": 0.049467
+          },
+          "assemble_window": {
+            "bytes": {},
+            "calls": 1,
+            "children_max_s": 0.128919,
+            "children_sum_s": 0.261771,
+            "concurrent": false,
+            "exclusive_s": 0.092817,
+            "inclusive_s": 0.354588,
+            "inside_concurrent": false,
+            "parent": null,
+            "wall_contribution_s": 0.092817
+          }
+        },
+        "ranking": [
+          {
+            "basis": "exclusive",
+            "phase": "assemble_agents_publish",
+            "share_percent": 36.36,
+            "wall_s": 0.128919
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_window",
+            "share_percent": 26.18,
+            "wall_s": 0.092817
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_route_transform",
+            "share_percent": 13.95,
+            "wall_s": 0.049467
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_route_read",
+            "share_percent": 11.49,
+            "wall_s": 0.040738
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_agents_json",
+            "share_percent": 8.65,
+            "wall_s": 0.030673
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_output_digest",
+            "share_percent": 3.31,
+            "wall_s": 0.011742
+          },
+          {
+            "basis": "exclusive",
+            "phase": "assemble_route_publish",
+            "share_percent": 0.07,
+            "wall_s": 0.000231
+          }
+        ],
+        "residual_s": 0.092817,
+        "root": "assemble_window",
+        "schema_version": 1,
+        "unique_counts": {},
+        "unmeasured_categories": []
+      },
+      "result": {
+        "days": 1,
+        "vehicles": 9217
+      },
+      "wall_s": 0.35463
+    }
+  },
+  "build": {
+    "build_id": "226eb3a85efa0c19e3d8",
+    "catalog": {
+      "cache_event": "hit",
+      "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+      "fallback": null,
+      "pool_key": "weekend"
+    },
+    "command_contract": {
+      "begin": "00:00",
+      "candidate_source": "catalog",
+      "candidate_source_implicit": false,
+      "date": "2027-06-25",
+      "direction_stress_variants": true,
+      "end": "24:00",
+      "pfe_workers": 10,
+      "source": "forecast"
+    },
+    "timings_s": {
+      "assignment_priors": 0.271,
+      "candidate_generation": 0.443,
+      "catalog_adapter": 0.001,
+      "catalog_restore_or_build": 0.437,
+      "dynamic_passage": 48.437,
+      "observability": 0.108,
+      "passage_evidence_retention": 2.0587391250000024,
+      "pfe_variants_and_rounding": 66.064,
+      "structural_bounds_priors": 0.045
+    },
+    "validation": {
+      "overall": "warn",
+      "release_qualified": false,
+      "section_status": {
+        "counts_fit": "pass",
+        "held_out": "info",
+        "multi_day": "pass",
+        "purposes": "warn",
+        "sensor_output": "pass",
+        "sensor_output_exact": "pass",
+        "simulation": "pass",
+        "structure": "warn",
+        "temporal_holdout": "missing"
+      },
+      "structure_trip_length_l1": 0.1871,
+      "structure_trip_length_l1_maximum": 0.2
+    },
+    "vehicles": {
+      "q10": 9374,
+      "q50": 9675,
+      "q90": 9217,
+      "total": 28266
+    }
+  },
+  "catalog_preflight": {
+    "pools": {
+      "weekday": {
+        "adopted_key": "8548c8191269d61bce2f9bbe85e7785d",
+        "current_key": "8548c8191269d61bce2f9bbe85e7785d",
+        "drift": [],
+        "serves_current_inputs": true
+      },
+      "weekend": {
+        "adopted_key": "77e237f04c746a4fb1fac7e790fff419",
+        "current_key": "77e237f04c746a4fb1fac7e790fff419",
+        "drift": [],
+        "serves_current_inputs": true
+      }
+    },
+    "stale_pools": [],
+    "status": "serves_current_inputs"
+  },
+  "claims": {
+    "optimization_selected": false,
+    "sumo_started": false,
+    "whole_month_extrapolation": null
+  },
+  "content_key": "f225db88b0793a3336e6fe8d927a933c0ac8e4f7f8cd15dc87465ae5f44b4a4b",
+  "costing": {
+    "measurement": {
+      "counters": {
+        "closure_resolve_calls": 28266,
+        "closure_resolver_instances": 3,
+        "closure_route_edges_events": 28266,
+        "costing_provider_identity_events": 1
+      },
+      "digests": {},
+      "measurement_only_phases": [],
+      "phases": {
+        "cost_route_vehicle_grouping": {
+          "bytes": {},
+          "calls": 3,
+          "children_max_s": 0.0,
+          "children_sum_s": 0.0,
+          "concurrent": false,
+          "exclusive_s": 0.819684,
+          "inclusive_s": 0.819684,
+          "inside_concurrent": false,
+          "parent": null,
+          "wall_contribution_s": 0.819684
+        },
+        "cost_shortest_path_detour": {
+          "bytes": {},
+          "calls": 3,
+          "children_max_s": 0.0,
+          "children_sum_s": 0.0,
+          "concurrent": false,
+          "exclusive_s": 0.562067,
+          "inclusive_s": 0.562067,
+          "inside_concurrent": false,
+          "parent": null,
+          "wall_contribution_s": 0.562067
+        },
+        "cost_window_aggregation": {
+          "bytes": {},
+          "calls": 3,
+          "children_max_s": 0.0,
+          "children_sum_s": 0.0,
+          "concurrent": false,
+          "exclusive_s": 0.561942,
+          "inclusive_s": 0.561942,
+          "inside_concurrent": false,
+          "parent": null,
+          "wall_contribution_s": 0.561942
+        },
+        "cost_xml_parse": {
+          "bytes": {},
+          "calls": 3,
+          "children_max_s": 0.0,
+          "children_sum_s": 0.0,
+          "concurrent": false,
+          "exclusive_s": 0.323357,
+          "inclusive_s": 0.323357,
+          "inside_concurrent": false,
+          "parent": null,
+          "wall_contribution_s": 0.323357
+        }
+      },
+      "ranking": [
+        {
+          "basis": "exclusive",
+          "phase": "cost_route_vehicle_grouping",
+          "share_percent": 36.16,
+          "wall_s": 0.819684
+        },
+        {
+          "basis": "exclusive",
+          "phase": "cost_shortest_path_detour",
+          "share_percent": 24.79,
+          "wall_s": 0.562067
+        },
+        {
+          "basis": "exclusive",
+          "phase": "cost_window_aggregation",
+          "share_percent": 24.79,
+          "wall_s": 0.561942
+        },
+        {
+          "basis": "exclusive",
+          "phase": "cost_xml_parse",
+          "share_percent": 14.26,
+          "wall_s": 0.323357
+        }
+      ],
+      "schema_version": 1,
+      "unique_counts": {
+        "closure_route_edges": 315,
+        "costing_provider_identity": 1
+      },
+      "unmeasured_categories": []
+    },
+    "provider_timings": {
+      "route_vehicle_grouping": 0.8196841670000001,
+      "shortest_path_detour": 0.5620671649999993,
+      "window_aggregation": 0.5619415009999997,
+      "xml_parse": 0.3233569989999996
+    },
+    "records": [
+      {
+        "added_metres_median": 194.4,
+        "added_metres_total": 240090.3,
+        "added_seconds_median": 14.0,
+        "added_vehicle_hours": 4.9857,
+        "assumed_congestion_delay_s": 3600.0,
+        "basis": "calibrated baseline routes; cheapest legal path with vs without the closure, free-flow cost",
+        "capacity_model": null,
+        "congestion_model": null,
+        "demand_variant": "q10",
+        "destination_relocation_metres_max": 0.0,
+        "destination_relocation_metres_total": 0,
+        "lane_count_used": false,
+        "vehicles_affected": 1029,
+        "vehicles_considered": 9374,
+        "vehicles_denied_departure": 0,
+        "vehicles_destination_relocated": 0,
+        "vehicles_no_detour": 0,
+        "vehicles_severed_destination": 0
+      },
+      {
+        "added_metres_median": 347.0,
+        "added_metres_total": 348733.6,
+        "added_seconds_median": 25.0,
+        "added_vehicle_hours": 7.1292,
+        "assumed_congestion_delay_s": 3600.0,
+        "basis": "calibrated baseline routes; cheapest legal path with vs without the closure, free-flow cost",
+        "capacity_model": null,
+        "congestion_model": null,
+        "demand_variant": "q50",
+        "destination_relocation_metres_max": 0.0,
+        "destination_relocation_metres_total": 0,
+        "lane_count_used": false,
+        "vehicles_affected": 1285,
+        "vehicles_considered": 9675,
+        "vehicles_denied_departure": 0,
+        "vehicles_destination_relocated": 0,
+        "vehicles_no_detour": 0,
+        "vehicles_severed_destination": 0
+      },
+      {
+        "added_metres_median": 194.4,
+        "added_metres_total": 306179.7,
+        "added_seconds_median": 14.0,
+        "added_vehicle_hours": 6.3127,
+        "assumed_congestion_delay_s": 3600.0,
+        "basis": "calibrated baseline routes; cheapest legal path with vs without the closure, free-flow cost",
+        "capacity_model": null,
+        "congestion_model": null,
+        "demand_variant": "q90",
+        "destination_relocation_metres_max": 0.0,
+        "destination_relocation_metres_total": 0,
+        "lane_count_used": false,
+        "vehicles_affected": 1339,
+        "vehicles_considered": 9217,
+        "vehicles_denied_departure": 0,
+        "vehicles_destination_relocated": 0,
+        "vehicles_no_detour": 0,
+        "vehicles_severed_destination": 0
+      }
+    ],
+    "result_sha256": "04a1b833c6ab724cb4c8bbff503e26a0a9e3b71b8469db6ac5587c71a0d12c2c",
+    "schedule_id": "closure-41761b0f3b9a03a5c758",
+    "wall_s": 3.810544
+  },
+  "decision": {
+    "existing_robust_path": "ParsedWindowCostIndex plus content-bound WindowCostIndex",
+    "full_month_gate": {
+      "daily_units": 1950,
+      "parent_candidates": 1690,
+      "requires_current_source_qualified_manifest": true,
+      "requires_exact_oracle_equivalence": true,
+      "requires_positive_end_to_end_benefit": true,
+      "requires_zero_sumo_launches": true,
+      "variant_records": 5850
+    },
+    "optimization_selected": false,
+    "reason": "one schedule cannot justify a full-month optimization or projection; ClosureRouteResolver already memoizes per-route offsets and path costs",
+    "step_5": "targeted_production_measured_full_month_unmeasured",
+    "step_6_started": false
+  },
+  "full_month_preflight": {
+    "builds_started": false,
+    "current_matching_archives": 0,
+    "daily_unit_derivation": "30 calendar dates x 65 quarter-hour start times",
+    "daily_units": 1950,
+    "demand_builds_required": 30,
+    "demand_spec_days": 3,
+    "demand_start_date_end": "2027-09-29",
+    "demand_start_date_start": "2027-08-31",
+    "manifest_created": false,
+    "parent_candidate_derivation": "26 legal five-day starts x 65 quarter-hour start times",
+    "parent_candidates": 1690,
+    "reason": "qualified manifest producer would build all 30 missing current-source archives",
+    "search_spec": "/private/tmp/gs-step3-departure-bounds/validation/subhour_monthly_search_profile_spec_v1.json",
+    "search_spec_sha256": "10f3939a69b6f0bb6e74eb2b1e08a2b513cf54fa5610dd4a25d4d8366c1261aa",
+    "targeted_archive_present_in_measurement_worktree": true,
+    "targeted_day_library_present_in_measurement_worktree": true,
+    "variant_record_derivation": "1950 daily units x 3 demand variants",
+    "variant_records": 5850
+  },
+  "git_commit": "1309cf6eb8afe8421bdc420c8b961de2bc171c0e",
+  "kind": "passage_step5_targeted_day_measurement",
+  "release_evidence": false,
+  "review": {
+    "1eedc04": "documentation_conclusion_superseded",
+    "40f3cca": "catalog_blocker_superseded",
+    "correction": "the isolated branch lacked existing content-equivalence renewal and complete ignored inputs; current sources serve both adopted pools",
+    "correction_commit": "1309cf6eb8afe8421bdc420c8b961de2bc171c0e",
+    "d221797": "accepted_with_977712a_measurement_accounting_fix"
+  },
+  "review_measurement": {
+    "basis": "independent same-machine review after the targeted run",
+    "future_report_phase": "resolver_observer_measurement",
+    "future_report_phase_kind": "measurement_only",
+    "isolation": "temporary class patch is supported only in the profiler CLI's own process; its lock serializes profilers but not unrelated production calls",
+    "original_measurement_only_phases_empty_is_historical": true,
+    "resolver_observer_overhead_s": 0.0373,
+    "share_of_original_costing_wall_percent": 1.0
+  },
+  "schema_version": 1,
+  "scope": {
+    "archive": "/private/tmp/gs-step3-departure-bounds/runs/demand-20260913-194636-17755050-918f",
+    "archive_manifest_sha256": "cecc4fe68b9d9a7e8799ad73efc09194fb526c10a7b0ae09f2d9a3fe23f8f62d",
+    "closure_spec": "/private/tmp/gs-step3-departure-bounds/validation/step5_targeted_day_closure_spec_20260913.json",
+    "closure_spec_sha256": "ce2c6ecdfd7770575599a30f669fbaf830e0fbd6216a4e515a11d4260af00f97",
+    "date": "2027-06-25",
+    "day_entry": "/private/tmp/gs-step3-departure-bounds/runs/step5-day-library-20260913/2027-06-25/374fc9b2ffd007068b8e22f5a2acbf30",
+    "day_manifest_sha256": "0d70501937870491d6b39573b9bc158c859e3fe36961eb4077f9f9579ff2edc3",
+    "variants": [
+      "q10",
+      "q50",
+      "q90"
+    ]
+  },
+  "status": "PASS",
+  "verification": {
+    "catalog_preflight_rechecked_after_build": true,
+    "focused_tests": {
+      "failed": 0,
+      "passed": 637,
+      "wall_s": 30.04
+    },
+    "git_diff_check": "PASS"
+  }
+}

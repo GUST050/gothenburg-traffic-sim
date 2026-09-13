@@ -779,10 +779,11 @@ till ~21,8 s — den är diagnostik och får inte multipliceras till en
 månadssiffra. Åtta eller fler arbetare är inte mätta. Gzipnivå, mtime,
 verifiering, tempfil/publicering och städsemantik är orörda.
 
-**Steg 4 är därmed stängt.** `_tracked_main` är instrumenterad men dess
-produktionstid är uppskjuten till nästa redan motiverade demand-canary; ingen
-separat dyr körning startas för den timern. Processcachen för
-`source_trace_xml` implementeras inte.
+**Steg 4 är därmed stängt.** `_tracked_main`-instrumenteringen drogs senare
+tillbaka med avsikt i `1309cf6`: `build_sumo_demand.py` är katalogbundet byte
+för byte, och mätningen hade ingen profileringscollector som kunde motivera
+identitetsdriften. Den mätgruppen är pensionerad, inte levererad eller uppskjuten.
+Processcachen för `source_trace_xml` implementeras inte.
 
 Eftergranskning av profileraren hittade en isoleringslucka: dess experimentella
 worker-tak ändrade tillfälligt den processglobala produktionskonstanten. Det
@@ -897,6 +898,91 @@ arkiv matchar fortfarande noll den aktuella källidentiteten. Alla
 produktionstider är därför `null` och ingen optimering väljs från
 fixturvärdena. Steg 5:s nästa mätning sker först när den planerade riktade
 värmningen ger ett current-source-kvalificerat arkiv. Steg 6 har inte startat.
+
+#### Steg 5 riktad produktionsmätning — tidigare blockerare korrigerad, 2026-09-13
+
+**Status: TARGETED PRODUCTION MEASURED, FULL MONTH UNMEASURED.**
+
+Den oberoende granskningen accepterar `d221797` först tillsammans med
+`977712a`: före reparationen låg de mätberoende output-digesternas arbete
+utanför redovisningsroten och 45,8 % av den observerade
+`assemble_window`-körningen saknades i fasbokslutet. `1eedc04` och `40f3cca`
+är däremot överspelade i sin slutsats att en ny katalogkvalificering krävdes.
+Den isolerade grenen saknade både huvudträdets befintliga, byteidentiska
+katalogförnyelse och kompletta ignorerade indata. Efter att samma
+innehållsbundna förnyelse och samtliga indata återställts rapporterade både
+vardags- och helgkatalogen noll drift. Ingen grind försvagades.
+
+En riktad byggning av 2027-06-25 kördes med explicit katalogkälla och
+riktningsvarianter. Helgpoolen gav `cache_event: hit`,
+`catalog_fallback: null` och ingen ny kandidatpool byggdes. Bygget gav 9 675
+q50-, 9 374 q10- och 9 217 q90-fordon. Passagekalibreringen tog 48,437 s;
+hela `pfe_variants_and_rounding` tog 66,064 s. Sensorernas heltalsmål och
+GEH-grindar passerade, men arkivets samlade validering är `WARN`: trip-length
+L1 är 0,599 mot gränsen 0,2, fritidsresornas median är kortare än arbetsresornas
+och temporal holdout är inaktuell. Arkivet är därför endast diagnostik.
+
+`tools/profile_monthly_cost_ledger.py` kan inte ta denna endagsprodukt som en
+fullmånadsmätning. Dess fail-closed kontrakt kräver 1 950 unika dagenheter,
+5 850 variantposter, 1 690 föräldrakandidater och ett kvalificerat manifest.
+Siffrorna är mekaniskt härledda ur
+`validation/subhour_monthly_search_profile_spec_v1.json`: 30 kalenderdatum
+gånger 65 möjliga starttider ger 1 950 unika dagenheter; 26 möjliga
+femdagarsstarter gånger samma 65 tider ger 1 690 föräldrar; tre
+efterfrågevarianter per dagenhet ger 5 850 variantposter. Detta motsvarar 30
+unika tredagarsbyggen för demand, med startdatum 2027-08-31 till 2027-09-29,
+inte 1 950 separata demandbyggen.
+
+En eftergranskning körd i en annan checkout rapporterade felaktigt att
+endagsarkivet och dagbiblioteket saknades. De finns kvar i den isolerade
+worktree där mätningen skapades och är lokalt omverifierbara. Den separata
+fullmånadsgaten är ändå öppen: 0 av dess 30 demand-specifikationer har ett
+aktuellt matchande arkiv i denna worktree. Manifestproducenten
+`tools/qualify_subhour_demand.py` bygger saknade arkiv i en ny runs-rot och är
+inte en ren indexerare. Därför startades varken de 30 byggena, manifestet eller
+fullmånadsmätningen utan ett separat kostnadsbeslut.
+I stället kördes en avgränsad mätning genom samma produktionsfunktioner för
+arkivvalidering, assembly och en verklig heldagsstängning, utan SUMO:
+
+| Del | Uppmätt resultat |
+|---|---:|
+| arkivvalidering, kall | 0,644 s |
+| arkivvalidering, återläst i samma process | 0,184 / 0,183 s |
+| assembly q10 / q50 / q90 | 0,354 / 0,394 / 0,355 s |
+| costing, en heldagsstängning över tre varianter | 3,811 s |
+| route grouping | 0,820 s |
+| shortest-path detour | 0,562 s |
+| window aggregation | 0,562 s |
+| XML-parse | 0,323 s |
+
+Alla sex reassemblerade route-/agentfiler är byteidentiska med arkivet.
+Costing omfattade 28 266 fordonsanrop men 315 unika kanttupler. Det är inte i
+sig en ny cachemöjlighet: `ClosureRouteResolver` memoiserar redan ruttens
+offsets och vägkostnader, medan varje fordon fortfarande måste klassificeras
+mot det aktuella tidsfönstret.
+
+Eftergranskningen mätte också profilerarens egna resolverräknare till 0,0373 s,
+cirka 1,0 % av den rapporterade costingtiden. Den ursprungliga artefaktens
+`measurement_only_phases: []` beskriver därför dess dåvarande instrumentering,
+inte noll overhead. Framtida körningar redovisar konstruktion och anrop i den
+namngivna measurement-only-fasen `resolver_observer_measurement`. Observatören
+patchar ett klassattribut processglobalt medan profilen kör; låset serialiserar
+två profiler men kan inte isolera ett samtidigt produktionsanrop i samma
+process. Den stödda isoleringen är därför profil-CLI:ns egen process.
+
+Commit `1309cf6` innehåller dessutom den sedan tidigare motiverade kompakta,
+atomiska skrivningen av `demand_meta.json`. Det parsedokument som används av
+`build_id` är oförändrat och beteendet har test, men ändringen är ett separat
+output-formatomfång som commitrubriken inte beskriver.
+
+**Beslut:** steg 5 är riktat produktionsmätt men fullmånadsmätningen är öppen.
+Ingen ny optimering eller månadsprojektion väljs från ett enda schema. Den
+befintliga `ParsedWindowCostIndex`/`WindowCostIndex` är den robusta
+återanvändningsvägen och förblir opt-in tills ett aktuellt fullmånadstest
+passerar komplett population, identitet, exakt oracle-jämförelse och positiv
+end-to-end-vinst. Evidensen finns i
+`validation/passage_step5_targeted_day_measurement_20260913.json` och har
+`release_evidence: false`. Steg 6 har inte startat.
 
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 

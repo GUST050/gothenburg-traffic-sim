@@ -9,12 +9,12 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — simulation quality and performance research`
-- Current focus: `Steps 0-4 of the passage-speed plan are complete. Step 5 has complete, content-safe instrumentation across metric groups 1-7; production timing is blocked by zero current-source archives.`
-- Status: `Step 5 INSTRUMENTATION COMPLETE, PRODUCTION UNMEASURED. Independent review of d221797/1eedc04 passed seven of eight checks; the eighth found the assembly measurement hiding 45.8% of its own observed run and is fixed in 977712a. The production one-day build is REJECTED by the catalog rule: this branch drifts the catalog at source_files.build_sumo_demand and source_files.closure_disruption, so it would miss and generate a new pool.`
-- Suggested next action: `Freeze this code series, requalify and re-adopt the route catalog against the frozen sources, then build the single date 2027-06-25 with --candidate-source catalog and measure with tools/profile_monthly_cost_ledger.py. Do not warm the year. Do not start step 6. No optimisation hypothesis until production is measured.`
+- Current focus: `Steps 0-4 of the passage-speed plan are complete. Step 5 is independently reviewed and measured on one current-source production-scale day across q10/q50/q90.`
+- Status: `Step 5 TARGETED PRODUCTION MEASURED, FULL MONTH UNMEASURED. d221797 is accepted after 977712a accounts for measurement-only digests. The earlier catalog blocker in 1eedc04/40f3cca is superseded: after restoring the branch's existing catalog-equivalence support and complete ignored input inventory, the explicit catalog build was a weekend hit and generated no candidate pool. The one-day build and exact assembly/costing replay passed; validation remains WARN and the evidence is diagnostic, not release evidence.`
+- Suggested next action: `Do not duplicate or activate a route cache from the one-day sample. The frozen September profile derives 30 missing three-day demand builds, not 1,950 demand builds: 1,690 parents = 26 five-day starts x 65 times; 1,950 units = 30 dates x 65 times; 5,850 records = three variants per unit. Run that qualification/profile only as a separately authorised, costed experiment. Do not warm the year or start step 6 for this measurement.`
 - Eligible actors: `Any capable actor.`
 - Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation or expensive catalog/demand run without explicit scope; keep unrelated local changes outside this delivery.`
-- Updated: `2026-09-13. Step 5 reviewed and repaired; production build rejected by the catalog gate.`
+- Updated: `2026-09-13. Step 5 reviewed and measured on a bounded real day; full-month timing remains open.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- WORKFLOW_HISTORY_START -->
@@ -686,13 +686,15 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### SIM-RESEARCH-2026-09-10 — Performance and generalization roadmap
+### PASSAGE-SPEED-STEP5-2026-09-13 — Archive and deterministic-cost measurement
 
-- Status: `ITEM 1 IMPLEMENTATION PLAN READY; implementation not started.`
-- Objective and scope: `Identify robust, evidence-preserving improvements to heldag build speed, physical sensor matching, unseen-sensor/day generalization and closure decision fidelity.`
-- Completion outcome: `Item 1 now separates zero-risk offline diagnosis, structured in-build lookup reasons, a bounded context-independent pool experiment and job-level accounting. A pool policy can be promoted only with exact output equivalence; otherwise the current context-aware identity remains.`
-- Evidence: `validation/codebase_simulation_improvement_research_20260910.md; direct reproductions of map-validator IndexError and merge AttributeError; exact clockBegin/clockEnd unions from54 archived stats files; nested builder call inspection; active catalog-hit cadence; metadata and NumPy measurements; local timing, solver, source-reuse, LOSO, structure and libsumo preflight artifacts; official SUMO and FHWA primary guidance.`
-- Constraints and safety: `Do not weaken seeds, health, exactness, provenance or release gates. Historical no_viable remains invalid; bounded corrected closure check precedes a new full search. Performance patches remain unactivated until full-population equivalence, resource and cancellation checks pass.`
+- Status: `TARGETED PRODUCTION MEASURED, FULL MONTH UNMEASURED.`
+- Objective and scope: `Measure archive validation, one-day assembly and deterministic closure costing without weakening content identity, catalog selection, exact output or release gates.`
+- Completion outcome: `A current-source 2027-06-25 q10/q50/q90 archive was built with an explicit catalog hit. Reassembly reproduced every archived route and agent digest. One real full-day closure was costed without SUMO; no optimisation was selected from the bounded sample.`
+- Evidence: `validation/passage_step5_targeted_day_measurement_20260913.json; runs/demand-20260913-194636-17755050-918f; validation/step5_targeted_day_closure_spec_20260913.json.`
+- Full-month preflight: `The targeted archive and its runs/step5-day-library-20260913 entry are present in the isolated worktree. The separate September profile needs 30 three-day demand specs spanning 2027-08-31 through 2027-09-29; current matching archives: 0/30. No qualification build or full-month profile was started.`
+- Constraints and safety: `The run is diagnostic and validation is WARN. Do not extrapolate one schedule to a month. The existing WindowCostIndex remains opt-in until its complete 1,950/5,850/1,690 identity and exactness gates pass on current sources.`
+- Acceptance criteria: `Full-month completion requires a current-source qualified manifest, zero SUMO launches during ledger profiling, exact population/accounting, complete process-tree resource telemetry and unchanged ledger/winner/disqualification/stop-proof results.`
 <!-- ACTIVE_TASK_END -->
 
 <!-- ACTIVE_TASK_HISTORY_START -->
