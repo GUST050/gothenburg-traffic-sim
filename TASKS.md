@@ -9,12 +9,12 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — simulation quality and performance research`
-- Current focus: `Steps 0-4 of the passage-speed plan are complete. Step 5 is partial: archive instrumentation exists, but production timing is blocked by zero current-source archives and assemble_window, costing, ClosureRouteResolver and final ledger/stop-proof measurements are still absent.`
-- Status: `Step 5 commit 294c75a is not accepted as complete. Codex review proved its warm-cache safety claim false: the test restored float mtime while the key used mtime_ns. With exact nanoseconds restored, changed route bytes were served from the global validated-record cache and changed demand_meta bytes stayed under the old global metadata index. The review repair removes both stat-authorized global caches, rebuilds the metadata index at each new disk entry, permits operation-local index reuse, and full-validates every candidate. The zero-current-source preflight remains valid; no production timing or optimisation claim is available.`
-- Suggested next action: `Apply and commit the archive-cache safety review fix, correct the evidence, then finish Step 5 measurement groups 5-7: assemble_window; cost-ledger and ClosureRouteResolver counts/timing; exact ledger, winner, disqualification and stop-proof digests. Use existing artifacts or hermetic fixtures and report production as unmeasured when no current-source archive exists. Do not start Step 6 or launch SUMO, a monthly search, demand, catalog or warming.`
+- Current focus: `Steps 0-4 of the passage-speed plan are complete. Step 5 has complete, content-safe instrumentation across metric groups 1-7; production timing is blocked by zero current-source archives.`
+- Status: `Step 5 INSTRUMENTATION COMPLETE, PRODUCTION UNMEASURED. Three process-global stat-authorised content caches were proved unsafe under preserved st_mtime_ns and removed. ArchiveInputs reuse is now operationslokal. Assembly remains streaming, the resolver counts semantic route tuples, and full provider identities use the existing content-bound cache key. No optimisation is proposed or implemented.`
+- Suggested next action: `Freeze the source series, then run one planned targeted warm so a current-source qualified archive exists. Measure Step 5 production with tools/profile_monthly_cost_ledger.py before selecting a hypothesis. Do not start Step 6 or launch a broad month search merely to obtain timing.`
 - Eligible actors: `Any capable actor.`
 - Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation or expensive catalog/demand run without explicit scope; keep unrelated local changes outside this delivery.`
-- Updated: `2026-09-13. Step 5 archive review found unsafe stat caches and incomplete metric coverage; repair prepared, completion measurement next.`
+- Updated: `2026-09-13. Step 5 instrumentation completed and reviewed; production remains unmeasured.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- WORKFLOW_HISTORY_START -->

@@ -826,7 +826,7 @@ utfall; identisk kostnadslista, vinnare och stoppbevis. Ingen liveträdsmutation
 **Prioritet:** villkorad av steg 0; exempelvalidering på 0,35 s är inte bevis
 för många minuters möjlig vinst.
 
-#### Steg 5 DELVIS MÄTT — reviewreparation krävs, 2026-09-13
+#### Steg 5 initial mätning — senare reparerad, 2026-09-13
 
 **Preflight avgjorde saken först.** Av 142 arkiv med metadata matchar **noll**
 `demand_source_fingerprints` för det aktuella trädet; varje arkiv skiljer sig i
@@ -862,11 +862,41 @@ den mätte en osäker global cacheträff. Ingen optimering får väljas från de
 fixturmätning. Först måste den verkliga `prepare`-kedjan mätas när ett
 current-source-arkiv finns; en ny diskentré ska fortsatt fullvalidera.
 
-**Steg 5 är inte komplett.** `assemble_window`-detaljerna,
+**Vid denna revision var steg 5 inte komplett.** `assemble_window`-detaljerna,
 costing-/`ClosureRouteResolver`-räknarna och en samlad jämförelse av exakt
 ledger, vinnare, disqualifications och stop proof saknas fortfarande.
 `tools/profile_monthly_cost_ledger.py` kan utökas eller återanvändas; att den
 redan binder identiteter ersätter inte de saknade räknarna och tiderna.
+
+#### Steg 5 instrumentering KLAR — produktion fortfarande omätt, 2026-09-13
+
+Reviewreparationen landade i `f5d0148`. Slutförandet hittade samma defekt i en
+tredje processglobal cache: `ArchiveInputs` återanvände route-digests genom en
+nyckel av path, size, inode och `st_mtime_ns`. Ett innehållsbyte med exakt
+bevarad storlek och nanosekund-mtime gav stale identitet. Den globala cachen är
+borta. Månadsresolvern delar i stället en verifierad `ArchiveInputs`-descriptor
+inom sin egen operation, så den normala kostkedjan hashar varje arkiv en gång
+utan att ett senare diskinträde auktoriseras av stat-data.
+
+Mätgrupp 5–7 är nu komplett instrumenterade:
+
+1. `assemble_window` mäter route-läsning, radtransformering, agent-JSON och
+   atomisk publicering samt dagar, rader, agenter, bytes och output-digests.
+   Den omätta produktionsvägen fortsätter att streama route-rader; mätningen
+   får inte materialisera hela filen.
+2. Cost-ledgern mäter varje parent och läser pricerens egna unit-/cachetal en
+   gång. Resolvern räknar anrop och unika edge-tupler. Full identitet kommer
+   från den befintliga innehållsbundna provideridentiteten som omfattar arkiv,
+   nät och schedule; inga processlokala objekt-ID:n används.
+3. Ett komplett hermetiskt beslut körs med och utan observer. Ledger,
+   selected IDs, disqualifications, candidate statuses, cursor, stop proof och
+   provider identity är exakt lika.
+
+Detta är kontrakts- och instrumenteringsbevis, inte produktionstid. Av 142
+arkiv matchar fortfarande noll den aktuella källidentiteten. Alla
+produktionstider är därför `null` och ingen optimering väljs från
+fixturvärdena. Steg 5:s nästa mätning sker först när den planerade riktade
+värmningen ger ett current-source-kvalificerat arkiv. Steg 6 har inte startat.
 
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 

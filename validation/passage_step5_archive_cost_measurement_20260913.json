@@ -1,16 +1,21 @@
 {
+  "archive_inputs_cache_review": {
+    "finding": "ArchiveInputs also cached content globally by path and stat tuple; exact same-size same-mtime_ns edits reused stale route digests",
+    "regression_test": "a second disk open rehashes identical-stat changed content; two providers in one resolver operation share one verified descriptor",
+    "repair": "remove the global cache and share a verified ArchiveInputs descriptor only inside one MonthlyDemandResolverRunner operation"
+  },
   "conditional_next_hypothesis": {
-    "gate": "finish metric groups 5-7 and measure a current-source qualified archive before proposing one bounded optimization",
-    "reason": "production is unmeasured and assemble_window, costing, resolver and final decision measurements are incomplete",
+    "gate": "measure a current-source qualified archive before proposing one bounded optimization",
+    "reason": "all seven groups are instrumented, but no current-source production archive exists",
     "status": "withheld"
   },
   "date": "2026-09-13",
   "diagnostic_only": true,
   "findings": [
-    "The committed warm-cache safety claim is false: exact preservation of size and st_mtime_ns lets changed bytes reuse global stat-authorized cache entries.",
-    "Every new disk entry must read the metadata index and full-validate candidates; only the metadata index may be shared inside one controlled resolver operation.",
-    "No current-source qualified archive exists, so production timing remains unavailable.",
-    "Metric groups 5-7 are absent, so Step 5 is not complete and no optimization is selected."
+    "Exact preservation of size and st_mtime_ns fooled three process-global stat-authorized caches: the two archive discovery caches fixed at f5d0148 and ArchiveInputs fixed at d221797.",
+    "Every new disk entry reads and validates content. Reuse of parsed ArchiveInputs is scoped to one MonthlyDemandResolverRunner operation and remains bound to the verified archive path.",
+    "Metric groups 5-7 are instrumented and contract-tested without changing route streaming, output bytes, cost order, winner, disqualifications, cursor or stop proof.",
+    "No current-source qualified archive exists, so production timing remains unavailable and no optimization is selected."
   ],
   "hermetic_fixture_measurement": {
     "WARNING": "FIXTURE TIMES AND COUNTS, NOT PRODUCTION RESULTS. Three synthetic archives.",
@@ -48,6 +53,7 @@
       "note": "a new disk entry never reuses a prior validation result"
     }
   },
+  "instrumentation_complete": true,
   "instrumented": {
     "archive_discovery_and_validation": {
       "bytes": [
@@ -69,15 +75,253 @@
       "unique_counts": [
         "archive_validated_path"
       ]
+    },
+    "assembly_costing_and_decision": {
+      "assembly": [
+        "days, route rows, agents, decoded route bytes, stored agent bytes, output bytes and output SHA-256",
+        "exclusive route-read, route-transform, agent-JSON and atomic-publication phases"
+      ],
+      "costing": [
+        "parent candidates and parent-cost wall time",
+        "the pricer's own daily-unit and memory/disk cache counters",
+        "resolver instances, calls and unique route edge tuples",
+        "existing exclusive XML parse, grouping, detour and aggregation timings",
+        "content-bound provider identity including archive, network and schedule"
+      ],
+      "decision": [
+        "ledger, selected IDs, disqualifications, execution cursor, stop proof and provider identity"
+      ]
     }
   },
-  "measurement_revision": "aef1cccd2602783885541152e532c363aee7c8e3",
+  "measurement_revision": "d221797bd21c8945acf8c0a69e925553c58be443",
+  "metric_groups": {
+    "group_1_to_4_archive_chain": "instrumented; fixture counts in hermetic_fixture_measurement",
+    "group_5_assemble_window": {
+      "counters": {
+        "assemble_agents": 15,
+        "assemble_days": 3,
+        "assemble_route_rows": 15
+      },
+      "digests": {
+        "assembled_agents_sha256": "a97563d3f850af5cdcb06b80a216f7aa5abf52af94ad6b94c9fdda599d68165e",
+        "assembled_routes_sha256": "7d03d1ee3bba3591921ee4175e49f3d004545e647b400e950b8326d29286343b"
+      },
+      "not_production_timing": true,
+      "phases": {
+        "assemble_agents_json": {
+          "bytes": {
+            "read": 1086
+          },
+          "calls": 3,
+          "children_max_s": 0.0,
+          "children_sum_s": 0.0,
+          "concurrent": false,
+          "exclusive_s": 0.000362,
+          "inclusive_s": 0.000362,
+          "inside_concurrent": false,
+          "parent": null,
+          "wall_contribution_s": 0.000362
+        },
+        "assemble_agents_publish": {
+          "bytes": {
+            "written": 970
+          },
+          "calls": 1,
+          "children_max_s": 0.0,
+          "children_sum_s": 0.0,
+          "concurrent": false,
+          "exclusive_s": 0.000313,
+          "inclusive_s": 0.000313,
+          "inside_concurrent": false,
+          "parent": null,
+          "wall_contribution_s": 0.000313
+        },
+        "assemble_route_publish": {
+          "bytes": {
+            "written": 1048
+          },
+          "calls": 1,
+          "children_max_s": 0.0,
+          "children_sum_s": 0.0,
+          "concurrent": false,
+          "exclusive_s": 0.000133,
+          "inclusive_s": 0.000133,
+          "inside_concurrent": false,
+          "parent": null,
+          "wall_contribution_s": 0.000133
+        },
+        "assemble_route_read": {
+          "bytes": {
+            "read": 1044
+          },
+          "calls": 24,
+          "children_max_s": 0.0,
+          "children_sum_s": 0.0,
+          "concurrent": false,
+          "exclusive_s": 0.0001,
+          "inclusive_s": 0.0001,
+          "inside_concurrent": false,
+          "parent": null,
+          "wall_contribution_s": 0.0001
+        },
+        "assemble_route_transform": {
+          "bytes": {},
+          "calls": 21,
+          "children_max_s": 0.0,
+          "children_sum_s": 0.0,
+          "concurrent": false,
+          "exclusive_s": 6e-05,
+          "inclusive_s": 6e-05,
+          "inside_concurrent": false,
+          "parent": null,
+          "wall_contribution_s": 6e-05
+        }
+      },
+      "ranking": [
+        {
+          "basis": "exclusive",
+          "phase": "assemble_agents_json",
+          "share_percent": 37.4,
+          "wall_s": 0.000362
+        },
+        {
+          "basis": "exclusive",
+          "phase": "assemble_agents_publish",
+          "share_percent": 32.33,
+          "wall_s": 0.000313
+        },
+        {
+          "basis": "exclusive",
+          "phase": "assemble_route_publish",
+          "share_percent": 13.74,
+          "wall_s": 0.000133
+        },
+        {
+          "basis": "exclusive",
+          "phase": "assemble_route_read",
+          "share_percent": 10.33,
+          "wall_s": 0.0001
+        },
+        {
+          "basis": "exclusive",
+          "phase": "assemble_route_transform",
+          "share_percent": 6.2,
+          "wall_s": 6e-05
+        }
+      ],
+      "result": {
+        "days": 3,
+        "vehicles": 15
+      },
+      "streaming_preserved": true
+    },
+    "group_6_cost_ledger_and_resolver": {
+      "fixture_report": {
+        "counters": {
+          "closure_resolve_calls": 2,
+          "closure_resolver_instances": 1,
+          "closure_route_edges_events": 2,
+          "cost_daily_units": 0,
+          "cost_parent_candidates": 6,
+          "cost_unit_cache_hits": 0,
+          "cost_unit_cache_misses": 0,
+          "costing_provider_identity_events": 2
+        },
+        "digests": {},
+        "phases": {
+          "cost_parent": {
+            "bytes": {},
+            "calls": 6,
+            "children_max_s": 0.0,
+            "children_sum_s": 0.0,
+            "concurrent": false,
+            "exclusive_s": 4.6e-05,
+            "inclusive_s": 4.6e-05,
+            "inside_concurrent": false,
+            "parent": null,
+            "wall_contribution_s": 4.6e-05
+          }
+        },
+        "ranking": [
+          {
+            "basis": "exclusive",
+            "phase": "cost_parent",
+            "share_percent": 100.0,
+            "wall_s": 4.6e-05
+          }
+        ],
+        "schema_version": 1,
+        "unique_counts": {
+          "closure_route_edges": 1,
+          "costing_provider_identity": 2
+        },
+        "unmeasured_categories": []
+      },
+      "identity_basis": "costing_provider_identity is a digest of the existing full content-bound provider cache identity; closure_route_edges counts distinct route tuples and never uses Python object id",
+      "not_production_timing": true,
+      "note": "The ledger fixture uses a fake cost source. Resolver and full provider-identity counters are exercised directly; the real pricer timing remains production-unmeasured.",
+      "pricer_counter_contract_test": {
+        "cache_hits": 4,
+        "cache_misses": 2,
+        "daily_units": 2,
+        "source": "one snapshot from the pricer itself, recorded once by build_cost_ledger"
+      }
+    },
+    "group_7_result_identity": {
+      "covers": [
+        "serialized cost ledger",
+        "selected IDs / winner set",
+        "deterministic disqualifications",
+        "stop proof and complete cursor",
+        "provider identity and candidate statuses"
+      ],
+      "cursor": {
+        "cursor": 2,
+        "cutoff": 2.0,
+        "identity_key": "aa54cbada4b79af38a73a96089c5221754762d7b61fafc8ac31303f7598302f6",
+        "order": [
+          "closure-1db4389930cfd9650368",
+          "closure-b50a76e3883566ca605d",
+          "closure-cd8f7c71f8e1c89d90b5",
+          "closure-b3981f4c7c384a6bb23c",
+          "closure-f26db0c7bb8fe358673f"
+        ],
+        "schema": "cost_ordered_closure_search_v1",
+        "stop_reason": "band_exhausted",
+        "verified": [
+          "closure-1db4389930cfd9650368",
+          "closure-b50a76e3883566ca605d"
+        ],
+        "version": 1,
+        "viable": [
+          "closure-1db4389930cfd9650368",
+          "closure-b50a76e3883566ca605d"
+        ]
+      },
+      "disqualified_ids": [
+        "closure-a4fd15d1d7204b1857b4"
+      ],
+      "execution_record": "597ba5e9512c76b068d207aa7b2a8b4e17d61d5e0936eb544f0382679bf809c8",
+      "ledger": "0cb0a92ffcceb194996248ae4d3b7ef8c25c92b6cd2d89fba8c66718e0ffd90a",
+      "method": "run the complete hermetic cost-ordered execution once with and once without the observer and compare all returned dictionaries exactly",
+      "not_production_timing": true,
+      "observed_equals_unobserved": true,
+      "provider_identity": {
+        "network": {
+          "sha256": "net"
+        },
+        "schema": "fake_cost_source_v1"
+      },
+      "result": "861170f65bdaf77e91d7e6cf65cbaebb6170def67f66e7c8cb9b6503564dc29a",
+      "selected_ids": [
+        "closure-1db4389930cfd9650368",
+        "closure-b50a76e3883566ca605d"
+      ],
+      "stop_reason": "band_exhausted"
+    }
+  },
   "missing_precondition": "current-source qualified archive",
-  "not_instrumented_this_round": [
-    "day_library.assemble_window: days, route rows, agents, bytes and exclusive wall (metric group 5)",
-    "cost_ordered_execution.build_cost_ledger and disruption.ClosureRouteResolver: parent candidates, daily units, cache hits/misses, route identities, XML parses, resolver instances and resolve calls (metric group 6)",
-    "final ledger/winner/stop-proof digest (metric group 7): tools/profile_monthly_cost_ledger.py already binds these and was not duplicated"
-  ],
+  "not_instrumented_this_round": [],
   "optimization_proposed": false,
   "preflight": {
     "always_differing_files": [
@@ -97,7 +341,9 @@
     "method": "compared each archive's build_fingerprint.source_files with demand_source_fingerprints(project_root), which is the exact equality validate_demand_archive requires",
     "question": "does any existing archive pass validate_demand_archive against the current source identity?"
   },
-  "purpose": "Step 5 archive measurement only; costing and assemble_window remain unmeasured",
+  "production_timings": null,
+  "production_timings_note": "null on purpose: no archive matches the current demand source identity, so no production number exists. Never estimated from synthetic data.",
+  "purpose": "Step 5 measurement contract across archive discovery, assembly, costing, resolver accounting and final decision identity",
   "release_evidence": false,
   "review_of_294c75a": {
     "finding": "the same-stat tests restored float st_mtime although both global caches keyed nanosecond stat values; exact os.utime(ns=...) reproduces unsafe reuse",
@@ -111,6 +357,20 @@
     "verdict": "rejected_as_complete"
   },
   "schema_version": 1,
-  "status": "partial_measurement_review_repair_required",
-  "why_no_optimization": "The original no-repetition result depended on unsafe global stat caches and is superseded. Production remains unmeasured and metric groups 5-7 are absent."
+  "status": "instrumentation_complete_production_unmeasured",
+  "still_unmeasured_in_production": [
+    "every archive-chain timing: 0 of 142 archives match the current source identity",
+    "assemble_window on real current-source day archives",
+    "the real deterministic cost source and ClosureRouteResolver on a current-source archive",
+    "build_sumo_demand._tracked_main, deferred to the next already-justified demand canary"
+  ],
+  "verification": {
+    "command_scope": "15 focused and dependent Step-5 modules",
+    "failed": 0,
+    "git_diff_check": "clean",
+    "passed": 697,
+    "warning": "pre-existing urllib3 LibreSSL compatibility warning",
+    "warnings": 1
+  },
+  "why_no_optimization": "All seven groups are instrumented, but no production measurement is available. Synthetic fixture time is not used to select or project an optimization."
 }
