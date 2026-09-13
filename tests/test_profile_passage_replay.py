@@ -1051,7 +1051,7 @@ def test_each_repeat_carries_its_own_structure_measurement(tmp_path):
 
     for run in summary['runs']:
         measured = run['structure_measurement']
-        assert measured['route_facts_cache'] == 'not_implemented'
+        assert measured['route_facts_cache'] == 'operation_scoped_content_bound'
         assert measured['source_route']['unique_edge_tuples'] == 1
         assert measured['structure_source_calls']['_route_structure_metrics']['calls'] == 1
 
@@ -1074,3 +1074,35 @@ def test_the_sensor_identity_uses_the_newline_terminated_convention():
     assert identity['measured_sensor_edge_identity'] == expected
     # A bare join is a different digest for identical edges; pin the difference.
     assert expected != hashlib.sha256('\n'.join(ids).encode('utf-8')).hexdigest()
+
+
+class TestSharedStructureContext:
+    """One context per replay: source and candidate must share it."""
+
+    def test_the_replay_declares_an_operation_scoped_content_bound_cache(self, tmp_path):
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        assert report['structure_measurement']['route_facts_cache'] \
+            == 'operation_scoped_content_bound'
+
+    def test_source_and_candidate_reports_share_one_context(self, tmp_path, monkeypatch):
+        from demand import structure
+
+        built = []
+        real = structure.StructureContext
+        monkeypatch.setattr(structure, 'StructureContext',
+                            lambda: (built.append(1), real())[1])
+
+        profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        # One for the replay itself; the two reports must not each make their own.
+        assert len(built) == 1
+
+    def test_the_shared_context_is_reported_by_its_content_identity(self, tmp_path):
+        report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+
+        measured = report['structure_measurement']
+        assert measured['input_identity']['geometry_sha256'] \
+            == measured['structure_context']['geometry_sha256']
+        assert measured['structure_context']['sensor_identity'] \
+            == measured['input_identity']['measured_sensor_edge_identity']

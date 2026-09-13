@@ -461,6 +461,29 @@ OBS för steg 8: `demand/structure.py` ingår i `demand_source_paths`, så den h
 ändringen ger demandarkiven en ny källidentitet. Den ingår INTE i
 `CATALOG_SOURCE_LABELS`, så den adopterade ruttkatalogen påverkas inte.
 
+**Granskningsfixar 2026-09-13, före godkännande.** Fem korrigeringar:
+testfilen använder postponed annotations så den går på Python 3.9;
+`StructureContext` läser geometrin EN gång och härleder både SHA-256 och
+arrayerna ur samma bytes, så en omskrivning med oförändrad storlek och mtime —
+precis det en stat-nyckel missar — invalidiserar kontexten; poolrapportens
+cache nycklas på INNEHÅLLET i ruttfilen, dess ändamålssidecar och
+generationsmålet, inte på sökvägen, så samma sökväg med nya bytes aldrig ger en
+gammal rapport; `demand/structure.py` ingår nu i
+`automatic_passage.replay_source_sha256()`, eftersom en ändrad strukturrapport
+ändrar vad en sparad replay betyder; och profilern skapar EN kontext per replay
+som delas av source- och candidate-rapporten, med
+`route_facts_cache: operation_scoped_content_bound` och kontextens
+innehållsidentitet i rapporten. Verifierat att digests och anropsantal är
+oförändrade mot `b375c3c` (14 294 anrop, samma selection/routes/agents).
+
+**Accepterat lokalt A/B (Codex, motviktad A/B/B/A på samma sparade q50-evidens):**
+varm replaymedian 6,6376895 → 5,956609 s (10,26%), varm strukturtid 1,3972755 →
+0,749738 s (46,34%), kall replaymedian 9,943896 → 9,233191 s (7,15%), alla 11
+solver-request-arrayer exakt lika och identiska selection-/route-/agenthashar.
+Med granskningsfixarna och korrekt delad kontext: varm replaymedian 5,8138625 s
+och varm strukturtid 0,651292 s. Steg 2 är därmed godkänt. Detta är diagnostisk
+replay, inte releasebevis och inte ett fullständigt produktionsdagsbygge.
+
 ### Steg 3 — lösar- och supportkostnad, endast efter mätning
 
 **Filer:** `dynamic_assignment.py:fit_integer_flows`,

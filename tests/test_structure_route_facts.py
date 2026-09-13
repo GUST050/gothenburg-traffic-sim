@@ -4,6 +4,8 @@ Deduplication applies to CALCULATIONS only. Every vehicle keeps its own
 observation, in document order, so counts, medians, shares and per-quarter
 fields are the ones the report has always produced.
 """
+from __future__ import annotations
+
 import json
 from pathlib import Path
 
@@ -408,3 +410,131 @@ def test_the_network_baseline_is_computed_once_per_context(tmp_path, monkeypatch
     # per edge in the network again.
     assert len(calls) < len(context.edge_latlon)
     assert report["dest_sensor_proximity"]["baseline_pct_within"] is not None
+
+
+class TestContextReadsOneSetOfBytes:
+    """The arrays and the digest must describe the SAME file content."""
+
+    def _swap_sensor_edge(self, path: Path) -> None:
+        """Move the sensor from edge S to edge T by swapping two 1-char ids.
+
+        Same byte length, same mtime: only the CONTENT changes, which is the
+        case a stat-keyed cache cannot see.
+        """
+        payload = json.loads(path.read_text())
+        for feature in payload["features"]:
+            if feature["properties"]["id"] == "S":
+                feature["properties"]["id"] = "T"
+            elif feature["properties"]["id"] == "T":
+                feature["properties"]["id"] = "S"
+        self._rewrite_in_place(path, payload)
+
+    def _rewrite_in_place(self, path: Path, payload: dict) -> None:
+        """Same size, same mtime: the stat key cannot see this change."""
+        stat = path.stat()
+        text = json.dumps(payload)
+        original = path.read_text()
+        assert len(text) == len(original), "fixture must keep the byte length"
+        path.write_text(text)
+        import os
+        os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+
+    def test_a_same_size_same_mtime_rewrite_invalidates_the_context(
+            self, tmp_path, monkeypatch):
+        path = geometry(tmp_path)
+        monkeypatch.setattr(dstructure, "GEO_PATH", path)
+        route = route_file(tmp_path, [("O S D5", 0.0)])
+        context = dstructure.structure_context()
+        assert dstructure.calibrated_structure_report(
+            route, _context=context)["sensor_passages"] == {"1": 1}
+
+        self._swap_sensor_edge(path)
+
+        assert not context.is_current()
+
+    def test_the_digest_and_the_arrays_come_from_one_read(
+            self, tmp_path, monkeypatch):
+        path = geometry(tmp_path)
+        monkeypatch.setattr(dstructure, "GEO_PATH", path)
+        # Warm the stat-keyed module cache on the ORIGINAL content.
+        dstructure.load_edge_geometry()
+        self._swap_sensor_edge(path)
+
+        context = dstructure.structure_context()
+
+        import hashlib
+        assert context.geometry_sha256 == hashlib.sha256(path.read_bytes()).hexdigest()
+        # The arrays must describe the bytes that digest covers, not the
+        # stale ones the stat-keyed cache still holds.
+        assert "T" in context.sensor_edge_ids
+
+
+class TestPoolReportIsContentBound:
+    def test_a_rewritten_pool_route_file_is_not_served_from_cache(
+            self, tmp_path, monkeypatch):
+        monkeypatch.setattr(dstructure, "GEO_PATH", geometry(tmp_path))
+        route = route_file(tmp_path, [("O S D5", 0.0)])
+        pool = route_file(tmp_path, [("O D10", 0.0)], name="candidates.rou.xml")
+        context = dstructure.structure_context()
+        first = dstructure.calibrated_structure_report(
+            route, pool_path=pool, _context=context)
+
+        pool.write_text('<routes><vehicle id="p0" depart="0.0">'
+                        '<route edges="O D09"/></vehicle></routes>')
+        second = dstructure.calibrated_structure_report(
+            route, pool_path=pool, _context=context)
+
+        assert second["pool"]["trip_length_fit"]["shares"] \
+            != first["pool"]["trip_length_fit"]["shares"]
+        assert second["pool"] == dstructure.calibrated_structure_report(
+            route, pool_path=pool)["pool"]
+
+    def test_a_rewritten_pool_sidecar_is_not_served_from_cache(
+            self, tmp_path, monkeypatch):
+        monkeypatch.setattr(dstructure, "GEO_PATH", geometry(tmp_path))
+        route = route_file(tmp_path, [("O S D5", 0.0)])
+        pool = route_file(tmp_path, [("O D10", 0.0)], name="candidates.rou.xml")
+        agents_for(pool, [{"purpose": "arbete", "origin_edge": "O",
+                           "destination_edge": "D10"}])
+        context = dstructure.structure_context()
+        first = dstructure.calibrated_structure_report(
+            route, pool_path=pool, _context=context)
+
+        agents_for(pool, [{"purpose": "fritid", "origin_edge": "O",
+                           "destination_edge": "D1"}])
+        second = dstructure.calibrated_structure_report(
+            route, pool_path=pool, _context=context)
+
+        assert "arbete" in first["pool"]["purpose_length_bins"]
+        assert "fritid" in second["pool"]["purpose_length_bins"]
+
+    def test_an_unchanged_pool_is_still_measured_once(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(dstructure, "GEO_PATH", geometry(tmp_path))
+        route = route_file(tmp_path, [("O S D5", 0.0)])
+        pool = route_file(tmp_path, [("O D10", 0.0)], name="candidates.rou.xml")
+        parsed = []
+        real = dstructure._parse_route_file
+        monkeypatch.setattr(dstructure, "_parse_route_file",
+                            lambda path: (parsed.append(Path(path)), real(path))[1])
+        context = dstructure.structure_context()
+
+        for _ in range(3):
+            dstructure.calibrated_structure_report(route, pool_path=pool,
+                                                   _context=context)
+
+        assert parsed.count(pool) == 1
+
+
+def test_structure_source_is_part_of_the_passage_replay_identity():
+    """A changed structure report changes what a saved replay means."""
+    from traffic_sim.demand import automatic_passage as auto
+
+    identity = auto.replay_source_sha256()
+
+    assert "structure" in identity
+    assert identity["structure"] == dstructure_sha256()
+
+
+def dstructure_sha256() -> str:
+    from traffic_sim.core.fingerprint import sha256_file
+    return sha256_file(Path(dstructure.__file__))

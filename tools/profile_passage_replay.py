@@ -28,7 +28,7 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
-from demand.structure import calibrated_structure_report
+from demand.structure import calibrated_structure_report, structure_context
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.demand import automatic_passage
 from traffic_sim.experimental import dynamic_assignment as dynamic
@@ -671,9 +671,14 @@ def replay(source: Path, out: Path, *, label: str | None = None,
             with recorder.phase('route_shape_inventory', route='source') as shape:
                 source_shape = route_shape_inventory(source_route)
                 shape.update(source_shape)
+            # ONE context for this replay, exactly as _refine holds one per
+            # calibration: the source and candidate reports share the pool's
+            # facts and the network-wide baseline instead of each rebuilding it.
+            structure_ctx = structure_context()
             with measure_structure_calls() as source_calls, \
                     recorder.phase('structure_source'):
-                before = calibrated_structure_report(source_route, pool_path=pool)
+                before = calibrated_structure_report(
+                    source_route, pool_path=pool, _context=structure_ctx)
             if before is None:
                 raise ReplayRefused('source structural report is unavailable')
 
@@ -714,13 +719,19 @@ def replay(source: Path, out: Path, *, label: str | None = None,
             with measure_structure_calls() as candidate_calls, \
                     recorder.phase('structure_candidate',
                                    pool_path=str(pool) if pool else None):
-                after = calibrated_structure_report(candidate, pool_path=pool)
+                after = calibrated_structure_report(
+                    candidate, pool_path=pool, _context=structure_ctx)
             if after is None:
                 raise ReplayRefused('candidate structural report is unavailable')
             report['structure_measurement'] = {
                 'basis': ('observational; measured outside every semantic '
                           'fingerprint and never fed back into a report'),
-                'route_facts_cache': 'not_implemented',
+                'route_facts_cache': 'operation_scoped_content_bound',
+                'structure_context': {
+                    'geometry_sha256': structure_ctx.geometry_sha256,
+                    'sensor_identity': structure_ctx.sensor_identity,
+                    'scope': 'one context per replay, shared by source and candidate',
+                },
                 'input_identity': structure_input_identity(),
                 'source_route': source_shape,
                 'candidate_route': candidate_shape,

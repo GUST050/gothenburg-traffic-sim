@@ -219,8 +219,12 @@ class StructureContext:
     """
 
     def __init__(self):
-        self.edge_latlon, self.sensor_edge_ids, self.edge_len_m = load_edge_geometry()
-        self.geometry_sha256 = _file_sha256(GEO_PATH)
+        # One read: the digest and the arrays describe the SAME bytes. The
+        # module's stat-keyed cache cannot see a same-size, same-mtime rewrite,
+        # so a context that took its arrays from there and its digest from the
+        # file would describe two different networks at once.
+        (self.geometry_sha256, self.edge_latlon,
+         self.sensor_edge_ids, self.edge_len_m) = _geometry_for_context()
         self.sensor_identity = _sensor_edge_identity(self.sensor_edge_ids)
         self._sorted_sensors = sorted(self.sensor_edge_ids)
         self._route_facts: dict[tuple[str, ...], RouteFacts] = {}
@@ -231,13 +235,15 @@ class StructureContext:
         self._pool_reports: dict[Path, dict] = {}
 
     def is_current(self) -> bool:
-        """True while the geometry on disk is still the one this was built on."""
+        """True while the geometry on disk is still the one this was built on.
+
+        Content only. A rewrite that preserves size and mtime still invalidates
+        the context, which is exactly the case a stat key misses.
+        """
         if not GEO_PATH.exists():
             return False
-        if _file_sha256(GEO_PATH) != self.geometry_sha256:
-            return False
-        _latlon, sensors, _lengths = load_edge_geometry()
-        return _sensor_edge_identity(sensors) == self.sensor_identity
+        digest = hashlib.sha256(GEO_PATH.read_bytes()).hexdigest()
+        return digest == self.geometry_sha256
 
     def endpoint_km(self, origin_edge: str | None,
                     destination_edge: str | None) -> float | None:
@@ -323,19 +329,35 @@ class StructureContext:
         """The pool's metrics and bins, computed once per operation.
 
         ``_refine`` compares the SAME pool against the source and then against
-        every staged candidate. Each caller gets its own deep copy, so no two
-        reports share a mutable structure.
+        every staged candidate. The key is the CONTENT of every file the pool
+        report reads — the route file, its purpose sidecar and the generation
+        length target — not the path: one path can hold different bytes inside
+        one operation, and a stale report would then describe a pool that no
+        longer exists. Each caller gets its own deep copy, so no two reports
+        share a mutable structure.
         """
-        key = Path(pool_path)
+        key = _pool_report_key(Path(pool_path))
         if key not in self._pool_reports:
-            metrics = _route_structure_metrics(key, _context=self)
+            metrics = _route_structure_metrics(Path(pool_path), _context=self)
             if metrics is not None:
-                bins = purpose_length_bins(key, _context=self)
+                bins = purpose_length_bins(Path(pool_path), _context=self)
                 if bins:
                     metrics["purpose_length_bins"] = bins
             self._pool_reports[key] = metrics
         stored = self._pool_reports[key]
         return copy.deepcopy(stored) if stored is not None else None
+
+
+#: Every input a pool report reads. The sidecars are alternatives, and the
+#: generation target is shared, but all of them change what the report says.
+def _pool_report_key(pool_path: Path) -> tuple:
+    """Content identity of a pool report: the route file and all it reads."""
+    inputs = [pool_path,
+              pool_path.with_name(pool_path.name.replace(".rou.xml", ".agents.json")),
+              pool_path.with_name(pool_path.name.replace(".rou.xml", ".meta.json")),
+              Path("sumo") / "trip_length_fit.json"]
+    return (str(pool_path),) + tuple(
+        _file_sha256(path) if path.is_file() else None for path in inputs)
 
 
 def structure_context() -> StructureContext:
@@ -424,6 +446,17 @@ def load_edge_geometry() -> tuple[dict[str, tuple[float, float]],
         return _EDGE_GEOMETRY_CACHE[1], _EDGE_GEOMETRY_CACHE[2], _EDGE_GEOMETRY_CACHE[3]
     with open(GEO_PATH) as f:
         geo = json.load(f)
+    edge_latlon, sensor_edge_ids, edge_len_m = _geometry_from_document(geo)
+    _EDGE_GEOMETRY_CACHE = (key, edge_latlon, sensor_edge_ids, edge_len_m)
+    return edge_latlon, sensor_edge_ids, edge_len_m
+
+
+def _geometry_from_document(geo: dict) -> tuple[dict, set, dict]:
+    """Derive midpoints, measured edges and polyline lengths from one document.
+
+    Split out so a caller that has already READ the bytes can derive the arrays
+    from exactly those bytes instead of a separately-stat-keyed reload.
+    """
     edge_latlon: dict[str, tuple[float, float]] = {}
     sensor_edge_ids: set[str] = set()
     edge_len_m: dict[str, float] = {}
@@ -440,8 +473,24 @@ def load_edge_geometry() -> tuple[dict[str, tuple[float, float]],
             lats[1:], lons[1:], lats[:-1], lons[:-1]).sum() * 1000.0)
         if feat["properties"].get("sensor_id"):
             sensor_edge_ids.add(eid)
-    _EDGE_GEOMETRY_CACHE = (key, edge_latlon, sensor_edge_ids, edge_len_m)
     return edge_latlon, sensor_edge_ids, edge_len_m
+
+
+#: ONE entry, keyed by content digest: a context must not re-parse 3 MB of
+#: geometry per report, and must never be handed arrays from other bytes.
+_CONTEXT_GEOMETRY: tuple[str, tuple] | None = None
+
+
+def _geometry_for_context() -> tuple[str, dict, set, dict]:
+    """Read GEO_PATH once; return its digest and the arrays from those bytes."""
+    global _CONTEXT_GEOMETRY
+    raw = GEO_PATH.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if _CONTEXT_GEOMETRY is not None and _CONTEXT_GEOMETRY[0] == digest:
+        return (digest, *_CONTEXT_GEOMETRY[1])
+    parsed = _geometry_from_document(json.loads(raw))
+    _CONTEXT_GEOMETRY = (digest, parsed)
+    return (digest, *parsed)
 
 
 def route_od_distance_km(
