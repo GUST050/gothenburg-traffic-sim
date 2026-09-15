@@ -29,7 +29,8 @@ def _entry_quarter(departure_s: float) -> int:
 
 
 def evidence_root(tmp_path: Path, *, departures=DEPARTURES,
-                  with_contract=True, with_result=True) -> Path:
+                  with_contract=True, with_result=True,
+                  sensor: str = SENSOR) -> Path:
     """One complete passage evidence root whose traces reconstruct exactly.
 
     The edgeData is DERIVED from the same route times the traces carry, so
@@ -41,7 +42,7 @@ def evidence_root(tmp_path: Path, *, departures=DEPARTURES,
     inputs.mkdir(parents=True)
     vehicles = [f'v{index}' for index in range(len(departures))]
     (inputs / 'calibrated.rou.xml').write_text('<routes>\n' + ''.join(
-        f'<vehicle id="{name}" depart="{depart}"><route edges="o {SENSOR} d"/></vehicle>\n'
+        f'<vehicle id="{name}" depart="{depart}"><route edges="o {sensor} d"/></vehicle>\n'
         for name, depart in zip(vehicles, departures)) + '</routes>\n')
     (inputs / 'calibrated.agents.json').write_text(json.dumps({'agents': [
         {'vehicle_id': name, 'candidate_id': f'c{index}', 'origin_edge': 'o',
@@ -53,7 +54,7 @@ def evidence_root(tmp_path: Path, *, departures=DEPARTURES,
         counts[_entry_quarter(depart)] += 1
     (inputs / 'demand_meta.json').write_text(json.dumps({
         'n_intervals': QUARTERS, 'date': '2027-06-16', 'source': 'forecast',
-        'sensor_targets': {'variants': {'edge_shares': {SENSOR: counts}}}}))
+        'sensor_targets': {'variants': {'edge_shares': {sensor: counts}}}}))
     (inputs / 'net.net.xml').write_text('<net/>')
     if with_contract:
         (inputs / profiler.automatic_passage.REPLAY_CONTRACT_NAME).write_text(json.dumps({
@@ -70,12 +71,12 @@ def evidence_root(tmp_path: Path, *, departures=DEPARTURES,
         directory.mkdir(parents=True)
         (directory / 'vehroute.xml').write_text('<routes>' + ''.join(
             f'<vehicle id="{name}" depart="{depart + 1}">'
-            f'<route edges="o {SENSOR} d" exitTimes="{depart + 60} {depart + 120} '
+            f'<route edges="o {sensor} d" exitTimes="{depart + 60} {depart + 120} '
             f'{depart + 180}"/></vehicle>'
             for name, depart in zip(vehicles, departures)) + '</routes>')
         (directory / 'edge.xml').write_text('<meandata>' + ''.join(
             f'<interval begin="{quarter * 900}" end="{quarter * 900 + 900}">'
-            f'<edge id="{SENSOR}" entered="{counts[quarter]}"/></interval>'
+            f'<edge id="{sensor}" entered="{counts[quarter]}"/></interval>'
             for quarter in range(QUARTERS)) + '</meandata>')
         for name in ('vehroute.xml', 'edge.xml'):
             path = directory / name
@@ -87,7 +88,7 @@ def evidence_root(tmp_path: Path, *, departures=DEPARTURES,
         expanded = dynamic.expand_departure_support(
             options, profiler.SHIFT_SUPPORT_S, begin_s=0,
             end_s=QUARTERS * 900, guard_s=profiler.GUARD_S)
-        system = dynamic.build_passage_system(expanded, [SENSOR], QUARTERS)
+        system = dynamic.build_passage_system(expanded, [sensor], QUARTERS)
         fit = dynamic.fit_integer_flows(
             system, targets, groups,
             departure_bounds=[{} for _ in range(QUARTERS)])
@@ -97,6 +98,8 @@ def evidence_root(tmp_path: Path, *, departures=DEPARTURES,
             inputs, selected, stage)
         (source / 'result.json').write_text(json.dumps({
             'status': 'validated',
+            'source_inputs': manifest['input_sha256'],
+            'learning_evidence': manifest['evidence_sha256'],
             'structural_repair': {'passes': 0, 'boundary_fallback': False},
             'selection_sha256': sha256_file(stage / 'selection.json'),
             'routes_sha256': sha256_file(candidate),
@@ -201,6 +204,39 @@ class TestOutputIsolation:
 
 
 class TestRefusalBeforeMeasurement:
+    @pytest.mark.parametrize('field', ['source_inputs', 'learning_evidence'])
+    def test_result_must_bind_the_source_and_trace_manifests(self, tmp_path, field):
+        source = evidence_root(tmp_path)
+        result_path = source / 'result.json'
+        result = json.loads(result_path.read_text())
+        result.pop(field)
+        result_path.write_text(json.dumps(result))
+
+        with pytest.raises(profiler.ReplayRefused, match='saved result evidence'):
+            profiler.replay(source, tmp_path / 'out')
+
+    @pytest.mark.parametrize('relative,field,key', [
+        ('input/passage_replay_contract.json', 'input_sha256',
+         'passage_replay_contract.json'),
+        ('evidence/learning-0-arm-1000/vehroute.xml', 'evidence_sha256',
+         'evidence/learning-0-arm-1000/vehroute.xml'),
+    ])
+    def test_rehashed_evidence_cannot_replace_the_saved_result_inputs(
+            self, tmp_path, relative, field, key):
+        source = evidence_root(tmp_path)
+        result_before = (source / 'result.json').read_bytes()
+        path = source / relative
+        # Semantically identical bytes still must not replace a bound artifact.
+        path.write_text(path.read_text() + '\n')
+        manifest_path = source / 'report.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest[field][key] = sha256_file(path)
+        manifest_path.write_text(json.dumps(manifest))
+
+        with pytest.raises(profiler.ReplayRefused, match='saved result evidence'):
+            profiler.replay(source, tmp_path / 'out')
+        assert (source / 'result.json').read_bytes() == result_before
+
     def test_a_compressed_root_is_not_replayed_without_an_explicit_opt_in(self, tmp_path):
         source = evidence_root(tmp_path)
         _compress(source, 'evidence/learning-0-arm-1000/edge.xml')
@@ -250,14 +286,60 @@ class TestRefusalBeforeMeasurement:
         with pytest.raises(profiler.ReplayRefused, match='production source differs'):
             profiler.replay(source, tmp_path / 'out')
 
-    def test_a_saved_structural_repair_is_not_misprofiled_as_the_simple_path(self, tmp_path):
+    def test_a_saved_structural_repair_is_replayed_as_the_repair_path(
+            self, tmp_path, monkeypatch):
         source = evidence_root(tmp_path)
+        real_build = dynamic.build_passage_system
+        built_systems = []
+
+        def record_build(*args, **kwargs):
+            system = real_build(*args, **kwargs)
+            built_systems.append(system)
+            return system
+
+        monkeypatch.setattr(dynamic, 'build_passage_system', record_build)
         result = json.loads((source / 'result.json').read_text())
-        result['structural_repair']['passes'] = 1
+        result['structural_repair'] = {
+            'passes': 1, 'quarters': [0], 'support': 'fixed_shift_grid',
+            'boundary_fallback': False,
+        }
         (source / 'result.json').write_text(json.dumps(result))
 
-        with pytest.raises(profiler.ReplayRefused, match='structural repair'):
-            profiler.replay(source, tmp_path / 'out')
+        reports = iter([
+            {'structure_flags': []},
+            {'structure_flags': ['trips_under_1km_cap: fixture']},
+            {'structure_flags': []},
+        ])
+        monkeypatch.setattr(
+            profiler, 'calibrated_structure_report',
+            lambda *_args, **_kwargs: next(reports))
+        monkeypatch.setattr(
+            profiler.automatic_passage, '_short_trip_violation_quarters',
+            lambda _report: {0})
+        monkeypatch.setattr(
+            profiler.automatic_passage, '_short_trip_departure_guards',
+            lambda *_args, **_kwargs: [object()])
+        real_fit = profiler.dynamic.fit_integer_flows
+
+        def ignore_fixture_guard(*args, **kwargs):
+            kwargs.pop('departure_group_bounds', None)
+            return real_fit(*args, **kwargs)
+
+        monkeypatch.setattr(
+            profiler.dynamic, 'fit_integer_flows', ignore_fixture_guard)
+
+        report = profiler.replay(source, tmp_path / 'out')
+
+        # Production constructs the base, the initial system and one repair system.
+        assert len(built_systems) == 3
+        expanded_phases = [row for row in report['timing']['phases']
+                           if row['phase'] == 'build_passage_system_expanded']
+        assert len(expanded_phases) == 2
+        assert expanded_phases[-1]['attempt'] == 'candidate-repair-1'
+        assert report['structural_repair_reproduced'] == {
+            'passes': 1, 'quarters': [0], 'support': 'fixed_shift_grid',
+            'boundary_fallback': False,
+        }
 
 
 class TestReplayReport:
@@ -266,6 +348,12 @@ class TestReplayReport:
 
         assert report['status'] == 'replayed'
         assert report['measurement_reconstruction_verified'] is True
+        assert report['predicted_sensor_incidence']['exact'] is True
+        assert report['predicted_sensor_incidence']['basis'] \
+            == 'sensor_edge_entry_quarter'
+        assert report['predicted_sensor_incidence']['replayed_days'] == 1
+        assert set(map(str, trial.LEARNING_ARMS)) <= set(
+            report['predicted_sensor_incidence']['scenarios'])
         phases = [row['phase'] for row in report['timing']['phases']]
         assert phases.index('load_source') < phases.index('fit_integer_flows')
 
@@ -1019,12 +1107,25 @@ def test_a_refusal_is_recorded_as_a_refusal_not_a_failure(tmp_path):
     assert report['timing']['phases'][1]['files'] == len(report['inventory']['files'])
 
 
-def test_the_replay_mirrors_production_and_reuses_the_verified_base_system(tmp_path):
+def test_the_replay_mirrors_production_and_reuses_the_verified_base_system(
+        tmp_path, monkeypatch):
     """The profile must measure the path production actually runs."""
     source = evidence_root(tmp_path)
+    real_build = dynamic.build_passage_system
+    built_systems = []
+
+    def record_build(*args, **kwargs):
+        system = real_build(*args, **kwargs)
+        built_systems.append(system)
+        return system
+
+    monkeypatch.setattr(dynamic, 'build_passage_system', record_build)
 
     report = profiler.replay(source, tmp_path / 'out')
 
+    assert len(built_systems) == 2  # verified source and expanded support, each once
+    assert len(built_systems[0].options) == len(DEPARTURES)
+    assert len(built_systems[1].options) == report['expanded_columns']
     rows = {row['phase']: row for row in report['timing']['phases']}
     assert rows['build_passage_system_base']['source'] == 'reused_from_load_source'
     assert report['status'] == 'replayed'

@@ -1,0 +1,116 @@
+{
+  "canaries": [
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d",
+      "elapsed_s": 39.355753,
+      "identical_to_prior_review_result": true,
+      "label": "normal",
+      "result": {
+        "candidate_records": 434,
+        "content_digests": {
+          "calibrated_agents": "1544572d904e22411a2fe76947cbf1b4cba0a95e0a61b137218e16cd15750e69",
+          "calibrated_routes": "1e06f46f3cb26fbf6c3b7a2b107995615b4f781ba08d5d29f1387316158b09a1",
+          "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+          "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+        },
+        "passage_proof": {
+          "assembly_reproduced": true,
+          "basis": "sensor_edge_entry_quarter",
+          "evidence_digests": [
+            "e7873a860e47efb1b948092de577aab91a38a81bb1f351b58821f98ce436d78e",
+            "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3",
+            "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b"
+          ],
+          "exact": true,
+          "replayed_days": 3,
+          "targets_digest": "4606706a34dcd977d7236f2b87b92dcd5b65696ee585ec09baef03f20a2d1421"
+        },
+        "provenance_status": "pass",
+        "relaxation_summary": {
+          "clean": 135,
+          "no_bounds_tol1": 153
+        },
+        "route_file": "calibrated_v1.rou.xml",
+        "sensor_incidence_digest": "4606706a34dcd977d7236f2b87b92dcd5b65696ee585ec09baef03f20a2d1421",
+        "sensor_incidence_exact": true,
+        "sensor_incidence_records": 2016,
+        "target_key": "edge_shares_q10",
+        "targets_digest": "173bce48b90eb79dc39668f9bfbb3fd371b05ad9aa12873ad54e7561f4daca1a",
+        "variant": "q10",
+        "vehicles": 59831
+      },
+      "variant": "q10"
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603",
+      "elapsed_s": 47.97664,
+      "identical_to_prior_review_result": true,
+      "label": "structural_repair",
+      "result": {
+        "candidate_records": 434,
+        "content_digests": {
+          "calibrated_agents": "c13957748b45b3c18071f83edb11c8e02a5e4915a547be327feec55003d33dd9",
+          "calibrated_routes": "d7c9356fc9d1b7daafaf248a06345377d7f0dda6ef23690e35727e6696e5b59c",
+          "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+          "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+        },
+        "passage_proof": {
+          "assembly_reproduced": true,
+          "basis": "sensor_edge_entry_quarter",
+          "evidence_digests": [
+            "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc",
+            "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720",
+            "dd52489d2377b219b1b1478e0d411fc9dceebe3edbdc5c1c9714b155379a0697"
+          ],
+          "exact": true,
+          "replayed_days": 3,
+          "targets_digest": "1bc731475b5400101d9e32a9a5943a1dd5e9da61214bffeed0fb717049941d3d"
+        },
+        "provenance_status": "pass",
+        "relaxation_summary": {
+          "clean": 267,
+          "no_bounds_tol1": 19,
+          "no_priors_tol1": 2
+        },
+        "route_file": "calibrated.rou.xml",
+        "sensor_incidence_digest": "1bc731475b5400101d9e32a9a5943a1dd5e9da61214bffeed0fb717049941d3d",
+        "sensor_incidence_exact": true,
+        "sensor_incidence_records": 2016,
+        "target_key": "edge_shares",
+        "targets_digest": "dc7cc36a538875115acb9c8469632064e25cff61da21205f004b6967d8f1afdf",
+        "variant": "q50",
+        "vehicles": 62159
+      },
+      "variant": "q50"
+    }
+  ],
+  "content_key": "ff4d0110e68628ad508efdc016884bb264afa2fb4241cc659f8f3daf19593d5c",
+  "date": "2026-09-15",
+  "demand_rebuilt": false,
+  "historical_full_month_artifact": {
+    "content_key": "5d355a3e6f81b398c4d69ed3961418bcb25a3527eaab489308c922eb2c6cec99",
+    "path": "/private/tmp/gs-step3-departure-bounds/validation/subhour_passage_entry_quarter_revalidation_20260914.json",
+    "sha256": "f71bfdc5d1b0cdcee93bb59006468299e0e3638b8d0a54a332089381e36ecb26"
+  },
+  "implementation_sha256": {
+    "tools/profile_passage_replay.py": "703cca57e5bdb9c0886d2ae155fe136814a01cf8035903c7461be45e01128c10",
+    "tools/qualify_subhour_demand.py": "dddbb88245a90a073e59c47067df9eef2e02dbaa023bb47ceee7d756f1b3393e"
+  },
+  "limitations": [
+    "Two canaries on reviewed code; full month replay remains the historical diagnostic, not rerun after review fixes.",
+    "CODE_APPROVED, new qualified manifest and full-month cost ledger remain pending."
+  ],
+  "measurement_note": "Final canaries after initial duplicate removal and restoration of timed per-repair builds to match production.",
+  "prior_review_record": {
+    "path": "/private/tmp/gs-step3-departure-bounds/validation/subhour_passage_review_20260915.json",
+    "sha256": "5b3d3993a9e70d0807b646225f2f8614232fbb3fe0c12b0a7ab90e1319f12d99"
+  },
+  "release_evidence": false,
+  "retained_result_binding_scan": {
+    "mismatches": [],
+    "unique_evidence": 144
+  },
+  "schema": "subhour_passage_review_v1",
+  "status": "PASS",
+  "sumo_launched": false
+}

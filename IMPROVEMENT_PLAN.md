@@ -984,6 +984,69 @@ end-to-end-vinst. Evidensen finns i
 `validation/passage_step5_targeted_day_measurement_20260913.json` och har
 `release_evidence: false`. Steg 6 har inte startat.
 
+#### Steg 5 fullmånadskorrigering — passagebevis PASS, 2026-09-14
+
+Den första fullmånadskvalificeringen avslutades felaktigt med 1 475 q10-celler
+som avvikande. Validatorn räknade en sensorträff i fordonets avgångskvart.
+Kalibreringen begränsar i stället sensorns predikterade inträdeskvart,
+`(departure_s + entry_offset) // 900`. Att alla dagssummor samtidigt var
+exakta visade att felet låg i tidsplaceringen hos kontrollen, inte i ruttstöd
+eller PFE-avrundning.
+
+Den korrigerade kontrollen rekonstruerar day-library-identiteten och verifierar
+dess innehåll, binder varje fit till sparat passage-resultat och output-hashar,
+återspelar retained traces och PFE-bounds genom produktionssystemet samt kräver
+identiska selection/routes/agents. Den jämför därefter systemets projektion per
+sensorinträdeskvart med heltalsmålet och återmonterar varje tredagarsvariant
+byteidentiskt. Ett strukturellt reparationspass återskapas med samma
+innehållsbundna kandidatpool; boundary-fallback förblir fail-closed tills den
+vägen kan reproduceras.
+
+En omvalidering av de redan byggda arkiven passerade 30/30 arkiv, 90/90
+q10/q50/q90-varianter, 48 unika day-library-poster och 144 unika
+evidens/pool-bindningar. Alla sensorprojektioner och assemblies var exakta.
+Körningen tog 2 370,589 s och startade varken SUMO eller demandbygge. Evidensen
+är `validation/subhour_passage_entry_quarter_revalidation_20260914.json` med
+`release_evidence: false`.
+
+Detta stänger den falska passageblockeraren men inte hela steg 5. Ändringen är
+ännu ocommittad, så den tidigare CODE_APPROVED-frysningen får inte återanvändas.
+Nästa ordning är review/commit, ny källfrysning, ett nytt append-only
+kvalificerat manifest byggt från de 30 befintliga arkiven och därefter den
+fullständiga cost-ledger-profilen. Ingen demand behöver byggas om för detta.
+Manifestproducenten har därför en explicit `--existing-runs-root`-väg som
+kräver exakt ett fullvaliderat arkiv per build-key och delar endast ett
+innehållsläst index inom anropet. Den gamla `--fresh-runs-root`-vägen behåller
+kravet på en tidigare frånvarande rot. Producenten jämför dessutom de körande
+skyddade källbytesen mot CODE_APPROVED; en gammal frysning kan inte märka den
+nya validatorn som godkänd. Ett verkligt index-/valideringsanrop hittade 30/30
+befintliga arkiv på 95,565 s utan build.
+
+#### Reviewkorrigering och lokal leverans — 2026-09-15
+
+Reviewen hittade och rättade tre problem före commit: replaymanifestets input-
+och spårhashar måste matcha det sparade produktionsresultatet; memoiserade
+framgångar måste kontrollera innehållet igen vid återanvändning; och profilern
+byggde det expanderade passagesystemet en extra gång. Snapshotkontrollen
+hashar även råa/komprimerade artefakter och kan inte kringgås genom oförändrad
+filstorlek och återställd mtime. Det redan byggda systemet används i första
+solve; varje reparationsbygge tidtas separat precis som i produktionen.
+Regressionstesterna visade RED före respektive fix.
+
+380 fokuserade tester passerade. Den oberoende eftergranskningen godkände dessa
+reparationer och körde 11 riktade tester. Reviewevidensen finns i
+`validation/subhour_passage_review_20260915_final.json`: 144 sparade
+resultat/input/spår-bindningar kontrollerades och två arkivvarianter återspelades,
+varav en med strukturell reparation. Den äldre fullmånadstidens 2 370,589 s
+avser den tidigare implementationen; hela månaden är inte omkörd efter reviewen.
+Den tiden får inte beskrivas som den nya validatorns eller sökningens hastighet.
+
+Nästa steg är en ny källfrysning med källbundna kontroller, därefter ett nytt
+kvalificerat manifest från de befintliga arkiven och fullmånadens cost-ledger-
+profil. Kvarvarande ändrade webbartefakter måste redovisas i källfrysningen utan
+att denna kodcommit tar över dem. Ingen uppvärmning eller demandgenerering
+krävs av denna fortsättning. Steg 5 är fortsatt öppet; steg 6 är inte startat.
+
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 
 **Filer:** `build_sumo_demand.py`, `monthly_demand.py:_resolve_new_release`,

@@ -731,11 +731,21 @@ def replay(source: Path, out: Path, *, label: str | None = None,
                 return report
 
             original = _load_original_result(source)
+            _require_result_evidence(source, original)
             repair = original.get('structural_repair') or {}
-            if repair.get('boundary_fallback') or int(repair.get('passes', 0)) != 0:
+            if repair.get('boundary_fallback'):
                 raise ReplayRefused(
-                    'saved result used boundary fallback or structural repair; '
-                    'this replay path cannot reproduce that solver branch')
+                    'saved result used boundary fallback; this replay path '
+                    'cannot reproduce that solver branch')
+            repair_passes = repair.get('passes', 0)
+            repair_quarters = repair.get('quarters', [])
+            if isinstance(repair_passes, bool) or not isinstance(repair_passes, int) \
+                    or repair_passes < 0 or not isinstance(repair_quarters, list) \
+                    or any(isinstance(value, bool) or not isinstance(value, int)
+                           or not 0 <= value < quarters for value in repair_quarters):
+                raise ReplayRefused('saved structural repair record is malformed')
+            if repair_passes and repair.get('support') != 'fixed_shift_grid':
+                raise ReplayRefused('saved structural repair used unsupported support')
 
             source_route = replay_root / 'input/calibrated.rou.xml'
             with recorder.phase('route_shape_inventory', route='source') as shape:
@@ -759,49 +769,123 @@ def replay(source: Path, out: Path, *, label: str | None = None,
             cache_root = (_solver_cache_dir if _solver_cache_dir is not None
                           else out / 'solver-cache')
             cache_root.mkdir(parents=True, exist_ok=True)
-            with recorder.phase('solver') as solver:
-                with measure_solver_phases() as solver_phases, \
-                        recorder.phase('fit_integer_flows'):
-                    fit = dynamic.fit_integer_flows(
-                        system, targets, groups, time_limit_s=solver_time_limit_s,
-                        departure_bounds=bounds,
-                        checkpoint_dir=out / 'solver',
-                        cache_dir=cache_root)
-                solver['status'] = fit.status
-            checkpoint = _solver_checkpoint_state(out / 'solver')
-            phases = solver_phases.report()
+            solver_attempts = []
+
+            def solve_stage(attempt_system, name, *, group_bounds=None):
+                support = attempt_system.options
+                checkpoint_dir = out / ('solver' if name == 'candidate'
+                                        else f'solver-{name.removeprefix("candidate-")}')
+                with recorder.phase('solver', attempt=name) as solver:
+                    with measure_solver_phases() as solver_phases, \
+                            recorder.phase('fit_integer_flows', attempt=name):
+                        attempt_fit = dynamic.fit_integer_flows(
+                            attempt_system, targets, groups,
+                            time_limit_s=solver_time_limit_s,
+                            departure_bounds=bounds,
+                            departure_group_bounds=group_bounds,
+                            checkpoint_dir=checkpoint_dir,
+                            cache_dir=cache_root)
+                    solver['status'] = attempt_fit.status
+                checkpoint = _solver_checkpoint_state(checkpoint_dir)
+                phases = solver_phases.report()
+                solver['cache_hit'] = checkpoint['cache_hit']
+                attempt_selected = [
+                    option for option, count in zip(support, attempt_fit.counts)
+                    if count == 1]
+                if Counter(option.group for option in attempt_selected) != Counter(groups) \
+                        or len(attempt_selected) != len(options):
+                    raise ReplayRefused('replay changed the OD/purpose population')
+                stage = out / name
+                with recorder.phase('staging', attempt=name):
+                    attempt_candidate = automatic_passage._stage_selection(
+                        replay_root / 'input', attempt_selected, stage)
+                with recorder.phase(
+                        'route_shape_inventory', route='candidate', attempt=name) as shape:
+                    attempt_shape = route_shape_inventory(attempt_candidate)
+                    shape.update(attempt_shape)
+                with measure_structure_calls() as attempt_calls, \
+                        recorder.phase('structure_candidate', attempt=name,
+                                       pool_path=str(pool) if pool else None):
+                    attempt_after = calibrated_structure_report(
+                        attempt_candidate, pool_path=pool, _context=structure_ctx)
+                if attempt_after is None:
+                    raise ReplayRefused('candidate structural report is unavailable')
+                solver_attempts.append({
+                    'attempt': name,
+                    'solver_cache_hit': checkpoint['cache_hit'],
+                    'solver_request_key': checkpoint['key'],
+                    'milp_executed': phases['milp_solve']['calls'] > 0,
+                    'phases': phases,
+                })
+                return (attempt_system, attempt_fit, attempt_selected, stage,
+                        attempt_candidate, attempt_shape, attempt_calls, attempt_after)
+
+            (system, fit, selected, stage, candidate, candidate_shape,
+             candidate_calls, after) = solve_stage(system, 'candidate')
+            active_quarters = set()
+            for pass_index in range(1, repair_passes + 1):
+                violations = automatic_passage._short_trip_violation_quarters(after)
+                active_quarters.update(violations)
+                guards = automatic_passage._short_trip_departure_guards(
+                    options, expanded, before, quarters, active_quarters)
+                if not guards:
+                    raise ReplayRefused('saved structural repair has no reproducible guards')
+                # Production rebuilds for each repair. Keep that work visible,
+                # while the initial solve uses the system already timed above.
+                with recorder.phase('build_passage_system_expanded',
+                                    attempt=f'candidate-repair-{pass_index}'):
+                    system = dynamic.build_passage_system(expanded, edges, quarters)
+                (system, fit, selected, stage, candidate, candidate_shape,
+                 candidate_calls, after) = solve_stage(
+                    system, f'candidate-repair-{pass_index}',
+                    group_bounds=guards)
+            if sorted(active_quarters) != sorted(repair_quarters):
+                raise ReplayRefused(
+                    'replayed structural repair quarters differ from the saved result')
+            report['structural_repair_reproduced'] = {
+                'passes': repair_passes,
+                'quarters': sorted(active_quarters),
+                'support': 'fixed_shift_grid',
+                'boundary_fallback': False,
+            }
+            final_flags = automatic_passage._structure_flag_names(after or {})
+            source_flags = automatic_passage._structure_flag_names(before or {})
+            if final_flags - source_flags:
+                raise ReplayRefused('replayed structural repair left new warnings')
+
+            final_solver = solver_attempts[-1]
+            report['solver_attempts'] = solver_attempts
             report['solver_measurement'] = {
                 'basis': ('observational; measured outside every demand, passage '
                           'and solver fingerprint'),
-                'solver_cache_hit': checkpoint['cache_hit'],
-                'milp_executed': phases['milp_solve']['calls'] > 0,
-                'phases': phases,
+                'solver_cache_hit': final_solver['solver_cache_hit'],
+                'milp_executed': final_solver['milp_executed'],
+                'phases': final_solver['phases'],
             }
-            solver['cache_hit'] = checkpoint['cache_hit']
             report['solver_cache_root'] = str(cache_root)
-            report['solver_cache_hit'] = checkpoint['cache_hit']
-            report['solver_request_key'] = checkpoint['key']
+            report['solver_cache_hit'] = final_solver['solver_cache_hit']
+            report['solver_request_key'] = final_solver['solver_request_key']
             report['fit_status'] = fit.status
-            selected = [option for option, count in zip(expanded, fit.counts) if count == 1]
             report['selected_vehicles'] = len(selected)
-            if Counter(option.group for option in selected) != Counter(groups) \
-                    or len(selected) != len(options):
-                raise ReplayRefused('replay changed the OD/purpose population')
 
-            with recorder.phase('staging'):
-                candidate = automatic_passage._stage_selection(
-                    replay_root / 'input', selected, out / 'candidate')
-
-            with recorder.phase('route_shape_inventory', route='candidate') as shape:
-                candidate_shape = route_shape_inventory(candidate)
-                shape.update(candidate_shape)
-            with measure_structure_calls() as candidate_calls, \
-                    recorder.phase('structure_candidate',
-                                   pool_path=str(pool) if pool else None):
-                after = calibrated_structure_report(
-                    candidate, pool_path=pool, _context=structure_ctx)
-            if after is None:
-                raise ReplayRefused('candidate structural report is unavailable')
+            projected = system.project(fit.counts)
+            exact = all(
+                [int(round(value)) for value in values] == targets[edge]
+                for scenario in projected.values()
+                for edge, values in scenario.items())
+            report['predicted_sensor_incidence'] = {
+                'basis': 'sensor_edge_entry_quarter',
+                'replayed_days': 1,
+                'scenarios': list(system.scenarios),
+                'exact': exact,
+                'records': len(system.scenarios) * len(edges) * quarters,
+                'targets_digest': hashlib.sha256(json.dumps(
+                    targets, sort_keys=True, separators=(',', ':')).encode()).hexdigest(),
+                'digest': hashlib.sha256(json.dumps(
+                    projected, sort_keys=True, separators=(',', ':')).encode()).hexdigest(),
+            }
+            if not exact:
+                raise ReplayRefused('replayed predicted sensor incidence is not exact')
             report['structure_measurement'] = {
                 'basis': ('observational; measured outside every semantic '
                           'fingerprint and never fed back into a report'),
@@ -837,12 +921,13 @@ def replay(source: Path, out: Path, *, label: str | None = None,
                 if any(call != 'valid' for call in report['archive_validation']['calls']):
                     raise ReplayRefused('demand archive validation was rejected')
 
-            report['selection_sha256'] = sha256_file(out / 'candidate/selection.json')
+            report['selection_sha256'] = sha256_file(stage / 'selection.json')
             report['routes_sha256'] = sha256_file(candidate)
-            report['agents_sha256'] = sha256_file(out / 'candidate/calibrated.agents.json')
+            report['agents_sha256'] = sha256_file(stage / 'calibrated.agents.json')
             report['selection_reproduced'] = _compare_original(original, report)
             if report['selection_reproduced']['state'] != 'identical':
-                raise ReplayRefused('replayed route/departure selection differs from the saved result')
+                raise ReplayRefused(
+                    'replayed route/departure selection differs from the saved result')
             root['vehicles'] = len(options)
             report['status'] = 'replayed'
 
@@ -870,6 +955,21 @@ def replay(source: Path, out: Path, *, label: str | None = None,
         report['input_identity'] = context['input_identity']
         (out / 'replay_report.json').write_text(json.dumps(report, indent=2) + '\n')
     return report
+
+
+def _require_result_evidence(source: Path, original: dict) -> None:
+    """Bind the replay manifest to the result retained by the day library."""
+    try:
+        manifest = json.loads((source / 'report.json').read_text())
+    except (OSError, ValueError) as error:
+        raise ReplayRefused(f'saved result evidence manifest is unreadable: {error}') from error
+    for result_key, manifest_key in (
+            ('source_inputs', 'input_sha256'), ('learning_evidence', 'evidence_sha256')):
+        recorded = original.get(result_key)
+        if not isinstance(recorded, dict) or not recorded \
+                or not isinstance(manifest, dict) or recorded != manifest.get(manifest_key):
+            raise ReplayRefused(
+                f'saved result evidence differs from the replay manifest: {result_key}')
 
 
 def _load_original_result(source: Path) -> dict:

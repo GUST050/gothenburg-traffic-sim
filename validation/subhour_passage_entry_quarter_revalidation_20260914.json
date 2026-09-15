@@ -1,0 +1,2631 @@
+{
+  "archives": [
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d",
+      "archive_content_key": "ff2c496d06510641f95d1c1a0c543a0dfc8b0728958f92f73a22f8e638e1e154",
+      "archive_manifest_sha256": "7f85cc1a0d6798c6a86059a2ea01accd8794bef25a21011a34c3b0e7bad28c6a",
+      "build_key": "5fcc585e03915396",
+      "days": 3,
+      "demand_meta_sha256": "717a523b6ebaa3da58e3def9d9549a27b8aad7e549963835f8279bf85f199c91",
+      "start_date": "2027-08-31",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "1544572d904e22411a2fe76947cbf1b4cba0a95e0a61b137218e16cd15750e69",
+            "calibrated_routes": "1e06f46f3cb26fbf6c3b7a2b107995615b4f781ba08d5d29f1387316158b09a1",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 44.261068,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "e7873a860e47efb1b948092de577aab91a38a81bb1f351b58821f98ce436d78e",
+              "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3",
+              "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "4606706a34dcd977d7236f2b87b92dcd5b65696ee585ec09baef03f20a2d1421"
+          },
+          "sensor_incidence_digest": "4606706a34dcd977d7236f2b87b92dcd5b65696ee585ec09baef03f20a2d1421",
+          "sensor_incidence_exact": true,
+          "targets_digest": "173bce48b90eb79dc39668f9bfbb3fd371b05ad9aa12873ad54e7561f4daca1a",
+          "vehicles": 59831
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "03e463698b28471abef7d826cbe6371e46caaa9b8870f2ada10f12451c815a8b",
+            "calibrated_routes": "b3867df491cad6605f0b54b6a627b7d082e85f4bfb2d698b3d57d219c2009fda",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 44.512696,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "36d3b478b1b20bcf8666fde58988db0c0c959d55106a9d9631e630a447ba8075",
+              "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc",
+              "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "b402efe575782fa2107be2f3da3293d4972aa20031bed318f51d7e457086b8d9"
+          },
+          "sensor_incidence_digest": "b402efe575782fa2107be2f3da3293d4972aa20031bed318f51d7e457086b8d9",
+          "sensor_incidence_exact": true,
+          "targets_digest": "e788b27bd18be608373a4f404f6836a0e9b8a6e441d2134e6d2555da4893c98b",
+          "vehicles": 60279
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "72663f7c5098f9c274a48966b4b9ee9dbd81669501c4ff18ed80fb8530afde31",
+            "calibrated_routes": "aa11a76e9566551ed16ff6e95112da0d4dd6146418572df1daaaf2cdbd1f36ee",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 45.487751,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "1d43e9270c1e6df182eb98775dce313b86d82dcdabcc54dec1d86196ccc6610b",
+              "30d6ecf7a595ab6d1ee85ee3dd39b8146a972326b9a0275b20e61ef24f14efc9",
+              "c9b84d1a2b348b5df7e447158d0f138fee06113498ec36ee100082f6b1af5f00"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "0e4d179f22de9c43f2fb63ebf035912f518115b3d149d6f7f10dbe38edb0f10d"
+          },
+          "sensor_incidence_digest": "0e4d179f22de9c43f2fb63ebf035912f518115b3d149d6f7f10dbe38edb0f10d",
+          "sensor_incidence_exact": true,
+          "targets_digest": "2b3a0231704d7f1986fb5569a29c8c11baa5d7d753f6db8c9a2011c3ca859781",
+          "vehicles": 60155
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224149-53fb2fd0-6182",
+      "archive_content_key": "76be17a75c7ae517491ee1aec369b6c72bd51851ab5c8555ff5b2ef4abe6d470",
+      "archive_manifest_sha256": "959e368f68a87b993c1dad3964bd7c13b8caf7a033d9663fb668273ca8bde4bb",
+      "build_key": "8dcbe1518a5b0898",
+      "days": 3,
+      "demand_meta_sha256": "455e6d033f9f3ec7e7f61b9bf9d4df12af9fc86425a1545c8826a95320ce05dc",
+      "start_date": "2027-09-01",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "6b4fa060516e13ae25ca8a9f082a28baa8122271f77a99421213458a52bd7f82",
+            "calibrated_routes": "ace6cd24a2f9b0e8fc110111b9918696e2da1ab8b9d3d950ece2afcac9ec8174",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.098035,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3",
+              "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b",
+              "9d51071d8423f309d0f81826011b5192d0009443e35e9bd2076210454a42538d"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "539450951319108cbc14223fec823e98c26595aeac00272f7fed0bc81e3562c1"
+          },
+          "sensor_incidence_digest": "539450951319108cbc14223fec823e98c26595aeac00272f7fed0bc81e3562c1",
+          "sensor_incidence_exact": true,
+          "targets_digest": "c75e474d062eab177c842acc7534a28b3e8c28619197ac9c2b676db1658c6103",
+          "vehicles": 61904
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "150bef679a502a5c2388596da93e4655a44daea0aa050a2efeb798cb0eff380c",
+            "calibrated_routes": "25f6f39f2852e535e8404d0a650f1c53bec684496d282edb1a18fb4c530ad1ff",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.306595,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc",
+              "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720",
+              "dd52489d2377b219b1b1478e0d411fc9dceebe3edbdc5c1c9714b155379a0697"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "1bc731475b5400101d9e32a9a5943a1dd5e9da61214bffeed0fb717049941d3d"
+          },
+          "sensor_incidence_digest": "1bc731475b5400101d9e32a9a5943a1dd5e9da61214bffeed0fb717049941d3d",
+          "sensor_incidence_exact": true,
+          "targets_digest": "dc7cc36a538875115acb9c8469632064e25cff61da21205f004b6967d8f1afdf",
+          "vehicles": 62188
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "8b507e1720f5bd80e94f714a3df756919d413074424a64c733087f3dfde5dc79",
+            "calibrated_routes": "22371a743996db4cd48104daa717668356ba5a967f242e2a1c0d90f8aa402e5b",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.453334,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "30d6ecf7a595ab6d1ee85ee3dd39b8146a972326b9a0275b20e61ef24f14efc9",
+              "c9b84d1a2b348b5df7e447158d0f138fee06113498ec36ee100082f6b1af5f00",
+              "fcda0f6e6f5316749c90d3a5f0136b074c056984828348116087ed2f97792740"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "4a5f37597a93d74ab51c3d9cbece1fd55e5ea447f4100a72137ec3b103e2402a"
+          },
+          "sensor_incidence_digest": "4a5f37597a93d74ab51c3d9cbece1fd55e5ea447f4100a72137ec3b103e2402a",
+          "sensor_incidence_exact": true,
+          "targets_digest": "1d0942ad0862f9ed399825200d4475093b50525097ef85ae7889db1c8a24d767",
+          "vehicles": 62057
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6",
+      "archive_content_key": "fb2be2d4d29d40d0e0d2adf9b864025be503c02b6aed5cf05887bee9849c73f1",
+      "archive_manifest_sha256": "26f4ff87cfde218987795c730236412b10007aa6f2b6c9f71b769fdd04282958",
+      "build_key": "d42db159b3ee565f",
+      "days": 3,
+      "demand_meta_sha256": "e8cf61acf568c594d6a3fbc2b841809a16ccc0464648d7089d05e47505ee1b02",
+      "start_date": "2027-09-02",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "5ae4648242bd4a97add0398a474bb520f772e3e3fefb8688cddb040670ed90c1",
+            "calibrated_routes": "20bdcde95676cc322849d329c58edcb8ce4b3a73fd618a464f3057a3379299be",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 42.906098,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b",
+              "9d51071d8423f309d0f81826011b5192d0009443e35e9bd2076210454a42538d",
+              "f2439d5bc869087d6b573f657b663700d18302b129c3a121c947305d29788f61"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "5ad199736cb803d2ebe4b3fbf19e25629ac97a71feee7b65ce50713901a0da23"
+          },
+          "sensor_incidence_digest": "5ad199736cb803d2ebe4b3fbf19e25629ac97a71feee7b65ce50713901a0da23",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a37f9e2ba9732fb2f6309e9fb60eee0b1debb6136e3ac07754bb29447c84d9e6",
+          "vehicles": 56215
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "0e44a181ddcb1d440501ee1b4b814e89e5efcb6db9d67aff18b48e5f92b928bb",
+            "calibrated_routes": "187e9f9640f2dfcf45eb45f636f13115df499fea06f75a6f55a5be7e6f5ca6eb",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 43.727575,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720",
+              "dd52489d2377b219b1b1478e0d411fc9dceebe3edbdc5c1c9714b155379a0697",
+              "9c59afe296d96fbf033b3891d33df6b07ac4cecb42e85b3d2fcbfc444c7ea91e"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "2353c85b0a01b9ba0daf897b6e43f4baa67642afb235495c8de03a1b4e1f6b15"
+          },
+          "sensor_incidence_digest": "2353c85b0a01b9ba0daf897b6e43f4baa67642afb235495c8de03a1b4e1f6b15",
+          "sensor_incidence_exact": true,
+          "targets_digest": "fa7ea341bf44367d7532a02fe8dea2311091803bafa34e720009eb85c5ba9f23",
+          "vehicles": 57172
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "8ffcb0c7df20aaee7da22b38194f5ca8c7208f770de69999d5ea59cc3e776799",
+            "calibrated_routes": "53fe459f53683d27e1582a337107f0455cd869235e5b26dd6abbd5a7a5ddcd8c",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 42.668976,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "c9b84d1a2b348b5df7e447158d0f138fee06113498ec36ee100082f6b1af5f00",
+              "fcda0f6e6f5316749c90d3a5f0136b074c056984828348116087ed2f97792740",
+              "e96a8045a2eb10a4e070ebca6948e29dadb618a2e51c08e0d4bd5578c57fb4e9"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "18ad4d8a967a56672d6864302009663bad2c1b024cb0b32d2063fb26d9391eaf"
+          },
+          "sensor_incidence_digest": "18ad4d8a967a56672d6864302009663bad2c1b024cb0b32d2063fb26d9391eaf",
+          "sensor_incidence_exact": true,
+          "targets_digest": "d508a972a3d4ed3b6b96e56a586257de79b8092a9e0d4e7d70110aa8680e0ae7",
+          "vehicles": 55226
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225650-83f1213a-5e40",
+      "archive_content_key": "d620d265108ca5b83bdaeaeb094bcfa574dbf153b5965f2cd64deda352b05a12",
+      "archive_manifest_sha256": "cdd776715e24beabdc54d2efbf3ee52bd6185b1905cc12dcd92dcc6ca561dfcf",
+      "build_key": "d482aa0afa27e9ce",
+      "days": 3,
+      "demand_meta_sha256": "2fbbb810b6309b869c858f81562ff3f9ec46e6b0b0db46d7b74c6c0dea40487d",
+      "start_date": "2027-09-03",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "05c464941f8f6d1a6d854d916fb28c0825fa4f992cde0715d19b0fa3d70511d2",
+            "calibrated_routes": "c50d5f1bb146f0afe4f19b6b91a30f6c84e0aa10de086e49d5002dae68f420ac",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 13.906495,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "9d51071d8423f309d0f81826011b5192d0009443e35e9bd2076210454a42538d",
+              "f2439d5bc869087d6b573f657b663700d18302b129c3a121c947305d29788f61",
+              "1209d13596330bba6d43fe159077966e11172c765e764db5e9a8e52d88c8486a"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "8ede6ddef574b253f94d38da2b8d0e3574b134a9ad50b4cac962f6f2944ce218"
+          },
+          "sensor_incidence_digest": "8ede6ddef574b253f94d38da2b8d0e3574b134a9ad50b4cac962f6f2944ce218",
+          "sensor_incidence_exact": true,
+          "targets_digest": "e9c8eb028796d0a44bfe2493f45a1cbbc41cbc8bc86c631725cbe0869b2bdf3f",
+          "vehicles": 51668
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "7f70c11037de67c63f11d74260e49d7c948d8919861bf18a8cf9b7ba9a7c4d51",
+            "calibrated_routes": "0b25fad07359e31e96d45f5641d1d5f561f442e8cdc9ef3f55c74a946f6c7d06",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 13.977753,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "dd52489d2377b219b1b1478e0d411fc9dceebe3edbdc5c1c9714b155379a0697",
+              "9c59afe296d96fbf033b3891d33df6b07ac4cecb42e85b3d2fcbfc444c7ea91e",
+              "c987ec27bfa4bda91281f5a636481ba9dd2051b083dda27a7928ef475aeb1796"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "f9fab5a149ab99b07921aedf143b3e1054d1251aad90fbc65a732e44263f1a2d"
+          },
+          "sensor_incidence_digest": "f9fab5a149ab99b07921aedf143b3e1054d1251aad90fbc65a732e44263f1a2d",
+          "sensor_incidence_exact": true,
+          "targets_digest": "91743c859bf14b5f34375c784775e6b0d87675c8a70f580d8285bb35d9220ff3",
+          "vehicles": 52766
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "523cca507aba3907127ac175772191fdf389bca0e3b584b0d3f3f6d27c729181",
+            "calibrated_routes": "f36fecd7c2cdda97652e13b468f4b0f03ce50dd46e41c9dedf39d42db040e40a",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 13.818943,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "fcda0f6e6f5316749c90d3a5f0136b074c056984828348116087ed2f97792740",
+              "e96a8045a2eb10a4e070ebca6948e29dadb618a2e51c08e0d4bd5578c57fb4e9",
+              "5a395450e53010661c2d85bb3427ccf6114fac11a92688dbd7db6f657094d636"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "dbd19bac6259fc06e3f002a3781dc01a380d4ef1bf0117ce3d8f74d6666fb065"
+          },
+          "sensor_incidence_digest": "dbd19bac6259fc06e3f002a3781dc01a380d4ef1bf0117ce3d8f74d6666fb065",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a50db6358d67ead111668a5b813d038cea32bcf84c5a077f2b105ae900fe554b",
+          "vehicles": 50981
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225714-b593ac27-7b71",
+      "archive_content_key": "dffb422022663c0f901948b22d9e5dc8c495c8556976b2f7c69f413f79d3d4f0",
+      "archive_manifest_sha256": "8d1cd1dd134d28275d31e172fdf9b0947d3280e64703f455e7065e3cf1da1786",
+      "build_key": "dae23c801891223c",
+      "days": 3,
+      "demand_meta_sha256": "7535b0a541a927302575e85758ca370343d54c29c2abb066b2461409138ed91a",
+      "start_date": "2027-09-04",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "14ac37768c2f60ece75ffa43f9a1ca9d61632788b12fbcfc771739d8257524fd",
+            "calibrated_routes": "485d639f66713007db5c8bb889935fdb5067ea19c6e7c6b2b13d80aa2d7bd8e1",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 15.756317,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "f2439d5bc869087d6b573f657b663700d18302b129c3a121c947305d29788f61",
+              "1209d13596330bba6d43fe159077966e11172c765e764db5e9a8e52d88c8486a",
+              "18a6729259f8e537e3154d943eb1e39066e2cf205cc9d15bf8b716a83511808c"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "1bd6f03877213de16620ce340564d92f5b41327697efd0a1a1fbd8c104b541a4"
+          },
+          "sensor_incidence_digest": "1bd6f03877213de16620ce340564d92f5b41327697efd0a1a1fbd8c104b541a4",
+          "sensor_incidence_exact": true,
+          "targets_digest": "bb26f5a85b20f7eee0cd343e97fccd85eb27b0908d7f4bb5701b43eca1812c2e",
+          "vehicles": 49956
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "22d8dd09e3e3a6340bb4b7252524554f6508dd4d194545a554dacd331b7bd98a",
+            "calibrated_routes": "5a6c62c86e5de2f4c96c3b9bbb599f1091c324925b172c1db9b33cb1e565533c",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 16.175403,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "9c59afe296d96fbf033b3891d33df6b07ac4cecb42e85b3d2fcbfc444c7ea91e",
+              "c987ec27bfa4bda91281f5a636481ba9dd2051b083dda27a7928ef475aeb1796",
+              "865d40af0d70f42df74be8c27fdaad7fb45eab934ed04a7502fd99791f4b8131"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "c1455a5abbf8c63a9cb1350307f18508aeb9a3aa5fa80b5fc53bc82e36d3c5b9"
+          },
+          "sensor_incidence_digest": "c1455a5abbf8c63a9cb1350307f18508aeb9a3aa5fa80b5fc53bc82e36d3c5b9",
+          "sensor_incidence_exact": true,
+          "targets_digest": "8014a202ea073802b1f7a294f6eaf36e8a7902163630285ef6026083ce32dca8",
+          "vehicles": 51232
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "e9d23a49e091e0a48d04dc0441a00e9658a817ebdb0365754619b69cdb630437",
+            "calibrated_routes": "ee6f653d5c30cad39691a6826d442a4488c494c3eb342e5afd8113a5d2f81b5b",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 15.930227,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "e96a8045a2eb10a4e070ebca6948e29dadb618a2e51c08e0d4bd5578c57fb4e9",
+              "5a395450e53010661c2d85bb3427ccf6114fac11a92688dbd7db6f657094d636",
+              "8dcf1d3a20bd3adb655dc9a6024ddc00a3a3552f15bd4222ad33010233a427f0"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "0b1869c61132302acd67348f20b0c3e6fd9b42ec711065b33b61034e2038abbd"
+          },
+          "sensor_incidence_digest": "0b1869c61132302acd67348f20b0c3e6fd9b42ec711065b33b61034e2038abbd",
+          "sensor_incidence_exact": true,
+          "targets_digest": "dd8724ce13a2a8aca2661e91822299441385d499974b2508eb864254cdef69c5",
+          "vehicles": 49630
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223825-2bbb1a66-845d",
+      "archive_content_key": "c54eb87e4e6225c4d54b00db8d9cc02b937566b89176840e535756fa71eb9a5e",
+      "archive_manifest_sha256": "0beb321782cee931790bdeb02c9950998e24b00e36e334983bc38d79ec42e915",
+      "build_key": "7e395749f1712cb4",
+      "days": 3,
+      "demand_meta_sha256": "dd84473f5051ba3a709392b5332cf40ed36d9d4249c8ec70e281e436f76305aa",
+      "start_date": "2027-09-05",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "fc6bb1277787bbcb1cf30ae1233d639d0b8edb11d9b86caab497a889dc363f9b",
+            "calibrated_routes": "9e65a929e224abc7021561669b0d2b057273913a54d68cba7bfab58a3bbee651",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 16.459416,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "1209d13596330bba6d43fe159077966e11172c765e764db5e9a8e52d88c8486a",
+              "18a6729259f8e537e3154d943eb1e39066e2cf205cc9d15bf8b716a83511808c",
+              "bdf31ffadec231d08308c2ee46840105db75f93ccd7eca32dbb252d45cd63737"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "ae8284c450f5bb2048ffc50684dcefb575203a349923ac5ebbd6312db3d198bd"
+          },
+          "sensor_incidence_digest": "ae8284c450f5bb2048ffc50684dcefb575203a349923ac5ebbd6312db3d198bd",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a3d9fca19e9aa72895cc683f13f43b1a805a86f648ae87d17898eb01293cdb6c",
+          "vehicles": 51421
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "7927f012087e7fe314ed41f0ac68bf6884278b054c208f1d2ca7b0b3885ac037",
+            "calibrated_routes": "57e1f2b02e4f2b3b61103b2eae2bcab1045615ef6cfb7fc8d65cd772bc7f6e25",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 16.809317,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "c987ec27bfa4bda91281f5a636481ba9dd2051b083dda27a7928ef475aeb1796",
+              "865d40af0d70f42df74be8c27fdaad7fb45eab934ed04a7502fd99791f4b8131",
+              "fe8ede77def998f6f633602146bfb2ca89286758c565be3008fec60c8cd9aac6"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "f869604b56796bcb9abd6dfc37961172d8fbed840cb2d784573f281090b9dca2"
+          },
+          "sensor_incidence_digest": "f869604b56796bcb9abd6dfc37961172d8fbed840cb2d784573f281090b9dca2",
+          "sensor_incidence_exact": true,
+          "targets_digest": "03c3896b36f2362161405cc54337ae0f6764e7a948291a72a82793a701cda06a",
+          "vehicles": 52640
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "9d27407e132702f23bb7848f644f9963fccc046c1561ac55f362072e988d9276",
+            "calibrated_routes": "97cd530ce0a8e18b7969924e82c9904b68f337572865fb0c35fd80923368b25f",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 16.237084,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "5a395450e53010661c2d85bb3427ccf6114fac11a92688dbd7db6f657094d636",
+              "8dcf1d3a20bd3adb655dc9a6024ddc00a3a3552f15bd4222ad33010233a427f0",
+              "6b6de13faf5df7577f2251448797615eb9db3cd4f82c3f76f2b9c9c886f59584"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "40f8c264fd4b81d4f4804bd541f3409300d6a9820f3acf2cc0d1e0f47705d165"
+          },
+          "sensor_incidence_digest": "40f8c264fd4b81d4f4804bd541f3409300d6a9820f3acf2cc0d1e0f47705d165",
+          "sensor_incidence_exact": true,
+          "targets_digest": "937a3f3e89139fbe0db0f24172d0af4501e9f816384ed3b9deffb92366488122",
+          "vehicles": 51110
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225738-e3bfe154-7e43",
+      "archive_content_key": "9b6b99f5d8d0e43abd4d3e9847a522f9acf8f3aa4e128c2c15afd2b0caab52d3",
+      "archive_manifest_sha256": "78f2b4c7daa7c0fbf2ebb72f5b150ad12e4a1a30392c5d08b637842a94040032",
+      "build_key": "dce1407ed7d893a6",
+      "days": 3,
+      "demand_meta_sha256": "74b94a4b0fd0e7f6bf1313106838ac86647651c49a426bc5716038c1bf65df40",
+      "start_date": "2027-09-06",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "34dfe58bd415e2951c049ccc58d7d18fdacc77285ee0ab7636a55a0f7448886a",
+            "calibrated_routes": "3d89d47bbca2dc13e2b3261514009d775428e8cbceed8c3daa9c3b045a2b6ce4",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 45.593019,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "18a6729259f8e537e3154d943eb1e39066e2cf205cc9d15bf8b716a83511808c",
+              "bdf31ffadec231d08308c2ee46840105db75f93ccd7eca32dbb252d45cd63737",
+              "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "1caae3cebb6835e4e037c5e200118f43afec483418c423c0d29b78a5624a3009"
+          },
+          "sensor_incidence_digest": "1caae3cebb6835e4e037c5e200118f43afec483418c423c0d29b78a5624a3009",
+          "sensor_incidence_exact": true,
+          "targets_digest": "e59b46de85291be3641430071b87ced2b3f089865e358030cd62b1a530ac6693",
+          "vehicles": 58977
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "2e130b987701ece8d3e964c084d562154e973e9e2d6053acec1cb2e1f0827079",
+            "calibrated_routes": "5035cdbb02d708440f395266e3d53c9a6d452403143557b3dcde93d2f6233665",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 61.460164,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "865d40af0d70f42df74be8c27fdaad7fb45eab934ed04a7502fd99791f4b8131",
+              "fe8ede77def998f6f633602146bfb2ca89286758c565be3008fec60c8cd9aac6",
+              "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "cb47af30337ef14ba9ce83de2c925661333d2b7643c6699b3df20dfca675a660"
+          },
+          "sensor_incidence_digest": "cb47af30337ef14ba9ce83de2c925661333d2b7643c6699b3df20dfca675a660",
+          "sensor_incidence_exact": true,
+          "targets_digest": "fcbbee4b9dd5ed5c8edae0a9c090af1b9b59f8a94125829e35689e6a57fe376a",
+          "vehicles": 59531
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "7e97ea82faafbb94ce9dde29094e2b557ac0e40a30e6e9f168a1963dae50fca9",
+            "calibrated_routes": "7f9cf4a11b0d34cffb803f2714986d2092716ca722063587afda31d063e386c2",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 44.663143,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "8dcf1d3a20bd3adb655dc9a6024ddc00a3a3552f15bd4222ad33010233a427f0",
+              "6b6de13faf5df7577f2251448797615eb9db3cd4f82c3f76f2b9c9c886f59584",
+              "30d6ecf7a595ab6d1ee85ee3dd39b8146a972326b9a0275b20e61ef24f14efc9"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "37259675a0bf138f1a02e1270115c1b639af3c5a0cab5e8213c9cf6cac2425bc"
+          },
+          "sensor_incidence_digest": "37259675a0bf138f1a02e1270115c1b639af3c5a0cab5e8213c9cf6cac2425bc",
+          "sensor_incidence_exact": true,
+          "targets_digest": "188d4684b08660d660f54ed3458e0f31f52e51df1de70490072b7fa5329f1eb7",
+          "vehicles": 59356
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230432-5b265029-5e0f",
+      "archive_content_key": "b743107496ca4d8756a67697d41ceb1e15463d042222683fcfd7e79cc62f3140",
+      "archive_manifest_sha256": "705d3b47bdeb0b8217a55df3c315f8b9a680cee2999d00518e21e9454e07837e",
+      "build_key": "eb0bd33739d5e926",
+      "days": 3,
+      "demand_meta_sha256": "8ab6ecddfd8b2e7e52ca0de13295ec86b22882070cfc1f2929bb6726e5fffad0",
+      "start_date": "2027-09-07",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "1666d707275c74b216040f6a38b8e2603b7cf7b3154262e999787e21367fc508",
+            "calibrated_routes": "270ebf3678806e588e53afee51fbe35b4084b5e3271b38b7a3f3dd37a3348f46",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 17.789438,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "bdf31ffadec231d08308c2ee46840105db75f93ccd7eca32dbb252d45cd63737",
+              "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3",
+              "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "64961ef96a78ed04c1809d3ebe4ca47490dc75c281b5a72630e82b831dac176a"
+          },
+          "sensor_incidence_digest": "64961ef96a78ed04c1809d3ebe4ca47490dc75c281b5a72630e82b831dac176a",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a0e34adafcbcb83eef544daab665d91adf9d76a7fc5cf2defbf10302c63030d7",
+          "vehicles": 60535
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "51baf95bf5ecc347c63190ba30e9813cab2cd47f4bef4af96b8b6a4d291246ed",
+            "calibrated_routes": "2c35a15afddce9708f5e269a44d0f7a785709755d58e633b3f1a5a44359085f3",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.322903,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "fe8ede77def998f6f633602146bfb2ca89286758c565be3008fec60c8cd9aac6",
+              "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc",
+              "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "eace35945f311164223e795d28b72160346c4bbef50ca69eb8fc17c287800d85"
+          },
+          "sensor_incidence_digest": "eace35945f311164223e795d28b72160346c4bbef50ca69eb8fc17c287800d85",
+          "sensor_incidence_exact": true,
+          "targets_digest": "dfd5bf6b6f66e67ba2103608090698e8dafba1cf0ebc2b2347b9692d27d44491",
+          "vehicles": 60983
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "011c5d4d89ea7d8e1606574973c6ab5dd2c0d204232d0a16f4d8d33dd7b5c015",
+            "calibrated_routes": "f07567a27026474aca406087af900de26950da61bd4f7a96b32d7256a8723b1e",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.047622,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "6b6de13faf5df7577f2251448797615eb9db3cd4f82c3f76f2b9c9c886f59584",
+              "30d6ecf7a595ab6d1ee85ee3dd39b8146a972326b9a0275b20e61ef24f14efc9",
+              "c9b84d1a2b348b5df7e447158d0f138fee06113498ec36ee100082f6b1af5f00"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "150dca52232d85c334a706f909897a46a292baf2afa8a6c6248db56cb1885c97"
+          },
+          "sensor_incidence_digest": "150dca52232d85c334a706f909897a46a292baf2afa8a6c6248db56cb1885c97",
+          "sensor_incidence_exact": true,
+          "targets_digest": "8cdd04801af80da8d8fa6f6ccadf3d6f1eaed585bfcf29bc27cf2cab0edc7583",
+          "vehicles": 60853
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603",
+      "archive_content_key": "6c846a3f11cf44c5dd3eb09c15a411c6cdf694359e3bb7c0b18dd848a8c76fb0",
+      "archive_manifest_sha256": "8720d692e7239f9a68c7a034b995a06613c399cf7a0088c3a740899e5cc9aa6e",
+      "build_key": "e72299dc2abeabcd",
+      "days": 3,
+      "demand_meta_sha256": "3043483d027fc8091f71d163cd08a608bfdc804558fcba2951ca00eff6a29e12",
+      "start_date": "2027-09-08",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "0138ddc4ea103a3c5bd7e6a2c26c0d31930d76250efe839da480cc10fcf057b0",
+            "calibrated_routes": "ffdffb204e7315e0b482d75ce39df25e0db085133a76cddefe8353637fcdb920",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 17.927559,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3",
+              "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b",
+              "9d51071d8423f309d0f81826011b5192d0009443e35e9bd2076210454a42538d"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "539450951319108cbc14223fec823e98c26595aeac00272f7fed0bc81e3562c1"
+          },
+          "sensor_incidence_digest": "539450951319108cbc14223fec823e98c26595aeac00272f7fed0bc81e3562c1",
+          "sensor_incidence_exact": true,
+          "targets_digest": "c75e474d062eab177c842acc7534a28b3e8c28619197ac9c2b676db1658c6103",
+          "vehicles": 61895
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "c13957748b45b3c18071f83edb11c8e02a5e4915a547be327feec55003d33dd9",
+            "calibrated_routes": "d7c9356fc9d1b7daafaf248a06345377d7f0dda6ef23690e35727e6696e5b59c",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 24.582176,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc",
+              "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720",
+              "dd52489d2377b219b1b1478e0d411fc9dceebe3edbdc5c1c9714b155379a0697"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "1bc731475b5400101d9e32a9a5943a1dd5e9da61214bffeed0fb717049941d3d"
+          },
+          "sensor_incidence_digest": "1bc731475b5400101d9e32a9a5943a1dd5e9da61214bffeed0fb717049941d3d",
+          "sensor_incidence_exact": true,
+          "targets_digest": "dc7cc36a538875115acb9c8469632064e25cff61da21205f004b6967d8f1afdf",
+          "vehicles": 62159
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "43894d782bdf6719e2037fd37a7d4906ce4257b7a8d128a10d74d7def42ed744",
+            "calibrated_routes": "cb9a13513e01ccd3fe20b335d14bc61fb6315aff51baffe5b899680986ca20da",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.272865,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "30d6ecf7a595ab6d1ee85ee3dd39b8146a972326b9a0275b20e61ef24f14efc9",
+              "c9b84d1a2b348b5df7e447158d0f138fee06113498ec36ee100082f6b1af5f00",
+              "fcda0f6e6f5316749c90d3a5f0136b074c056984828348116087ed2f97792740"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "4a5f37597a93d74ab51c3d9cbece1fd55e5ea447f4100a72137ec3b103e2402a"
+          },
+          "sensor_incidence_digest": "4a5f37597a93d74ab51c3d9cbece1fd55e5ea447f4100a72137ec3b103e2402a",
+          "sensor_incidence_exact": true,
+          "targets_digest": "1d0942ad0862f9ed399825200d4475093b50525097ef85ae7889db1c8a24d767",
+          "vehicles": 61964
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222709-889e6f89-d6d5",
+      "archive_content_key": "782f2e480f945e03af3e3fda8b2ce5bd2dc76dae8460ff46777a1de3fff2e65b",
+      "archive_manifest_sha256": "ea33986733a44f07d1eba3314c12b7ef64fe1092e41d52370df0448cf50be5fd",
+      "build_key": "3f5d86eed8fe5c17",
+      "days": 3,
+      "demand_meta_sha256": "e7d97e3f7031cb3827118f7be5dd95519c3130fbfd0d0507a1207a638676adbd",
+      "start_date": "2027-09-09",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "725448e82cc4e2ebe7a7f34317f3e502fe852f09ccf990ddd4d0901171ad6613",
+            "calibrated_routes": "27b19bcdb06f2b599f167e8f2e7f61ab269292a06e6d3ef3020f91d4d6b38f27",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 42.646024,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b",
+              "9d51071d8423f309d0f81826011b5192d0009443e35e9bd2076210454a42538d",
+              "f2439d5bc869087d6b573f657b663700d18302b129c3a121c947305d29788f61"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "5ad199736cb803d2ebe4b3fbf19e25629ac97a71feee7b65ce50713901a0da23"
+          },
+          "sensor_incidence_digest": "5ad199736cb803d2ebe4b3fbf19e25629ac97a71feee7b65ce50713901a0da23",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a37f9e2ba9732fb2f6309e9fb60eee0b1debb6136e3ac07754bb29447c84d9e6",
+          "vehicles": 56194
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "63deab720ece46b107f8ee06ceba7e92025311a06bfe6d9b72aeb6ee7f4de18c",
+            "calibrated_routes": "62d36af702fda24d713843609534883279bc8fafdca4edbfc90add927c0bc6e6",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 43.648259,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720",
+              "dd52489d2377b219b1b1478e0d411fc9dceebe3edbdc5c1c9714b155379a0697",
+              "9c59afe296d96fbf033b3891d33df6b07ac4cecb42e85b3d2fcbfc444c7ea91e"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "2353c85b0a01b9ba0daf897b6e43f4baa67642afb235495c8de03a1b4e1f6b15"
+          },
+          "sensor_incidence_digest": "2353c85b0a01b9ba0daf897b6e43f4baa67642afb235495c8de03a1b4e1f6b15",
+          "sensor_incidence_exact": true,
+          "targets_digest": "fa7ea341bf44367d7532a02fe8dea2311091803bafa34e720009eb85c5ba9f23",
+          "vehicles": 57063
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "4421f03f5ad97aff0c39583b02328e7ed3874a1c3cc50125d407d576ea156239",
+            "calibrated_routes": "6a80bf4b215a47ae2c5e477f18e8e0dfd69502d440eef88d6047b92d9685c667",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 42.177354,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "c9b84d1a2b348b5df7e447158d0f138fee06113498ec36ee100082f6b1af5f00",
+              "fcda0f6e6f5316749c90d3a5f0136b074c056984828348116087ed2f97792740",
+              "e96a8045a2eb10a4e070ebca6948e29dadb618a2e51c08e0d4bd5578c57fb4e9"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "18ad4d8a967a56672d6864302009663bad2c1b024cb0b32d2063fb26d9391eaf"
+          },
+          "sensor_incidence_digest": "18ad4d8a967a56672d6864302009663bad2c1b024cb0b32d2063fb26d9391eaf",
+          "sensor_incidence_exact": true,
+          "targets_digest": "d508a972a3d4ed3b6b96e56a586257de79b8092a9e0d4e7d70110aa8680e0ae7",
+          "vehicles": 54929
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230407-7f119ae2-9f58",
+      "archive_content_key": "c2a0ec057231f73ebed89226f9b3911de162033c235c1316aea265410d5d4803",
+      "archive_manifest_sha256": "a56727e6dc1efcc8b1e5bdc31b38554730a78b08dbcb5d8d4551ba1acc8b398b",
+      "build_key": "e9b489b9b469e9b6",
+      "days": 3,
+      "demand_meta_sha256": "1fb8360f965f556e8be1c616aa9bd07b54663f97137cec338dcf4e1286b61cbb",
+      "start_date": "2027-09-10",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "50c49ba3a545c8eb31cda484f701fc508ff300a59aa3a863ff4b6a1b4c85fc3a",
+            "calibrated_routes": "308ffe628160cd5625c142afa04f77e59618778a4c1ba31054f7296dd50df734",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 13.521177,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "9d51071d8423f309d0f81826011b5192d0009443e35e9bd2076210454a42538d",
+              "f2439d5bc869087d6b573f657b663700d18302b129c3a121c947305d29788f61",
+              "1209d13596330bba6d43fe159077966e11172c765e764db5e9a8e52d88c8486a"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "8ede6ddef574b253f94d38da2b8d0e3574b134a9ad50b4cac962f6f2944ce218"
+          },
+          "sensor_incidence_digest": "8ede6ddef574b253f94d38da2b8d0e3574b134a9ad50b4cac962f6f2944ce218",
+          "sensor_incidence_exact": true,
+          "targets_digest": "e9c8eb028796d0a44bfe2493f45a1cbbc41cbc8bc86c631725cbe0869b2bdf3f",
+          "vehicles": 51598
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "9534d41965d6a295d9277ce69dd3935e2248ec2fd95c4c6f5a3739b8db747c3b",
+            "calibrated_routes": "e458bba64e57d850dc08beffdc2bda546a7dd3edf0c528710044fb16c62ffbed",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 13.759088,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "dd52489d2377b219b1b1478e0d411fc9dceebe3edbdc5c1c9714b155379a0697",
+              "9c59afe296d96fbf033b3891d33df6b07ac4cecb42e85b3d2fcbfc444c7ea91e",
+              "c987ec27bfa4bda91281f5a636481ba9dd2051b083dda27a7928ef475aeb1796"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "f9fab5a149ab99b07921aedf143b3e1054d1251aad90fbc65a732e44263f1a2d"
+          },
+          "sensor_incidence_digest": "f9fab5a149ab99b07921aedf143b3e1054d1251aad90fbc65a732e44263f1a2d",
+          "sensor_incidence_exact": true,
+          "targets_digest": "91743c859bf14b5f34375c784775e6b0d87675c8a70f580d8285bb35d9220ff3",
+          "vehicles": 52660
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "7dcd1ec3191da8fd8a5d61f616da7ac1e57f31ee74f86eb2df5374b4b591e541",
+            "calibrated_routes": "930c3c97ea738dece9e59ea0532d43328f1978259cefc0847d050759d1d787d1",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 13.368819,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "fcda0f6e6f5316749c90d3a5f0136b074c056984828348116087ed2f97792740",
+              "e96a8045a2eb10a4e070ebca6948e29dadb618a2e51c08e0d4bd5578c57fb4e9",
+              "5a395450e53010661c2d85bb3427ccf6114fac11a92688dbd7db6f657094d636"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "dbd19bac6259fc06e3f002a3781dc01a380d4ef1bf0117ce3d8f74d6666fb065"
+          },
+          "sensor_incidence_digest": "dbd19bac6259fc06e3f002a3781dc01a380d4ef1bf0117ce3d8f74d6666fb065",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a50db6358d67ead111668a5b813d038cea32bcf84c5a077f2b105ae900fe554b",
+          "vehicles": 50635
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72",
+      "archive_content_key": "1fe659e7a0b9b25f51035ac11e39495d38095fddc84da5341cf567cd319fb35a",
+      "archive_manifest_sha256": "9fe027d033355b76d054d6e862db5a038fc90770b27eb5e99a404037c41be565",
+      "build_key": "9c7ad9c97b6bdbc6",
+      "days": 3,
+      "demand_meta_sha256": "5136153beae3bffece06c8f4e47ca272e0d00b9758bf9f981cbba6784b377a58",
+      "start_date": "2027-09-11",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "0cf7913c5e94011c27049f3c9010c7240d1b987d5c95643114ca6251dd4f5d44",
+            "calibrated_routes": "44413462fceb856dcba5d9f8a5fc45cd0d54568509236c8eb72a85b06501bfda",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 15.602657,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "f2439d5bc869087d6b573f657b663700d18302b129c3a121c947305d29788f61",
+              "1209d13596330bba6d43fe159077966e11172c765e764db5e9a8e52d88c8486a",
+              "18a6729259f8e537e3154d943eb1e39066e2cf205cc9d15bf8b716a83511808c"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "1bd6f03877213de16620ce340564d92f5b41327697efd0a1a1fbd8c104b541a4"
+          },
+          "sensor_incidence_digest": "1bd6f03877213de16620ce340564d92f5b41327697efd0a1a1fbd8c104b541a4",
+          "sensor_incidence_exact": true,
+          "targets_digest": "bb26f5a85b20f7eee0cd343e97fccd85eb27b0908d7f4bb5701b43eca1812c2e",
+          "vehicles": 49826
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "35d7a6dba3d52df751db1fcb9c713eeb35df9283db21ec5001d70e7ad2eccca6",
+            "calibrated_routes": "3137ef8ca6e3e8dc0305577e5feab9d6fdf0ec5d601a764c02c67777db4e70cd",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 16.00631,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "9c59afe296d96fbf033b3891d33df6b07ac4cecb42e85b3d2fcbfc444c7ea91e",
+              "c987ec27bfa4bda91281f5a636481ba9dd2051b083dda27a7928ef475aeb1796",
+              "865d40af0d70f42df74be8c27fdaad7fb45eab934ed04a7502fd99791f4b8131"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "c1455a5abbf8c63a9cb1350307f18508aeb9a3aa5fa80b5fc53bc82e36d3c5b9"
+          },
+          "sensor_incidence_digest": "c1455a5abbf8c63a9cb1350307f18508aeb9a3aa5fa80b5fc53bc82e36d3c5b9",
+          "sensor_incidence_exact": true,
+          "targets_digest": "8014a202ea073802b1f7a294f6eaf36e8a7902163630285ef6026083ce32dca8",
+          "vehicles": 51105
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "bd937f035a6999779e01d45c5f5259b047c0a4f9a4d9013560a9b7c86078efbf",
+            "calibrated_routes": "7caf6a8c373bcbfd21ffa4a75513776ad8e042a7c7f4aae8ae2a0b19142fafa0",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 15.71766,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "e96a8045a2eb10a4e070ebca6948e29dadb618a2e51c08e0d4bd5578c57fb4e9",
+              "5a395450e53010661c2d85bb3427ccf6114fac11a92688dbd7db6f657094d636",
+              "8dcf1d3a20bd3adb655dc9a6024ddc00a3a3552f15bd4222ad33010233a427f0"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "0b1869c61132302acd67348f20b0c3e6fd9b42ec711065b33b61034e2038abbd"
+          },
+          "sensor_incidence_digest": "0b1869c61132302acd67348f20b0c3e6fd9b42ec711065b33b61034e2038abbd",
+          "sensor_incidence_exact": true,
+          "targets_digest": "dd8724ce13a2a8aca2661e91822299441385d499974b2508eb864254cdef69c5",
+          "vehicles": 49415
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230455-3e34ff00-af60",
+      "archive_content_key": "8b853bfc6d2659af4a7699963614489e5cc9600194f5837761f4579898f83633",
+      "archive_manifest_sha256": "4ec3dda8f26f165f1cb552a46a5275f8623f95ec271eeff791b3aa6a6a4061c5",
+      "build_key": "eb5d47e234425a98",
+      "days": 3,
+      "demand_meta_sha256": "3a700f6ecc536e720eee7fa4977b9fdc54a8a477c7e48640d8d496ebfabd5e5e",
+      "start_date": "2027-09-12",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "b0a568df28c15062b6dab23cc0efc45f85f8fa7730e0549dec93057f88827655",
+            "calibrated_routes": "5d414ff6130c136c6d8efca864e19de3d29dfd292f42a31dd8126b50489a38b5",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 16.107585,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "1209d13596330bba6d43fe159077966e11172c765e764db5e9a8e52d88c8486a",
+              "18a6729259f8e537e3154d943eb1e39066e2cf205cc9d15bf8b716a83511808c",
+              "bdf31ffadec231d08308c2ee46840105db75f93ccd7eca32dbb252d45cd63737"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "ae8284c450f5bb2048ffc50684dcefb575203a349923ac5ebbd6312db3d198bd"
+          },
+          "sensor_incidence_digest": "ae8284c450f5bb2048ffc50684dcefb575203a349923ac5ebbd6312db3d198bd",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a3d9fca19e9aa72895cc683f13f43b1a805a86f648ae87d17898eb01293cdb6c",
+          "vehicles": 51221
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "5ebe140cd621afd24436118f9a7a1a8c4c36edfed954d88dfb9ab63ce825c2b4",
+            "calibrated_routes": "e3206f8e2881dd45402fa811c85dac52ab7a6ecb256a175ae5af0ff5c1f7acb8",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 16.618157,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "c987ec27bfa4bda91281f5a636481ba9dd2051b083dda27a7928ef475aeb1796",
+              "865d40af0d70f42df74be8c27fdaad7fb45eab934ed04a7502fd99791f4b8131",
+              "fe8ede77def998f6f633602146bfb2ca89286758c565be3008fec60c8cd9aac6"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "f869604b56796bcb9abd6dfc37961172d8fbed840cb2d784573f281090b9dca2"
+          },
+          "sensor_incidence_digest": "f869604b56796bcb9abd6dfc37961172d8fbed840cb2d784573f281090b9dca2",
+          "sensor_incidence_exact": true,
+          "targets_digest": "03c3896b36f2362161405cc54337ae0f6764e7a948291a72a82793a701cda06a",
+          "vehicles": 52453
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "064b03a22e3c373cd21e1fee28fcd0f941e6450c859c8a2b67a54bbc357fbec5",
+            "calibrated_routes": "52c21301ad8439a46e0b723761b57ef621892e4a436c3f149cca6031ba4ec59e",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 16.255648,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "5a395450e53010661c2d85bb3427ccf6114fac11a92688dbd7db6f657094d636",
+              "8dcf1d3a20bd3adb655dc9a6024ddc00a3a3552f15bd4222ad33010233a427f0",
+              "6b6de13faf5df7577f2251448797615eb9db3cd4f82c3f76f2b9c9c886f59584"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "40f8c264fd4b81d4f4804bd541f3409300d6a9820f3acf2cc0d1e0f47705d165"
+          },
+          "sensor_incidence_digest": "40f8c264fd4b81d4f4804bd541f3409300d6a9820f3acf2cc0d1e0f47705d165",
+          "sensor_incidence_exact": true,
+          "targets_digest": "937a3f3e89139fbe0db0f24172d0af4501e9f816384ed3b9deffb92366488122",
+          "vehicles": 50860
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222404-4b5941dd-77c7",
+      "archive_content_key": "56160da62dcdddefa2e3f7d4de751061428920f2201504b4a650769b09a1cb5c",
+      "archive_manifest_sha256": "c31bcde9ab6aface9c3024a4f2808b24068161efbb961f327921a99f6d0b2361",
+      "build_key": "340168e305f8381e",
+      "days": 3,
+      "demand_meta_sha256": "4236b04930a5d880fcc970212164bd04a343226cf56496cd6556f1f6bd34dbfd",
+      "start_date": "2027-09-13",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "13a68df5adf67bbfc296a5c5f11d317d4ce0455b3434792bdeb01e699cd53a20",
+            "calibrated_routes": "19b2f83089271eb581aba30993edf4fa178c3f8ed2ffc8d08da34095ec0e13fd",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 44.31251,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "18a6729259f8e537e3154d943eb1e39066e2cf205cc9d15bf8b716a83511808c",
+              "bdf31ffadec231d08308c2ee46840105db75f93ccd7eca32dbb252d45cd63737",
+              "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "1caae3cebb6835e4e037c5e200118f43afec483418c423c0d29b78a5624a3009"
+          },
+          "sensor_incidence_digest": "1caae3cebb6835e4e037c5e200118f43afec483418c423c0d29b78a5624a3009",
+          "sensor_incidence_exact": true,
+          "targets_digest": "e59b46de85291be3641430071b87ced2b3f089865e358030cd62b1a530ac6693",
+          "vehicles": 58842
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "5f66916256e50c40e85a7d2804fdf6befd15ebe9cd71565a0980f86ce41d8848",
+            "calibrated_routes": "0a3e194825aa61dca1cbfe2aae08ce32a068ce201a55f03e81e475a032a779e1",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 44.998194,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "865d40af0d70f42df74be8c27fdaad7fb45eab934ed04a7502fd99791f4b8131",
+              "fe8ede77def998f6f633602146bfb2ca89286758c565be3008fec60c8cd9aac6",
+              "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "cb47af30337ef14ba9ce83de2c925661333d2b7643c6699b3df20dfca675a660"
+          },
+          "sensor_incidence_digest": "cb47af30337ef14ba9ce83de2c925661333d2b7643c6699b3df20dfca675a660",
+          "sensor_incidence_exact": true,
+          "targets_digest": "fcbbee4b9dd5ed5c8edae0a9c090af1b9b59f8a94125829e35689e6a57fe376a",
+          "vehicles": 59513
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "672155e9855e349c6a6e2fa72c441fb54b26bf22ae8ff4349f2ecaf04c50e765",
+            "calibrated_routes": "00c037ec2f5862509d6b2c40bb935f20e419194cf47937deb60379548069218c",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 45.782656,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "8dcf1d3a20bd3adb655dc9a6024ddc00a3a3552f15bd4222ad33010233a427f0",
+              "6b6de13faf5df7577f2251448797615eb9db3cd4f82c3f76f2b9c9c886f59584",
+              "30d6ecf7a595ab6d1ee85ee3dd39b8146a972326b9a0275b20e61ef24f14efc9"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "37259675a0bf138f1a02e1270115c1b639af3c5a0cab5e8213c9cf6cac2425bc"
+          },
+          "sensor_incidence_digest": "37259675a0bf138f1a02e1270115c1b639af3c5a0cab5e8213c9cf6cac2425bc",
+          "sensor_incidence_exact": true,
+          "targets_digest": "188d4684b08660d660f54ed3458e0f31f52e51df1de70490072b7fa5329f1eb7",
+          "vehicles": 59358
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224309-23459e2e-c9ef",
+      "archive_content_key": "8e47519b0f6cf3fca62832e19e5e0d1d28e47844c9f76413850345b02d597c28",
+      "archive_manifest_sha256": "b7d7a357bb2c9f9196b3ffd46492741dbaa9a74b50f23505aa7f0bc58e682310",
+      "build_key": "90a93715895966dc",
+      "days": 3,
+      "demand_meta_sha256": "84467e141600570b33c9f5bc12c5b7d54ac1ba13b424c61ac42dd31ff88a309c",
+      "start_date": "2027-09-14",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "62d46c3476f73ee2775ee20ac06f401c71aa87a36f630db1b6ac6f6d2768176b",
+            "calibrated_routes": "6038e16dfac2d59a722ffd1af8d7663011c1afe543532bf8e92977dee7632bdf",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 17.786095,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "bdf31ffadec231d08308c2ee46840105db75f93ccd7eca32dbb252d45cd63737",
+              "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3",
+              "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "64961ef96a78ed04c1809d3ebe4ca47490dc75c281b5a72630e82b831dac176a"
+          },
+          "sensor_incidence_digest": "64961ef96a78ed04c1809d3ebe4ca47490dc75c281b5a72630e82b831dac176a",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a0e34adafcbcb83eef544daab665d91adf9d76a7fc5cf2defbf10302c63030d7",
+          "vehicles": 60420
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "6ee5c148f22d178105c670e89a17af94d5dfdf11b6992d3116df5d3fff09389d",
+            "calibrated_routes": "be474ab3b7230350bbc17f41e637e33935b2946130115913168a5f8f76d3d511",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 17.68418,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "fe8ede77def998f6f633602146bfb2ca89286758c565be3008fec60c8cd9aac6",
+              "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc",
+              "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "eace35945f311164223e795d28b72160346c4bbef50ca69eb8fc17c287800d85"
+          },
+          "sensor_incidence_digest": "eace35945f311164223e795d28b72160346c4bbef50ca69eb8fc17c287800d85",
+          "sensor_incidence_exact": true,
+          "targets_digest": "dfd5bf6b6f66e67ba2103608090698e8dafba1cf0ebc2b2347b9692d27d44491",
+          "vehicles": 60931
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "b964a6d79a01e280a8fa51a8fa13fe497e3f76ade62bda95db5732c8ec678dcb",
+            "calibrated_routes": "8d6e11334cafad4244fb57d901fabbccee0b26871d30577a1abc73d9c28b234b",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 17.947737,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "6b6de13faf5df7577f2251448797615eb9db3cd4f82c3f76f2b9c9c886f59584",
+              "30d6ecf7a595ab6d1ee85ee3dd39b8146a972326b9a0275b20e61ef24f14efc9",
+              "c9b84d1a2b348b5df7e447158d0f138fee06113498ec36ee100082f6b1af5f00"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "150dca52232d85c334a706f909897a46a292baf2afa8a6c6248db56cb1885c97"
+          },
+          "sensor_incidence_digest": "150dca52232d85c334a706f909897a46a292baf2afa8a6c6248db56cb1885c97",
+          "sensor_incidence_exact": true,
+          "targets_digest": "8cdd04801af80da8d8fa6f6ccadf3d6f1eaed585bfcf29bc27cf2cab0edc7583",
+          "vehicles": 60890
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230620-a893719c-a662",
+      "archive_content_key": "bec4f0d0bb89a6c0239e98d7ebaad911ed0807857f79be2533604dbec41641f5",
+      "archive_manifest_sha256": "eaeb4c28db84873238f95d6a5b5656706a5be773701fd8a8a4267196d4740027",
+      "build_key": "f3d1a9ac4d14bd7a",
+      "days": 3,
+      "demand_meta_sha256": "d24f31f67c4157e5fff2298dc5d5e5282db7ebeda794520dde963882ab8badf4",
+      "start_date": "2027-09-15",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "e0ee44a7bc01b59166089c651326a00c1ff5f8d75354bf050a3ab8d1bfc96ca2",
+            "calibrated_routes": "36eb2e6779044ad6a3f71739308cedde60d7ad266b472137ecf726c3ed8c2c65",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.382503,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3",
+              "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b",
+              "9d51071d8423f309d0f81826011b5192d0009443e35e9bd2076210454a42538d"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "539450951319108cbc14223fec823e98c26595aeac00272f7fed0bc81e3562c1"
+          },
+          "sensor_incidence_digest": "539450951319108cbc14223fec823e98c26595aeac00272f7fed0bc81e3562c1",
+          "sensor_incidence_exact": true,
+          "targets_digest": "c75e474d062eab177c842acc7534a28b3e8c28619197ac9c2b676db1658c6103",
+          "vehicles": 61915
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "ab7164b31da3f6618dd401afc3d6a6975c5a6e434eaf97918933095cc6fc84c6",
+            "calibrated_routes": "375ea2f7a9ab0e4ab296e562246b660a39fdcf0b376be23eeb45e2adb8118427",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.130284,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc",
+              "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720",
+              "dd52489d2377b219b1b1478e0d411fc9dceebe3edbdc5c1c9714b155379a0697"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "1bc731475b5400101d9e32a9a5943a1dd5e9da61214bffeed0fb717049941d3d"
+          },
+          "sensor_incidence_digest": "1bc731475b5400101d9e32a9a5943a1dd5e9da61214bffeed0fb717049941d3d",
+          "sensor_incidence_exact": true,
+          "targets_digest": "dc7cc36a538875115acb9c8469632064e25cff61da21205f004b6967d8f1afdf",
+          "vehicles": 62178
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "a6d81d6e8bdc8159c7def71c6fca3e0194c9399b369f5441100a8750dc03dfd1",
+            "calibrated_routes": "ddd3d093c6b6e31a34150981bbcca0fc6d340edd41b0651ce648a7678962d55d",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.470554,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "30d6ecf7a595ab6d1ee85ee3dd39b8146a972326b9a0275b20e61ef24f14efc9",
+              "c9b84d1a2b348b5df7e447158d0f138fee06113498ec36ee100082f6b1af5f00",
+              "fcda0f6e6f5316749c90d3a5f0136b074c056984828348116087ed2f97792740"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "4a5f37597a93d74ab51c3d9cbece1fd55e5ea447f4100a72137ec3b103e2402a"
+          },
+          "sensor_incidence_digest": "4a5f37597a93d74ab51c3d9cbece1fd55e5ea447f4100a72137ec3b103e2402a",
+          "sensor_incidence_exact": true,
+          "targets_digest": "1d0942ad0862f9ed399825200d4475093b50525097ef85ae7889db1c8a24d767",
+          "vehicles": 62139
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33",
+      "archive_content_key": "cfb86558a8bd4bc690af033ef274c6242601f0308edc60706644a76dc89af478",
+      "archive_manifest_sha256": "2f8ffbd2123d280b4faf8944fd6b7cdcbe408c4807a05dcecbef5a74efbc2a3d",
+      "build_key": "b7e7cef8b702abae",
+      "days": 3,
+      "demand_meta_sha256": "57ad042825fc8b99cd631dff101ea8a53e8a8c23ce78949c8ed82093cb3f8d8f",
+      "start_date": "2027-09-16",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "8d27c2beafe8381ed67abac30a1a30aa21ebfec8982676029ea4e15f2200496a",
+            "calibrated_routes": "a832cf124fefc8d89784bce5eef9c6119a5627490eda4ea470074da80415de51",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 48.586343,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b",
+              "9d51071d8423f309d0f81826011b5192d0009443e35e9bd2076210454a42538d",
+              "f2439d5bc869087d6b573f657b663700d18302b129c3a121c947305d29788f61"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "5ad199736cb803d2ebe4b3fbf19e25629ac97a71feee7b65ce50713901a0da23"
+          },
+          "sensor_incidence_digest": "5ad199736cb803d2ebe4b3fbf19e25629ac97a71feee7b65ce50713901a0da23",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a37f9e2ba9732fb2f6309e9fb60eee0b1debb6136e3ac07754bb29447c84d9e6",
+          "vehicles": 56266
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "4f1e2015b2e8a0162ea56e942a641d487bc6cd3896de6e3230fe1bd53b2ed3d0",
+            "calibrated_routes": "25753bc5c2db9880d7a1e24a29d6248ed2c896d15c7c99481e68308696d95b0d",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 49.374476,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720",
+              "dd52489d2377b219b1b1478e0d411fc9dceebe3edbdc5c1c9714b155379a0697",
+              "9c59afe296d96fbf033b3891d33df6b07ac4cecb42e85b3d2fcbfc444c7ea91e"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "2353c85b0a01b9ba0daf897b6e43f4baa67642afb235495c8de03a1b4e1f6b15"
+          },
+          "sensor_incidence_digest": "2353c85b0a01b9ba0daf897b6e43f4baa67642afb235495c8de03a1b4e1f6b15",
+          "sensor_incidence_exact": true,
+          "targets_digest": "fa7ea341bf44367d7532a02fe8dea2311091803bafa34e720009eb85c5ba9f23",
+          "vehicles": 57232
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "93226b9a792528d9ca50e263f7c274cdbdbf1ca1f658f56aaf84744121a1e266",
+            "calibrated_routes": "61400b3120cb403d61702e8cd57160837028654017d13dc623bff0c217c37f88",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 42.841656,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "c9b84d1a2b348b5df7e447158d0f138fee06113498ec36ee100082f6b1af5f00",
+              "fcda0f6e6f5316749c90d3a5f0136b074c056984828348116087ed2f97792740",
+              "e96a8045a2eb10a4e070ebca6948e29dadb618a2e51c08e0d4bd5578c57fb4e9"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "18ad4d8a967a56672d6864302009663bad2c1b024cb0b32d2063fb26d9391eaf"
+          },
+          "sensor_incidence_digest": "18ad4d8a967a56672d6864302009663bad2c1b024cb0b32d2063fb26d9391eaf",
+          "sensor_incidence_exact": true,
+          "targets_digest": "d508a972a3d4ed3b6b96e56a586257de79b8092a9e0d4e7d70110aa8680e0ae7",
+          "vehicles": 55232
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225243-61cb7aca-8652",
+      "archive_content_key": "6bcae642202f42e526addd00e564acfc14c54334e24fa30c6b7b8d098b449a5b",
+      "archive_manifest_sha256": "f38e85af9a14a068a7ddf7269d62f6ab100e9a3e39e6778c155da258f15526fe",
+      "build_key": "cff4da5d9bb7efb7",
+      "days": 3,
+      "demand_meta_sha256": "53297aae2913214be0f4f66136f77cb13ad5c623a213005fcc9f420cfb9f31d4",
+      "start_date": "2027-09-17",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "381edb5b7f6fd37f1ac2b4454abc209b12864ecdadc47400d783a0f0641b0168",
+            "calibrated_routes": "bd0dc44f38cd210bac35eb2150439853ae3894bc84a76ebaa402a86cf78d327c",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 13.480779,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "9d51071d8423f309d0f81826011b5192d0009443e35e9bd2076210454a42538d",
+              "f2439d5bc869087d6b573f657b663700d18302b129c3a121c947305d29788f61",
+              "1209d13596330bba6d43fe159077966e11172c765e764db5e9a8e52d88c8486a"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "8ede6ddef574b253f94d38da2b8d0e3574b134a9ad50b4cac962f6f2944ce218"
+          },
+          "sensor_incidence_digest": "8ede6ddef574b253f94d38da2b8d0e3574b134a9ad50b4cac962f6f2944ce218",
+          "sensor_incidence_exact": true,
+          "targets_digest": "e9c8eb028796d0a44bfe2493f45a1cbbc41cbc8bc86c631725cbe0869b2bdf3f",
+          "vehicles": 51603
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "9b2fb2d323fec585002463fd280bcf12ee40035736f624773bc29f72d2c9f68a",
+            "calibrated_routes": "487f321e3ec6ba8237a7fdf27d94486a9ca3ff3401efb3b49c427ed91fb1618d",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 13.772883,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "dd52489d2377b219b1b1478e0d411fc9dceebe3edbdc5c1c9714b155379a0697",
+              "9c59afe296d96fbf033b3891d33df6b07ac4cecb42e85b3d2fcbfc444c7ea91e",
+              "c987ec27bfa4bda91281f5a636481ba9dd2051b083dda27a7928ef475aeb1796"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "f9fab5a149ab99b07921aedf143b3e1054d1251aad90fbc65a732e44263f1a2d"
+          },
+          "sensor_incidence_digest": "f9fab5a149ab99b07921aedf143b3e1054d1251aad90fbc65a732e44263f1a2d",
+          "sensor_incidence_exact": true,
+          "targets_digest": "91743c859bf14b5f34375c784775e6b0d87675c8a70f580d8285bb35d9220ff3",
+          "vehicles": 52748
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "a993ce7b5004156d7ebdb5ab0d35d3a23a78983abb73f8867f8439fda90b659d",
+            "calibrated_routes": "d72beac7ff5a205a63e3de0366322e9651a12c8c348beb6cf4e1d007bb84ddb5",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 13.368533,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "fcda0f6e6f5316749c90d3a5f0136b074c056984828348116087ed2f97792740",
+              "e96a8045a2eb10a4e070ebca6948e29dadb618a2e51c08e0d4bd5578c57fb4e9",
+              "5a395450e53010661c2d85bb3427ccf6114fac11a92688dbd7db6f657094d636"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "dbd19bac6259fc06e3f002a3781dc01a380d4ef1bf0117ce3d8f74d6666fb065"
+          },
+          "sensor_incidence_digest": "dbd19bac6259fc06e3f002a3781dc01a380d4ef1bf0117ce3d8f74d6666fb065",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a50db6358d67ead111668a5b813d038cea32bcf84c5a077f2b105ae900fe554b",
+          "vehicles": 50836
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-215415-af2d83e6-bc11",
+      "archive_content_key": "5849d34a9a69723c34e2aafcec82c4c968b68864a69d892ad46ad5c2d8b889e0",
+      "archive_manifest_sha256": "ce9f12f86651abb36a37fd20caef0fd9917e14a58b6dbee6cdb575dc73aab848",
+      "build_key": "06cc309e4779897c",
+      "days": 3,
+      "demand_meta_sha256": "46bdf218fac1928b163dd810509efc3c8d34aabb2bcf91da754050c85946d092",
+      "start_date": "2027-09-18",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "3b0cadc43fbf4430dd4588afd7837d418a579c2222912ed50b6d7bada1eaebd7",
+            "calibrated_routes": "40bad0d2fde6196a887baeb170f7965ea98c7fa96148ef2d8fa1f755f3561e3c",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 15.784881,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "f2439d5bc869087d6b573f657b663700d18302b129c3a121c947305d29788f61",
+              "1209d13596330bba6d43fe159077966e11172c765e764db5e9a8e52d88c8486a",
+              "18a6729259f8e537e3154d943eb1e39066e2cf205cc9d15bf8b716a83511808c"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "1bd6f03877213de16620ce340564d92f5b41327697efd0a1a1fbd8c104b541a4"
+          },
+          "sensor_incidence_digest": "1bd6f03877213de16620ce340564d92f5b41327697efd0a1a1fbd8c104b541a4",
+          "sensor_incidence_exact": true,
+          "targets_digest": "bb26f5a85b20f7eee0cd343e97fccd85eb27b0908d7f4bb5701b43eca1812c2e",
+          "vehicles": 49851
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "2c73177bd443e8fe07dd9e5f1eb92e3359783d5874ad79b368a7aa9350d78152",
+            "calibrated_routes": "17301074ec3dae1b27833a611054e179cdec4bfc4a4e41fac01a9b0e10246ee8",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 15.86721,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "9c59afe296d96fbf033b3891d33df6b07ac4cecb42e85b3d2fcbfc444c7ea91e",
+              "c987ec27bfa4bda91281f5a636481ba9dd2051b083dda27a7928ef475aeb1796",
+              "865d40af0d70f42df74be8c27fdaad7fb45eab934ed04a7502fd99791f4b8131"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "c1455a5abbf8c63a9cb1350307f18508aeb9a3aa5fa80b5fc53bc82e36d3c5b9"
+          },
+          "sensor_incidence_digest": "c1455a5abbf8c63a9cb1350307f18508aeb9a3aa5fa80b5fc53bc82e36d3c5b9",
+          "sensor_incidence_exact": true,
+          "targets_digest": "8014a202ea073802b1f7a294f6eaf36e8a7902163630285ef6026083ce32dca8",
+          "vehicles": 51175
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "15ae4e08bedd668ba2b1aa0b5c5f9966639ca5713df102a3cb59f7854df6ca0d",
+            "calibrated_routes": "3dff89dff38f4981bcb807c64ab0755043aacb5b136f8d9ee1f4b7cf9997ab2c",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 15.718129,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "e96a8045a2eb10a4e070ebca6948e29dadb618a2e51c08e0d4bd5578c57fb4e9",
+              "5a395450e53010661c2d85bb3427ccf6114fac11a92688dbd7db6f657094d636",
+              "8dcf1d3a20bd3adb655dc9a6024ddc00a3a3552f15bd4222ad33010233a427f0"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "0b1869c61132302acd67348f20b0c3e6fd9b42ec711065b33b61034e2038abbd"
+          },
+          "sensor_incidence_digest": "0b1869c61132302acd67348f20b0c3e6fd9b42ec711065b33b61034e2038abbd",
+          "sensor_incidence_exact": true,
+          "targets_digest": "dd8724ce13a2a8aca2661e91822299441385d499974b2508eb864254cdef69c5",
+          "vehicles": 49497
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221303-3a1fda45-188f",
+      "archive_content_key": "ffb8c79b719e45d8fae852db3e81611ee0ac3e1c5f79774806c1f1c02e293f6c",
+      "archive_manifest_sha256": "ede3ef8a9d62aa14da24ab225d44f34de1f8bb156ad79cf368ddd6955b69f664",
+      "build_key": "16f1d6176c7a9133",
+      "days": 3,
+      "demand_meta_sha256": "fc082ddb484574efc29a2d4707164f4a8316097daa19b4bba35e9b64c6ba7059",
+      "start_date": "2027-09-19",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "1855606ba00c9fb6a75dccf41a136fc7f12fadbc784da44d1bd06083b4db2f46",
+            "calibrated_routes": "6fdad2fdc92b136e6b686ead579b3d3212c88df6fce02e8255fbc782b506f4fe",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 16.163358,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "1209d13596330bba6d43fe159077966e11172c765e764db5e9a8e52d88c8486a",
+              "18a6729259f8e537e3154d943eb1e39066e2cf205cc9d15bf8b716a83511808c",
+              "bdf31ffadec231d08308c2ee46840105db75f93ccd7eca32dbb252d45cd63737"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "ae8284c450f5bb2048ffc50684dcefb575203a349923ac5ebbd6312db3d198bd"
+          },
+          "sensor_incidence_digest": "ae8284c450f5bb2048ffc50684dcefb575203a349923ac5ebbd6312db3d198bd",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a3d9fca19e9aa72895cc683f13f43b1a805a86f648ae87d17898eb01293cdb6c",
+          "vehicles": 51327
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "aab400af8d6bb130b085c3699ba65c3d2faba1e8c7b4d2d91eeb17c06ff919f4",
+            "calibrated_routes": "baadb761bb649f3b7310faffc18ff3d6d10001240bfbd452e0a3d5397a2c581e",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 17.006468,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "c987ec27bfa4bda91281f5a636481ba9dd2051b083dda27a7928ef475aeb1796",
+              "865d40af0d70f42df74be8c27fdaad7fb45eab934ed04a7502fd99791f4b8131",
+              "fe8ede77def998f6f633602146bfb2ca89286758c565be3008fec60c8cd9aac6"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "f869604b56796bcb9abd6dfc37961172d8fbed840cb2d784573f281090b9dca2"
+          },
+          "sensor_incidence_digest": "f869604b56796bcb9abd6dfc37961172d8fbed840cb2d784573f281090b9dca2",
+          "sensor_incidence_exact": true,
+          "targets_digest": "03c3896b36f2362161405cc54337ae0f6764e7a948291a72a82793a701cda06a",
+          "vehicles": 52575
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "e543f9c4bc980a9472061d68e00dd3987ea03914a8baec0556fe64094ec33a87",
+            "calibrated_routes": "7da0f419b0af68a2c93a7b0ac859df117cdd412d376a44f7432688e613ac687e",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 16.453446,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "5a395450e53010661c2d85bb3427ccf6114fac11a92688dbd7db6f657094d636",
+              "8dcf1d3a20bd3adb655dc9a6024ddc00a3a3552f15bd4222ad33010233a427f0",
+              "6b6de13faf5df7577f2251448797615eb9db3cd4f82c3f76f2b9c9c886f59584"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "40f8c264fd4b81d4f4804bd541f3409300d6a9820f3acf2cc0d1e0f47705d165"
+          },
+          "sensor_incidence_digest": "40f8c264fd4b81d4f4804bd541f3409300d6a9820f3acf2cc0d1e0f47705d165",
+          "sensor_incidence_exact": true,
+          "targets_digest": "937a3f3e89139fbe0db0f24172d0af4501e9f816384ed3b9deffb92366488122",
+          "vehicles": 51008
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223016-ef0f3cf3-44e9",
+      "archive_content_key": "f4c156ddfe278bee41a5e983e7a33edca2c31e14e357e54e371747ce97fdcd20",
+      "archive_manifest_sha256": "10a229bcf9e8ce777333ca28f732a25cb40b8a492cfacb9949e6c17ad08c95d3",
+      "build_key": "4008e6387839d7a3",
+      "days": 3,
+      "demand_meta_sha256": "89c33f2f3379955a96a6ca93ae12192059839be8d464fb1fea04dc135e963bcb",
+      "start_date": "2027-09-20",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "57014482b96a563891248b438bfeb157a5752c7ead4caac743e09b2d7fce33a8",
+            "calibrated_routes": "6f7e524cef8eeffb588d1bc165ec80b241fa6edf67192e76f4854d2731d11861",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 45.622893,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "18a6729259f8e537e3154d943eb1e39066e2cf205cc9d15bf8b716a83511808c",
+              "bdf31ffadec231d08308c2ee46840105db75f93ccd7eca32dbb252d45cd63737",
+              "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "1caae3cebb6835e4e037c5e200118f43afec483418c423c0d29b78a5624a3009"
+          },
+          "sensor_incidence_digest": "1caae3cebb6835e4e037c5e200118f43afec483418c423c0d29b78a5624a3009",
+          "sensor_incidence_exact": true,
+          "targets_digest": "e59b46de85291be3641430071b87ced2b3f089865e358030cd62b1a530ac6693",
+          "vehicles": 59137
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "1332b5e1706f86a0b7a8bdf1497f778bc51fa6e3fe8999dbeb8a426eb699f2c3",
+            "calibrated_routes": "9056963ef718ed0ff45d7dd85769f64bad22f090ce1228d1bcaf0c67642e4527",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 45.191041,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "865d40af0d70f42df74be8c27fdaad7fb45eab934ed04a7502fd99791f4b8131",
+              "fe8ede77def998f6f633602146bfb2ca89286758c565be3008fec60c8cd9aac6",
+              "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "cb47af30337ef14ba9ce83de2c925661333d2b7643c6699b3df20dfca675a660"
+          },
+          "sensor_incidence_digest": "cb47af30337ef14ba9ce83de2c925661333d2b7643c6699b3df20dfca675a660",
+          "sensor_incidence_exact": true,
+          "targets_digest": "fcbbee4b9dd5ed5c8edae0a9c090af1b9b59f8a94125829e35689e6a57fe376a",
+          "vehicles": 59695
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "9c41e2569a1aebb4d19c73a01baee54b3b407711531f09c0e4f84dfdb0bc374b",
+            "calibrated_routes": "7af51749923336e5321f0478c9ac78ed8ae91dbe955978313ac1921419942173",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 45.212096,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "8dcf1d3a20bd3adb655dc9a6024ddc00a3a3552f15bd4222ad33010233a427f0",
+              "6b6de13faf5df7577f2251448797615eb9db3cd4f82c3f76f2b9c9c886f59584",
+              "30d6ecf7a595ab6d1ee85ee3dd39b8146a972326b9a0275b20e61ef24f14efc9"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "37259675a0bf138f1a02e1270115c1b639af3c5a0cab5e8213c9cf6cac2425bc"
+          },
+          "sensor_incidence_digest": "37259675a0bf138f1a02e1270115c1b639af3c5a0cab5e8213c9cf6cac2425bc",
+          "sensor_incidence_exact": true,
+          "targets_digest": "188d4684b08660d660f54ed3458e0f31f52e51df1de70490072b7fa5329f1eb7",
+          "vehicles": 59490
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223744-a3782377-418d",
+      "archive_content_key": "926b9383658a7267699e63869117819c74d8801a55dae8398fe0dea199825ff7",
+      "archive_manifest_sha256": "1f2be9b797907be721ffab65b35ff275ab86354354efafe7d45f621a04a3dcbe",
+      "build_key": "657fa0b9f3268e78",
+      "days": 3,
+      "demand_meta_sha256": "e92013bc7c28a4680b5c451e9f1d8d6da8326314cbe7651477e74373fb2e2f81",
+      "start_date": "2027-09-21",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "c59256e6baef5c28d4df090723b539c3653812efe6511770cc3b715a5b009f5d",
+            "calibrated_routes": "19f1905418cc59ccd931657445c38e3cc5caf60d72cca1d67ab5c83a9b6ba142",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.285014,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "bdf31ffadec231d08308c2ee46840105db75f93ccd7eca32dbb252d45cd63737",
+              "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3",
+              "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "64961ef96a78ed04c1809d3ebe4ca47490dc75c281b5a72630e82b831dac176a"
+          },
+          "sensor_incidence_digest": "64961ef96a78ed04c1809d3ebe4ca47490dc75c281b5a72630e82b831dac176a",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a0e34adafcbcb83eef544daab665d91adf9d76a7fc5cf2defbf10302c63030d7",
+          "vehicles": 60632
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "639f08931911ca02075b312af7071d2c033e8d1c590de45e15a05f80753c49bb",
+            "calibrated_routes": "2ba6e528c43ff9fd90ef82b6ba2ab79505c60274c82e6d58be702b832d31cfa0",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.411384,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "fe8ede77def998f6f633602146bfb2ca89286758c565be3008fec60c8cd9aac6",
+              "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc",
+              "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "eace35945f311164223e795d28b72160346c4bbef50ca69eb8fc17c287800d85"
+          },
+          "sensor_incidence_digest": "eace35945f311164223e795d28b72160346c4bbef50ca69eb8fc17c287800d85",
+          "sensor_incidence_exact": true,
+          "targets_digest": "dfd5bf6b6f66e67ba2103608090698e8dafba1cf0ebc2b2347b9692d27d44491",
+          "vehicles": 61122
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "a7036f97d49a257c1cb02c7acd432ec04a976cfd24b62d58721cf08db3426927",
+            "calibrated_routes": "c468ced358b28b3054a1fe94a6d80648e25f90f5561523a66cab01bf1b48e4ed",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.549587,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "6b6de13faf5df7577f2251448797615eb9db3cd4f82c3f76f2b9c9c886f59584",
+              "30d6ecf7a595ab6d1ee85ee3dd39b8146a972326b9a0275b20e61ef24f14efc9",
+              "c9b84d1a2b348b5df7e447158d0f138fee06113498ec36ee100082f6b1af5f00"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "150dca52232d85c334a706f909897a46a292baf2afa8a6c6248db56cb1885c97"
+          },
+          "sensor_incidence_digest": "150dca52232d85c334a706f909897a46a292baf2afa8a6c6248db56cb1885c97",
+          "sensor_incidence_exact": true,
+          "targets_digest": "8cdd04801af80da8d8fa6f6ccadf3d6f1eaed585bfcf29bc27cf2cab0edc7583",
+          "vehicles": 60968
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221806-7415a4c6-0d68",
+      "archive_content_key": "ecec806d1a819d447e714bb4234dd5d471429e2d09e2cd328a10eb3b62f8df99",
+      "archive_manifest_sha256": "4b10f845d253f782d15a4d43df033725e17cacf1c223006481c4a73f7f8186d4",
+      "build_key": "2d4f272bb3dfc5d2",
+      "days": 3,
+      "demand_meta_sha256": "9d16c5b77cd80031f79216226e2d3a4b4558e6e641a29a39b416879f6a6c1049",
+      "start_date": "2027-09-22",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "01cba42f72e9f1ecee17b1b5d3431a720f08479dfb2d7dc06abe166546869c16",
+            "calibrated_routes": "dfff4f46ba78ff584bb53ed44385ac4910c4ea28da46ce891d238b8c7aeb6155",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.498849,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3",
+              "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b",
+              "9d51071d8423f309d0f81826011b5192d0009443e35e9bd2076210454a42538d"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "539450951319108cbc14223fec823e98c26595aeac00272f7fed0bc81e3562c1"
+          },
+          "sensor_incidence_digest": "539450951319108cbc14223fec823e98c26595aeac00272f7fed0bc81e3562c1",
+          "sensor_incidence_exact": true,
+          "targets_digest": "c75e474d062eab177c842acc7534a28b3e8c28619197ac9c2b676db1658c6103",
+          "vehicles": 62009
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "5db1ea4057fa0d087082b2576c73e8c8f00c8324416d77f94782f6fb971879c2",
+            "calibrated_routes": "0e55e40b67ee6ed3d4b59afa99e768fd39e51c59a06f90e94bab919e0ef4f5c2",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.635906,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc",
+              "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720",
+              "dd52489d2377b219b1b1478e0d411fc9dceebe3edbdc5c1c9714b155379a0697"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "1bc731475b5400101d9e32a9a5943a1dd5e9da61214bffeed0fb717049941d3d"
+          },
+          "sensor_incidence_digest": "1bc731475b5400101d9e32a9a5943a1dd5e9da61214bffeed0fb717049941d3d",
+          "sensor_incidence_exact": true,
+          "targets_digest": "dc7cc36a538875115acb9c8469632064e25cff61da21205f004b6967d8f1afdf",
+          "vehicles": 62219
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "3ce099c1bc266ea85f1f09e27790b5e3fb96488d40852bb2ecb3a25acad13813",
+            "calibrated_routes": "2e948048e35aefc063298703d9da79a133c5b08490ffb6cb11bfa572877e72ec",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.246949,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "30d6ecf7a595ab6d1ee85ee3dd39b8146a972326b9a0275b20e61ef24f14efc9",
+              "c9b84d1a2b348b5df7e447158d0f138fee06113498ec36ee100082f6b1af5f00",
+              "fcda0f6e6f5316749c90d3a5f0136b074c056984828348116087ed2f97792740"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "4a5f37597a93d74ab51c3d9cbece1fd55e5ea447f4100a72137ec3b103e2402a"
+          },
+          "sensor_incidence_digest": "4a5f37597a93d74ab51c3d9cbece1fd55e5ea447f4100a72137ec3b103e2402a",
+          "sensor_incidence_exact": true,
+          "targets_digest": "1d0942ad0862f9ed399825200d4475093b50525097ef85ae7889db1c8a24d767",
+          "vehicles": 61951
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223222-19b614fb-7ce8",
+      "archive_content_key": "d44a8994a0330ce60d8325a91034001f49a93cdea90cfa00797bc2c6589f8304",
+      "archive_manifest_sha256": "99f69c511aa8f136a4b66b4ca54004ff7f6cfbcdb58d39e7143accad0775f348",
+      "build_key": "5803fd9aa62080cb",
+      "days": 3,
+      "demand_meta_sha256": "00f6fa1a125c27e72953c39711317f9e15ebbb4f43c007e38e9b93f209a9799c",
+      "start_date": "2027-09-23",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "682ef7c7110cec81bebb812f19c26411e2c193dc5abfd3fea9e8573e83f4a7ba",
+            "calibrated_routes": "b936b1d31714073419bcbd140fabaaeef756cd1f25db27b0bac902b6ff9bbd9f",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 42.394538,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b",
+              "9d51071d8423f309d0f81826011b5192d0009443e35e9bd2076210454a42538d",
+              "f2439d5bc869087d6b573f657b663700d18302b129c3a121c947305d29788f61"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "5ad199736cb803d2ebe4b3fbf19e25629ac97a71feee7b65ce50713901a0da23"
+          },
+          "sensor_incidence_digest": "5ad199736cb803d2ebe4b3fbf19e25629ac97a71feee7b65ce50713901a0da23",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a37f9e2ba9732fb2f6309e9fb60eee0b1debb6136e3ac07754bb29447c84d9e6",
+          "vehicles": 56142
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "0826e1a4039633b98f32221e5ded489419ec51d7f632b9b62f4fe2465fcc0985",
+            "calibrated_routes": "ff306b69100450d54c3ad7e8ba0710c89f58f81bc49b3c927831846280b01a87",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 43.444855,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720",
+              "dd52489d2377b219b1b1478e0d411fc9dceebe3edbdc5c1c9714b155379a0697",
+              "9c59afe296d96fbf033b3891d33df6b07ac4cecb42e85b3d2fcbfc444c7ea91e"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "2353c85b0a01b9ba0daf897b6e43f4baa67642afb235495c8de03a1b4e1f6b15"
+          },
+          "sensor_incidence_digest": "2353c85b0a01b9ba0daf897b6e43f4baa67642afb235495c8de03a1b4e1f6b15",
+          "sensor_incidence_exact": true,
+          "targets_digest": "fa7ea341bf44367d7532a02fe8dea2311091803bafa34e720009eb85c5ba9f23",
+          "vehicles": 57132
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "3df696443e5ba838e3ee41eb29e8523d7b94ba3ea0e3e2ca1ba386a0c5d270aa",
+            "calibrated_routes": "d31af09df6dacd7c06c9e7f061964e51f3ca7ba3721ee62367ba68cb44a7302e",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 42.610612,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "c9b84d1a2b348b5df7e447158d0f138fee06113498ec36ee100082f6b1af5f00",
+              "fcda0f6e6f5316749c90d3a5f0136b074c056984828348116087ed2f97792740",
+              "e96a8045a2eb10a4e070ebca6948e29dadb618a2e51c08e0d4bd5578c57fb4e9"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "18ad4d8a967a56672d6864302009663bad2c1b024cb0b32d2063fb26d9391eaf"
+          },
+          "sensor_incidence_digest": "18ad4d8a967a56672d6864302009663bad2c1b024cb0b32d2063fb26d9391eaf",
+          "sensor_incidence_exact": true,
+          "targets_digest": "d508a972a3d4ed3b6b96e56a586257de79b8092a9e0d4e7d70110aa8680e0ae7",
+          "vehicles": 55032
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223804-04518454-6d14",
+      "archive_content_key": "e3a33894fd71177975d33e55024bac2d65877251e7c81e23cb6b7a2d2d494552",
+      "archive_manifest_sha256": "b24a137d1203fcd8f68416085e62a9908e42a83773b5a24e1333795b37d4c292",
+      "build_key": "6e3416af316f91cc",
+      "days": 3,
+      "demand_meta_sha256": "f8a3f715c4268dc38ea940e463f84107a8e9ce101d19eaa08d36b6ae34f85468",
+      "start_date": "2027-09-24",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "4fec090b5d05d492242bfb18dff4b4ad7b828204c743fa4f368c1ecc8c1f75fc",
+            "calibrated_routes": "69175cc51448ee4660679195066a2049361500a3ea741b1c9dcbc2a33b082b13",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 13.42101,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "9d51071d8423f309d0f81826011b5192d0009443e35e9bd2076210454a42538d",
+              "f2439d5bc869087d6b573f657b663700d18302b129c3a121c947305d29788f61",
+              "1209d13596330bba6d43fe159077966e11172c765e764db5e9a8e52d88c8486a"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "8ede6ddef574b253f94d38da2b8d0e3574b134a9ad50b4cac962f6f2944ce218"
+          },
+          "sensor_incidence_digest": "8ede6ddef574b253f94d38da2b8d0e3574b134a9ad50b4cac962f6f2944ce218",
+          "sensor_incidence_exact": true,
+          "targets_digest": "e9c8eb028796d0a44bfe2493f45a1cbbc41cbc8bc86c631725cbe0869b2bdf3f",
+          "vehicles": 51641
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "abe5e1c0be6651da67a7a5fd03d3fbd7791d0b15bbfcb4fdade18e4332c9b8c3",
+            "calibrated_routes": "85401a2a37d789f5922abf5f5738ad30b371f0557615cadb08d49dd5eb4dea3f",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 13.719936,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "dd52489d2377b219b1b1478e0d411fc9dceebe3edbdc5c1c9714b155379a0697",
+              "9c59afe296d96fbf033b3891d33df6b07ac4cecb42e85b3d2fcbfc444c7ea91e",
+              "c987ec27bfa4bda91281f5a636481ba9dd2051b083dda27a7928ef475aeb1796"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "f9fab5a149ab99b07921aedf143b3e1054d1251aad90fbc65a732e44263f1a2d"
+          },
+          "sensor_incidence_digest": "f9fab5a149ab99b07921aedf143b3e1054d1251aad90fbc65a732e44263f1a2d",
+          "sensor_incidence_exact": true,
+          "targets_digest": "91743c859bf14b5f34375c784775e6b0d87675c8a70f580d8285bb35d9220ff3",
+          "vehicles": 52726
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "6dacebf5423bbfb8c38fc94a587501c4ac9ee805c92ea0074d5644be146ddba1",
+            "calibrated_routes": "d2599a88c1c0a42d34ccd2ff3a43b94f9caf9603a7289bd89143515f0c0b82a5",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 13.393149,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "fcda0f6e6f5316749c90d3a5f0136b074c056984828348116087ed2f97792740",
+              "e96a8045a2eb10a4e070ebca6948e29dadb618a2e51c08e0d4bd5578c57fb4e9",
+              "5a395450e53010661c2d85bb3427ccf6114fac11a92688dbd7db6f657094d636"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "dbd19bac6259fc06e3f002a3781dc01a380d4ef1bf0117ce3d8f74d6666fb065"
+          },
+          "sensor_incidence_digest": "dbd19bac6259fc06e3f002a3781dc01a380d4ef1bf0117ce3d8f74d6666fb065",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a50db6358d67ead111668a5b813d038cea32bcf84c5a077f2b105ae900fe554b",
+          "vehicles": 50626
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221533-52837f59-7e5d",
+      "archive_content_key": "228429ec61688bd93b4676d3d4e742489d29c65d64737ac96144ea2a23dbdac5",
+      "archive_manifest_sha256": "e170bad30432cac3ccc51bb01a8cc290f9d6b0b794dad9d69bd625a49f0b0409",
+      "build_key": "187fca60022dedc5",
+      "days": 3,
+      "demand_meta_sha256": "9f9b3796976032addeda308cb16d818d174154181ec327f039918221c3a0005b",
+      "start_date": "2027-09-25",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "ad87c8b578f51ed6def8f88878fb68a6f7db3ddffbdea625694bc344087be416",
+            "calibrated_routes": "9462e3e00a8e635bcee36cce7158e326c355772d269b0ed44ff8465f6f2882a2",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 15.868549,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "f2439d5bc869087d6b573f657b663700d18302b129c3a121c947305d29788f61",
+              "1209d13596330bba6d43fe159077966e11172c765e764db5e9a8e52d88c8486a",
+              "18a6729259f8e537e3154d943eb1e39066e2cf205cc9d15bf8b716a83511808c"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "1bd6f03877213de16620ce340564d92f5b41327697efd0a1a1fbd8c104b541a4"
+          },
+          "sensor_incidence_digest": "1bd6f03877213de16620ce340564d92f5b41327697efd0a1a1fbd8c104b541a4",
+          "sensor_incidence_exact": true,
+          "targets_digest": "bb26f5a85b20f7eee0cd343e97fccd85eb27b0908d7f4bb5701b43eca1812c2e",
+          "vehicles": 49836
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "d6011f65ceee49e05765e98b1e869c25e27b325dc2da8ad3d045022faaf4e32d",
+            "calibrated_routes": "3c54203309c5c3f030d552bf77328c0d6e729abfc44865944fdde1f19bbec9f0",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 15.934844,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "9c59afe296d96fbf033b3891d33df6b07ac4cecb42e85b3d2fcbfc444c7ea91e",
+              "c987ec27bfa4bda91281f5a636481ba9dd2051b083dda27a7928ef475aeb1796",
+              "865d40af0d70f42df74be8c27fdaad7fb45eab934ed04a7502fd99791f4b8131"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "c1455a5abbf8c63a9cb1350307f18508aeb9a3aa5fa80b5fc53bc82e36d3c5b9"
+          },
+          "sensor_incidence_digest": "c1455a5abbf8c63a9cb1350307f18508aeb9a3aa5fa80b5fc53bc82e36d3c5b9",
+          "sensor_incidence_exact": true,
+          "targets_digest": "8014a202ea073802b1f7a294f6eaf36e8a7902163630285ef6026083ce32dca8",
+          "vehicles": 51172
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "c02833a14dc0daeb7f4ef09f54b233ce93f1afe6a93830df3e94ba15b380f2bb",
+            "calibrated_routes": "dc8b1912ec0df5fbd345a50b027ef24715405f7fce1399c160478769997d7fc6",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 15.442896,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "e96a8045a2eb10a4e070ebca6948e29dadb618a2e51c08e0d4bd5578c57fb4e9",
+              "5a395450e53010661c2d85bb3427ccf6114fac11a92688dbd7db6f657094d636",
+              "8dcf1d3a20bd3adb655dc9a6024ddc00a3a3552f15bd4222ad33010233a427f0"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "0b1869c61132302acd67348f20b0c3e6fd9b42ec711065b33b61034e2038abbd"
+          },
+          "sensor_incidence_digest": "0b1869c61132302acd67348f20b0c3e6fd9b42ec711065b33b61034e2038abbd",
+          "sensor_incidence_exact": true,
+          "targets_digest": "dd8724ce13a2a8aca2661e91822299441385d499974b2508eb864254cdef69c5",
+          "vehicles": 49371
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220012-de032bcb-2165",
+      "archive_content_key": "bef93cdbf6d3c0a20328b69935ad6f8ca18745fdc87b157d8ff15020b55e83ed",
+      "archive_manifest_sha256": "7d430d34ec5619fa95da76a8afe1e4c2f660fc50f805dd888a7e872851e1f08d",
+      "build_key": "084cedb913d5197c",
+      "days": 3,
+      "demand_meta_sha256": "fd254f905bfc3a9c203b0a0019b56f1e6d30f686ad23fcaa6b1a168014863570",
+      "start_date": "2027-09-26",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "21ebb2ef181494524e8f11a897bf6b5a9ab3a76d4d3cce3aff869e3714364358",
+            "calibrated_routes": "3cbd37a04e437c8b210606b60048db2e2dbc44a0681b9c6dd9b82ee436510a39",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 15.98512,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "1209d13596330bba6d43fe159077966e11172c765e764db5e9a8e52d88c8486a",
+              "18a6729259f8e537e3154d943eb1e39066e2cf205cc9d15bf8b716a83511808c",
+              "bdf31ffadec231d08308c2ee46840105db75f93ccd7eca32dbb252d45cd63737"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "ae8284c450f5bb2048ffc50684dcefb575203a349923ac5ebbd6312db3d198bd"
+          },
+          "sensor_incidence_digest": "ae8284c450f5bb2048ffc50684dcefb575203a349923ac5ebbd6312db3d198bd",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a3d9fca19e9aa72895cc683f13f43b1a805a86f648ae87d17898eb01293cdb6c",
+          "vehicles": 51347
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "cae31df85c873bc467ebd586061a0063c4aa788349b02a6250a9a9165104d394",
+            "calibrated_routes": "398a64fea8b9b3df9367f119f9092346b4b52aeb60248a5cac3efecab028b077",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 21.618716,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "c987ec27bfa4bda91281f5a636481ba9dd2051b083dda27a7928ef475aeb1796",
+              "865d40af0d70f42df74be8c27fdaad7fb45eab934ed04a7502fd99791f4b8131",
+              "fe8ede77def998f6f633602146bfb2ca89286758c565be3008fec60c8cd9aac6"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "f869604b56796bcb9abd6dfc37961172d8fbed840cb2d784573f281090b9dca2"
+          },
+          "sensor_incidence_digest": "f869604b56796bcb9abd6dfc37961172d8fbed840cb2d784573f281090b9dca2",
+          "sensor_incidence_exact": true,
+          "targets_digest": "03c3896b36f2362161405cc54337ae0f6764e7a948291a72a82793a701cda06a",
+          "vehicles": 52643
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "b386ab1a285248f275e4befb8dbde9f71008391447e44bae9e9730a36983b88d",
+            "calibrated_routes": "122788b946eee790eadf0e731e5b16cb58244417acee3c511a70c5aef778418f",
+            "candidate_metadata": "63016bbc3d8532cd465703031fe3b172b23e02c17fa79ec239ed6086c9dc2388",
+            "candidate_routes": "626faca351dd9dda309d3887adf8e754c5722db3ec773110b6463060d346b879"
+          },
+          "elapsed_s": 15.794758,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "5a395450e53010661c2d85bb3427ccf6114fac11a92688dbd7db6f657094d636",
+              "8dcf1d3a20bd3adb655dc9a6024ddc00a3a3552f15bd4222ad33010233a427f0",
+              "6b6de13faf5df7577f2251448797615eb9db3cd4f82c3f76f2b9c9c886f59584"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "40f8c264fd4b81d4f4804bd541f3409300d6a9820f3acf2cc0d1e0f47705d165"
+          },
+          "sensor_incidence_digest": "40f8c264fd4b81d4f4804bd541f3409300d6a9820f3acf2cc0d1e0f47705d165",
+          "sensor_incidence_exact": true,
+          "targets_digest": "937a3f3e89139fbe0db0f24172d0af4501e9f816384ed3b9deffb92366488122",
+          "vehicles": 50955
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225121-de7e3e34-015d",
+      "archive_content_key": "e2547c2176d32d53510ec7f8b8b2b5fd8d3c88146d4537777883c2a8361163f1",
+      "archive_manifest_sha256": "2f32967403ab4df3f2548e7135e3cd2e0eff97e7d8d8b95ab7b3e952cfe38c52",
+      "build_key": "cc8eb82bc98de729",
+      "days": 3,
+      "demand_meta_sha256": "6a4cc13ca19f7c680e48cf30c57e202422eee1d66f5123689918bde3a242617b",
+      "start_date": "2027-09-27",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "67c02f192d2c4a88d9a82a815cc157d0eae9e341d5514bb1c4861f68749e7a95",
+            "calibrated_routes": "fc776c3b4f12ff0829eebc0a53c16748df52710d2e0b5b1c05377ff43ebb232d",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 43.942389,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "18a6729259f8e537e3154d943eb1e39066e2cf205cc9d15bf8b716a83511808c",
+              "bdf31ffadec231d08308c2ee46840105db75f93ccd7eca32dbb252d45cd63737",
+              "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "1caae3cebb6835e4e037c5e200118f43afec483418c423c0d29b78a5624a3009"
+          },
+          "sensor_incidence_digest": "1caae3cebb6835e4e037c5e200118f43afec483418c423c0d29b78a5624a3009",
+          "sensor_incidence_exact": true,
+          "targets_digest": "e59b46de85291be3641430071b87ced2b3f089865e358030cd62b1a530ac6693",
+          "vehicles": 58967
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "888fb07107757c1029382f57f406dc103242faafccc79686939b8fdc1be435b4",
+            "calibrated_routes": "95227405b15530e6b616aff0bba4d70213d12fad2aac7f6593e57d3f2016eb48",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 44.652798,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "865d40af0d70f42df74be8c27fdaad7fb45eab934ed04a7502fd99791f4b8131",
+              "fe8ede77def998f6f633602146bfb2ca89286758c565be3008fec60c8cd9aac6",
+              "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "cb47af30337ef14ba9ce83de2c925661333d2b7643c6699b3df20dfca675a660"
+          },
+          "sensor_incidence_digest": "cb47af30337ef14ba9ce83de2c925661333d2b7643c6699b3df20dfca675a660",
+          "sensor_incidence_exact": true,
+          "targets_digest": "fcbbee4b9dd5ed5c8edae0a9c090af1b9b59f8a94125829e35689e6a57fe376a",
+          "vehicles": 59566
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "84003d841ecd6379125e696adb0bb5c3e3ca78159f560d10b874c338512b7f59",
+            "calibrated_routes": "b4895a26b2e799b02cfd28d789f97a1bd9a1d952f6f08f62e7cc9ab66393d8a9",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 44.778176,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "8dcf1d3a20bd3adb655dc9a6024ddc00a3a3552f15bd4222ad33010233a427f0",
+              "6b6de13faf5df7577f2251448797615eb9db3cd4f82c3f76f2b9c9c886f59584",
+              "30d6ecf7a595ab6d1ee85ee3dd39b8146a972326b9a0275b20e61ef24f14efc9"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "37259675a0bf138f1a02e1270115c1b639af3c5a0cab5e8213c9cf6cac2425bc"
+          },
+          "sensor_incidence_digest": "37259675a0bf138f1a02e1270115c1b639af3c5a0cab5e8213c9cf6cac2425bc",
+          "sensor_incidence_exact": true,
+          "targets_digest": "188d4684b08660d660f54ed3458e0f31f52e51df1de70490072b7fa5329f1eb7",
+          "vehicles": 59326
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220648-791840d4-c887",
+      "archive_content_key": "c988c98a618cab201fabcd9285c72b05951e9937070bb160903b0dc37f2a6eaf",
+      "archive_manifest_sha256": "cccddde80cbb0df85ace64b1502b2c15ccc8aea2f7035cbbc5b8baf91792d922",
+      "build_key": "0a6c5266d76b5b39",
+      "days": 3,
+      "demand_meta_sha256": "80d3b358f4e7f4cac26f64cf299b6cfa43d8b5d29033c57d13afb21415c5b3d4",
+      "start_date": "2027-09-28",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "70e9c609b0da80eaa203cc95ee9e92f66d5e180def103d317ac462e5ef878505",
+            "calibrated_routes": "9a078f48dbe0d75a86cdb8dd7de118050763f2ae2b450cb4acceb513372a08b2",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 17.507922,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "bdf31ffadec231d08308c2ee46840105db75f93ccd7eca32dbb252d45cd63737",
+              "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3",
+              "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "64961ef96a78ed04c1809d3ebe4ca47490dc75c281b5a72630e82b831dac176a"
+          },
+          "sensor_incidence_digest": "64961ef96a78ed04c1809d3ebe4ca47490dc75c281b5a72630e82b831dac176a",
+          "sensor_incidence_exact": true,
+          "targets_digest": "a0e34adafcbcb83eef544daab665d91adf9d76a7fc5cf2defbf10302c63030d7",
+          "vehicles": 60445
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "863c43d3341965acb632362bd6bca6385905ce94768420fda62fa041e41d81cf",
+            "calibrated_routes": "ee1a689e629c0bca1839089e9c4f51e0979174b17ffdc42c90f7a71d7c017dd6",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 17.575098,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "fe8ede77def998f6f633602146bfb2ca89286758c565be3008fec60c8cd9aac6",
+              "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc",
+              "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "eace35945f311164223e795d28b72160346c4bbef50ca69eb8fc17c287800d85"
+          },
+          "sensor_incidence_digest": "eace35945f311164223e795d28b72160346c4bbef50ca69eb8fc17c287800d85",
+          "sensor_incidence_exact": true,
+          "targets_digest": "dfd5bf6b6f66e67ba2103608090698e8dafba1cf0ebc2b2347b9692d27d44491",
+          "vehicles": 60948
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "3fe12bfb7f60d567f2c419dd9f189d3dbce67461e9df3c5eb2c40300043f4e9b",
+            "calibrated_routes": "ac0f2ccd4496dd94889c561bc6e11e85abbe1e9137bac22242aa8f0f42efd8d9",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 17.72031,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "6b6de13faf5df7577f2251448797615eb9db3cd4f82c3f76f2b9c9c886f59584",
+              "30d6ecf7a595ab6d1ee85ee3dd39b8146a972326b9a0275b20e61ef24f14efc9",
+              "c9b84d1a2b348b5df7e447158d0f138fee06113498ec36ee100082f6b1af5f00"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "150dca52232d85c334a706f909897a46a292baf2afa8a6c6248db56cb1885c97"
+          },
+          "sensor_incidence_digest": "150dca52232d85c334a706f909897a46a292baf2afa8a6c6248db56cb1885c97",
+          "sensor_incidence_exact": true,
+          "targets_digest": "8cdd04801af80da8d8fa6f6ccadf3d6f1eaed585bfcf29bc27cf2cab0edc7583",
+          "vehicles": 60772
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06",
+      "archive_content_key": "537def3d6b4c300eb024d205203346487bcca04e1837c5de6817aaf5cc1c8083",
+      "archive_manifest_sha256": "b2001c4199acce85a675b4a6f308c6541ba697c3ba63c2dbed538c4674de966e",
+      "build_key": "c796667235591888",
+      "days": 3,
+      "demand_meta_sha256": "fac578d254731afa6aadc321da71a1eb8108e9b5dd4ccda56874a195d06df635",
+      "start_date": "2027-09-29",
+      "variants": {
+        "q10": {
+          "content_digests": {
+            "calibrated_agents": "15939f110fe1e806092643f5f748bcb7365fa4049ea2c7b8861da607b30a2c13",
+            "calibrated_routes": "257be9fb379333b1ad094edc7a29c5aec8175ea641dbce663187e9dccbe0f553",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.100098,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "b965b98ad66772abcf2885ff435176c110e4d2fee25f66ac545be9de22ce91b3",
+              "148dc1f4b72fcf43a6eedbdf798d43341900b1d0e94f36f2a5adbab28814703b",
+              "2fb75bd54bf707b5c7ef579e484b5a7edb827f2358bd150cfd654bf0aa528995"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "1a2ff8910344e36f7a3fe85902d2364bc0b6c82857ea3ee9407e3390afc0f7d5"
+          },
+          "sensor_incidence_digest": "1a2ff8910344e36f7a3fe85902d2364bc0b6c82857ea3ee9407e3390afc0f7d5",
+          "sensor_incidence_exact": true,
+          "targets_digest": "d57ff8e9124ba0340381e92d39ce7111f251b5d0f447b78c6033494c239371b1",
+          "vehicles": 62110
+        },
+        "q50": {
+          "content_digests": {
+            "calibrated_agents": "68231f5f1811ab4c2d552c47b4bd8d5cb9871e4877340e2e4823103c0e6431d1",
+            "calibrated_routes": "c041ea54d0c00d503b3cbbcc855fcecb349b413bebb43d6cf2d0a812fe1d2e08",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.184065,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "e60d79d6ab8e5db927b2335ab7d8b35a7429b85d8b3456b88f7c18c270655adc",
+              "d921df8a6465c2c28fc97a2a0649c08b6c20f0e177a777ecdd7db593b34a8720",
+              "27609b001d34df07fd66757ec9a7b5426cb6b86003a09197d9fbda4bc17f3feb"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "cd81da8547b991f40c12d9071ffdf59d4aebe2c531b1712a70e9fc94914367f7"
+          },
+          "sensor_incidence_digest": "cd81da8547b991f40c12d9071ffdf59d4aebe2c531b1712a70e9fc94914367f7",
+          "sensor_incidence_exact": true,
+          "targets_digest": "c299b3e1c76d84404bd9c0879da5f45809b65bbc74611ae2a565f22186b21cc9",
+          "vehicles": 62446
+        },
+        "q90": {
+          "content_digests": {
+            "calibrated_agents": "05a1c4ffc8b3d309e5e7df37279d809526bda8b4d948ce2e721e48e9899bd679",
+            "calibrated_routes": "48e45142f127996f08aea9e47bfeb4266d6dd7c1a336408fe027bb123f7f8aee",
+            "candidate_metadata": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+            "candidate_routes": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+          },
+          "elapsed_s": 18.290261,
+          "passage_proof": {
+            "assembly_reproduced": true,
+            "basis": "sensor_edge_entry_quarter",
+            "evidence_digests": [
+              "30d6ecf7a595ab6d1ee85ee3dd39b8146a972326b9a0275b20e61ef24f14efc9",
+              "c9b84d1a2b348b5df7e447158d0f138fee06113498ec36ee100082f6b1af5f00",
+              "43bf01036b77e240c965eb22502e96a1c89972b925643df9b37d780082f1ff61"
+            ],
+            "exact": true,
+            "replayed_days": 3,
+            "targets_digest": "67e6faa6e7994f8e7d68a2bd69a3307b5f82befd67f9e92246ad0038b1e8ef2c"
+          },
+          "sensor_incidence_digest": "67e6faa6e7994f8e7d68a2bd69a3307b5f82befd67f9e92246ad0038b1e8ef2c",
+          "sensor_incidence_exact": true,
+          "targets_digest": "2b4ad3b4ce9885e522562edb271859633cb24e3d28d1bca7c0eefcf6a32cb2d0",
+          "vehicles": 62291
+        }
+      }
+    }
+  ],
+  "content_key": "5d355a3e6f81b398c4d69ed3961418bcb25a3527eaab489308c922eb2c6cec99",
+  "inputs": {
+    "archive_root": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+    "base_head": "424c626",
+    "day_library_root": "/private/tmp/gs-step3-departure-bounds/runs/demand-days",
+    "implementation_sha256": {
+      "tools/profile_passage_replay.py": "fb8a1fae1f3e00a0fc591cb63dd4db3acc4d8504caa74aed74b6240c56de5de9",
+      "tools/qualify_subhour_demand.py": "0a33f606b2dd5f157a8595c92c037775d304a35ce82918aefa11eb03d4bfea80"
+    },
+    "old_manifest_sha256": "18a9b94fa21a5a06e3a73c1ccffa6c199d228965040a6ffb8dcee4ed4efcf698",
+    "solver_cache_root": "/private/tmp/gs-step3-departure-bounds/runs/passage-solver-cache"
+  },
+  "method": {
+    "archive_validation": "validate_demand_archive against each stored DemandBuildSpec",
+    "day_binding": "DayLibrary content verification plus exact byte reproduction of each assembled variant",
+    "demand_rebuilt": false,
+    "passage_binding": "retained traces, retained PFE bounds, solver replay, exact selection/routes/agents hashes, and sensor-edge entry-quarter projection",
+    "sumo_launched": false
+  },
+  "posthoc_integrity_checks": {
+    "all_candidate_pool_and_metadata_digests_exact": true,
+    "archive_day_candidate_bindings": 90,
+    "basis": "each content-verified day identity candidate_pool and candidate_metadata SHA-256 equals its assembled archive inputs",
+    "unique_day_entries": 48
+  },
+  "purpose": "Correct the false departure-quarter archive rejection by replaying the calibrated sensor-entry-quarter system.",
+  "release_evidence": false,
+  "schema": "subhour_passage_entry_quarter_revalidation_v1",
+  "status": "PASS",
+  "summary": {
+    "all_assemblies_reproduced": true,
+    "all_candidate_pool_bindings_exact": true,
+    "all_sensor_incidence_exact": true,
+    "archive_day_candidate_bindings": 90,
+    "archives": 30,
+    "elapsed_s": 2370.58877,
+    "unique_day_entries": 48,
+    "unique_passage_replay_bindings": 144,
+    "variants": 90
+  },
+  "superseded_terminal": {
+    "code": "exact_sensor_incidence_infeasible",
+    "error_type": "SensorShortestSupportInconclusive",
+    "message": "q10 emitted sensor incidence differs from exact target (1455801464_18241874_0@q0: 14 != 13; 1475 mismatch(es))",
+    "stage": "variant_archive_qualification"
+  },
+  "supersedes_conclusion_in": "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260913.json"
+}

@@ -9,12 +9,12 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — simulation quality and performance research`
-- Current focus: `Steps 0-4 of the passage-speed plan are complete. Step 5 is independently reviewed and measured on one current-source production-scale day across q10/q50/q90.`
-- Status: `Step 5 TARGETED PRODUCTION MEASURED, FULL MONTH UNMEASURED. d221797 is accepted after 977712a accounts for measurement-only digests. The earlier catalog blocker in 1eedc04/40f3cca is superseded: after restoring the branch's existing catalog-equivalence support and complete ignored input inventory, the explicit catalog build was a weekend hit and generated no candidate pool. The one-day build and exact assembly/costing replay passed; validation remains WARN and the evidence is diagnostic, not release evidence.`
-- Suggested next action: `Do not duplicate or activate a route cache from the one-day sample. The frozen September profile derives 30 missing three-day demand builds, not 1,950 demand builds: 1,690 parents = 26 five-day starts x 65 times; 1,950 units = 30 dates x 65 times; 5,850 records = three variants per unit. Run that qualification/profile only as a separately authorised, costed experiment. Do not warm the year or start step 6 for this measurement.`
+- Current focus: `Repair Step 5's false full-month sensor-incidence rejection and finish its source-bound qualification.`
+- Status: `The validator defect is fixed locally. Its old check counted every sensor route in the vehicle departure quarter; production calibration constrains the predicted sensor-entry quarter. A no-build replay of all 30 retained September archives passed 90/90 q10/q50/q90 variants, 48 content-verified day entries and 144 passage-evidence bindings. The 2026-09-15 review also repaired result-to-input binding, content validation on memo reuse and duplicate system construction. The prior full-month diagnostic predates these review fixes; a fresh CODE_APPROVED and qualified manifest remain pending.`
+- Suggested next action: `Establish a new source approval for the reviewed commit and exact protected worktree bytes, then produce the append-only qualified manifest from the 30 existing archives without rebuilding them. Only after that PASS manifest exists should the full monthly cost-ledger profile run. Step 6 remains unstarted.`
 - Eligible actors: `Any capable actor.`
 - Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation or expensive catalog/demand run without explicit scope; keep unrelated local changes outside this delivery.`
-- Updated: `2026-09-13. Step 5 reviewed and measured on a bounded real day; full-month timing remains open.`
+- Updated: `2026-09-15. Validator reviewed and regression-tested; local commit authorized. Historical full-month replay and current review evidence remain diagnostic.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- WORKFLOW_HISTORY_START -->
@@ -688,13 +688,13 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### PASSAGE-SPEED-STEP5-2026-09-13 — Archive and deterministic-cost measurement
 
-- Status: `TARGETED PRODUCTION MEASURED, FULL MONTH UNMEASURED.`
+- Status: `FULL-MONTH PASSAGE REVALIDATION PASS; SOURCE-APPROVED MANIFEST AND COST PROFILE PENDING.`
 - Objective and scope: `Measure archive validation, one-day assembly and deterministic closure costing without weakening content identity, catalog selection, exact output or release gates.`
-- Completion outcome: `A current-source 2027-06-25 q10/q50/q90 archive was built with an explicit catalog hit. Reassembly reproduced every archived route and agent digest. One real full-day closure was costed without SUMO; no optimisation was selected from the bounded sample.`
-- Evidence: `validation/passage_step5_targeted_day_measurement_20260913.json; runs/demand-20260913-194636-17755050-918f; validation/step5_targeted_day_closure_spec_20260913.json.`
-- Full-month preflight: `The targeted archive and its runs/step5-day-library-20260913 entry are present in the isolated worktree. The separate September profile needs 30 three-day demand specs spanning 2027-08-31 through 2027-09-29; current matching archives: 0/30. No qualification build or full-month profile was started.`
+- Completion outcome: `The targeted 2027-06-25 assembly/costing measurement remains valid. The later 30-archive build was also reused: its earlier 1,475-cell failure was a validator clock bug, and all 90 variants now reproduce exact sensor-entry-quarter projections, selections, routes, agents and archive assemblies.`
+- Evidence: `validation/passage_step5_targeted_day_measurement_20260913.json; validation/subhour_passage_entry_quarter_revalidation_20260914.json; runs/step5_monthly_qualify_20260913/demand_archives.`
+- Full-month preflight: `30/30 existing three-day archives spanning 2027-08-31 through 2027-09-29 passed the corrected diagnostic revalidation without SUMO or rebuilding. The reviewed validator now needs a fresh CODE_APPROVED source freeze and checks before producing a new qualified manifest from those same archives.`
 - Constraints and safety: `The run is diagnostic and validation is WARN. Do not extrapolate one schedule to a month. The existing WindowCostIndex remains opt-in until its complete 1,950/5,850/1,690 identity and exactness gates pass on current sources.`
-- Acceptance criteria: `Full-month completion requires a current-source qualified manifest, zero SUMO launches during ledger profiling, exact population/accounting, complete process-tree resource telemetry and unchanged ledger/winner/disqualification/stop-proof results.`
+- Acceptance criteria: `Remaining full-month completion requires a current-source qualified manifest, zero SUMO launches during ledger profiling, exact population/accounting, complete process-tree resource telemetry and unchanged ledger/winner/disqualification/stop-proof results.`
 <!-- ACTIVE_TASK_END -->
 
 <!-- ACTIVE_TASK_HISTORY_START -->

@@ -7,6 +7,22 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
+- Focus and status: `STEP 5 VALIDATOR REPAIR REVIEWED; SOURCE-APPROVED MANIFEST AND FULL-MONTH COST PROFILE PENDING.` Work is in `/private/tmp/gs-step3-departure-bounds`, branch `claude/exciting-rubin-1e6k5m`. This delivery is a local commit requested on 2026-09-15; no push or main-checkout integration was requested.
+- Root cause and repair: qualification counted vehicle departures instead of `(departure_s + retained entry_offset) // 900`. It now verifies day-library contents and candidate-pool identities, replays retained PFE bounds/traces, reproduces selection/routes/agents and assembles each archive variant byte-for-byte. Fixed-grid structural repairs replay; boundary fallback still fails closed.
+- Review repairs (2026-09-15): bind the replay manifest's complete input/trace digest maps to the saved production result; bind both memoized successes to content snapshots checked on reuse, including raw/compressed artifact bytes (not size/mtime); reuse the already-built expanded system for the initial solve and time each production-equivalent repair system build. The respective regression tests failed before each fix. Independent review subsequently found no remaining blocker within this scope; its 11 targeted tests passed.
+- Checks: 380 tests passed across profiler, qualifier, automatic passage, dynamic assignment, solver checkpoint, day library, provenance, monthly demand, monthly cost profiler and I/O phases. One environment warning: urllib3 with LibreSSL. No full-suite or release approval claim. The complete suite/check set required for a fresh CODE_APPROVED still must be run against the final frozen source.
+- Historical full-month evidence: `validation/subhour_passage_entry_quarter_revalidation_20260914.json` records 30 archives, 90 variants, 48 day entries and 144 evidence/pool bindings, with exact projections and assemblies in 2,370.589 s. It predates the final review repairs; preserve its original source digests and timing. It is diagnostic (`release_evidence: false`), not a new qualified manifest or a monthly-search runtime.
+- Current verification: `validation/subhour_passage_review_20260915_final.json` records a complete 144-root result/input/trace binding scan and two real archive-variant canaries, including a structural repair. The full 30-archive replay has not been rerun after review. The old failing `validation/subhour_qualified_demand_manifest_20260913.json` remains historical evidence; do not overwrite it or promote either diagnostic report.
+- Next action: establish a fresh CODE_APPROVED source/check record through the existing controller contract, then produce a new append-only qualified manifest using `--existing-runs-root runs/step5_monthly_qualify_20260913/demand_archives`, `--day-library-root runs/demand-days` and `--passage-solver-cache-root runs/passage-solver-cache`. Check the frozen `validation/subhour_monthly_search_profile_spec_v1.json`. Only after PASS, run `tools/profile_monthly_cost_ledger.py` for the complete 1,950 daily units / 5,850 variant records / 1,690 parents with process-tree resource telemetry and zero SUMO launches. Step 6 remains unstarted.
+- Environment and boundaries: use `/usr/bin/python3` (3.9.6, pytest installed); bare `python3` currently resolves to Homebrew 3.13 without pytest. Use an explicit workdir for every command. Preserve unrelated modified `web/data/od_matrix.csv`, `web/data/od_matrix.json`, `web/data/validation.json` and untracked files. Those protected web bytes need an explicit accounting in the next source freeze; do not silently restore or include them in this commit. No demand build, warming, SUMO run, catalog change or production activation was performed.
+<!-- CURRENT_HANDOFF_END -->
+
+<!-- CURRENT_HANDOFF_HISTORY_START -->
+
+### Before the full-month September qualification attempt (2026-09-14)
+
+## CURRENT_HANDOFF
+
 - Focus and status: `TARGETED PRODUCTION MEASURED, FULL MONTH UNMEASURED.` Passage-speed step 5 is independently reviewed and measured on one real current-source day.
 - Summary: Commit `d221797` is accepted after `977712a` moved measurement-only output digests into the accounting root. The catalog rejection recorded by `1eedc04`/`40f3cca` is superseded: it combined missing ignored worktree inputs with a branch that lacked the main checkout's already-proved catalog-equivalence renewal.
 - Implementation correction: local commit `1309cf6` keeps profiling outside catalog-bound production routing, restores content-qualified catalog renewal, and installs resolver observation only inside `tools/profile_monthly_cost_ledger.py`. It also carries the separately motivated compact atomic `demand_meta.json` writer; parsed metadata and `build_id` are unchanged, but that output-format change is explicitly part of the commit despite its narrow title. The commit is one ahead of origin and has not been pushed.
@@ -19,9 +35,6 @@ which model may continue. See `AGENTS.md`.
 - Checks: 637 focused tests across 17 archive, costing, resolver, monthly and provenance modules pass in the latest run (30.04 s). A wider subhour set had 202 passes and two pre-existing network-metadata-drift failures. Catalog preflight was rechecked after the build and both pools still serve current inputs with zero drift. No full-suite claim.
 - Working tree: generated `web/data/od_matrix.*` and `web/data/validation.json` changes from the diagnostic build were restored after their values were bound into the evidence. The isolated worktree retains the three intended documentation edits and untracked review/evidence files. The user's main checkout was not modified.
 - Suggested next action: keep the targeted result as the valid bounded measurement. Run the 30-build September qualification/profile only as a separately authorised, costed experiment; otherwise leave the full-month gate open. Do not warm a month or start step 6 merely to fill this measurement gap.
-<!-- CURRENT_HANDOFF_END -->
-
-<!-- CURRENT_HANDOFF_HISTORY_START -->
 
 ### Before departure-to-passage integration (2026-09-08)
 

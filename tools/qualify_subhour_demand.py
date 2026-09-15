@@ -38,17 +38,25 @@ never a silent partial manifest.
 No-clobber: `write_manifest` refuses to overwrite an existing file, matching
 the append-only evidence contract every other Phase 3-5 producer already
 follows.
+
+Archive input is explicit: `--fresh-runs-root` builds into a previously absent
+root; `--existing-runs-root` performs no build and accepts exactly one fully
+validated existing archive per required build key.  Both paths still require
+the protected source bytes executing this tool to match CODE_APPROVED.
 """
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import math
 from pathlib import Path
+import shutil
+import tempfile
 from typing import Mapping, Sequence
-import xml.etree.ElementTree as ET
 
+from demand.day_library import DayIdentity, DayLibrary, assemble_window
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.demand.provenance import validate_calibrated_provenance
 from traffic_sim.demand import route_catalog
@@ -61,11 +69,13 @@ from traffic_sim.core.contracts import ClosureSearchSpec, DemandBuildSpec
 from traffic_sim.simulation.independent_daily import daily_unit_records
 from traffic_sim.simulation.monthly_demand import (
     MonthlyDemandResolverRunner,
+    _archives_for_build_key,
     build_demand_archive,
     find_demand_archives,
     validate_demand_archive,
     validate_qualified_demand_manifest_shape,
 )
+from tools import profile_passage_replay
 
 MANIFEST_SCHEMA = "subhour_qualified_demand_manifest_v1"
 MANIFEST_KIND = "subhour_qualified_demand_manifest"
@@ -109,6 +119,34 @@ class SensorShortestSupportInconclusive(QualificationError):
     """The strict route/count representation is scientifically infeasible."""
 
 
+def _source_manifest(root: Path, patterns: Sequence[str]) -> dict:
+    """Build the controller's canonical protected-source manifest."""
+    from tools.ai_flow import source_manifest
+    return source_manifest(Path(root), patterns)
+
+
+def _require_current_source(source: Mapping, root: Path,
+                            patterns: Sequence[str]) -> None:
+    """Reject an approval frozen for source bytes other than those executing."""
+    current = _source_manifest(Path(root), patterns)
+    if current.get("digest") == source.get("digest"):
+        return
+    before = {
+        item.get("path"): item.get("sha256")
+        for item in source.get("files", ()) if isinstance(item, Mapping)
+    }
+    after = {
+        item.get("path"): item.get("sha256")
+        for item in current.get("files", ()) if isinstance(item, Mapping)
+    }
+    changed = sorted(
+        path for path in set(before) | set(after)
+        if before.get(path) != after.get(path))
+    raise QualificationError(
+        "protected source changed after CODE_APPROVED: "
+        f"{changed[:20]}{' ...' if len(changed) > 20 else ''}")
+
+
 def _digest_payload(payload: object) -> str:
     canonical = json.dumps(
         payload, sort_keys=True, separators=(",", ":"),
@@ -134,8 +172,14 @@ def _load_json_object(path: Path, label: str) -> dict:
     return value
 
 
-def validate_code_approval(source_manifest_path: Path, checks_path: Path,
-                           impact_inventory_path: Path) -> dict:
+def validate_code_approval(
+    source_manifest_path: Path,
+    checks_path: Path,
+    impact_inventory_path: Path,
+    *,
+    source_root: Path | None = None,
+    source_patterns: Sequence[str] | None = None,
+) -> dict:
     """Bind Phase D to persisted controller-owned CODE_APPROVED inputs."""
     source = _load_json_object(source_manifest_path, "CODE_APPROVED source manifest")
     digest = _require_sha256(source.get("digest"), "source manifest digest")
@@ -145,6 +189,20 @@ def validate_code_approval(source_manifest_path: Path, checks_path: Path,
     canonical_files = json.dumps(files, sort_keys=True, separators=(",", ":")).encode()
     if hashlib.sha256(canonical_files).hexdigest() != digest:
         raise QualificationError("CODE_APPROVED source manifest digest is invalid")
+    root = (Path(source_root).resolve() if source_root is not None
+            else Path(__file__).resolve().parents[1])
+    if source_patterns is None:
+        from tools.ai_flow import FlowError, load_config
+        try:
+            config = load_config(
+                root / ".ai-flow/config.complete-subhour.toml", root)
+        except (OSError, ValueError, FlowError) as error:
+            raise QualificationError(
+                "cannot load the protected-source policy") from error
+        if config.evidence_policy is None:
+            raise QualificationError("source policy lacks evidence settings")
+        source_patterns = config.evidence_policy.source_globs
+    _require_current_source(source, root, source_patterns)
     checks = _load_json_object(checks_path, "source-bound checks")
     results = checks.get("results")
     if (checks.get("status") != "PASS" or checks.get("source_digest") != digest
@@ -213,27 +271,278 @@ def validate_adoption_and_catalogs(adoption_path: Path, catalog_root: Path,
              "catalog_keys": keys}, bindings)
 
 
-def _emitted_sensor_counts(route_path: Path, measured_edges: Sequence[str],
-                           quarters: int) -> dict[str, list[int]]:
-    measured = set(map(str, measured_edges))
-    counts = {edge: [0] * quarters for edge in sorted(measured)}
+def _require_passage_proof(variant: str, proof: Mapping | None,
+                           expected: Mapping[str, Sequence[int]]) -> Mapping:
+    """Require a replayed, target-bound sensor-entry-quarter proof.
+
+    Route XML stores departures, not the predicted time at which each vehicle
+    enters a downstream sensor edge. Counting a route in its departure quarter
+    is therefore a different measurement and was the defect that rejected the
+    September qualification campaign. The only accepted replacement is a
+    replay of the same entry-offset system that calibration solved.
+    """
+    if not isinstance(proof, Mapping) or proof.get("exact") is not True \
+            or proof.get("basis") != "sensor_edge_entry_quarter" \
+            or type(proof.get("replayed_days")) is not int \
+            or proof["replayed_days"] < 1:
+        raise QualificationError(
+            f"{variant} passage proof is missing, incomplete, or uses the wrong basis")
+    if proof.get("targets_digest") != _digest_payload(expected):
+        raise QualificationError(f"{variant} passage proof target digest differs")
+    return proof
+
+
+_VARIANT_DAY_FILES = {
+    "q50": ("calibrated.rou.xml", "calibrated.agents.json", "fit.json"),
+    "q10": ("calibrated_v1.rou.xml", "calibrated_v1.agents.json", "fit_v1.json"),
+    "q90": ("calibrated_v2.rou.xml", "calibrated_v2.agents.json", "fit_v2.json"),
+}
+
+
+def _file_snapshot(paths: Sequence[Path]) -> dict[str, str]:
+    """Content snapshot, including compressed bytes; never stat-authorized."""
     try:
-        root = ET.parse(route_path).getroot()
-    except (OSError, ET.ParseError) as error:
-        raise QualificationError(f"calibrated routes are unreadable: {route_path}") from error
-    for vehicle in root.findall("vehicle"):
-        route = vehicle.find("route")
+        return {str(path): sha256_file(path) for path in paths}
+    except OSError as error:
+        raise QualificationError(
+            f"evidence is unreadable or changed during qualification: {error}") from error
+
+
+def _require_snapshot(snapshot: Mapping[str, str]) -> None:
+    if _file_snapshot([Path(path) for path in snapshot]) != snapshot:
+        raise QualificationError("evidence changed during qualification")
+
+
+def _passage_snapshot(root: Path) -> dict[str, str]:
+    paths = [root / "report.json", root / "result.json"]
+    for name in (profile_passage_replay.REQUIRED_INPUTS
+                 + profile_passage_replay.REQUIRED_EVIDENCE
+                 + (profile_passage_replay.REPLAY_CONTRACT,)):
+        path = root / name
+        paths.append(path if path.is_file() else path.with_name(path.name + ".gz"))
+    return _file_snapshot(paths)
+
+
+def _verified_day_directories(demand_meta: Mapping, root: Path,
+                              memo: dict[Path, dict]) -> list[Path]:
+    diagnostics = demand_meta.get("day_library_diagnostics")
+    days = demand_meta.get("days")
+    if type(days) is not int or days < 1 or not isinstance(diagnostics, list) \
+            or len(diagnostics) != days:
+        raise QualificationError("demand metadata lacks complete day-library diagnostics")
+    library = DayLibrary(Path(root))
+    result = []
+    for item in diagnostics:
+        if not isinstance(item, Mapping):
+            raise QualificationError("day-library diagnostic is malformed")
+        date, key = item.get("date"), item.get("expected_key")
+        if not isinstance(date, str) or not isinstance(key, str):
+            raise QualificationError("day-library diagnostic lacks date or key")
+        directory = (Path(root) / date / key).resolve()
+        if directory in memo:
+            _require_snapshot(memo[directory]["snapshot"])
+        else:
+            manifest_path = directory / "manifest.json"
+            snapshot = _file_snapshot([manifest_path])
+            raw = _load_json_object(manifest_path, "day-library manifest")
+            identity_record = raw.get("identity")
+            if not isinstance(identity_record, Mapping):
+                raise QualificationError("day-library manifest lacks identity")
+            try:
+                identity = DayIdentity(
+                    date=identity_record["date"], source=identity_record["source"],
+                    pool_composition=tuple(identity_record["pool_composition"]),
+                    inputs=identity_record["inputs"],
+                    source_hashes=identity_record["source_hashes"],
+                )
+            except (KeyError, TypeError, ValueError) as error:
+                raise QualificationError("day-library identity is malformed") from error
+            lookup = library.lookup(identity)
+            if identity.date != date or identity.key != key or lookup.outcome != "hit" \
+                    or lookup.manifest is None:
+                raise QualificationError(
+                    f"day-library entry is absent or unverified: {directory}")
+            snapshot.update({
+                str(directory / name): record["sha256"]
+                for name, record in lookup.manifest["artifacts"].items()
+            })
+            _require_snapshot(snapshot)
+            memo[directory] = {"manifest": lookup.manifest, "snapshot": snapshot}
+        result.append(directory)
+    return result
+
+
+def _decompressed_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    opener = gzip.open if path.suffix == ".gz" else open
+    try:
+        with opener(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+    except OSError as error:
+        raise QualificationError(f"day artifact is unreadable: {path}") from error
+    return digest.hexdigest()
+
+
+def _seed_replay_cache(evidence_root: Path, source_cache: Path,
+                       owned_cache: Path) -> None:
+    """Copy candidate cache entries; replay still validates every solution."""
+    for state_path in sorted(Path(evidence_root).glob("solver-*/state.json")):
+        state = _load_json_object(state_path, "passage solver state")
+        key = _require_sha256(state.get("key"), "passage solver state key")
+        source = Path(source_cache) / key / "result.json"
+        if not source.is_file():
+            continue
+        destination = Path(owned_cache) / key / "result.json"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if not destination.exists():
+            shutil.copy2(source, destination)
+
+
+def _replay_day_passage(
+    evidence_root: Path,
+    expected: Mapping[str, Sequence[int]],
+    *,
+    candidate_pool: Path,
+    replay_root: Path,
+    solver_cache_root: Path,
+    replay_memo: dict[tuple[Path, str], dict],
+) -> dict:
+    evidence_root = Path(evidence_root).resolve()
+    candidate_pool = Path(candidate_pool).resolve()
+    memo_key = (evidence_root, sha256_file(candidate_pool))
+    snapshot = _passage_snapshot(evidence_root)
+    if memo_key in replay_memo and snapshot != replay_memo[memo_key]["snapshot"]:
+        raise QualificationError("passage evidence changed during qualification")
+    if memo_key not in replay_memo:
+        owned_cache = replay_root / "solver-cache"
+        _seed_replay_cache(evidence_root, solver_cache_root, owned_cache)
+        output = replay_root / f"replay-{len(replay_memo):04d}"
         try:
-            depart = float(vehicle.get("depart"))
-        except (TypeError, ValueError) as error:
-            raise QualificationError("calibrated vehicle has invalid departure") from error
-        quarter = int(math.floor(depart / 900.0))
-        if quarter < 0 or quarter >= quarters:
-            raise QualificationError("calibrated vehicle departure is outside target horizon")
-        edges = set((route.get("edges") if route is not None else "").split())
-        for edge in measured & edges:
-            counts[edge][quarter] += 1
-    return counts
+            report = profile_passage_replay.replay(
+                evidence_root, output, pool=candidate_pool,
+                allow_compressed=True,
+                _solver_cache_dir=owned_cache)
+        except (OSError, ValueError, profile_passage_replay.ReplayRefused) as error:
+            raise QualificationError(
+                f"passage evidence replay failed: {evidence_root}: {error}") from error
+        proof = report.get("predicted_sensor_incidence")
+        if report.get("selection_reproduced", {}).get("state") != "identical":
+            raise QualificationError(
+                f"passage evidence did not reproduce exactly: {evidence_root}")
+        proof = dict(_require_passage_proof("day", proof, expected))
+        _require_sha256(proof.get("digest"), "passage projection digest")
+        if _passage_snapshot(evidence_root) != snapshot:
+            raise QualificationError("passage evidence changed during qualification")
+        replay_memo[memo_key] = {"proof": proof, "snapshot": snapshot}
+    proof = replay_memo[memo_key]["proof"]
+    _require_passage_proof("day", proof, expected)
+    return proof
+
+
+def _reproduce_assembled_variant(
+    archive: Path,
+    day_directories: Sequence[Path],
+    route_name: str,
+    agent_name: str,
+    work: Path,
+) -> None:
+    route_out, agents_out = work / route_name, work / agent_name
+    assemble_window(day_directories, route_out, agents_out, (route_name, agent_name))
+    for reproduced, published in (
+            (route_out, archive / route_name), (agents_out, archive / agent_name)):
+        if sha256_file(reproduced) != sha256_file(published):
+            raise QualificationError(
+                f"assembled archive differs from verified day artifacts: {published}")
+
+
+def validate_archive_passage_evidence(
+    variant: str,
+    *,
+    archive: Path,
+    demand_meta: Mapping,
+    expected: Mapping[str, Sequence[int]],
+    day_library_root: Path,
+    solver_cache_root: Path,
+    work_root: Path,
+    day_memo: dict[Path, dict],
+    replay_memo: dict[tuple[Path, str], dict],
+) -> dict:
+    """Re-prove one assembled variant from content-bound per-day evidence."""
+    if variant not in _VARIANT_DAY_FILES:
+        raise QualificationError(f"unknown demand variant: {variant!r}")
+    route_name, agent_name, fit_name = _VARIANT_DAY_FILES[variant]
+    day_directories = _verified_day_directories(
+        demand_meta, day_library_root, day_memo)
+    if any(len(values) % len(day_directories) for values in expected.values()):
+        raise QualificationError("archive target horizon is not divisible into days")
+    quarters_per_day = len(next(iter(expected.values()))) // len(day_directories)
+    candidate_pool = Path(archive) / "candidates.rou.xml"
+    candidate_metadata = Path(archive) / "candidates.meta.json"
+    candidate_binding = {
+        "candidate_pool": sha256_file(candidate_pool),
+        "candidate_metadata": sha256_file(candidate_metadata),
+    }
+    evidence_digests = []
+    for index, directory in enumerate(day_directories):
+        identity = day_memo[directory]["manifest"].get("identity")
+        inputs = identity.get("inputs") if isinstance(identity, Mapping) else None
+        if not isinstance(inputs, Mapping) or any(
+                inputs.get(name) != digest
+                for name, digest in candidate_binding.items()):
+            raise QualificationError(
+                f"{variant} day identity differs from the archive candidate pool")
+        fit = _load_json_object(directory / fit_name, f"{variant} day fit")
+        passage = fit.get("passage_calibration")
+        if not isinstance(passage, Mapping):
+            raise QualificationError(f"{variant} day fit lacks passage calibration")
+        evidence_directory = passage.get("evidence_directory")
+        if not isinstance(evidence_directory, str) or not evidence_directory:
+            raise QualificationError(
+                f"{variant} day fit lacks an evidence directory")
+        evidence_root = Path(evidence_directory)
+        if not evidence_root.is_absolute():
+            raise QualificationError(
+                f"{variant} passage evidence directory is not absolute")
+        saved_result = _load_json_object(
+            evidence_root / "result.json", f"{variant} passage result")
+        if saved_result != passage:
+            raise QualificationError(
+                f"{variant} day fit differs from its saved passage result")
+        stored_route = directory / (route_name + ".gz")
+        stored_agents = directory / (agent_name + ".gz")
+        if not stored_route.is_file():
+            stored_route = directory / route_name
+        if not stored_agents.is_file():
+            stored_agents = directory / agent_name
+        if _decompressed_sha256(stored_route) != passage.get("routes_sha256") \
+                or _decompressed_sha256(stored_agents) != passage.get("agents_sha256"):
+            raise QualificationError(
+                f"{variant} day artifacts differ from passage output hashes")
+        start = index * quarters_per_day
+        day_expected = {
+            edge: list(values[start:start + quarters_per_day])
+            for edge, values in expected.items()
+        }
+        replayed = _replay_day_passage(
+            evidence_root, day_expected,
+            candidate_pool=candidate_pool,
+            replay_root=work_root,
+            solver_cache_root=solver_cache_root, replay_memo=replay_memo)
+        evidence_digests.append(replayed["digest"])
+    archive_key = hashlib.sha256(str(archive).encode()).hexdigest()[:12]
+    assembly = work_root / f"assembly-{archive_key}-{variant}"
+    assembly.mkdir(parents=True, exist_ok=False)
+    _reproduce_assembled_variant(
+        Path(archive), day_directories, route_name, agent_name, assembly)
+    return {
+        "basis": "sensor_edge_entry_quarter",
+        "exact": True,
+        "targets_digest": _digest_payload(expected),
+        "replayed_days": len(day_directories),
+        "evidence_digests": evidence_digests,
+        "assembly_reproduced": True,
+    }
 
 
 def audit_shared_support(
@@ -315,6 +624,11 @@ def validate_variant_archive(
     measured_edges: Sequence[str],
     target_key: str,
     route_file: str,
+    day_library_root: Path | None = None,
+    solver_cache_root: Path | None = None,
+    passage_work_root: Path | None = None,
+    day_memo: dict[Path, dict] | None = None,
+    replay_memo: dict[tuple[Path, str], dict] | None = None,
 ) -> dict:
     """Independently re-prove one q10/q50/q90 demand variant.
 
@@ -378,19 +692,17 @@ def validate_variant_archive(
                or not math.isfinite(float(value)) or value < 0 for value in values):
             raise QualificationError(f"{variant} exact targets contain invalid values")
         expected[edge] = [int(round(float(value))) for value in values]
-    achieved = _emitted_sensor_counts(calibrated_routes, measured_edges, quarters)
-    mismatches = []
-    for edge in sorted(expected):
-        for quarter, (actual, target) in enumerate(zip(achieved[edge], expected[edge])):
-            if actual != target:
-                mismatches.append({"edge": edge, "quarter": quarter,
-                                   "target": target, "achieved": actual})
-    if mismatches:
-        first = mismatches[0]
-        raise SensorShortestSupportInconclusive(
-            f"{variant} emitted sensor incidence differs from exact target "
-            f"({first['edge']}@q{first['quarter']}: {first['achieved']} != "
-            f"{first['target']}; {len(mismatches)} mismatch(es))")
+    if any(value is None for value in (
+            day_library_root, solver_cache_root, passage_work_root,
+            day_memo, replay_memo)):
+        raise QualificationError(f"{variant} passage proof context is missing")
+    proof = validate_archive_passage_evidence(
+        variant, archive=sumo_dir, demand_meta=demand_meta, expected=expected,
+        day_library_root=day_library_root,
+        solver_cache_root=solver_cache_root,
+        work_root=passage_work_root,
+        day_memo=day_memo, replay_memo=replay_memo)
+    _require_passage_proof(variant, proof, expected)
 
     return {
         "variant": variant,
@@ -400,9 +712,10 @@ def validate_variant_archive(
         "candidate_records": provenance["candidate_records"],
         "provenance_status": provenance["status"],
         "targets_digest": _digest_payload(targets),
-        "sensor_incidence_digest": _digest_payload(achieved),
+        "sensor_incidence_digest": proof["targets_digest"],
         "sensor_incidence_exact": True,
-        "sensor_incidence_records": sum(len(values) for values in achieved.values()),
+        "sensor_incidence_records": sum(len(values) for values in expected.values()),
+        "passage_proof": proof,
         "relaxation_summary": relaxation_summary,
         "content_digests": {
             "candidate_routes": sha256_file(candidate_routes),
@@ -424,6 +737,8 @@ def build_manifest(
     catalog_bindings: Mapping[str, Mapping],
     catalogs: Mapping[str, tuple[Path, Path]],
     archives: Mapping[str, tuple[Path, Mapping]],
+    day_library_root: Path = Path("runs/demand-days"),
+    solver_cache_root: Path = Path("runs/passage-solver-cache"),
 ) -> dict:
     """Assemble the single Phase D qualified-demand manifest.
 
@@ -458,31 +773,40 @@ def build_manifest(
         report.get("status") == "pass" for report in support_audit.values())
 
     archive_inventory = {}
-    for build_key, (archive_path, validated_record) in sorted(archives.items()):
-        archive_path = Path(archive_path).resolve()
-        if validated_record.get("build_key") != build_key \
-                or Path(str(validated_record.get("archive", ""))).resolve() != archive_path:
-            raise QualificationError("validated archive record does not match its build key/path")
-        demand_meta_path = archive_path / "demand_meta.json"
-        demand_meta = _load_json_object(demand_meta_path, "demand metadata")
-        variant_contract = resolve_variant_contract(demand_meta)
-        variants = {
-            variant: validate_variant_archive(
-                variant, sumo_dir=archive_path,
-                candidate_routes=archive_path / "candidates.rou.xml",
-                candidate_metadata=archive_path / "candidates.meta.json",
-                demand_meta=demand_meta, measured_edges=measured_edges, **entry)
-            for variant, entry in sorted(variant_contract.items())
-        }
-        archive_inventory[build_key] = {
-            "build_key": build_key,
-            "archive": str(archive_path),
-            "demand_build_spec": dict(validated_record["demand_build_spec"]),
-            "archive_manifest_sha256": validated_record["archive_manifest_sha256"],
-            "archive_content_key": validated_record["archive_content_key"],
-            "demand_meta_sha256": sha256_file(demand_meta_path),
-            "variants": variants,
-        }
+    day_memo: dict[Path, dict] = {}
+    replay_memo: dict[tuple[Path, str], dict] = {}
+    with tempfile.TemporaryDirectory(prefix="qualified-passage-replay-") as temporary:
+        passage_work_root = Path(temporary)
+        for build_key, (archive_path, validated_record) in sorted(archives.items()):
+            archive_path = Path(archive_path).resolve()
+            if validated_record.get("build_key") != build_key \
+                    or Path(str(validated_record.get("archive", ""))).resolve() != archive_path:
+                raise QualificationError(
+                    "validated archive record does not match its build key/path")
+            demand_meta_path = archive_path / "demand_meta.json"
+            demand_meta = _load_json_object(demand_meta_path, "demand metadata")
+            variant_contract = resolve_variant_contract(demand_meta)
+            variants = {
+                variant: validate_variant_archive(
+                    variant, sumo_dir=archive_path,
+                    candidate_routes=archive_path / "candidates.rou.xml",
+                    candidate_metadata=archive_path / "candidates.meta.json",
+                    demand_meta=demand_meta, measured_edges=measured_edges,
+                    day_library_root=day_library_root,
+                    solver_cache_root=solver_cache_root,
+                    passage_work_root=passage_work_root,
+                    day_memo=day_memo, replay_memo=replay_memo, **entry)
+                for variant, entry in sorted(variant_contract.items())
+            }
+            archive_inventory[build_key] = {
+                "build_key": build_key,
+                "archive": str(archive_path),
+                "demand_build_spec": dict(validated_record["demand_build_spec"]),
+                "archive_manifest_sha256": validated_record["archive_manifest_sha256"],
+                "archive_content_key": validated_record["archive_content_key"],
+                "demand_meta_sha256": sha256_file(demand_meta_path),
+                "variants": variants,
+            }
 
     manifest = {
         "schema": MANIFEST_SCHEMA,
@@ -620,6 +944,41 @@ def build_fresh_archives(required: Mapping[str, DemandBuildSpec], fresh_runs_roo
     return result
 
 
+def load_existing_archives(
+    required: Mapping[str, DemandBuildSpec],
+    runs_root: Path,
+    *,
+    finder=find_demand_archives,
+    archive_indexer=_archives_for_build_key,
+) -> dict[str, tuple[Path, Mapping]]:
+    """Load one already-built, fully validated archive per required key.
+
+    This is the no-rebuild counterpart to ``build_fresh_archives``.  The
+    archive index is local to this call and is derived from metadata content;
+    each candidate still passes ``find_demand_archives``' full content checks.
+    Missing or duplicate matches fail closed instead of selecting by recency.
+    """
+    root = Path(runs_root).resolve()
+    if not root.is_dir():
+        raise QualificationError(f"existing demand root is absent: {root}")
+    archive_index = archive_indexer(root)
+    result = {}
+    for key, spec in sorted(required.items()):
+        matches = finder(root, spec, _archive_index=archive_index)
+        if len(matches) != 1:
+            raise QualificationError(
+                f"existing demand build {key} produced {len(matches)} valid archives")
+        record = matches[0]
+        archive = Path(str(record.get("archive", ""))).resolve()
+        try:
+            archive.relative_to(root)
+        except ValueError as error:
+            raise QualificationError(
+                f"existing demand archive escapes its root: {archive}") from error
+        result[key] = (archive, record)
+    return result
+
+
 def write_manifest(output_path: Path, manifest: Mapping) -> Path:
     """No-clobber write: refuses to overwrite an existing manifest.
 
@@ -657,7 +1016,15 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--weekend-routes", required=True, type=Path)
     parser.add_argument("--weekend-metadata", required=True, type=Path)
     parser.add_argument("--search-spec", action="append", required=True, type=Path)
-    parser.add_argument("--fresh-runs-root", required=True, type=Path)
+    archive_source = parser.add_mutually_exclusive_group(required=True)
+    archive_source.add_argument("--fresh-runs-root", type=Path)
+    archive_source.add_argument(
+        "--existing-runs-root", type=Path,
+        help="reuse exactly one fully validated existing archive per build key")
+    parser.add_argument("--day-library-root", type=Path,
+                        default=Path("runs/demand-days"))
+    parser.add_argument("--passage-solver-cache-root", type=Path,
+                        default=Path("runs/passage-solver-cache"))
     parser.add_argument("--output", required=True, type=Path)
     return parser.parse_args(argv)
 
@@ -673,7 +1040,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     adoption, catalog_bindings = validate_adoption_and_catalogs(
         args.adoption, args.catalog_root, catalogs)
     required = derive_required_demand_specs(args.search_spec)
-    archives = build_fresh_archives(required, args.fresh_runs_root)
+    archives = (
+        build_fresh_archives(required, args.fresh_runs_root)
+        if args.fresh_runs_root is not None
+        else load_existing_archives(required, args.existing_runs_root)
+    )
     try:
         manifest = build_manifest(
             evidence_id=args.evidence_id,
@@ -683,6 +1054,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             min_per_sensor=args.min_per_sensor,
             adoption=adoption, catalog_bindings=catalog_bindings,
             catalogs=catalogs, archives=archives,
+            day_library_root=args.day_library_root,
+            solver_cache_root=args.passage_solver_cache_root,
         )
     except QualificationError as error:
         manifest = build_inconclusive_manifest(
