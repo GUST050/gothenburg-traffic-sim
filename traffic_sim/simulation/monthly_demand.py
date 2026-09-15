@@ -624,8 +624,19 @@ def qualified_manifest_archive_mismatch(
     except (OSError, ValueError):
         return "demand archive metadata could not be re-read for catalog identity"
     catalog = metadata.get("candidate_catalog")
-    if not isinstance(catalog, Mapping) or catalog.get("keys") != dict(
-            manifest["adopted_catalog_keys"]):
+    keys = catalog.get("keys") if isinstance(catalog, Mapping) else None
+    composition = (catalog.get("pool_composition")
+                   if isinstance(catalog, Mapping) else None)
+    adopted = dict(manifest["adopted_catalog_keys"])
+    # A window records only the pools its own days draw from: a weekday-only
+    # window carries no weekend key.  Every recorded key must still be the
+    # adopted key for its pool, and the key set must equal that composition.
+    if (not isinstance(keys, Mapping) or not keys
+            or not isinstance(composition, list)
+            or any(not isinstance(pool, str) for pool in composition)
+            or len(set(composition)) != len(composition)
+            or set(keys) != set(composition)
+            or any(adopted.get(pool) != key for pool, key in keys.items())):
         return "demand archive catalog keys do not match the qualified-demand manifest"
     if sha256_file(archive / "demand_meta.json") != archive_entry.get("demand_meta_sha256"):
         return "demand archive metadata bytes do not match the qualified manifest"

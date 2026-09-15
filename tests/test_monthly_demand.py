@@ -1158,9 +1158,15 @@ def _qualified_manifest_for(record, *, network_sha256,
     return manifest
 
 
-def _with_catalog_keys(archive, catalog_keys):
+def _with_catalog_keys(archive, catalog_keys, pool_composition=None):
+    # Mirrors build_sumo_demand: `keys` names exactly the pools the window's
+    # `pool_composition` draws from, never every adopted pool.
     metadata = json.loads((archive / "demand_meta.json").read_text())
-    metadata["candidate_catalog"] = {"keys": dict(catalog_keys)}
+    metadata["candidate_catalog"] = {
+        "pool_composition": (sorted(catalog_keys) if pool_composition is None
+                             else list(pool_composition)),
+        "keys": dict(catalog_keys),
+    }
     _rewrite_metadata(archive, metadata)
 
 
@@ -1318,6 +1324,78 @@ def test_qualified_manifest_rejects_archive_with_no_catalog_record(tmp_path):
     record = validate_demand_archive(archive, required)
     net_path, net_sha256 = _phase_d_net_path(tmp_path)
     manifest = _qualified_manifest_for(record, network_sha256=net_sha256)
+
+    reason = monthly_demand.qualified_manifest_archive_mismatch(
+        record, manifest, net_path=net_path)
+    assert reason is not None and "catalog keys" in reason
+
+
+_ADOPTED_CATALOG_KEYS = {"weekday": "wd-key", "weekend": "we-key"}
+
+
+def _one_weekday_catalog_record(tmp_path, name, catalog_keys, pool_composition):
+    """A one-day window on 2027-07-15, a Thursday: only the weekday pool."""
+    schedules = generate_closure_schedules(_spec(end_date="2027-07-15"))
+    resolver = MonthlyDemandResolverRunner(
+        _spec(end_date="2027-07-15"),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        build_missing=False,
+        runner_factory=FakeChildRunner,
+    )
+    required = resolver._required(schedules[0])
+    archive = _archive(
+        tmp_path, required, name, finished_at="2027-01-01T00:00:00Z")
+    _with_catalog_keys(archive, catalog_keys, pool_composition)
+    return archive, required, validate_demand_archive(archive, required)
+
+
+def test_qualified_manifest_accepts_a_weekday_only_window(tmp_path):
+    """A window without a weekend day draws only the weekday pool, and the
+    builder records exactly that one key. Requiring every adopted pool
+    refused all 14 weekday-only archives of the real September campaign
+    (2026-09-15) although each carried the adopted weekday key."""
+    archive, required, record = _one_weekday_catalog_record(
+        tmp_path, "demand-weekday-only", {"weekday": "wd-key"}, ["weekday"])
+    net_path, net_sha256 = _phase_d_net_path(tmp_path)
+    manifest = _qualified_manifest_for(
+        record, network_sha256=net_sha256, catalog_keys=_ADOPTED_CATALOG_KEYS)
+
+    assert monthly_demand.qualified_manifest_archive_mismatch(
+        record, manifest, net_path=net_path) is None
+    matches = find_demand_archives(
+        tmp_path, required, qualified_manifest=manifest,
+        qualified_manifest_net_path=net_path)
+    assert matches and matches[0]["archive"] == str(archive)
+
+
+def test_qualified_manifest_rejects_a_key_for_a_pool_the_window_did_not_use(
+        tmp_path):
+    """Keys must describe the window's own composition, not every adopted
+    pool: a weekday-only window that also names the weekend key is not what
+    the builder writes and must not be trusted as a match."""
+    _archive_dir, _required, record = _one_weekday_catalog_record(
+        tmp_path, "demand-extra-pool", dict(_ADOPTED_CATALOG_KEYS),
+        ["weekday"])
+    net_path, net_sha256 = _phase_d_net_path(tmp_path)
+    manifest = _qualified_manifest_for(
+        record, network_sha256=net_sha256, catalog_keys=_ADOPTED_CATALOG_KEYS)
+
+    reason = monthly_demand.qualified_manifest_archive_mismatch(
+        record, manifest, net_path=net_path)
+    assert reason is not None and "catalog keys" in reason
+
+
+def test_qualified_manifest_rejects_a_weekday_only_window_with_a_wrong_key(
+        tmp_path):
+    _archive_dir, _required, record = _one_weekday_catalog_record(
+        tmp_path, "demand-wrong-weekday", {"weekday": "other-key"},
+        ["weekday"])
+    net_path, net_sha256 = _phase_d_net_path(tmp_path)
+    manifest = _qualified_manifest_for(
+        record, network_sha256=net_sha256, catalog_keys=_ADOPTED_CATALOG_KEYS)
 
     reason = monthly_demand.qualified_manifest_archive_mismatch(
         record, manifest, net_path=net_path)

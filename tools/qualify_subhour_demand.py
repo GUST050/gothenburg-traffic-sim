@@ -72,6 +72,7 @@ from traffic_sim.simulation.monthly_demand import (
     _archives_for_build_key,
     build_demand_archive,
     find_demand_archives,
+    qualified_manifest_archive_mismatch,
     validate_demand_archive,
     validate_qualified_demand_manifest_shape,
 )
@@ -1029,6 +1030,28 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def require_consumable_archives(
+    manifest: Mapping,
+    archives: Mapping[str, tuple[Path, Mapping]],
+    *,
+    net_path: Path,
+) -> None:
+    """Refuse PASS for an archive the manifest's own consumers would skip.
+
+    Every resolver selects archives through
+    ``qualified_manifest_archive_mismatch``, which silently excludes a
+    mismatch.  A manifest this producer certifies must therefore pass that
+    exact check for every archive it lists; otherwise the first consumer
+    fails in preparation with "no archive", long after qualification.
+    """
+    for build_key, (_archive, record) in sorted(archives.items()):
+        reason = qualified_manifest_archive_mismatch(
+            record, manifest, net_path=Path(net_path))
+        if reason is not None:
+            raise QualificationError(
+                f"qualified archive {build_key} is not consumable: {reason}")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     approval = validate_code_approval(
@@ -1057,6 +1080,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             day_library_root=args.day_library_root,
             solver_cache_root=args.passage_solver_cache_root,
         )
+        if manifest["status"] == "PASS":
+            require_consumable_archives(
+                manifest, archives, net_path=args.net_path)
     except QualificationError as error:
         manifest = build_inconclusive_manifest(
             evidence_id=args.evidence_id, code_approval=approval,

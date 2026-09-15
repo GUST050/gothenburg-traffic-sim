@@ -737,6 +737,9 @@ class TestMainCli:
             }
 
         monkeypatch.setattr(qsd, "build_manifest", fake_manifest)
+        # The fake manifest lists no archives; consumability has its own tests.
+        monkeypatch.setattr(
+            qsd, "require_consumable_archives", lambda *_a, **_k: None)
         code = qsd.main([
             "--net-path", "net.xml", "--sensor", "s",
             "--min-per-sensor", "1", "--evidence-id", "id",
@@ -786,6 +789,10 @@ class TestMainCli:
         monkeypatch.setattr(qsd, "derive_required_demand_specs", lambda *_: {"build-key": object()})
         monkeypatch.setattr(
             qsd, "build_fresh_archives", lambda *_: _archive_inputs(sumo_dir))
+        # _archive_inputs is a minimal record, not a validated archive;
+        # consumability is exercised by TestQualifiedArchivesMustBeConsumable.
+        monkeypatch.setattr(
+            qsd, "require_consumable_archives", lambda *_a, **_k: None)
 
         code = qsd.main([
             "--net-path", str(net_path),
@@ -813,3 +820,90 @@ class TestMainCli:
         printed = json.loads(capsys.readouterr().out)
         assert printed["status"] == "PASS"
         assert printed["content_key"] == manifest["content_key"]
+
+    def test_main_turns_an_unconsumable_archive_into_a_terminal(
+            self, tmp_path, monkeypatch):
+        output = tmp_path / "manifest.json"
+        archives = {"build-key": (tmp_path / "archive", {})}
+        seen = {}
+        monkeypatch.setattr(
+            qsd, "validate_code_approval", lambda *_: _approval())
+        monkeypatch.setattr(
+            qsd, "validate_adoption_and_catalogs", lambda *_: _bindings())
+        monkeypatch.setattr(
+            qsd, "derive_required_demand_specs",
+            lambda *_: {"build-key": object()})
+        monkeypatch.setattr(
+            qsd, "load_existing_archives", lambda required, root: archives)
+        monkeypatch.setattr(qsd, "build_manifest", lambda **_: {
+            "status": "PASS", "support_audit_pass": True,
+            "content_key": "a" * 64})
+
+        def refuse(manifest, seen_archives, *, net_path):
+            seen["archives"] = seen_archives
+            raise qsd.QualificationError(
+                "qualified archive build-key is not consumable: catalog keys")
+
+        def terminal(**kwargs):
+            seen["error"] = kwargs["error"]
+            return {"status": "INCONCLUSIVE_DEMAND_QUALIFICATION",
+                    "support_audit_pass": True, "content_key": "b" * 64}
+
+        monkeypatch.setattr(qsd, "require_consumable_archives", refuse)
+        monkeypatch.setattr(qsd, "build_inconclusive_manifest", terminal)
+        code = qsd.main([
+            "--net-path", "net.xml", "--sensor", "s",
+            "--min-per-sensor", "1", "--evidence-id", "id",
+            "--source-manifest", "source.json", "--checks", "checks.json",
+            "--impact-inventory", "impact.md",
+            "--weekday-routes", "weekday.xml",
+            "--weekday-metadata", "weekday.json",
+            "--weekend-routes", "weekend.xml",
+            "--weekend-metadata", "weekend.json",
+            "--search-spec", "search.json",
+            "--existing-runs-root", str(tmp_path / "existing"),
+            "--output", str(output),
+        ])
+
+        assert code == 1
+        assert seen["archives"] is archives
+        assert "not consumable" in str(seen["error"])
+        assert json.loads(output.read_text())["status"] == \
+            "INCONCLUSIVE_DEMAND_QUALIFICATION"
+
+
+class TestQualifiedArchivesMustBeConsumable:
+    """A PASS manifest that its consumers would silently skip is not qualified.
+
+    Found 2026-09-15: the qualifier certified 30/30 September archives while
+    `qualified_manifest_archive_mismatch`, the check every resolver applies,
+    refused 14 of them, so the full-month profile stopped in prepare.
+    """
+
+    @staticmethod
+    def _weekday_window(tmp_path, catalog_keys):
+        from tests.test_monthly_demand import (
+            _one_weekday_catalog_record, _phase_d_net_path,
+            _qualified_manifest_for)
+        archive, _required, record = _one_weekday_catalog_record(
+            tmp_path, "demand-consumable", catalog_keys, ["weekday"])
+        net_path, net_sha256 = _phase_d_net_path(tmp_path)
+        manifest = _qualified_manifest_for(
+            record, network_sha256=net_sha256,
+            catalog_keys={"weekday": "wd-key", "weekend": "we-key"})
+        return manifest, {record["build_key"]: (archive, record)}, net_path
+
+    def test_accepts_archives_their_consumers_accept(self, tmp_path):
+        manifest, archives, net_path = self._weekday_window(
+            tmp_path, {"weekday": "wd-key"})
+
+        qsd.require_consumable_archives(manifest, archives, net_path=net_path)
+
+    def test_refuses_an_archive_its_consumers_would_skip(self, tmp_path):
+        manifest, archives, net_path = self._weekday_window(
+            tmp_path, {"weekday": "other-key"})
+
+        with pytest.raises(qsd.QualificationError,
+                           match="not consumable.*catalog keys"):
+            qsd.require_consumable_archives(
+                manifest, archives, net_path=net_path)
