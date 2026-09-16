@@ -1,0 +1,513 @@
+{
+  "archive_set": {
+    "archives": [
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-215415-af2d83e6-bc11",
+        "archive_content_key": "5849d34a9a69723c34e2aafcec82c4c968b68864a69d892ad46ad5c2d8b889e0",
+        "archive_manifest_sha256": "ce9f12f86651abb36a37fd20caef0fd9917e14a58b6dbee6cdb575dc73aab848",
+        "build_key": "06cc309e4779897c"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220012-de032bcb-2165",
+        "archive_content_key": "bef93cdbf6d3c0a20328b69935ad6f8ca18745fdc87b157d8ff15020b55e83ed",
+        "archive_manifest_sha256": "7d430d34ec5619fa95da76a8afe1e4c2f660fc50f805dd888a7e872851e1f08d",
+        "build_key": "084cedb913d5197c"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220648-791840d4-c887",
+        "archive_content_key": "c988c98a618cab201fabcd9285c72b05951e9937070bb160903b0dc37f2a6eaf",
+        "archive_manifest_sha256": "cccddde80cbb0df85ace64b1502b2c15ccc8aea2f7035cbbc5b8baf91792d922",
+        "build_key": "0a6c5266d76b5b39"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221303-3a1fda45-188f",
+        "archive_content_key": "ffb8c79b719e45d8fae852db3e81611ee0ac3e1c5f79774806c1f1c02e293f6c",
+        "archive_manifest_sha256": "ede3ef8a9d62aa14da24ab225d44f34de1f8bb156ad79cf368ddd6955b69f664",
+        "build_key": "16f1d6176c7a9133"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221533-52837f59-7e5d",
+        "archive_content_key": "228429ec61688bd93b4676d3d4e742489d29c65d64737ac96144ea2a23dbdac5",
+        "archive_manifest_sha256": "e170bad30432cac3ccc51bb01a8cc290f9d6b0b794dad9d69bd625a49f0b0409",
+        "build_key": "187fca60022dedc5"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221806-7415a4c6-0d68",
+        "archive_content_key": "ecec806d1a819d447e714bb4234dd5d471429e2d09e2cd328a10eb3b62f8df99",
+        "archive_manifest_sha256": "4b10f845d253f782d15a4d43df033725e17cacf1c223006481c4a73f7f8186d4",
+        "build_key": "2d4f272bb3dfc5d2"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222404-4b5941dd-77c7",
+        "archive_content_key": "56160da62dcdddefa2e3f7d4de751061428920f2201504b4a650769b09a1cb5c",
+        "archive_manifest_sha256": "c31bcde9ab6aface9c3024a4f2808b24068161efbb961f327921a99f6d0b2361",
+        "build_key": "340168e305f8381e"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222709-889e6f89-d6d5",
+        "archive_content_key": "782f2e480f945e03af3e3fda8b2ce5bd2dc76dae8460ff46777a1de3fff2e65b",
+        "archive_manifest_sha256": "ea33986733a44f07d1eba3314c12b7ef64fe1092e41d52370df0448cf50be5fd",
+        "build_key": "3f5d86eed8fe5c17"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223016-ef0f3cf3-44e9",
+        "archive_content_key": "f4c156ddfe278bee41a5e983e7a33edca2c31e14e357e54e371747ce97fdcd20",
+        "archive_manifest_sha256": "10a229bcf9e8ce777333ca28f732a25cb40b8a492cfacb9949e6c17ad08c95d3",
+        "build_key": "4008e6387839d7a3"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223222-19b614fb-7ce8",
+        "archive_content_key": "d44a8994a0330ce60d8325a91034001f49a93cdea90cfa00797bc2c6589f8304",
+        "archive_manifest_sha256": "99f69c511aa8f136a4b66b4ca54004ff7f6cfbcdb58d39e7143accad0775f348",
+        "build_key": "5803fd9aa62080cb"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d",
+        "archive_content_key": "ff2c496d06510641f95d1c1a0c543a0dfc8b0728958f92f73a22f8e638e1e154",
+        "archive_manifest_sha256": "7f85cc1a0d6798c6a86059a2ea01accd8794bef25a21011a34c3b0e7bad28c6a",
+        "build_key": "5fcc585e03915396"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223744-a3782377-418d",
+        "archive_content_key": "926b9383658a7267699e63869117819c74d8801a55dae8398fe0dea199825ff7",
+        "archive_manifest_sha256": "1f2be9b797907be721ffab65b35ff275ab86354354efafe7d45f621a04a3dcbe",
+        "build_key": "657fa0b9f3268e78"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223804-04518454-6d14",
+        "archive_content_key": "e3a33894fd71177975d33e55024bac2d65877251e7c81e23cb6b7a2d2d494552",
+        "archive_manifest_sha256": "b24a137d1203fcd8f68416085e62a9908e42a83773b5a24e1333795b37d4c292",
+        "build_key": "6e3416af316f91cc"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223825-2bbb1a66-845d",
+        "archive_content_key": "c54eb87e4e6225c4d54b00db8d9cc02b937566b89176840e535756fa71eb9a5e",
+        "archive_manifest_sha256": "0beb321782cee931790bdeb02c9950998e24b00e36e334983bc38d79ec42e915",
+        "build_key": "7e395749f1712cb4"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224149-53fb2fd0-6182",
+        "archive_content_key": "76be17a75c7ae517491ee1aec369b6c72bd51851ab5c8555ff5b2ef4abe6d470",
+        "archive_manifest_sha256": "959e368f68a87b993c1dad3964bd7c13b8caf7a033d9663fb668273ca8bde4bb",
+        "build_key": "8dcbe1518a5b0898"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224309-23459e2e-c9ef",
+        "archive_content_key": "8e47519b0f6cf3fca62832e19e5e0d1d28e47844c9f76413850345b02d597c28",
+        "archive_manifest_sha256": "b7d7a357bb2c9f9196b3ffd46492741dbaa9a74b50f23505aa7f0bc58e682310",
+        "build_key": "90a93715895966dc"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72",
+        "archive_content_key": "1fe659e7a0b9b25f51035ac11e39495d38095fddc84da5341cf567cd319fb35a",
+        "archive_manifest_sha256": "9fe027d033355b76d054d6e862db5a038fc90770b27eb5e99a404037c41be565",
+        "build_key": "9c7ad9c97b6bdbc6"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33",
+        "archive_content_key": "cfb86558a8bd4bc690af033ef274c6242601f0308edc60706644a76dc89af478",
+        "archive_manifest_sha256": "2f8ffbd2123d280b4faf8944fd6b7cdcbe408c4807a05dcecbef5a74efbc2a3d",
+        "build_key": "b7e7cef8b702abae"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06",
+        "archive_content_key": "537def3d6b4c300eb024d205203346487bcca04e1837c5de6817aaf5cc1c8083",
+        "archive_manifest_sha256": "b2001c4199acce85a675b4a6f308c6541ba697c3ba63c2dbed538c4674de966e",
+        "build_key": "c796667235591888"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225121-de7e3e34-015d",
+        "archive_content_key": "e2547c2176d32d53510ec7f8b8b2b5fd8d3c88146d4537777883c2a8361163f1",
+        "archive_manifest_sha256": "2f32967403ab4df3f2548e7135e3cd2e0eff97e7d8d8b95ab7b3e952cfe38c52",
+        "build_key": "cc8eb82bc98de729"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225243-61cb7aca-8652",
+        "archive_content_key": "6bcae642202f42e526addd00e564acfc14c54334e24fa30c6b7b8d098b449a5b",
+        "archive_manifest_sha256": "f38e85af9a14a068a7ddf7269d62f6ab100e9a3e39e6778c155da258f15526fe",
+        "build_key": "cff4da5d9bb7efb7"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6",
+        "archive_content_key": "fb2be2d4d29d40d0e0d2adf9b864025be503c02b6aed5cf05887bee9849c73f1",
+        "archive_manifest_sha256": "26f4ff87cfde218987795c730236412b10007aa6f2b6c9f71b769fdd04282958",
+        "build_key": "d42db159b3ee565f"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225650-83f1213a-5e40",
+        "archive_content_key": "d620d265108ca5b83bdaeaeb094bcfa574dbf153b5965f2cd64deda352b05a12",
+        "archive_manifest_sha256": "cdd776715e24beabdc54d2efbf3ee52bd6185b1905cc12dcd92dcc6ca561dfcf",
+        "build_key": "d482aa0afa27e9ce"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225714-b593ac27-7b71",
+        "archive_content_key": "dffb422022663c0f901948b22d9e5dc8c495c8556976b2f7c69f413f79d3d4f0",
+        "archive_manifest_sha256": "8d1cd1dd134d28275d31e172fdf9b0947d3280e64703f455e7065e3cf1da1786",
+        "build_key": "dae23c801891223c"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225738-e3bfe154-7e43",
+        "archive_content_key": "9b6b99f5d8d0e43abd4d3e9847a522f9acf8f3aa4e128c2c15afd2b0caab52d3",
+        "archive_manifest_sha256": "78f2b4c7daa7c0fbf2ebb72f5b150ad12e4a1a30392c5d08b637842a94040032",
+        "build_key": "dce1407ed7d893a6"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603",
+        "archive_content_key": "6c846a3f11cf44c5dd3eb09c15a411c6cdf694359e3bb7c0b18dd848a8c76fb0",
+        "archive_manifest_sha256": "8720d692e7239f9a68c7a034b995a06613c399cf7a0088c3a740899e5cc9aa6e",
+        "build_key": "e72299dc2abeabcd"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230407-7f119ae2-9f58",
+        "archive_content_key": "c2a0ec057231f73ebed89226f9b3911de162033c235c1316aea265410d5d4803",
+        "archive_manifest_sha256": "a56727e6dc1efcc8b1e5bdc31b38554730a78b08dbcb5d8d4551ba1acc8b398b",
+        "build_key": "e9b489b9b469e9b6"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230432-5b265029-5e0f",
+        "archive_content_key": "b743107496ca4d8756a67697d41ceb1e15463d042222683fcfd7e79cc62f3140",
+        "archive_manifest_sha256": "705d3b47bdeb0b8217a55df3c315f8b9a680cee2999d00518e21e9454e07837e",
+        "build_key": "eb0bd33739d5e926"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230455-3e34ff00-af60",
+        "archive_content_key": "8b853bfc6d2659af4a7699963614489e5cc9600194f5837761f4579898f83633",
+        "archive_manifest_sha256": "4ec3dda8f26f165f1cb552a46a5275f8623f95ec271eeff791b3aa6a6a4061c5",
+        "build_key": "eb5d47e234425a98"
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230620-a893719c-a662",
+        "archive_content_key": "bec4f0d0bb89a6c0239e98d7ebaad911ed0807857f79be2533604dbec41641f5",
+        "archive_manifest_sha256": "eaeb4c28db84873238f95d6a5b5656706a5be773701fd8a8a4267196d4740027",
+        "build_key": "f3d1a9ac4d14bd7a"
+      }
+    ],
+    "build_keys_sorted": [
+      "06cc309e4779897c",
+      "084cedb913d5197c",
+      "0a6c5266d76b5b39",
+      "16f1d6176c7a9133",
+      "187fca60022dedc5",
+      "2d4f272bb3dfc5d2",
+      "340168e305f8381e",
+      "3f5d86eed8fe5c17",
+      "4008e6387839d7a3",
+      "5803fd9aa62080cb",
+      "5fcc585e03915396",
+      "657fa0b9f3268e78",
+      "6e3416af316f91cc",
+      "7e395749f1712cb4",
+      "8dcbe1518a5b0898",
+      "90a93715895966dc",
+      "9c7ad9c97b6bdbc6",
+      "b7e7cef8b702abae",
+      "c796667235591888",
+      "cc8eb82bc98de729",
+      "cff4da5d9bb7efb7",
+      "d42db159b3ee565f",
+      "d482aa0afa27e9ce",
+      "dae23c801891223c",
+      "dce1407ed7d893a6",
+      "e72299dc2abeabcd",
+      "e9b489b9b469e9b6",
+      "eb0bd33739d5e926",
+      "eb5d47e234425a98",
+      "f3d1a9ac4d14bd7a"
+    ],
+    "digest": "0ea30c1ec70ae65d0bea8474529c493a2d61151cc13f8dc82f6b7aa80e8f6d09"
+  },
+  "content_key": "639eb815ac2cf07ead0e65baf1294cb5e9cda671ba2c90ebcfb338d18883b6b9",
+  "counterfactual_old_path": {
+    "bound_claimed": null,
+    "bound_note": "neither the excluded index rebuilds nor the warm cache give the ratio a mechanically guaranteed direction, so no lower or upper bound is claimed",
+    "excludes_repeated_index_builds": true,
+    "measurement_order": "new path first, then the per-key validations on a warm file-system cache",
+    "method": "one measured full validation per build key, multiplied by the daily units that use that key",
+    "weighted_json_reads": 7800,
+    "weighted_validations": 1950,
+    "weighted_wall_s": 3043.277634670001
+  },
+  "driver": {
+    "path": "validation/benchmarks/archive_resolution_benchmark_v2.py",
+    "sha256": "7fe98d9f53155c5fbca7b03d98299bf30a8150d1691562d6d5778c1e3ca336cb"
+  },
+  "every_archive_fully_validated": true,
+  "inputs": {
+    "qualified_demand_manifest": "validation/subhour_qualified_demand_manifest_20260915b.json",
+    "qualified_demand_manifest_sha256": "1b609f705e08ab7a9c266a974a5976d33660209f0de914c95f66b3189d46f576",
+    "runs_root": "runs/step5_monthly_qualify_20260913/demand_archives",
+    "spec": "validation/subhour_monthly_search_profile_spec_v1.json",
+    "spec_sha256": "10f3939a69b6f0bb6e74eb2b1e08a2b513cf54fa5610dd4a25d4d8366c1261aa"
+  },
+  "kind": "archive_resolution_benchmark",
+  "measured_against": "the real September demand archives, no fixtures",
+  "net_saving_s": 2988.972739962001,
+  "new_path_measured": {
+    "archive_index_build": 1,
+    "archive_json_read": 150,
+    "archive_validate": 30,
+    "unique_validated_archives": 30,
+    "wall_s": 54.304894708
+  },
+  "peak_rss_bytes": 575455232,
+  "per_key_validations_measured": {
+    "count": 30,
+    "items": [
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-215415-af2d83e6-bc11",
+        "build_key": "06cc309e4779897c",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.4592772910000065,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220012-de032bcb-2165",
+        "build_key": "084cedb913d5197c",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.497905333999995,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220648-791840d4-c887",
+        "build_key": "0a6c5266d76b5b39",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.582807792000004,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221303-3a1fda45-188f",
+        "build_key": "16f1d6176c7a9133",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.4840188330000004,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221533-52837f59-7e5d",
+        "build_key": "187fca60022dedc5",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.4799357079999993,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221806-7415a4c6-0d68",
+        "build_key": "2d4f272bb3dfc5d2",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.6189897499999972,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222404-4b5941dd-77c7",
+        "build_key": "340168e305f8381e",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.591400207999996,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222709-889e6f89-d6d5",
+        "build_key": "3f5d86eed8fe5c17",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.5708101660000011,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223016-ef0f3cf3-44e9",
+        "build_key": "4008e6387839d7a3",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.5762170410000067,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223222-19b614fb-7ce8",
+        "build_key": "5803fd9aa62080cb",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.60535787500001,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d",
+        "build_key": "5fcc585e03915396",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.588881833000002,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223744-a3782377-418d",
+        "build_key": "657fa0b9f3268e78",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.60771570899999,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223804-04518454-6d14",
+        "build_key": "6e3416af316f91cc",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.4992760420000053,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223825-2bbb1a66-845d",
+        "build_key": "7e395749f1712cb4",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.5026845839999936,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224149-53fb2fd0-6182",
+        "build_key": "8dcbe1518a5b0898",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.654810917000006,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224309-23459e2e-c9ef",
+        "build_key": "90a93715895966dc",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.586630249999999,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72",
+        "build_key": "9c7ad9c97b6bdbc6",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.4638007920000007,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33",
+        "build_key": "b7e7cef8b702abae",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.5626008339999942,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06",
+        "build_key": "c796667235591888",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.6451851670000082,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225121-de7e3e34-015d",
+        "build_key": "cc8eb82bc98de729",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.5796202499999907,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225243-61cb7aca-8652",
+        "build_key": "cff4da5d9bb7efb7",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.5409712090000056,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6",
+        "build_key": "d42db159b3ee565f",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.6309497499999992,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225650-83f1213a-5e40",
+        "build_key": "d482aa0afa27e9ce",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.497494040999996,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225714-b593ac27-7b71",
+        "build_key": "dae23c801891223c",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.4780982500000022,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225738-e3bfe154-7e43",
+        "build_key": "dce1407ed7d893a6",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.575355916999996,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603",
+        "build_key": "e72299dc2abeabcd",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.6798057920000105,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230407-7f119ae2-9f58",
+        "build_key": "e9b489b9b469e9b6",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.5667474579999947,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230432-5b265029-5e0f",
+        "build_key": "eb0bd33739d5e926",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.6021484170000093,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230455-3e34ff00-af60",
+        "build_key": "eb5d47e234425a98",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.4884614159999927,
+        "validations": 1
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230620-a893719c-a662",
+        "build_key": "f3d1a9ac4d14bd7a",
+        "daily_units": 65,
+        "json_reads": 4,
+        "validation_wall_s": 1.6016972919999972,
+        "validations": 1
+      }
+    ],
+    "total_wall_s": 46.81965591800001
+  },
+  "population": {
+    "daily_units": 1950,
+    "daily_units_per_build_key": {
+      "max": 65,
+      "min": 65,
+      "sum": 1950
+    },
+    "unique_archives": 30,
+    "unique_build_keys": 30
+  },
+  "ratio_counterfactual_to_new": 56.04057702411264,
+  "release_evidence": false,
+  "schema": "archive_resolution_benchmark_v2",
+  "supersedes_comparison_in": "validation/archive_resolution_benchmark_20260916-v1.json"
+}

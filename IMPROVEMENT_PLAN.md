@@ -1244,6 +1244,12 @@ pylint rc 0 och rent `git diff --check`. Commit `f889071`, pushad till
 `origin/claude/exciting-rubin-1e6k5m`.
 
 **Uppmätt arkivupplösning — verkliga arkiv, 2026-09-16.**
+
+> **Preliminär, ersatt av v2 nedan.** v1 behålls oförändrad som historik. Dess
+> gamla väg extrapolerades från de 30 första dagenhetsidentiteterna i sorterad
+> ordning, vilket inte är ett representativt urval, och påståendet att faktorn
+> var en undre gräns följde inte av urvalet. Använd v2:s siffror.
+
 `validation/archive_resolution_benchmark_20260916-v1.json`
 (`release_evidence: false`) mäter den nya vägen över hela populationen och det
 gamla per-enhetsbeteendet på ett avgränsat stickprov:
@@ -1258,12 +1264,41 @@ Populationen är 1 950 dagenheter, 30 unika build keys och 30 unika arkiv.
 fortfarande; besparingen ligger i att samma 30 arkiv inte bevisas om för varje
 tidsfönster. Stickprovet var 30 dagenheter på 39,16 s, alltså 1,3055 s och 4
 JSON-läsningar per enhet. Hela mätprocessen tog 95,05 s med 586 MB peak RSS.
-Extrapoleringen är **gynnsam för den gamla vägen**: stickprovet återanvänder
-det delade arkivindexet, medan den gamla koden byggde om indexet i varje
-anrop. Faktorn 46,5× är därför en undre gräns.
+v1 motiverade faktorn 46,5× som en undre gräns eftersom stickprovet
+återanvände det delade arkivindexet. Det påståendet dras tillbaka: urvalet var
+inte representativt, och ingen gräns följer maskinellt av redovisningen.
 
-**Proportionen som avgör nästa beslut:** de extrapolerade 2 545,7 s är bara
-cirka 8 % av indexbyggets uppmätta 31 271,161 s. Resten låg i ruttparsning och
+**v2, stratifierad jämförelse — ersätter v1:s extrapolering.**
+`validation/archive_resolution_benchmark_20260916-v2.json`
+(`release_evidence: false`) mäter med drivern
+`validation/benchmarks/archive_resolution_benchmark_v2.py` (SHA-256
+`7fe98d9f…`, bunden i evidensen). De 30 build keys och valda arkivens
+identiteter binds med digesten `0ea30c1e…`, så samma arkivmängd kan
+verifieras vid reproduktion. Populationen är 1 950 dagenheter på 30 build keys,
+med exakt 65 dagenheter per nyckel.
+
+| Del | Värde |
+|---|---:|
+| Ny väg, direkt uppmätt | 54,30 s, 1 indexbygge, 30 fulla valideringar, 150 JSON-läsningar |
+| 30 per-key-valideringar, direkt uppmätta | 46,82 s |
+| Kontrafaktisk gammal väg, viktad per nyckel | 3 043,3 s, 1 950 valideringar, 7 800 JSON-läsningar |
+| Nettobesparing (kontrafaktisk − ny) | 2 989,0 s |
+| Kvot | 56,0× |
+| Peak RSS / processtid | 575,5 MB / 102,20 s |
+
+Alla 30 arkiv fullvalideras fortfarande (`unique_validated_archives` = 30).
+Den kontrafaktiska armen mäter en full validering per build key och
+multiplicerar med de 65 dagenheter som använder nyckeln. Två förbehåll gör att
+kvoten **inte** är en garanterad gräns åt något håll, och evidensen påstår
+ingen (`bound_claimed: null`):
+
+* den kontrafaktiska armen återanvänder arkivindexet och innehåller därför
+  inte den gamla kodens upprepade indexbyggen;
+* per-key-valideringarna kördes efter den nya vägen, alltså med varm
+  filsystemscache.
+
+**Proportionen som avgör nästa beslut:** de viktade 3 043,3 s är cirka 9,7 % av
+indexbyggets uppmätta 31 271,161 s. Resten låg i ruttparsning och
 indexkonstruktion, som denna ändring inte rör. Ett nytt fullständigt bygge
 skulle alltså fortfarande landa långt över baslinjens 7 320,348 s, och
 `WindowCostIndex` förblir opt-in och oadopterad. Ett sådant bygge får inte
