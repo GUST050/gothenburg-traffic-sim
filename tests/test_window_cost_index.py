@@ -29,6 +29,71 @@ def _records(unit="unit-a", schedule="schedule-a"):
     }
 
 
+def _adoption_spec():
+    """A real two-day search spec, so daily_unit_records is the real one."""
+    from traffic_sim.core.contracts import ClosureSearchSpec, DailyTimeBand
+    return ClosureSearchSpec(
+        search_id="wci-adoption",
+        directed_edges=("edge-a",),
+        demand_build_id="forecast-2027",
+        source="forecast",
+        permitted_date_start="2027-07-15",
+        permitted_date_end="2027-07-16",
+        required_work_minutes=60,
+        max_consecutive_start_days=1,
+        permitted_daily_band=DailyTimeBand("06:00", "08:00"),
+        allowed_weekdays=(3, 4),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_equal_daily_v1",
+        objective_profile="displaced_vehicles_and_detour_v1",
+    )
+
+
+def _adoption_index(spec, parent):
+    """Index records keyed exactly as the real contract yields them."""
+    records = {}
+    for unit_id, _identity, build_schedule in builder.daily_unit_records(
+            spec, parent):
+        schedule = build_schedule()
+        records[str(unit_id)] = {
+            "schedule_id": schedule.schedule_id,
+            "records": [{
+                "demand_variant": variant,
+                "vehicles_affected": 2,
+                "vehicles_considered": 10,
+                "vehicles_no_detour": 0,
+                "added_metres_total": 100.0,
+                "added_vehicle_hours": 0.25,
+            } for variant in ("q10", "q50", "q90")],
+        }
+    return WindowCostIndex(bound_identity={"source": "digest-a"},
+                           records=records)
+
+
+def test_indexed_ledger_source_follows_the_real_daily_unit_records_contract():
+    """`daily_unit_records` yields (unit_id, identity, build_schedule).
+
+    The adoption path read the identity dict as if it were a ClosureSchedule,
+    so the 2026-09-16 full-month run crashed with `AttributeError: 'dict'
+    object has no attribute 'schedule_id'` after 8 h 41 m — with the oracle
+    already proved and the index written, but ranking, winner and stop proof
+    never compared.
+    """
+    spec = _adoption_spec()
+    parents = tuple(builder.iter_closure_schedules(spec))
+    assert parents, "the fixture spec must enumerate at least one parent"
+    parent = parents[0]
+    index = _adoption_index(spec, parent)
+    source = builder._IndexedLedgerSource(spec, index)
+
+    cost = source.parent_cost(parent)
+
+    assert source.lookups == len(index.records)
+    assert cost.candidate_id == parent.schedule_id
+    assert set(cost.daily_unit_ids) == set(index.records)
+    assert len(cost.per_variant) == 3
+
+
 def test_index_round_trips_and_requires_field_identical_oracle():
     index = WindowCostIndex(bound_identity={"source": "digest-a"},
                             records=_records(), preparation_time_s=1.25)

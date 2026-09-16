@@ -85,7 +85,21 @@ class _IndexedLedgerSource:
     def parent_cost(self, parent: ClosureSchedule) -> ParentCost:
         daily_records = []
         unit_ids = []
-        for unit_id, schedule, _build in daily_unit_records(self.spec, parent):
+        # `daily_unit_records` yields (unit_id, identity, build_schedule): the
+        # middle item is the unit's identity mapping, NOT a schedule, and the
+        # schedule itself is deferred behind the callable.  Reading the
+        # identity as a schedule crashed the whole-month adoption replay
+        # (2026-09-16) after the oracle had already been proved and the index
+        # written, leaving ranking, winner and stop proof unmeasured.
+        for unit_id, identity, build_schedule in daily_unit_records(
+                self.spec, parent):
+            if not isinstance(identity, Mapping) or not identity:
+                raise WindowCostIndexError(
+                    f"daily unit {unit_id} has no identity mapping")
+            schedule = build_schedule()
+            # `lookup` fails closed when the identity stored with the record
+            # is not the schedule just built for this unit, so the built
+            # schedule -- not a remembered one -- decides what may be read.
             row = self.index.lookup(str(unit_id), schedule.schedule_id)
             self.lookups += 1
             daily_records.append(tuple(dict(item) for item in row))
