@@ -1047,6 +1047,204 @@ profil. Kvarvarande ändrade webbartefakter måste redovisas i källfrysningen u
 att denna kodcommit tar över dem. Ingen uppvärmning eller demandgenerering
 krävs av denna fortsättning. Steg 5 är fortsatt öppet; steg 6 är inte startat.
 
+#### Steg 5 källfrysning, kvalificerat manifest och kontraktsfel — 2026-09-15
+
+**Första frysningen.** En ny CODE_APPROVED-frysning av `d73ef73` gjordes med
+kontrollerns egna `source_manifest`/`run_checks` enligt
+`.ai-flow/config.complete-subhour.toml`, i
+`runs/step5_code_approved_20260915/checks/`. Källdigest `d47263ec…` omfattar
+505 filer, varav 41 under `web/` eftersom policyn binder `web/**/*`. Exakt tre
+skyddade filer skilde sig från HEAD: `web/data/od_matrix.csv`,
+`web/data/od_matrix.json` och `web/data/validation.json`, skrivna 2026-09-14
+01:07 av septemberkampanjens sista demandbygge (2027-09-15). De frystes som de
+låg, utan återställning eller commit, och redovisas i frysningens impact
+inventory.
+
+De konfigurerade kontrollerna gav: `git diff --check` godkänd; `make lint`
+rc 2 med ett enda ofarligt fynd (E1111 i
+`tools/profile_monthly_cost_ledger.py:222`); hela `pytest tests` 6 495
+godkända, 16 fel och 5 errors. Alla 21 granskades mot sina tracebacks. 20
+fanns redan vid `424c626`. Det nya, `test_explain_day_reuse`, körs nu
+eftersom `runs/demand-days` skapades 2026-09-13/14 av kampanjen utan det
+frysta jobbfönstret från 2026-09-10; dagbiblioteket är inte muterat och
+`DayLibrary.lookup` är skrivskyddad. Gating-omkörningen av hela sviten med
+exakt de 21 uteslutna gav 6 495 godkända, 21 överhoppade och rc 0 på
+1 300,7 s, med oförändrad källdigest. **Obs:** godkännandet vilar därmed på
+21 granskade uteslutningar och ett lintfynd, inte på en grön konfigurerad
+svit.
+
+**Kvalificeringen.** `validation/subhour_qualified_demand_manifest_20260915.json`
+(evidens `subhour-monthly-qualify-2026-09-15`, content key `555c1dc6…`) blev
+PASS från de 30 befintliga arkiven under
+`runs/step5_monthly_qualify_20260913/demand_archives`: 90/90 varianter med
+exakta sensorinträdesbevis och återskapade assemblies, båda support-audits
+godkända, 5 068 896 fordon över de 90 variantposterna. Ingen demand byggdes
+och SUMO startades inte. **Kvalificeringstid:** 1 842,15 s väggtid
+(1 741,66 s user, 85,03 s sys), max RSS 1,707 GB enligt `/usr/bin/time -l`.
+Det är tiden för att kvalificera underlaget, inte månadssökningens tid.
+
+**Blockerare i första konsumenten.** `tools/profile_monthly_cost_ledger.py`
+stoppade efter 14,58 s i `runner.prepare`, före mätningen. Ingen profilevidens
+publicerades. En skrivskyddad reproduktion visade att
+`qualified_manifest_archive_mismatch` accepterade 16 arkiv och avvisade exakt
+de 14 tredagarsfönster som bara innehåller vardagar (start mån–ons). Kontrollen
+krävde `candidate_catalog.keys == adopted_catalog_keys`, alltså båda
+poolerna, medan `build_sumo_demand.py` bara skriver de pooler som fönstrets
+`pool_composition` använder. Vardagsnycklarna stämde. Befintliga tester
+täckte bara tvåpoolsfixturer och arkiv utan katalog, och qualifiern
+tillämpade aldrig konsumentkontrollen. Ett PASS-manifest kunde därför vara
+okonsumerbart. Samma kontroll skyddar `build_window_cost_index.py` och
+cost-ordered-benchmarken.
+
+**Rättning (användarbeslut).** Lokal commit `b5e1564`: konsumentkontrollen
+kräver att nyckelmängden är lika med arkivets `pool_composition` och att varje
+nyckel är den adopterade nyckeln för sin pool. Fel nyckel, saknad katalog och
+en nyckel för en pool som fönstret inte använde avvisas fortfarande.
+Qualifiern kör dessutom `require_consumable_archives` på varje PASS-manifest
+och publicerar annars den befintliga inconclusive-terminalen. Två
+konsumenttester och tre qualifiertester var RED före rättningen och GREEN
+efter; 364 fokuserade tester godkändes och pylint gav rc 0. Mot de riktiga 30
+arkiven accepteras nu 30 av 30 i stället för 16. Den första frysningen och
+manifestet `20260915` bevaras som historik men kan inte auktorisera
+`b5e1564`, eftersom qualifiern kräver att godkännandet binder de körande
+källbytesen. En ny frysning och ett nytt manifest krävs före profilen.
+
+**Andra frysningen och nytt manifest.** `b5e1564` frystes i
+`runs/step5_code_approved_20260915b/checks/` med källdigest `2a157477…` (505
+filer). Mot den första frysningen skiljer sig exakt de fyra committade
+filerna; samma tre webbfiler skiljer sig fortfarande från HEAD. Kontrollerna
+gav `git diff --check` godkänd, samma enda lintfynd och en fullsvit med 6 501
+godkända tester och exakt samma 21 fel/errors med samma orsaker. De sex extra
+godkända är de nya testerna. Gating-omkörningen med de 21 uteslutna gav 6 501
+godkända och rc 0 på 1 312,4 s, med oförändrad källdigest.
+
+`validation/subhour_qualified_demand_manifest_20260915b.json` (evidens
+`subhour-monthly-qualify-2026-09-15b`, content key `2cb32dcd…`, sha256
+`1b609f70…`) är PASS: 30/30 arkiv och 90/90 exakta varianter, och qualifierns
+nya konsumerbarhetskontroll godkände alla 30. Kvalificeringen gjordes om i sin
+helhet under den nya källan, fortfarande utan demandbygge eller SUMO.
+**Kvalificeringstid:** 2 165,44 s väggtid (2 034,11 s user, 114,01 s sys), max
+RSS 1,788 GB. Även denna tid avser kvalificering av underlaget, inte
+månadssökningen. Manifestet `20260915` från den första frysningen är
+historik och används inte av profilen.
+
+**Fullmånadsprofil — PASS.** `tools/profile_monthly_cost_ledger.py` kördes mot
+manifestet `20260915b` med arkivroten som `--runs-root`.
+`validation/monthly_cost_ledger_profile_subhour-20260915-v2.json` (content key
+`46ee2666…`, sha256 `399f7642…`, byteidentisk med `profile.json`) är PASS:
+1 950 dagenheter, 5 850 variantposter och 1 690 föräldrar; SUMO-räknaren var
+0 före och 0 efter, alltså noll starter uppmätta; processträdets RSS är
+komplett; cache-bokföringen är konsekvent (8 450 uppslag = 6 500 minnesträffar
++ 1 950 missar, 1 950 diskmissar). Ledgerns content key är `bebfc81b…` och
+diskväxten 14,3 MB. Försöket under den första frysningen publicerade ingen
+evidens och dess tomma rötter ligger kvar.
+
+**Månadsledgerns tid** (skild från kvalificeringstiden ovan): 7 320,35 s
+väggtid; hela processen inklusive `prepare` tog 7 702,22 s (7 320,33 s user,
+380,81 s sys). Peak RSS för processträdet 6,52 GB. Exklusiva faser:
+
+| Fas | Väggtid | Andel |
+|---|---:|---:|
+| XML-parse | 4 368,7 s | 54,5 % |
+| rutt/fordonsgruppering | 2 477,3 s | 30,9 % |
+| `resolver_observer_measurement` (endast mätning) | 1 075,8 s | 13,4 % |
+| arkiv-JSON-läsning | 71,0 s | 0,9 % |
+| arkivdigest | 14,4 s | 0,2 % |
+| kortaste väg / fönsteraggregering / sortering | 0,35 / 0,17 / 0,13 s | < 0,01 % |
+
+Observatören gjorde 329 478 240 resolveranrop mot bara 569 unika kanttupler.
+Dess 1 075,8 s ligger inne i den uppmätta väggtiden, så 7 320 s är en övre
+gräns för den omätta produktionsledgern och inte dess tid. Den riktade
+endagsmätningens cirka 1 % gäller inte i fullmånadsskala. Körningen gick
+dessutom under minnestryck (cirka 2,6 GB swap och cirka 9,8 GB i kompressorn,
+nästan helt från profilprocessen), vilket kan ha förlängt tiden. Äldre
+v12-profilen (5 826,5 s, 1,31 GB) byggde på andra arkiv och äldre kod och är
+inte jämförbar.
+
+**Fas 5-beslut:** `phase_5_window_cost_index_needed: true`,
+`phase_5_decision: TRIGGERED`, eftersom 7 320 s överskrider gränsen 600 s.
+WindowCostIndex utvärderas därför enligt planens villkor.
+
+#### WindowCostIndex — utvärderad, inte aktiverad, 2026-09-16
+
+`tools/build_window_cost_index.py` kördes mot profilen med en färsk indexrot
+(`runs/step5_code_approved_20260915b/wci-index`) och en ny evidenssökväg.
+Körningen tog 31 273,03 s (8 h 41 min; 30 155,20 s user, 1 103,38 s sys, 6,46
+GB max RSS) och slutade med returkod 1. Ingen evidens publicerades.
+
+* **Exakthet: bevisad.** Orakeljämförelsen ligger före indexskrivningen i
+  koden och passerade: alla 5 850 dagliga variantposter var fält för fält
+  identiska med den bundna deterministiska dagkostnadscachen, och
+  `load_index` godkände indexets bundna identitet, 1 950 enheter och 5 850
+  poster. Indexet ligger på disk (9,3 MB) men är inte publicerad evidens.
+* **Tidsvinst: negativ.** Hela vägen tog 31 273 s mot baslinjen 7 320,35 s.
+  Planens villkor om uppmätt total tidsvinst före aktivering är därmed inte
+  uppfyllt. Stackprov under körningen dominerades av JSON-flyttalsparsning:
+  råvägen anropar `find_demand_archives` en gång per dagenhet utan delat
+  arkivindex, så arkivens stora `demand_meta.json` läses om 1 950 gånger.
+* **Rangordning, vinnare och stoppbevis: ej prövade.** Adoptionsvägen
+  kraschade innan någon indexerad ledger fanns:
+  `_IndexedLedgerSource.parent_cost` (rad 88) packar upp `daily_unit_records`
+  som `(unit_id, schedule, _build)`, men kontraktet är `(unit_id, identity,
+  build_schedule)` — samma fil gör rätt på rad 188. Felet blir
+  `AttributeError: 'dict' object has no attribute 'schedule_id'`. Den vägen
+  har alltså aldrig körts mot den verkliga populationen; den SUMO-fria
+  beslutsjämförelsen (`runs/step5_code_approved_20260915/wci/compare_decisions.py`)
+  kunde därför inte köras, eftersom den kräver publicerad PASS-evidens.
+* **Beslut:** `WindowCostIndex` förblir opt-in och aktiveras inte. Två saker
+  måste åtgärdas och mätas om först: adoptionsvägens uppackningsfel och
+  råvägens per-enhets-arkivupplösning. Ingen av dem rättades här, eftersom
+  aktiveringsbeslutet redan avgörs av den uppmätta tiden och varje
+  källändring kräver en ny frysning. Steg 6 är fortfarande inte startat.
+
+#### Fas 5-vägen rättad efter granskning — inte ommätt, 2026-09-16
+
+Granskningen hittade fler defekter än kraschen. Samtliga är nu rättade och
+testtäckta, men **ingen ny resume- eller indexbyggnadskörning har gjorts efter
+rättningarna**, så inga nya tidssiffror finns. Det enda mätresultatet är
+fortfarande 31 271,161 s preparation mot 7 320,348 s baslinje, alltså 4,27
+gånger långsammare.
+
+1. **Adoptionsvägens uppackning** (commit `a5a758d`). `daily_unit_records` ger
+   `(unit_id, identity, build_schedule)`, men vägen läste mitten som ett
+   schema. RED-testet föll på exakt produktionsfelet före fixen.
+2. **Arkivupplösningen validerade per dagenhet.** Den första fixen delade bara
+   arkivindexet; `find_demand_archives` kördes fortfarande per enhet, alltså
+   upp till 1 950 fulla valideringar och lika många parsningar av samma stora
+   `demand_meta.json`. Funktionen är nu uppdelad i fyra pass med en
+   operationslokal, innehållshärledd mapping `build_key → validerad
+   descriptor`. Kontraktet är en full validering per unikt build key: 30 för
+   en månad, inte 1 950. Samma deduplicering finns i resume-vägen.
+3. **Provideridentiteter kontrollerades inte på riktigt.** Resume jämförde
+   bara nyckelmängden. Nu jämförs varje dagenhets rekonstruerade
+   `provider.identity()` mot den sparade, och minsta skillnad avvisar innan
+   orakelposten används.
+4. **Source drift blockerar nu adoption.** Ett index skrivet av andra
+   byggarbytes kan aldrig bli `ADOPTABLE`; driften redovisas i artefakten.
+5. **Negativ prestanda är evidens, inte fel.** Byggvägen kastade tidigare ett
+   undantag och slängde därmed resultatet av en dyr, korrekt körning. Den
+   publicerar nu append-only `NOT_ADOPTED` med baslinje, preparationstid,
+   persist/load, replay, total kall tid, negativ vinst, population,
+   orakelutfall och ledgerjämförelse.
+6. **Ledgerjämförelsen är gemensam.** Båda vägarna anropar
+   `compare_decision_ledgers` och jämför `candidate_id`, `cost`,
+   `daily_unit_ids` och `per_variant` i kanonisk ordning. Cachefält får skilja
+   sig och redovisas separat; hela ledgerns content key duger inte som
+   kriterium, eftersom den även digesterar diagnostiska cacheräknare. En
+   avvikelse ger aldrig PASS.
+
+Ett fynd på vägen som hade fällt även byggvägen: adoptionsinvarianten jämförde
+antalet uppslag med antalet variantposter. Uppslag räknar relationer mellan
+förälder och dagenhet, alltså 1 690 × 5 = 8 450, medan variantposterna är
+1 950 × 3 = 5 850. Invarianten kräver nu rätt storheter på båda ställena.
+
+**Kontroller:** 51 fokuserade tester passerar (`test_window_cost_index.py`,
+`test_cost_ordered_execution.py`, `test_profile_monthly_cost_ledger.py`),
+pylint rc 0 och rent `git diff --check`. **Nästa steg, ännu inte utfört:** en
+resume-körning mot det befintliga indexet och en kort representativ benchmark
+av den deduplicerade upplösningen. Först därefter kan en ny tidsuppgift
+lämnas. Steg 6 är fortfarande inte startat.
+
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 
 **Filer:** `build_sumo_demand.py`, `monthly_demand.py:_resolve_new_release`,

@@ -39,6 +39,7 @@ from traffic_sim.simulation.disruption import (
 from traffic_sim.simulation.independent_daily import daily_unit_records
 from traffic_sim.simulation.monthly_demand import (
     MonthlyDemandResolverRunner,
+    _archives_for_build_key,
     find_demand_archives,
     validate_qualified_demand_manifest_shape,
 )
@@ -63,6 +64,7 @@ from tools.profile_monthly_cost_ledger import (
 
 EXPECTED_DAILY_UNITS = 1950
 EXPECTED_VARIANT_RECORDS = 5850
+EXPECTED_PARENTS = 1690
 
 
 class _IndexedLedgerSource:
@@ -77,6 +79,11 @@ class _IndexedLedgerSource:
         self.spec = spec
         self.index = index
         self.lookups = 0
+        # Distinct units, because `lookups` counts parent-to-unit
+        # relationships: the same daily unit is priced inside every parent
+        # whose window contains it.  Comparing lookups against the 5,850
+        # variant records confuses two different quantities.
+        self.units: set[str] = set()
         self._identity = dict(index.bound_identity.get("provider_identity", {}))
 
     def identity(self) -> Mapping[str, Any]:
@@ -102,6 +109,7 @@ class _IndexedLedgerSource:
             # schedule -- not a remembered one -- decides what may be read.
             row = self.index.lookup(str(unit_id), schedule.schedule_id)
             self.lookups += 1
+            self.units.add(str(unit_id))
             daily_records.append(tuple(dict(item) for item in row))
             unit_ids.append(str(unit_id))
         return ParentCost(
@@ -197,25 +205,60 @@ def _raw_index_records(
         study_provenance_key="subhour-phase5-raw-index",
         qualified_demand_manifest=qualified_demand_manifest,
     )
-    units: dict[str, tuple[dict[str, Any], ClosureSchedule, Path]] = {}
+    # ONE content-derived archive index for the whole loop.  Each
+    # `find_demand_archives` call used to rebuild it from metadata content, so
+    # a 1,950-unit month re-read every archive's large `demand_meta.json` 1,950
+    # times; sampling the 2026-09-16 attempt showed its 31,271 s preparation
+    # going into exactly that JSON parsing.  Sharing the index weakens no
+    # proof: each DISTINCT demand contract below still runs the full
+    # `validate_demand_archive` content check and the qualified-manifest
+    # match, and nothing here is keyed on a path, a size or an mtime.
+    archive_index = _archives_for_build_key(Path(runs_root))
+    # Pass 1: every distinct daily unit and its built schedule.
+    collected: dict[str, tuple[dict[str, Any], ClosureSchedule]] = {}
     for parent in iter_closure_schedules(spec):
         for unit_id, identity, build_schedule in daily_unit_records(spec, parent):
             schedule = build_schedule()
-            existing = units.get(unit_id)
+            existing = collected.get(unit_id)
             if existing is not None:
                 if existing[0] != identity or existing[1].to_dict() != schedule.to_dict():
                     raise WindowCostIndexError(
                         f"daily unit identity collision for {unit_id}")
                 continue
-            required = resolver._required(schedule)
-            matches = find_demand_archives(
-                Path(runs_root), required,
-                qualified_manifest=qualified_demand_manifest)
-            if not matches:
-                raise WindowCostIndexError(
-                    f"no immutable demand archive for daily unit {unit_id}")
-            units[unit_id] = (identity, schedule,
-                              Path(matches[0]["archive"]).resolve())
+            collected[unit_id] = (identity, schedule)
+
+    # Pass 2: the demand contract each unit needs, deduplicated by build key.
+    # A month's 1,950 units resolve to 30 distinct build keys, so validating
+    # per unit re-proved the same 30 archives 1,950 times -- 1,950 full
+    # validations and 1,950 parses of the same large `demand_meta.json`.
+    required_by_unit: dict[str, Any] = {}
+    required_by_key: dict[str, Any] = {}
+    for unit_id, (_identity, schedule) in collected.items():
+        required = resolver._required(schedule)
+        required_by_unit[unit_id] = required
+        required_by_key.setdefault(required.build_key, required)
+
+    # Pass 3: resolve and FULLY validate each distinct build key exactly once.
+    # The mapping is local to this call and derived from the content-validated
+    # records themselves; nothing here is keyed on a path, size or mtime, and
+    # no state survives the call.
+    descriptors: dict[str, Path] = {}
+    for build_key, required in sorted(required_by_key.items()):
+        matches = find_demand_archives(
+            Path(runs_root), required,
+            qualified_manifest=qualified_demand_manifest,
+            _archive_index=archive_index)
+        if not matches:
+            raise WindowCostIndexError(
+                f"no immutable demand archive for build key {build_key}")
+        descriptors[build_key] = Path(matches[0]["archive"]).resolve()
+
+    # Pass 4: bind every unit to the archive its build key already proved.
+    units: dict[str, tuple[dict[str, Any], ClosureSchedule, Path]] = {
+        unit_id: (identity, schedule,
+                  descriptors[required_by_unit[unit_id].build_key])
+        for unit_id, (identity, schedule) in collected.items()
+    }
 
     if len(units) != EXPECTED_DAILY_UNITS:
         raise WindowCostIndexError(
@@ -331,13 +374,13 @@ def _raw_index_records(
     }
 
 
-def build_from_profile(
-    profile_path: Path,
-    *,
-    index_out: Path,
-    evidence_out: Path,
-    evidence_id: str,
-) -> dict[str, Any]:
+def _bound_inputs(profile_path: Path) -> dict[str, Any]:
+    """Every Phase 4 binding a Phase 5 run must re-prove before it reads data.
+
+    Factored out so the build path and the resume path validate through ONE
+    implementation: a second copy is how a resume ends up trusting something
+    the builder would have refused.
+    """
     profile_path = Path(profile_path).resolve()
     profile = json.loads(profile_path.read_text(encoding="utf-8"))
     _validate_profile_binding(profile, profile_path)
@@ -396,18 +439,54 @@ def build_from_profile(
         raise WindowCostIndexError("ledger unit population changed while reading")
     runs_root = Path(str(profile.get("runs_root", ROOT / "runs")))
     parents = tuple(iter_closure_schedules(spec))
-    if len(parents) != 1690:
+    if len(parents) != EXPECTED_PARENTS:
         raise WindowCostIndexError(
-            f"bound spec has {len(parents)} parents, expected 1690")
+            f"bound spec has {len(parents)} parents, expected {EXPECTED_PARENTS}")
+    baseline_time_s = float(profile.get("wall_time_s", 0.0))
+    if baseline_time_s <= 0:
+        raise WindowCostIndexError(
+            "Phase 4 profile has no positive cold wall-time baseline")
+    return {
+        "profile": profile,
+        "profile_path": profile_path,
+        "qualified_ref": dict(qualified_ref),
+        "qualified_manifest": qualified_manifest,
+        "bound_spec": dict(bound_spec),
+        "spec": spec,
+        "ledger": ledger,
+        "parent_unit_ids": parent_unit_ids,
+        "cache_root": cache_root,
+        "runs_root": runs_root,
+        "parents": parents,
+        "baseline_time_s": baseline_time_s,
+    }
+
+
+def build_from_profile(
+    profile_path: Path,
+    *,
+    index_out: Path,
+    evidence_out: Path,
+    evidence_id: str,
+) -> dict[str, Any]:
+    bound = _bound_inputs(profile_path)
+    profile = bound["profile"]
+    profile_path = bound["profile_path"]
+    qualified_ref = bound["qualified_ref"]
+    qualified_manifest = bound["qualified_manifest"]
+    bound_spec = bound["bound_spec"]
+    spec = bound["spec"]
+    ledger = bound["ledger"]
+    parent_unit_ids = bound["parent_unit_ids"]
+    cache_root = bound["cache_root"]
+    runs_root = bound["runs_root"]
+    parents = bound["parents"]
+    baseline_time_s = bound["baseline_time_s"]
     started = time.perf_counter()
     records, oracle_records, raw_measurement = _raw_index_records(
         spec, runs_root=runs_root, oracle_cache=DailyCostCache(cache_root),
         qualified_demand_manifest=qualified_manifest)
     preparation_time_s = time.perf_counter() - started
-    baseline_time_s = float(profile.get("wall_time_s", 0.0))
-    if baseline_time_s <= 0:
-        raise WindowCostIndexError(
-            "Phase 4 profile has no positive cold wall-time baseline")
     if set(records) != parent_unit_ids:
         raise WindowCostIndexError("raw input population does not match ledger units")
     bound_identity = {
@@ -463,22 +542,43 @@ def build_from_profile(
     indexed_started = time.perf_counter()
     indexed_ledger = build_cost_ledger(spec, parents, indexed_source)
     indexed_ledger_time_s = time.perf_counter() - indexed_started
-    if len(indexed_ledger.costs) != 1690 \
-            or indexed_source.lookups != EXPECTED_VARIANT_RECORDS:
+    # Lookups count parent-to-daily-unit relationships (1,690 parents x 5
+    # days), which is not the 5,850 variant-record count the old check used.
+    expected_lookups = sum(
+        len(item.get("daily_unit_ids", ())) for item in ledger.get("costs", ()))
+    if len(indexed_ledger.costs) != EXPECTED_PARENTS \
+            or len(indexed_source.units) != EXPECTED_DAILY_UNITS \
+            or indexed_source.lookups != expected_lookups:
         raise WindowCostIndexError(
-            "indexed adoption ledger did not cover all 1,690 parents and 5,850 lookups")
+            f"indexed adoption ledger covered {len(indexed_ledger.costs)} "
+            f"parents, {len(indexed_source.units)} distinct daily units and "
+            f"{indexed_source.lookups} lookups; expected {EXPECTED_PARENTS}, "
+            f"{EXPECTED_DAILY_UNITS} and {expected_lookups}")
     indexed_total_time_s = (
         preparation_time_s + persistence_load_time_s + indexed_ledger_time_s)
     cold_benefit_s = baseline_time_s - indexed_total_time_s
-    if cold_benefit_s <= 0:
-        raise WindowCostIndexError(
-            "WindowCostIndex has no measured cold end-to-end benefit")
+    # A measured negative result is evidence, not an error. After an
+    # expensive, correct run the finding is published append-only instead of
+    # being thrown away; it never becomes PASS and never adopts the index.
+    benefit_proven = bool(cold_benefit_s > 0)
+    # The freshly built index must also reproduce the baseline ledger's
+    # decision-bearing content, compared exactly as the resume path compares
+    # it. A faster index that prices a different month is not an improvement,
+    # so a difference can never be published as PASS.
+    indexed_dict = indexed_ledger.to_dict()
+    ledger_identical, ledger_comparison = compare_decision_ledgers(
+        indexed_dict, ledger)
     evidence = {
         "schema": "subhour_phase5_window_cost_index_evidence_v1",
         "kind": "subhour_phase5_window_cost_index",
         "phase": 5,
         "release_evidence": False,
-        "status": "PASS",
+        "status": ("PASS" if benefit_proven and ledger_identical
+                   else "NOT_ADOPTED"),
+        "adopted": False,
+        "ledger_identical": ledger_identical,
+        "ledger_comparison": ledger_comparison,
+        "baseline_ledger_content_key": ledger.get("content_key"),
         "evidence_id": evidence_id,
         "source_profile": str(profile_path),
         "source_profile_content_key": profile.get("content_key"),
@@ -488,7 +588,7 @@ def build_from_profile(
         "baseline_cold_wall_time_s": baseline_time_s,
         "cold_index_end_to_end_time_s": indexed_total_time_s,
         "cold_benefit_s": cold_benefit_s,
-        "cold_benefit_proven": True,
+        "cold_benefit_proven": benefit_proven,
         "indexed_adoption": {
             "parent_schedules": len(indexed_ledger.costs),
             "daily_variant_lookups": indexed_source.lookups,
@@ -512,14 +612,352 @@ def build_from_profile(
     return evidence
 
 
+DECISION_LEDGER_FIELDS = ("candidate_id", "cost", "daily_unit_ids",
+                          "per_variant")
+CACHE_LEDGER_FIELDS = ("cache_hits",)
+
+
+def compare_decision_ledgers(
+    indexed: Mapping[str, Any],
+    baseline: Mapping[str, Any],
+) -> tuple[bool, dict[str, Any]]:
+    """Compare what the decision is made from, in the ledger's own order.
+
+    A ledger's content key also digests diagnostic cache counters, and an
+    indexed source legitimately reports different ones.  Comparing content
+    keys would therefore fail a correct index and pass nothing useful, so the
+    contract is the DECISION-bearing content -- candidate_id, cost,
+    per_variant and daily_unit_ids -- with cache and measurement fields
+    reported separately instead of being folded into the verdict.
+
+    Both Phase 5 paths call this one implementation: a second copy is how the
+    build path and the resume path start answering different questions.
+    """
+
+    def _project(costs, fields):
+        return [{field: dict(item).get(field) for field in fields}
+                for item in costs]
+
+    indexed_costs = indexed.get("costs", ())
+    baseline_costs = baseline.get("costs", ())
+    identical = (_project(indexed_costs, DECISION_LEDGER_FIELDS)
+                 == _project(baseline_costs, DECISION_LEDGER_FIELDS))
+    comparison = {
+        "compared_fields": sorted(DECISION_LEDGER_FIELDS),
+        "decision_fields_identical": identical,
+        "cache_fields_identical": (
+            _project(indexed_costs, CACHE_LEDGER_FIELDS)
+            == _project(baseline_costs, CACHE_LEDGER_FIELDS)),
+        "cache_fields_may_differ": sorted(CACHE_LEDGER_FIELDS),
+        "baseline_parents": len(baseline_costs),
+        "indexed_parents": len(indexed_costs),
+        "basis": ("candidate_id, cost, per_variant and daily_unit_ids in the "
+                  "ledger's own order; cache counters describe the source, "
+                  "not the price"),
+    }
+    return identical, comparison
+
+
+class _ResumeOracleProviders:
+    """Bound-oracle identities for an already-written index.
+
+    Reading the oracle needs each daily unit's `cache_identity`, which folds
+    in the unit identity, so one provider per unit is required.  The archive's
+    verified `ArchiveInputs` are built once per ARCHIVE and passed in, so a
+    resume pays archive hashing 30 times rather than 1,950, and no identity
+    arithmetic is duplicated here.
+    """
+
+    def __init__(self, spec: ClosureSearchSpec, *, runs_root: Path,
+                 qualified_demand_manifest: Mapping[str, Any]) -> None:
+        self.spec = spec
+        self.runs_root = Path(runs_root)
+        self.qualified_demand_manifest = qualified_demand_manifest
+        self.resolver = MonthlyDemandResolverRunner(
+            spec, runs_root=self.runs_root, build_missing=False,
+            baseline_trip_duration_p99_s=3600,
+            study_provenance_key="subhour-phase5-resume-oracle",
+            qualified_demand_manifest=qualified_demand_manifest)
+        self.archive_index = _archives_for_build_key(self.runs_root)
+        self._inputs: dict[Path, Any] = {}
+        # Operation-local and content-derived: one full validation per
+        # distinct demand contract, not one per daily unit. A month has 30
+        # build keys behind 1,950 units, so the per-unit form re-proved the
+        # same 30 archives 1,950 times. Nothing here outlives this object and
+        # nothing is keyed on a path, size or mtime.
+        self._archive_by_build_key: dict[str, Path] = {}
+        self.archives: set[Path] = set()
+
+    def _archive_for(self, schedule: ClosureSchedule) -> Path:
+        required = self.resolver._required(schedule)
+        cached = self._archive_by_build_key.get(required.build_key)
+        if cached is not None:
+            return cached
+        matches = find_demand_archives(
+            self.runs_root, required,
+            qualified_manifest=self.qualified_demand_manifest,
+            _archive_index=self.archive_index)
+        if not matches:
+            raise WindowCostIndexError(
+                f"no qualified demand archive for build key {required.build_key}")
+        archive = Path(matches[0]["archive"]).resolve()
+        self._archive_by_build_key[required.build_key] = archive
+        return archive
+
+    def identity_for(self, unit_id: str, identity: Mapping[str, Any],
+                     schedule: ClosureSchedule) -> Mapping[str, Any]:
+        from traffic_sim.simulation.deterministic_disruption import ArchiveInputs
+
+        archive = self._archive_for(schedule)
+        self.archives.add(archive)
+        inputs = self._inputs.get(archive)
+        if inputs is None:
+            inputs = ArchiveInputs.from_archive(archive)
+            self._inputs[archive] = inputs
+        if not isinstance(identity, Mapping) or not identity:
+            raise WindowCostIndexError(
+                f"daily unit {unit_id} has no identity mapping")
+        # The oracle key is the WRITER's identity, not a new one. Phase 4 wrote
+        # these entries from providers carrying no unit identity -- verified
+        # directly against the bound cache: including `daily_unit` addresses a
+        # key nobody ever wrote and reports the oracle as missing. `load`
+        # still re-verifies that the stored identity is the one asked for.
+        provider = ArchiveDisruptionProvider(
+            self.spec, archive=archive, network=None, cache=None,
+            inputs=inputs)
+        return provider.cache_identity(schedule)
+
+    def provider_identity_for(self, unit_id: str, identity: Mapping[str, Any],
+                              schedule: ClosureSchedule) -> Mapping[str, Any]:
+        """The provider identity this unit reconstructs from current inputs.
+
+        Compared against the identity stored in the index, so a resume proves
+        that the archive, network and costing sources behind every unit are
+        still the ones the index was built from -- a matching key SET says
+        nothing about that.
+        """
+        from traffic_sim.simulation.deterministic_disruption import ArchiveInputs
+
+        archive = self._archive_for(schedule)
+        inputs = self._inputs.get(archive)
+        if inputs is None:
+            inputs = ArchiveInputs.from_archive(archive)
+            self._inputs[archive] = inputs
+        provider = ArchiveDisruptionProvider(
+            self.spec, archive=archive, network=None, cache=None,
+            inputs=inputs)
+        return dict(provider.identity())
+
+
+def prove_existing_index(
+    profile_path: Path,
+    *,
+    index_path: Path,
+    evidence_out: Path,
+    evidence_id: str,
+    oracle_providers=None,
+) -> dict[str, Any]:
+    """Prove an already-written index instead of rebuilding it for hours.
+
+    The 2026-09-16 attempt wrote a complete index and proved its oracle, then
+    crashed in the adoption replay.  Rebuilding it costs 8 h 41 m, so this
+    path consumes the written index -- but only after re-proving every
+    binding the builder would have required, and it keeps the index's OWN
+    stored preparation time in the cold end-to-end total.  A cheap replay may
+    not rewrite history so that WindowCostIndex looks fast.
+    """
+    bound = _bound_inputs(profile_path)
+    profile = bound["profile"]
+    spec = bound["spec"]
+    ledger = bound["ledger"]
+    parents = bound["parents"]
+    parent_unit_ids = bound["parent_unit_ids"]
+    baseline_time_s = bound["baseline_time_s"]
+
+    index_path = Path(index_path).resolve()
+    persisted = load_index(
+        index_path,
+        expected_daily_units=EXPECTED_DAILY_UNITS,
+        expected_variant_records=EXPECTED_VARIANT_RECORDS,
+    )
+    identity = dict(persisted.bound_identity)
+    bindings = profile.get("bindings") or {}
+    expected_identity = {
+        "search_content_key": str(bound["bound_spec"]["search_content_key"]),
+        "ledger_content_key": str(profile.get("ledger_content_key", "")),
+        "source_profile_content_key": str(profile.get("content_key", "")),
+        "qualified_demand_manifest": dict(bound["qualified_ref"]),
+        "policy_content_key": str(
+            (bindings.get("policy") or {}).get("content_key", "")),
+        "producer_source_manifest": dict(
+            bindings.get("producer_source_manifest") or {}),
+        "producer_runtime_manifest": dict(
+            bindings.get("producer_runtime_manifest") or {}),
+    }
+    for field, expected in expected_identity.items():
+        if identity.get(field) != expected:
+            raise WindowCostIndexError(
+                f"window cost index {field} does not match this profile")
+    if set(persisted.records) != parent_unit_ids:
+        raise WindowCostIndexError(
+            "window cost index population does not match the ledger units")
+    provider_identities = identity.get("provider_identities")
+    if not isinstance(provider_identities, Mapping) \
+            or set(provider_identities) != parent_unit_ids:
+        raise WindowCostIndexError(
+            "window cost index lacks a provider identity for every daily unit")
+    # Honest, not hidden: this index was written by earlier builder bytes.
+    stored_sources = dict(identity.get("raw_input_sources") or {})
+    current_sources = {
+        relative: sha256_file(ROOT / relative)
+        for relative in stored_sources
+    }
+    builder_source_drift = {
+        relative: {"index": stored_sources[relative],
+                   "current": current_sources.get(relative)}
+        for relative in sorted(stored_sources)
+        if stored_sources[relative] != current_sources.get(relative)
+    }
+
+    providers = oracle_providers if oracle_providers is not None else \
+        _ResumeOracleProviders(
+            spec, runs_root=bound["runs_root"],
+            qualified_demand_manifest=bound["qualified_manifest"])
+    cache = DailyCostCache(bound["cache_root"])
+    oracle_started = time.perf_counter()
+    oracle_records: dict[str, dict[str, Any]] = {}
+    seen: set[str] = set()
+    for parent in parents:
+        for unit_id, unit_identity, build_schedule in daily_unit_records(
+                spec, parent):
+            unit_id = str(unit_id)
+            if unit_id in seen:
+                continue
+            seen.add(unit_id)
+            schedule = build_schedule()
+            # Prove the identity, not merely its presence: the archive,
+            # network and costing sources reconstructed for this unit today
+            # must be exactly the ones the index recorded, or the oracle
+            # record below describes a different world.
+            reconstructed = providers.provider_identity_for(
+                unit_id, unit_identity, schedule)
+            if dict(reconstructed) != dict(provider_identities[unit_id]):
+                raise WindowCostIndexError(
+                    f"provider identity for unit {unit_id} differs from the "
+                    "identity stored in the window cost index")
+            stored = cache.load(providers.identity_for(
+                unit_id, unit_identity, schedule))
+            if stored is None:
+                raise WindowCostIndexError(
+                    f"bound deterministic oracle is missing unit {unit_id}")
+            oracle_records[unit_id] = {
+                "schedule_id": schedule.schedule_id,
+                "records": [dict(item) for item in stored],
+            }
+    oracle_read_time_s = time.perf_counter() - oracle_started
+    oracle = persisted.compare_oracle(oracle_records)
+    if oracle["indexed_variant_records"] != EXPECTED_VARIANT_RECORDS \
+            or not oracle["oracle_complete"] or not oracle["field_identical"]:
+        raise WindowCostIndexError("resumed index is not oracle-identical")
+
+    indexed_source = _IndexedLedgerSource(spec, persisted)
+    replay_started = time.perf_counter()
+    indexed_ledger = build_cost_ledger(spec, parents, indexed_source)
+    replay_time_s = time.perf_counter() - replay_started
+    expected_lookups = sum(
+        len(item.get("daily_unit_ids", ())) for item in ledger.get("costs", ()))
+    if len(indexed_ledger.costs) != EXPECTED_PARENTS \
+            or len(indexed_source.units) != EXPECTED_DAILY_UNITS \
+            or indexed_source.lookups != expected_lookups:
+        raise WindowCostIndexError(
+            f"resumed adoption ledger covered {len(indexed_ledger.costs)} "
+            f"parents, {len(indexed_source.units)} distinct daily units and "
+            f"{indexed_source.lookups} lookups; expected {EXPECTED_PARENTS}, "
+            f"{EXPECTED_DAILY_UNITS} and {expected_lookups}")
+    indexed_dict = indexed_ledger.to_dict()
+
+    ledger_identical, ledger_comparison = compare_decision_ledgers(
+        indexed_dict, ledger)
+
+    stored_preparation_time_s = float(persisted.preparation_time_s)
+    cold_total_s = stored_preparation_time_s + oracle_read_time_s + replay_time_s
+    cold_benefit_s = baseline_time_s - cold_total_s
+    # Source drift is disqualifying, not merely reportable: an index written
+    # by different builder bytes may not be adopted on the strength of a
+    # replay performed by today's code.
+    adopted = bool(cold_benefit_s > 0 and ledger_identical
+                   and not builder_source_drift)
+    record = {
+        "schema": "subhour_phase5_window_cost_index_resume_v1",
+        "kind": "subhour_phase5_window_cost_index_resume",
+        "phase": 5,
+        "release_evidence": False,
+        "status": "ADOPTABLE" if adopted else "NOT_ADOPTED",
+        "adopted": False,
+        "rebuilt": False,
+        "evidence_id": evidence_id,
+        "source_profile": str(bound["profile_path"]),
+        "source_profile_content_key": profile.get("content_key"),
+        "index_path": str(index_path),
+        "index_content_key": persisted.content_key,
+        "index_sha256": sha256_file(index_path),
+        "bound_identity_verified": sorted(expected_identity) + [
+            "provider_identities", "daily_unit_population"],
+        "builder_source_drift": builder_source_drift,
+        "population": {
+            "daily_units": len(persisted.records),
+            "daily_variant_records": len(persisted.records) * 3,
+            "parent_schedules": len(indexed_ledger.costs),
+        },
+        "adoption": {
+            "parent_schedules": len(indexed_ledger.costs),
+            "daily_unit_lookups": indexed_source.lookups,
+            "distinct_daily_units": len(indexed_source.units),
+            "lookup_basis": ("one lookup per parent-to-daily-unit "
+                             "relationship, not per variant record"),
+        },
+        "oracle": oracle,
+        "oracle_source": "bound deterministic daily-cost cache, re-read per unit",
+        "ledger_identical": ledger_identical,
+        "ledger_comparison": ledger_comparison,
+        "baseline_ledger_content_key": ledger.get("content_key"),
+        "indexed_ledger_content_key": indexed_dict["content_key"],
+        "stored_preparation_time_s": stored_preparation_time_s,
+        "resume_oracle_read_time_s": oracle_read_time_s,
+        "resume_adoption_replay_time_s": replay_time_s,
+        "baseline_cold_wall_time_s": baseline_time_s,
+        "cold_index_end_to_end_time_s": cold_total_s,
+        "cold_benefit_s": cold_benefit_s,
+        "cold_benefit_proven": bool(cold_benefit_s > 0),
+        "accounting": (
+            "the index's own stored preparation time is included: a resume "
+            "replay measures adoption, never the cost of producing the index"),
+    }
+    record["content_key"] = _digest(record)
+    _publish(Path(evidence_out), record)
+    return record
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     import argparse
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--profile", type=Path, required=True)
-    parser.add_argument("--index-out", type=Path, required=True)
+    parser.add_argument("--index-out", type=Path)
+    parser.add_argument("--resume-index", type=Path,
+                        help="prove this already-written index instead of "
+                             "rebuilding it")
     parser.add_argument("--evidence-out", type=Path, required=True)
     parser.add_argument("--evidence-id", required=True)
     args = parser.parse_args(argv)
+    if (args.index_out is None) == (args.resume_index is None):
+        parser.error("pass exactly one of --index-out or --resume-index")
+    if args.resume_index is not None:
+        result = prove_existing_index(
+            args.profile, index_path=args.resume_index,
+            evidence_out=args.evidence_out, evidence_id=args.evidence_id)
+        print(f"proved Phase 5 index {result['index_content_key']}: "
+              f"{result['status']} (benefit {result['cold_benefit_s']:.3f}s)")
+        return 0 if result["status"] == "ADOPTABLE" else 1
     result = build_from_profile(
         args.profile, index_out=args.index_out, evidence_out=args.evidence_out,
         evidence_id=args.evidence_id)
