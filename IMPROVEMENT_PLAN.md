@@ -1305,6 +1305,45 @@ skulle alltså fortfarande landa långt över baslinjens 7 320,348 s, och
 startas utan ett uttryckligt beslut, eftersom det kostar timmar. Steg 6 är
 fortfarande inte startat.
 
+**Fasmätning av återstående WCI-kostnad — 2026-09-16.**
+`validation/wci_phase_cost_benchmark_20260916-v1.json` (driver
+`validation/benchmarks/wci_phase_cost_benchmark_v1.py`, urvalsregel och fem
+produktionskällors SHA-256 bundna) mätte minsta, median- och största arkiv
+efter ruttbytes, var och ett i kall process följt av varm upprepning med
+identiska utdatahashar. Ingen produktionskod ändrades.
+
+| Arkiv (ruttbytes) | Fordon | Kall väggtid | xml_parse | grouping | 195 fönster | Peak RSS |
+|---|---:|---:|---:|---:|---:|---:|
+| 145 760 833 | 150 346 | 2,91 s | 1,71 s | 0,12 s | ≈ 1 ms | 879 MB |
+| 163 254 555 | 168 730 | 3,13 s | 1,89 s | 0,14 s | ≈ 1 ms | 957 MB |
+| 181 568 252 | 186 847 | 3,32 s | 2,08 s | 0,15 s | ≈ 1 ms | 1 050 MB |
+
+Nätladdningen tog cirka 2,0 s per process. **Modellerat** för 30 arkiv, alltså
+inte direkt uppmätt: `xml_parse` 56,8 s, grouping 4,1 s, arkivindata 19,1 s och
+totalt 153,7 s inklusive nätladdning per arkiv. Ingen fas kommer i närheten
+av de minst 20 962 s som måste bort. En separat mätning visade att
+`provider.identity()` och `cache_identity()` tar under 1 ms per anrop.
+
+**Två fynd som ändrar bilden:**
+
+* **Noll korsande fordon.** `crossing_vehicles` är 0 i alla tre arkiven. Den
+  frysta månadsspecens avstängningskant `26355153_26842525_0` bär ingen
+  kalibrerad baslinjetrafik, så varje fönsterkostnad är noll och
+  kortaste-väg-arbetet körs aldrig. Mätningen säger därför inget om
+  fönsterkostnaden för en trafikerad kant, och spec:en prissätter en
+  degenererad stängning.
+* **Minnet förklarar sannolikt de 8,7 timmarna (slutsats, inte mätning).**
+  `_raw_index_records` behåller alla 30 arkiv × 3 parsade varianter och deras
+  index innan enhetsloopen. Ett arkiv kräver cirka 1 GB. Det misslyckade
+  bygget rapporterade 19,58 GB peak memory footprint och swappade kraftigt.
+  Uppmätt beräkning summerar till cirka 55 s upplösning plus cirka 154 s
+  modellerade faser.
+
+**Beslut:** WCI-spåret stängs **inte**. En exakthetsbevarande åtgärd finns:
+bearbeta och släpp ett arkiv i taget. Den är en produktionsändring och kräver
+först ett uttryckligt beslut, liksom varje ny fullskalekörning. Specens
+avstängningskant bör också granskas innan månadsresultatet används.
+
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 
 **Filer:** `build_sumo_demand.py`, `monthly_demand.py:_resolve_new_release`,

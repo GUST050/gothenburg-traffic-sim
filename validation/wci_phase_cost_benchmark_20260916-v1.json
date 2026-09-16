@@ -1,0 +1,374 @@
+{
+  "all_outputs_identical_cold_vs_warm": true,
+  "archives": [
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72",
+      "build_key": "9c7ad9c97b6bdbc6",
+      "cold": {
+        "cpu_s": 2.9075369999999996,
+        "crossing_vehicles": 0,
+        "first_window_s": 8.616700000008137e-05,
+        "inputs_s": 0.6500852080000001,
+        "later_windows_s": 0.0006413270000038551,
+        "output_sha256": "24f592ee18b02314c7a62b55ed01a940c43ab8aa9d0684a59e326b6829ecab14",
+        "route_vehicle_grouping_s": 0.12383141699999989,
+        "unique_od": 1337,
+        "unique_routes": 1337,
+        "vehicles": 150346,
+        "wall_s": 2.912392167,
+        "windows": 195,
+        "xml_parse_s": 1.7128483340000002
+      },
+      "daily_units": 65,
+      "network_load": {
+        "cpu_s": 2.0200679999999993,
+        "wall_s": 2.022786542
+      },
+      "outputs_identical": true,
+      "peak_rss_bytes": 879312896,
+      "route_bytes": 145760833,
+      "warm": {
+        "cpu_s": 2.954388,
+        "crossing_vehicles": 0,
+        "first_window_s": 5.4875000001786134e-05,
+        "inputs_s": 0.6209367500000003,
+        "later_windows_s": 0.0006550809999943397,
+        "output_sha256": "24f592ee18b02314c7a62b55ed01a940c43ab8aa9d0684a59e326b6829ecab14",
+        "route_vehicle_grouping_s": 0.12256420900000009,
+        "unique_od": 1337,
+        "unique_routes": 1337,
+        "vehicles": 150346,
+        "wall_s": 2.955038709,
+        "windows": 195,
+        "xml_parse_s": 1.8040889580000012
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33",
+      "build_key": "b7e7cef8b702abae",
+      "cold": {
+        "cpu_s": 3.1192389999999985,
+        "crossing_vehicles": 0,
+        "first_window_s": 8.308399999990002e-05,
+        "inputs_s": 0.6473826669999996,
+        "later_windows_s": 0.000624533999992849,
+        "output_sha256": "dc7d9a785b821ea0ac43a07bf1e2660cb74650558e41a30c81b30e0cb1762c75",
+        "route_vehicle_grouping_s": 0.13985670799999994,
+        "unique_od": 1262,
+        "unique_routes": 1262,
+        "vehicles": 168730,
+        "wall_s": 3.1302671670000004,
+        "windows": 195,
+        "xml_parse_s": 1.8878551659999996
+      },
+      "daily_units": 65,
+      "network_load": {
+        "cpu_s": 1.9875620000000005,
+        "wall_s": 1.9877026669999998
+      },
+      "outputs_identical": true,
+      "peak_rss_bytes": 957120512,
+      "route_bytes": 163254555,
+      "warm": {
+        "cpu_s": 3.3301539999999985,
+        "crossing_vehicles": 0,
+        "first_window_s": 5.7832999997842194e-05,
+        "inputs_s": 0.7607577500000007,
+        "later_windows_s": 0.0006570409999877569,
+        "output_sha256": "dc7d9a785b821ea0ac43a07bf1e2660cb74650558e41a30c81b30e0cb1762c75",
+        "route_vehicle_grouping_s": 0.14230608300000291,
+        "unique_od": 1262,
+        "unique_routes": 1262,
+        "vehicles": 168730,
+        "wall_s": 3.355826915999999,
+        "windows": 195,
+        "xml_parse_s": 1.9966146659999993
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06",
+      "build_key": "c796667235591888",
+      "cold": {
+        "cpu_s": 3.3193770000000002,
+        "crossing_vehicles": 0,
+        "first_window_s": 7.437400000043226e-05,
+        "inputs_s": 0.6145287079999999,
+        "later_windows_s": 0.0006453730000037794,
+        "output_sha256": "bff7e0ad198673f52129cdaf2c85054db0785057031bc15d2098af3aedeb2a80",
+        "route_vehicle_grouping_s": 0.1461686249999996,
+        "unique_od": 1164,
+        "unique_routes": 1164,
+        "vehicles": 186847,
+        "wall_s": 3.324383291,
+        "windows": 195,
+        "xml_parse_s": 2.078829709
+      },
+      "daily_units": 65,
+      "network_load": {
+        "cpu_s": 1.9893,
+        "wall_s": 1.9907262080000003
+      },
+      "outputs_identical": true,
+      "peak_rss_bytes": 1050083328,
+      "route_bytes": 181568252,
+      "warm": {
+        "cpu_s": 3.3351380000000006,
+        "crossing_vehicles": 0,
+        "first_window_s": 5.9792000000058465e-05,
+        "inputs_s": 0.5768029999999991,
+        "later_windows_s": 0.0006530740000041391,
+        "output_sha256": "bff7e0ad198673f52129cdaf2c85054db0785057031bc15d2098af3aedeb2a80",
+        "route_vehicle_grouping_s": 0.14945870899999925,
+        "unique_od": 1164,
+        "unique_routes": 1164,
+        "vehicles": 186847,
+        "wall_s": 3.335258542,
+        "windows": 195,
+        "xml_parse_s": 2.1279425419999995
+      }
+    }
+  ],
+  "content_key": "c05dd593052ececf06a1c0ec3b324e5c5563eb37de13314abc11e4f8093e0406",
+  "driver": {
+    "path": "validation/benchmarks/wci_phase_cost_benchmark_v1.py",
+    "sha256": "4b675d41659a63889c61573bed03e7b137381a1e534e350ef153d9eade9cc289"
+  },
+  "largest_modelled_phase": {
+    "month_s": 56.79533209,
+    "phase": "xml_parse_s"
+  },
+  "largest_phase_can_cover_required_saving": false,
+  "month_model": {
+    "archives": 30,
+    "basis": "mean cold per-archive cost over the three sampled archives times the 30 archives of the month; network load is paid once per process in production, so counting it per archive overstates the month",
+    "first_window_s": 0.0024362500000041365,
+    "inputs_s": 19.119965829999998,
+    "kind": "modelled",
+    "later_windows_s": 0.019112340000004835,
+    "route_vehicle_grouping_s": 4.098567499999994,
+    "total_including_network_per_archive_s": 153.68258042000002,
+    "xml_parse_s": 56.79533209
+  },
+  "production_sources": {
+    "tools/build_window_cost_index.py": "b5b14be2f285de406d938a7c8393be2b1e8eb6d64378eb528bd9fb5cee9829f6",
+    "traffic_sim/simulation/deterministic_disruption.py": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472",
+    "traffic_sim/simulation/disruption.py": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9",
+    "traffic_sim/simulation/monthly_demand.py": "0879d1fdd41e95643c3626fdda51b81e08edaa9be4ef957a33a517cda6890778",
+    "traffic_sim/simulation/window_cost_index.py": "13a12f44f25c7f977e1e411740b98e8b190f27e4d832c01359045764c3fe9f91"
+  },
+  "profile": "runs/step5_code_approved_20260915b/profile/profile.json",
+  "release_evidence": false,
+  "schema": "wci_phase_cost_benchmark_v1",
+  "selection": {
+    "candidates": [
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-215415-af2d83e6-bc11",
+        "archive_content_key": "5849d34a9a69723c34e2aafcec82c4c968b68864a69d892ad46ad5c2d8b889e0",
+        "build_key": "06cc309e4779897c",
+        "route_bytes": 146061256
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220012-de032bcb-2165",
+        "archive_content_key": "bef93cdbf6d3c0a20328b69935ad6f8ca18745fdc87b157d8ff15020b55e83ed",
+        "build_key": "084cedb913d5197c",
+        "route_bytes": 150299424
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220648-791840d4-c887",
+        "archive_content_key": "c988c98a618cab201fabcd9285c72b05951e9937070bb160903b0dc37f2a6eaf",
+        "build_key": "0a6c5266d76b5b39",
+        "route_bytes": 176006552
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221303-3a1fda45-188f",
+        "archive_content_key": "ffb8c79b719e45d8fae852db3e81611ee0ac3e1c5f79774806c1f1c02e293f6c",
+        "build_key": "16f1d6176c7a9133",
+        "route_bytes": 150499798
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221533-52837f59-7e5d",
+        "archive_content_key": "228429ec61688bd93b4676d3d4e742489d29c65d64737ac96144ea2a23dbdac5",
+        "build_key": "187fca60022dedc5",
+        "route_bytes": 145931176
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221806-7415a4c6-0d68",
+        "archive_content_key": "ecec806d1a819d447e714bb4234dd5d471429e2d09e2cd328a10eb3b62f8df99",
+        "build_key": "2d4f272bb3dfc5d2",
+        "route_bytes": 180057379
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222404-4b5941dd-77c7",
+        "archive_content_key": "56160da62dcdddefa2e3f7d4de751061428920f2201504b4a650769b09a1cb5c",
+        "build_key": "340168e305f8381e",
+        "route_bytes": 171996801
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222709-889e6f89-d6d5",
+        "archive_content_key": "782f2e480f945e03af3e3fda8b2ce5bd2dc76dae8460ff46777a1de3fff2e65b",
+        "build_key": "3f5d86eed8fe5c17",
+        "route_bytes": 162644458
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223016-ef0f3cf3-44e9",
+        "archive_content_key": "f4c156ddfe278bee41a5e983e7a33edca2c31e14e357e54e371747ce97fdcd20",
+        "build_key": "4008e6387839d7a3",
+        "route_bytes": 172577585
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223222-19b614fb-7ce8",
+        "archive_content_key": "d44a8994a0330ce60d8325a91034001f49a93cdea90cfa00797bc2c6589f8304",
+        "build_key": "5803fd9aa62080cb",
+        "route_bytes": 163059142
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d",
+        "archive_content_key": "ff2c496d06510641f95d1c1a0c543a0dfc8b0728958f92f73a22f8e638e1e154",
+        "build_key": "5fcc585e03915396",
+        "route_bytes": 174167426
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223744-a3782377-418d",
+        "archive_content_key": "926b9383658a7267699e63869117819c74d8801a55dae8398fe0dea199825ff7",
+        "build_key": "657fa0b9f3268e78",
+        "route_bytes": 176501055
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223804-04518454-6d14",
+        "archive_content_key": "e3a33894fd71177975d33e55024bac2d65877251e7c81e23cb6b7a2d2d494552",
+        "build_key": "6e3416af316f91cc",
+        "route_bytes": 150214798
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223825-2bbb1a66-845d",
+        "archive_content_key": "c54eb87e4e6225c4d54b00db8d9cc02b937566b89176840e535756fa71eb9a5e",
+        "build_key": "7e395749f1712cb4",
+        "route_bytes": 150909173
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224149-53fb2fd0-6182",
+        "archive_content_key": "76be17a75c7ae517491ee1aec369b6c72bd51851ab5c8555ff5b2ef4abe6d470",
+        "build_key": "8dcbe1518a5b0898",
+        "route_bytes": 180382317
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224309-23459e2e-c9ef",
+        "archive_content_key": "8e47519b0f6cf3fca62832e19e5e0d1d28e47844c9f76413850345b02d597c28",
+        "build_key": "90a93715895966dc",
+        "route_bytes": 176000185
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72",
+        "archive_content_key": "1fe659e7a0b9b25f51035ac11e39495d38095fddc84da5341cf567cd319fb35a",
+        "build_key": "9c7ad9c97b6bdbc6",
+        "route_bytes": 145760833
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33",
+        "archive_content_key": "cfb86558a8bd4bc690af033ef274c6242601f0308edc60706644a76dc89af478",
+        "build_key": "b7e7cef8b702abae",
+        "route_bytes": 163254555
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06",
+        "archive_content_key": "537def3d6b4c300eb024d205203346487bcca04e1837c5de6817aaf5cc1c8083",
+        "build_key": "c796667235591888",
+        "route_bytes": 181568252
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225121-de7e3e34-015d",
+        "archive_content_key": "e2547c2176d32d53510ec7f8b8b2b5fd8d3c88146d4537777883c2a8361163f1",
+        "build_key": "cc8eb82bc98de729",
+        "route_bytes": 172209457
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225243-61cb7aca-8652",
+        "archive_content_key": "6bcae642202f42e526addd00e564acfc14c54334e24fa30c6b7b8d098b449a5b",
+        "build_key": "cff4da5d9bb7efb7",
+        "route_bytes": 150160466
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6",
+        "archive_content_key": "fb2be2d4d29d40d0e0d2adf9b864025be503c02b6aed5cf05887bee9849c73f1",
+        "build_key": "d42db159b3ee565f",
+        "route_bytes": 163224307
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225650-83f1213a-5e40",
+        "archive_content_key": "d620d265108ca5b83bdaeaeb094bcfa574dbf153b5965f2cd64deda352b05a12",
+        "build_key": "d482aa0afa27e9ce",
+        "route_bytes": 150619387
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225714-b593ac27-7b71",
+        "archive_content_key": "dffb422022663c0f901948b22d9e5dc8c495c8556976b2f7c69f413f79d3d4f0",
+        "build_key": "dae23c801891223c",
+        "route_bytes": 146575121
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225738-e3bfe154-7e43",
+        "archive_content_key": "9b6b99f5d8d0e43abd4d3e9847a522f9acf8f3aa4e128c2c15afd2b0caab52d3",
+        "build_key": "dce1407ed7d893a6",
+        "route_bytes": 172429699
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603",
+        "archive_content_key": "6c846a3f11cf44c5dd3eb09c15a411c6cdf694359e3bb7c0b18dd848a8c76fb0",
+        "build_key": "e72299dc2abeabcd",
+        "route_bytes": 180407283
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230407-7f119ae2-9f58",
+        "archive_content_key": "c2a0ec057231f73ebed89226f9b3911de162033c235c1316aea265410d5d4803",
+        "build_key": "e9b489b9b469e9b6",
+        "route_bytes": 149827088
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230432-5b265029-5e0f",
+        "archive_content_key": "b743107496ca4d8756a67697d41ceb1e15463d042222683fcfd7e79cc62f3140",
+        "build_key": "eb0bd33739d5e926",
+        "route_bytes": 176534370
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230455-3e34ff00-af60",
+        "archive_content_key": "8b853bfc6d2659af4a7699963614489e5cc9600194f5837761f4579898f83633",
+        "build_key": "eb5d47e234425a98",
+        "route_bytes": 149937500
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230620-a893719c-a662",
+        "archive_content_key": "bec4f0d0bb89a6c0239e98d7ebaad911ed0807857f79be2533604dbec41641f5",
+        "build_key": "f3d1a9ac4d14bd7a",
+        "route_bytes": 180456557
+      }
+    ],
+    "chosen": [
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72",
+        "archive_content_key": "1fe659e7a0b9b25f51035ac11e39495d38095fddc84da5341cf567cd319fb35a",
+        "build_key": "9c7ad9c97b6bdbc6",
+        "route_bytes": 145760833
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33",
+        "archive_content_key": "cfb86558a8bd4bc690af033ef274c6242601f0308edc60706644a76dc89af478",
+        "build_key": "b7e7cef8b702abae",
+        "route_bytes": 163254555
+      },
+      {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06",
+        "archive_content_key": "537def3d6b4c300eb024d205203346487bcca04e1837c5de6817aaf5cc1c8083",
+        "build_key": "c796667235591888",
+        "route_bytes": 181568252
+      }
+    ],
+    "digest": "4daf551bc77cf3728dc59a9f24fe3fd5fd1ba6636b3237f57a0da11667e3907a",
+    "rule": "sort the 30 qualified archives by the summed bytes of their three variant route files (ties by build key) and take the minimum, the median (index 15) and the maximum",
+    "selection_wall_s": 133.866075958
+  },
+  "targets": {
+    "baseline_s": 7320.348,
+    "remaining_build_s": 28282.0,
+    "required_saving_s": 20962.0
+  }
+}
