@@ -1240,10 +1240,35 @@ förälder och dagenhet, alltså 1 690 × 5 = 8 450, medan variantposterna är
 
 **Kontroller:** 51 fokuserade tester passerar (`test_window_cost_index.py`,
 `test_cost_ordered_execution.py`, `test_profile_monthly_cost_ledger.py`),
-pylint rc 0 och rent `git diff --check`. **Nästa steg, ännu inte utfört:** en
-resume-körning mot det befintliga indexet och en kort representativ benchmark
-av den deduplicerade upplösningen. Först därefter kan en ny tidsuppgift
-lämnas. Steg 6 är fortfarande inte startat.
+pylint rc 0 och rent `git diff --check`. Commit `f889071`, pushad till
+`origin/claude/exciting-rubin-1e6k5m`.
+
+**Uppmätt arkivupplösning — verkliga arkiv, 2026-09-16.**
+`validation/archive_resolution_benchmark_20260916-v1.json`
+(`release_evidence: false`) mäter den nya vägen över hela populationen och det
+gamla per-enhetsbeteendet på ett avgränsat stickprov:
+
+| | indexbyggen | fulla valideringar | JSON-läsningar | väggtid |
+|---|---:|---:|---:|---:|
+| ny väg, per build key | 1 | 30 | 150 | 54,75 s |
+| gammal väg, per dagenhet (extrapolerad) | — | 1 950 | 7 800 | 2 545,7 s |
+
+Populationen är 1 950 dagenheter, 30 unika build keys och 30 unika arkiv.
+`unique_validated_archives` är 30, alltså fullvalideras varje arkiv
+fortfarande; besparingen ligger i att samma 30 arkiv inte bevisas om för varje
+tidsfönster. Stickprovet var 30 dagenheter på 39,16 s, alltså 1,3055 s och 4
+JSON-läsningar per enhet. Hela mätprocessen tog 95,05 s med 586 MB peak RSS.
+Extrapoleringen är **gynnsam för den gamla vägen**: stickprovet återanvänder
+det delade arkivindexet, medan den gamla koden byggde om indexet i varje
+anrop. Faktorn 46,5× är därför en undre gräns.
+
+**Proportionen som avgör nästa beslut:** de extrapolerade 2 545,7 s är bara
+cirka 8 % av indexbyggets uppmätta 31 271,161 s. Resten låg i ruttparsning och
+indexkonstruktion, som denna ändring inte rör. Ett nytt fullständigt bygge
+skulle alltså fortfarande landa långt över baslinjens 7 320,348 s, och
+`WindowCostIndex` förblir opt-in och oadopterad. Ett sådant bygge får inte
+startas utan ett uttryckligt beslut, eftersom det kostar timmar. Steg 6 är
+fortfarande inte startat.
 
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 

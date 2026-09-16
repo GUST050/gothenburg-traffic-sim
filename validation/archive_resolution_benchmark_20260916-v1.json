@@ -1,0 +1,44 @@
+{
+  "comparison": {
+    "basis": "the sample reuses the shared archive index, which the old per-unit path rebuilt on every call, so the real old cost was higher than this extrapolation",
+    "extrapolated_full_population_json_reads": 7800.0,
+    "extrapolated_full_population_validations": 1950,
+    "extrapolated_full_population_wall_s": 2545.6797654600005,
+    "measured_per_unit_json_reads": 4.0,
+    "measured_per_unit_s": 1.3054768028000003,
+    "sample_units": 30,
+    "sample_validations": 30,
+    "sample_wall_s": 39.16430408400001
+  },
+  "counters": {
+    "archive_index_build": 1,
+    "archive_json_read": 150,
+    "archive_sha256": 300,
+    "archive_validate": 30,
+    "unique_validated_archives": 30
+  },
+  "every_archive_fully_validated": true,
+  "inputs": {
+    "qualified_demand_manifest": "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+    "qualified_demand_manifest_sha256": "1b609f705e08ab7a9c266a974a5976d33660209f0de914c95f66b3189d46f576",
+    "runs_root": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+    "spec": "/private/tmp/gs-step3-departure-bounds/validation/subhour_monthly_search_profile_spec_v1.json",
+    "spec_sha256": "10f3939a69b6f0bb6e74eb2b1e08a2b513cf54fa5610dd4a25d4d8366c1261aa"
+  },
+  "kind": "archive_resolution_benchmark",
+  "measured_against": "the real September demand archives, no fixtures",
+  "peak_rss_bytes": 586448896,
+  "population": {
+    "daily_units": 1950,
+    "unique_archives": 30,
+    "unique_build_keys": 30
+  },
+  "release_evidence": false,
+  "schema": "archive_resolution_benchmark_v1",
+  "speedup_vs_extrapolated_old_path": 46.495061653603344,
+  "timings_s": {
+    "collect_daily_units": 0.21725020899999992,
+    "derive_demand_contracts": 0.055132457999999995,
+    "resolve_and_validate_per_build_key": 54.751616084
+  }
+}
