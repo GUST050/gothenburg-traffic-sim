@@ -1299,7 +1299,11 @@ ingen (`bound_claimed: null`):
 
 **Proportionen som avgör nästa beslut:** de viktade 3 043,3 s är cirka 9,7 % av
 indexbyggets uppmätta 31 271,161 s. Resten låg i ruttparsning och
-indexkonstruktion, som denna ändring inte rör. Ett nytt fullständigt bygge
+indexkonstruktion, som denna ändring inte rör. *(Rättat 2026-09-16: det var
+en gissning, och den höll inte. Fasmätningen nedan ger parsning och
+indexkonstruktion cirka 1 minut för hela månaden. Den kontrafaktiska armen
+utelämnade dessutom de 1 950 indexombyggena, som enligt modellen står för
+större delen av tiden. Se "Rättelse".)* Ett nytt fullständigt bygge
 skulle alltså fortfarande landa långt över baslinjens 7 320,348 s, och
 `WindowCostIndex` förblir opt-in och oadopterad. Ett sådant bygge får inte
 startas utan ett uttryckligt beslut, eftersom det kostar timmar. Steg 6 är
@@ -1323,26 +1327,175 @@ inte direkt uppmätt: `xml_parse` 56,8 s, grouping 4,1 s, arkivindata 19,1 s och
 totalt 153,7 s inklusive nätladdning per arkiv. Ingen fas kommer i närheten
 av de minst 20 962 s som måste bort. En separat mätning visade att
 `provider.identity()` och `cache_identity()` tar under 1 ms per anrop.
+*(Rättat 2026-09-16: målet "minst 20 962 s" räknades som 28 282 s kvar minus
+baslinjen. Den kvarvarande tiden byggde på v2:s kontrafaktiska arm utan
+indexombyggen och är därför inte giltig. Se "Rättelse".)*
 
-**Två fynd som ändrar bilden:**
+**Två observationer — rättade 2026-09-16, se "Rättelse" nedan:**
 
-* **Noll korsande fordon.** `crossing_vehicles` är 0 i alla tre arkiven. Den
-  frysta månadsspecens avstängningskant `26355153_26842525_0` bär ingen
-  kalibrerad baslinjetrafik, så varje fönsterkostnad är noll och
-  kortaste-väg-arbetet körs aldrig. Mätningen säger därför inget om
-  fönsterkostnaden för en trafikerad kant, och spec:en prissätter en
-  degenererad stängning.
-* **Minnet förklarar sannolikt de 8,7 timmarna (slutsats, inte mätning).**
-  `_raw_index_records` behåller alla 30 arkiv × 3 parsade varianter och deras
-  index innan enhetsloopen. Ett arkiv kräver cirka 1 GB. Det misslyckade
-  bygget rapporterade 19,58 GB peak memory footprint och swappade kraftigt.
-  Uppmätt beräkning summerar till cirka 55 s upplösning plus cirka 154 s
-  modellerade faser.
+* **Noll korsande fordon i de tre mätta arkiven.** `crossing_vehicles` var 0 i
+  vart och ett av de tre valda arkiven, alltså 3 av månadens 30. Ursprungligen
+  stod här att specens avstängningskant `26355153_26842525_0` saknar all
+  kalibrerad trafik och att spec:en prissätter en degenererad stängning. Det
+  följde inte av tre arkiv. Helmånadskontrollen i rättelsen avgör frågan.
+  Oavsett svar säger mätningen inget om fönsterkostnaden för en trafikerad
+  kant.
+* **Minnestryck som förklaring till de 8,7 timmarna var en hypotes, inte ett
+  fynd.** `_raw_index_records` behåller alla 30 arkiv × 3 parsade varianter och
+  deras index innan enhetsloopen. Kolumnen Peak RSS ovan visar *maximalt RSS*
+  i en process som räknade samma arkiv två gånger, kallt och sedan varmt. Den
+  mäter alltså inte vad ett kvarhållet arkiv kostar. Det misslyckade byggets
+  6,46 GB och 19,58 GB är två olika mått (se rättelsen). Här stod också att
+  bygget swappade kraftigt, men byggets egen logg innehåller ingen
+  swapmätning. Summeringen "55 s upplösning plus 154 s modellerade faser" är
+  struken som uttalande om byggtid. Den lägger ihop delkostnader och är ingen
+  uppmätt projektion av ett helt bygge.
 
-**Beslut:** WCI-spåret stängs **inte**. En exakthetsbevarande åtgärd finns:
-bearbeta och släpp ett arkiv i taget. Den är en produktionsändring och kräver
-först ett uttryckligt beslut, liksom varje ny fullskalekörning. Specens
-avstängningskant bör också granskas innan månadsresultatet används.
+**Beslut:** WCI-spåret stängs **inte**. Att bearbeta och släppa ett arkiv i
+taget är ett exakthetsbevarande *alternativ*, men dess nytta för byggtiden är
+inte visad. Det är en produktionsändring och kräver först ett uttryckligt
+beslut, liksom varje ny fullskalekörning.
+
+**Rättelse: stängningskanten över hela månaden och minneshypotesen prövad
+direkt — 2026-09-16.** Här redovisas två diagnostiker, båda med
+`release_evidence: false`. Ingen produktionskod och ingen `web/data/*` har
+ändrats, och varken SUMO, ett demandbygge eller ett WCI-bygge har startats.
+Båda körde under Python 3.9.6 på koden i `401b386`. Drivrarna, den gemensamma
+mäthjälpen `validation/benchmarks/wci_diag_common.py` och produktionskällornas
+SHA-256 är bundna i evidensen.
+
+*A — stängningskanten i alla 30 arkiv.*
+`validation/wci_closure_edge_census_20260916-v1.json` (driver
+`validation/benchmarks/wci_closure_edge_census_v1.py`, content key
+`0ad3f52c…`, output-hash `8f01e425…`, arkividentitetsdigest `54b81834…`).
+Drivern läste de 30 kvalificerade arkiven ett i taget, efter produktionens
+upplösning och fullvalidering, och släppte varje arkiv innan nästa öppnades.
+Footprint efter frigöring låg mellan 217 och 284 MB under hela körningen.
+Körtiden var 266 s.
+
+| Mått, 30 arkiv × q10/q50/q90 | Värde |
+|---|---:|
+| Dagenheter / fordon (produktionsparsern) | 1 950 (65 per arkiv) / 5 068 896 |
+| Fordon och unika rutter över `26355153_26842525_0` | **0 / 0**, i varje arkiv och variant |
+| Byteförekomster av kant-ID:t i de 90 ruttfilerna | 0 |
+| Motsatt kant enligt nätets `from`/`to`: `26842525_26355153_0` | 945 429 fordon (27 690–34 368 per arkiv) |
+| Vändningar från motsatt kant in på stängningskanten | 0 |
+| Katalograder med kanten (vardag `8548c819…` / helg `77e237f0…`) | 0 av 434 / 0 av 435 |
+| Katalograder med motsatt kant | 100 / 91 |
+
+Katalogernas SHA-256 stämmer med `routes_sha256` i alla 30 arkivs metadata.
+Parserns fordonsantal är lika med antalet `<vehicle `-taggar i alla 90 filer.
+
+**Klassificering: katalogtäckning.** Det är varken fel kant eller en väg som
+saknas i demand:
+
+* Kanten finns i nätet och har fyra inkommande förbindelser.
+* Registret (`data_in/sensors.json`) anger den som sensor 133:s *omätta
+  motsatta körbana* (`measurement_status: unmeasured_estimated`).
+* Den mätta riktningen `26842525_26355153_0` (Läraregatan V) bär trafik i
+  varje arkiv.
+* Ingen rutt i någon av de två katalogerna går över kanten, så ingen
+  kalibrerad bil kan göra det.
+
+Specen (`policy_status: user_supplied_unverified`) stänger alltså den omätta
+riktningen. Om det var avsikten är ett beslut för specens ägare, inte för
+diagnostiken.
+
+En trolig strukturell orsak, som inte är mätt: i nod 26355153 mäter 133
+inflödet medan 134 och 2276 mäter utflöden. En sensorförankrad rutt över
+kanten måste därför antingen vända direkt efter 133, vilket ruttfiltren tar
+bort, eller korsa en sensor på annat håll.
+
+**Följd:** varje daglig fönsterkostnad i månadsspecen är noll. Fas 4-ledgern
+(`runs/step5_code_approved_20260915b/profile/cost-ledger.json`) ger alla
+1 690 föräldrakandidater exakt samma kostnad: noll fordon, noll timmar och
+noll meter. En "vinnare" avgörs alltså bara av tie-break. Månadsresultatet ska inte användas som stängningsbeslut förrän
+kanten är omprövad. Inget verkligt arkiv har trafik på kanten, så
+exakthetstest med korsningar måste tills vidare vara syntetiska.
+
+*B — retain eller stream, en kall beräkning per process.*
+`validation/wci_retain_stream_memory_20260916-v1.json` (driver
+`validation/benchmarks/wci_retain_stream_memory_v1.py`, content key
+`4f7eac05…`, output-hash `9cc552ee…`; arkiven är v1-urvalet med minsta,
+median- och största arkiv, bundet via `c05dd593…`). Retain speglar
+loopstrukturen i `_raw_index_records`. Stream finns bara i drivern: den
+beräknar ett arkivs enheter, släpper arkivet och öppnar sedan nästa.
+Footprint mäts som `proc_pid_rusage` `ri_phys_footprint`, max RSS som
+`getrusage` `ru_maxrss`. Swap är `vm.swapusage` och gäller hela systemet.
+
+| Körning | Footprint efter nät | Footprint efter arkiv 1/2/3 | Efter frigöring | Livstidsmax footprint | Max RSS | Beräkning vägg / CPU |
+|---|---:|---:|---:|---:|---:|---:|
+| retain-1 | 209 MB | 768 | – | 801 MB | 943 MB | 2,91 / 2,90 s |
+| retain-2 | 215 MB | 754 / 1 411 | – | 1 442 MB | 1 603 MB | 6,24 / 6,20 s |
+| retain-3 | 219 MB | 753 / 1 404 / 2 119 | – | 2 139 MB | 2 315 MB | 9,58 / 9,53 s |
+| stream-3 | 216 MB | 756 / 827 / 913 | 230 / 229 / 240 | 942 MB | 1 114 MB | 9,17 / 9,17 s |
+
+* **Utdata:** identiska byte för byte. Retain-3 och stream-3 har samma
+  indexposter, orakelposter och provideridentiteter för alla 195 enheter.
+  Retain-1 och retain-2 stämmer med motsvarande delmängd av retain-3. I alla
+  fyra körningarna är indexposterna fält för fält lika med den bundna
+  dagkostnadscachen. De verkliga arkiven har dock 0 korsningar, så här prövas
+  bara den tomma vägen. Den trafikerade vägen prövas syntetiskt i
+  `tests/test_wci_retain_stream_diagnostic.py` (5 tester): omväg, avskuren
+  destination och nekad avgång. Där är retain och stream byte-identiska och
+  lika med den oberoende per-fil-beräkningen, och testerna bekräftar att
+  stream har släppt föregående arkiv innan nästa öppnas.
+* **Minne:** varje kvarhållet arkiv lade till 534, 651 och 715 MB footprint
+  (medel 633 MB). Arkiven är ordnade stigande efter storlek. Stream föll
+  tillbaka till 229–240 MB efter varje arkiv. `gc.collect()` hittade 0
+  objekt, eftersom referensräkningen redan hade släppt allt. **Modellerat**
+  (219 MB + 30 × 633 MB) blir en retain-väg över månaden 19,22 GB footprint.
+* **Tid:** systemets swap ändrades med 0,0 MB i alla fyra körningarna, och
+  beräkningsdelens CPU-tid låg inom 1 % av väggtiden. Vid tre arkiv kostar kvarhållningen
+  alltså ingen mätbar tid. En retain-körning över 30 arkiv gjordes inte.
+
+*Det misslyckade byggets två minnesmått* (`runs/step5_code_approved_20260915b/wci.log`,
+`/usr/bin/time -l`, kod `b5e1564`) är olika storheter. Inget av dem är
+belägg för det andra, och deras maxima behöver inte ha inträffat samtidigt:
+
+* `maximum resident set size` 6 455 951 360 byte (6,46 GB): största antal
+  sidor i RAM;
+* `peak memory footprint` 19 578 747 112 byte (19,58 GB): kärnans
+  footprint-bokföring, som även räknar komprimerat och utswappat minne.
+
+Loggens `swaps` visar 0, men systemets swap registrerades inte under
+körningen. Loggen visar alltså varken att bygget swappade eller att det inte
+gjorde det. Samma logg ger 31 273,03 s real, 30 155,20 s user (96,4 %) och
+1 103,38 s sys: processen låg på CPU i användarläge nästan hela tiden.
+
+*Konkurrerande förklaring, mätt med en enkel tidtagning.* `b5e1564`
+anropade `find_demand_archives` utan `_archive_index` en gång per dagenhet.
+Varje anrop byggde då om arkivindexet från alla 30 arkivs
+`demand_meta.json` (cirka 20 MB var). Funktionerna `_archives_for_build_key`
+och `_read` är byte-identiska i `b5e1564` och nu. Tre nya processer tog
+14,98, 15,19 och 15,40 s för ett indexbygge var, med CPU inom 0,7 % av
+väggtiden. **Modellerat:** 1 950 × 15,19 s = 29 630 s ombyggnad, plus v2:s
+viktade valideringar på 3 043 s, blir 32 673 s. Det är cirka 4 % mer än hela
+byggets 31 273 s. Modellen överskattar alltså något, men den lämnar inget
+utrymme åt en stor minnesdriven tidskostnad, och den stämmer med stackproven
+som dominerades av JSON-parsning. Båda delarna togs bort i `f889071`, som
+bygger indexet en gång och validerar en gång per build key.
+
+**Slutsats om streaminghypotesen:**
+
+* *Bekräftat:* kvarhållningen driver minnet. Tillväxten per arkiv är
+  linjär, stream ligger platt, utdata är byte-identiska, och den
+  modellerade footprinten (19,22 GB) ligger inom 2 % av byggets uppmätta
+  toppfootprint (19,58 GB).
+* *Inte bekräftat, och nu osannolikt:* att minnet förklarar de 8,7
+  timmarna. Byggets tid var nästan helt user-CPU, retain och stream kostar
+  lika mycket CPU vid tre arkiv, och de per-enhets indexombyggen som redan
+  är borttagna täcker enligt modellen hela tiden.
+
+Stream är därför en minnesåtgärd. Toppfootprinten blir cirka 0,94 GB mot
+modellerade cirka 19 GB på en maskin med 24 GiB RAM. När B startade höll
+kompressorn redan 20,5 GB data (4,4 GB fysiskt) och systemets swap var
+5,1 GB. Någon uppmätt tidsvinst finns
+inte. Den tidigare resten "28 282 s", och målet "minst 20 962 s" som räknades
+fram ur den, gäller inte längre. Ingen uppmätt projektion finns av hur lång
+tid ett helt bygge med nuvarande kod tar, och ingen sådan siffra anges här.
+Både ett helt bygge och produktionsändringen till stream kräver ett
+uttryckligt beslut.
 
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 

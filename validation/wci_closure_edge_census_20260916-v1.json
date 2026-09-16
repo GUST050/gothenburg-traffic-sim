@@ -1,0 +1,3758 @@
+{
+  "archive_identities_digest": "54b818340472409f7b5da6cf94dfef8c0ccad04286e137c9e115c921217701c7",
+  "archives": [
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-215415-af2d83e6-bc11",
+      "archive_content_key": "5849d34a9a69723c34e2aafcec82c4c968b68864a69d892ad46ad5c2d8b889e0",
+      "build_key": "06cc309e4779897c",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 222413736,
+      "resident_bytes_after_release": 493322240,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 49851,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9733
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 49851
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.5756328749999966,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 133,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9733
+            }
+          },
+          "sha256": "40bad0d2fde6196a887baeb170f7965ea98c7fa96148ef2d8fa1f755f3561e3c",
+          "total_vehicles": 49851,
+          "unique_routes": 435
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 51175,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9733
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 51175
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.5905272499999938,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9733
+            }
+          },
+          "sha256": "17301074ec3dae1b27833a611054e179cdec4bfc4a4e41fac01a9b0e10246ee8",
+          "total_vehicles": 51175,
+          "unique_routes": 482
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 49497,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9733
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 49497
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.5992392499999966,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 137,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9733
+            }
+          },
+          "sha256": "3dff89dff38f4981bcb807c64ab0755043aacb5b136f8d9ee1f4b7cf9997ab2c",
+          "total_vehicles": 49497,
+          "unique_routes": 449
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220012-de032bcb-2165",
+      "archive_content_key": "bef93cdbf6d3c0a20328b69935ad6f8ca18745fdc87b157d8ff15020b55e83ed",
+      "build_key": "084cedb913d5197c",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 230736856,
+      "resident_bytes_after_release": 553484288,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 51347,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10281
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 51347
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.599337583999997,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 137,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10281
+            }
+          },
+          "sha256": "3cbd37a04e437c8b210606b60048db2e2dbc44a0681b9c6dd9b82ee436510a39",
+          "total_vehicles": 51347,
+          "unique_routes": 442
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 52643,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10281
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 52643
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.607168791999996,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10281
+            }
+          },
+          "sha256": "398a64fea8b9b3df9367f119f9092346b4b52aeb60248a5cac3efecab028b077",
+          "total_vehicles": 52643,
+          "unique_routes": 487
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 50955,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10281
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 50955
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6279055410000041,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 128,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10281
+            }
+          },
+          "sha256": "122788b946eee790eadf0e731e5b16cb58244417acee3c511a70c5aef778418f",
+          "total_vehicles": 50955,
+          "unique_routes": 427
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220648-791840d4-c887",
+      "archive_content_key": "c988c98a618cab201fabcd9285c72b05951e9937070bb160903b0dc37f2a6eaf",
+      "build_key": "0a6c5266d76b5b39",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 223872080,
+      "resident_bytes_after_release": 681377792,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 60445,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11456
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 60445
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6717540420000034,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 86,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11456
+            }
+          },
+          "sha256": "9a078f48dbe0d75a86cdb8dd7de118050763f2ae2b450cb4acceb513372a08b2",
+          "total_vehicles": 60445,
+          "unique_routes": 363
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 60948,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11456
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 60948
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.7117077919999986,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 97,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11456
+            }
+          },
+          "sha256": "ee1a689e629c0bca1839089e9c4f51e0979174b17ffdc42c90f7a71d7c017dd6",
+          "total_vehicles": 60948,
+          "unique_routes": 409
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 60772,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11456
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 60772
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.7477619169999912,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11456
+            }
+          },
+          "sha256": "ac0f2ccd4496dd94889c561bc6e11e85abbe1e9137bac22242aa8f0f42efd8d9",
+          "total_vehicles": 60772,
+          "unique_routes": 375
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221303-3a1fda45-188f",
+      "archive_content_key": "ffb8c79b719e45d8fae852db3e81611ee0ac3e1c5f79774806c1f1c02e293f6c",
+      "build_key": "16f1d6176c7a9133",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 226477136,
+      "resident_bytes_after_release": 683982848,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 51327,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10281
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 51327
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6179852500000038,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 134,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10281
+            }
+          },
+          "sha256": "6fdad2fdc92b136e6b686ead579b3d3212c88df6fce02e8255fbc782b506f4fe",
+          "total_vehicles": 51327,
+          "unique_routes": 452
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 52575,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10281
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 52575
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.6045072919999939,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10281
+            }
+          },
+          "sha256": "baadb761bb649f3b7310faffc18ff3d6d10001240bfbd452e0a3d5397a2c581e",
+          "total_vehicles": 52575,
+          "unique_routes": 493
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 51008,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10281
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 51008
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6940820840000015,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 124,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10281
+            }
+          },
+          "sha256": "7da0f419b0af68a2c93a7b0ac859df117cdd412d376a44f7432688e613ac687e",
+          "total_vehicles": 51008,
+          "unique_routes": 433
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221533-52837f59-7e5d",
+      "archive_content_key": "228429ec61688bd93b4676d3d4e742489d29c65d64737ac96144ea2a23dbdac5",
+      "build_key": "187fca60022dedc5",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 217269328,
+      "resident_bytes_after_release": 674775040,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 49836,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9733
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 49836
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.5890300840000009,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 137,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9733
+            }
+          },
+          "sha256": "9462e3e00a8e635bcee36cce7158e326c355772d269b0ed44ff8465f6f2882a2",
+          "total_vehicles": 49836,
+          "unique_routes": 436
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 51172,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9733
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 51172
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.5835690000000113,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9733
+            }
+          },
+          "sha256": "3c54203309c5c3f030d552bf77328c0d6e729abfc44865944fdde1f19bbec9f0",
+          "total_vehicles": 51172,
+          "unique_routes": 470
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 49371,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9733
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 49371
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.5992990420000126,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9733
+            }
+          },
+          "sha256": "dc8b1912ec0df5fbd345a50b027ef24715405f7fce1399c160478769997d7fc6",
+          "total_vehicles": 49371,
+          "unique_routes": 443
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221806-7415a4c6-0d68",
+      "archive_content_key": "ecec806d1a819d447e714bb4234dd5d471429e2d09e2cd328a10eb3b62f8df99",
+      "build_key": "2d4f272bb3dfc5d2",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 223937712,
+      "resident_bytes_after_release": 802127872,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 62009,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10901
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 62009
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.7161455829999852,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 84,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10901
+            }
+          },
+          "sha256": "dfff4f46ba78ff584bb53ed44385ac4910c4ea28da46ce891d238b8c7aeb6155",
+          "total_vehicles": 62009,
+          "unique_routes": 341
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 62219,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10901
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 62219
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.7760623329999987,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 97,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10901
+            }
+          },
+          "sha256": "0e55e40b67ee6ed3d4b59afa99e768fd39e51c59a06f90e94bab919e0ef4f5c2",
+          "total_vehicles": 62219,
+          "unique_routes": 382
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 61951,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10901
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 61951
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.8186807499999986,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10901
+            }
+          },
+          "sha256": "2e948048e35aefc063298703d9da79a133c5b08490ffb6cb11bfa572877e72ec",
+          "total_vehicles": 61951,
+          "unique_routes": 374
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222404-4b5941dd-77c7",
+      "archive_content_key": "56160da62dcdddefa2e3f7d4de751061428920f2201504b4a650769b09a1cb5c",
+      "build_key": "340168e305f8381e",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 225084592,
+      "resident_bytes_after_release": 819953664,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 58842,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11219
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 58842
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6758266250000133,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 85,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11219
+            }
+          },
+          "sha256": "19b2f83089271eb581aba30993edf4fa178c3f8ed2ffc8d08da34095ec0e13fd",
+          "total_vehicles": 58842,
+          "unique_routes": 367
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 59513,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11219
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 59513
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.7123745830000132,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 98,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11219
+            }
+          },
+          "sha256": "0a3e194825aa61dca1cbfe2aae08ce32a068ce201a55f03e81e475a032a779e1",
+          "total_vehicles": 59513,
+          "unique_routes": 411
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 59358,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11219
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 59358
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.7460688330000096,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11219
+            }
+          },
+          "sha256": "00c037ec2f5862509d6b2c40bb935f20e419194cf47937deb60379548069218c",
+          "total_vehicles": 59358,
+          "unique_routes": 382
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222709-889e6f89-d6d5",
+      "archive_content_key": "782f2e480f945e03af3e3fda8b2ce5bd2dc76dae8460ff46777a1de3fff2e65b",
+      "build_key": "3f5d86eed8fe5c17",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 220267696,
+      "resident_bytes_after_release": 823476224,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 56194,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10329
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 56194
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6284248329999969,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 125,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10329
+            }
+          },
+          "sha256": "27b19bcdb06f2b599f167e8f2e7f61ab269292a06e6d3ef3020f91d4d6b38f27",
+          "total_vehicles": 56194,
+          "unique_routes": 404
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 57063,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10329
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 57063
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.6730049170000143,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10329
+            }
+          },
+          "sha256": "62d36af702fda24d713843609534883279bc8fafdca4edbfc90add927c0bc6e6",
+          "total_vehicles": 57063,
+          "unique_routes": 420
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 54929,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10329
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 54929
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6397715839999876,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 135,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10329
+            }
+          },
+          "sha256": "6a80bf4b215a47ae2c5e477f18e8e0dfd69502d440eef88d6047b92d9685c667",
+          "total_vehicles": 54929,
+          "unique_routes": 395
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223016-ef0f3cf3-44e9",
+      "archive_content_key": "f4c156ddfe278bee41a5e983e7a33edca2c31e14e357e54e371747ce97fdcd20",
+      "build_key": "4008e6387839d7a3",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 224265392,
+      "resident_bytes_after_release": 827473920,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 59137,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11219
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 59137
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6420043749999991,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 85,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11219
+            }
+          },
+          "sha256": "6f7e524cef8eeffb588d1bc165ec80b241fa6edf67192e76f4854d2731d11861",
+          "total_vehicles": 59137,
+          "unique_routes": 363
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 59695,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11219
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 59695
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.6814161659999911,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 98,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11219
+            }
+          },
+          "sha256": "9056963ef718ed0ff45d7dd85769f64bad22f090ce1228d1bcaf0c67642e4527",
+          "total_vehicles": 59695,
+          "unique_routes": 414
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 59490,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11219
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 59490
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6647234579999974,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11219
+            }
+          },
+          "sha256": "7af51749923336e5321f0478c9ac78ed8ae91dbe955978313ac1921419942173",
+          "total_vehicles": 59490,
+          "unique_routes": 380
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223222-19b614fb-7ce8",
+      "archive_content_key": "d44a8994a0330ce60d8325a91034001f49a93cdea90cfa00797bc2c6589f8304",
+      "build_key": "5803fd9aa62080cb",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 225150128,
+      "resident_bytes_after_release": 829358080,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 56142,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10329
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 56142
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6219431669999835,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 124,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10329
+            }
+          },
+          "sha256": "b936b1d31714073419bcbd140fabaaeef756cd1f25db27b0bac902b6ff9bbd9f",
+          "total_vehicles": 56142,
+          "unique_routes": 399
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 57132,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10329
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 57132
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.682296249999979,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10329
+            }
+          },
+          "sha256": "ff306b69100450d54c3ad7e8ba0710c89f58f81bc49b3c927831846280b01a87",
+          "total_vehicles": 57132,
+          "unique_routes": 442
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 55032,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10329
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 55032
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6416141249999896,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10329
+            }
+          },
+          "sha256": "d31af09df6dacd7c06c9e7f061964e51f3ca7ba3721ee62367ba68cb44a7302e",
+          "total_vehicles": 55032,
+          "unique_routes": 427
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d",
+      "archive_content_key": "ff2c496d06510641f95d1c1a0c543a0dfc8b0728958f92f73a22f8e638e1e154",
+      "build_key": "5fcc585e03915396",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 227427504,
+      "resident_bytes_after_release": 831635456,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 59831,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11299
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 59831
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6487481249999973,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 88,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11299
+            }
+          },
+          "sha256": "1e06f46f3cb26fbf6c3b7a2b107995615b4f781ba08d5d29f1387316158b09a1",
+          "total_vehicles": 59831,
+          "unique_routes": 365
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 60279,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11299
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 60279
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.7163832499999785,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11299
+            }
+          },
+          "sha256": "b3867df491cad6605f0b54b6a627b7d082e85f4bfb2d698b3d57d219c2009fda",
+          "total_vehicles": 60279,
+          "unique_routes": 396
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 60155,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11299
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 60155
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6657530829999985,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11299
+            }
+          },
+          "sha256": "aa11a76e9566551ed16ff6e95112da0d4dd6146418572df1daaaf2cdbd1f36ee",
+          "total_vehicles": 60155,
+          "unique_routes": 370
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223744-a3782377-418d",
+      "archive_content_key": "926b9383658a7267699e63869117819c74d8801a55dae8398fe0dea199825ff7",
+      "build_key": "657fa0b9f3268e78",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 230360240,
+      "resident_bytes_after_release": 842907648,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 60632,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11456
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 60632
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6925283340000021,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 84,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11456
+            }
+          },
+          "sha256": "19f1905418cc59ccd931657445c38e3cc5caf60d72cca1d67ab5c83a9b6ba142",
+          "total_vehicles": 60632,
+          "unique_routes": 361
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 61122,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11456
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 61122
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.7073980829999869,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 97,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11456
+            }
+          },
+          "sha256": "2ba6e528c43ff9fd90ef82b6ba2ab79505c60274c82e6d58be702b832d31cfa0",
+          "total_vehicles": 61122,
+          "unique_routes": 413
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 60968,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11456
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 60968
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.7518125420000104,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11456
+            }
+          },
+          "sha256": "c468ced358b28b3054a1fe94a6d80648e25f90f5561523a66cab01bf1b48e4ed",
+          "total_vehicles": 60968,
+          "unique_routes": 390
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223804-04518454-6d14",
+      "archive_content_key": "e3a33894fd71177975d33e55024bac2d65877251e7c81e23cb6b7a2d2d494552",
+      "build_key": "6e3416af316f91cc",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 233718960,
+      "resident_bytes_after_release": 852656128,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 51641,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9230
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 51641
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.601742833000003,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 137,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9230
+            }
+          },
+          "sha256": "69175cc51448ee4660679195066a2049361500a3ea741b1c9dcbc2a33b082b13",
+          "total_vehicles": 51641,
+          "unique_routes": 413
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 52726,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9230
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 52726
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.6022240839999995,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9230
+            }
+          },
+          "sha256": "85401a2a37d789f5922abf5f5738ad30b371f0557615cadb08d49dd5eb4dea3f",
+          "total_vehicles": 52726,
+          "unique_routes": 436
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 50626,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9230
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 50626
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6228850420000072,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 137,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9230
+            }
+          },
+          "sha256": "d2599a88c1c0a42d34ccd2ff3a43b94f9caf9603a7289bd89143515f0c0b82a5",
+          "total_vehicles": 50626,
+          "unique_routes": 426
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223825-2bbb1a66-845d",
+      "archive_content_key": "c54eb87e4e6225c4d54b00db8d9cc02b937566b89176840e535756fa71eb9a5e",
+      "build_key": "7e395749f1712cb4",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 232866992,
+      "resident_bytes_after_release": 853803008,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 51421,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10281
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 51421
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.5782358339999973,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10281
+            }
+          },
+          "sha256": "9e65a929e224abc7021561669b0d2b057273913a54d68cba7bfab58a3bbee651",
+          "total_vehicles": 51421,
+          "unique_routes": 451
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 52640,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10281
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 52640
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.6375086660000022,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10281
+            }
+          },
+          "sha256": "57e1f2b02e4f2b3b61103b2eae2bcab1045615ef6cfb7fc8d65cd772bc7f6e25",
+          "total_vehicles": 52640,
+          "unique_routes": 492
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 51110,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10281
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 51110
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6566096669999979,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 134,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10281
+            }
+          },
+          "sha256": "97cd530ce0a8e18b7969924e82c9904b68f337572865fb0c35fd80923368b25f",
+          "total_vehicles": 51110,
+          "unique_routes": 439
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224149-53fb2fd0-6182",
+      "archive_content_key": "76be17a75c7ae517491ee1aec369b6c72bd51851ab5c8555ff5b2ef4abe6d470",
+      "build_key": "8dcbe1518a5b0898",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 231654624,
+      "resident_bytes_after_release": 921075712,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 61904,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10901
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 61904
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6990620830000012,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 86,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10901
+            }
+          },
+          "sha256": "ace6cd24a2f9b0e8fc110111b9918696e2da1ab8b9d3d950ece2afcac9ec8174",
+          "total_vehicles": 61904,
+          "unique_routes": 349
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 62188,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10901
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 62188
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.7340196669999841,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 97,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10901
+            }
+          },
+          "sha256": "25f6f39f2852e535e8404d0a650f1c53bec684496d282edb1a18fb4c530ad1ff",
+          "total_vehicles": 62188,
+          "unique_routes": 394
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 62057,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10901
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 62057
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.749202624999981,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10901
+            }
+          },
+          "sha256": "22371a743996db4cd48104daa717668356ba5a967f242e2a1c0d90f8aa402e5b",
+          "total_vehicles": 62057,
+          "unique_routes": 371
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224309-23459e2e-c9ef",
+      "archive_content_key": "8e47519b0f6cf3fca62832e19e5e0d1d28e47844c9f76413850345b02d597c28",
+      "build_key": "90a93715895966dc",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 233194720,
+      "resident_bytes_after_release": 922615808,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 60420,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11456
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 60420
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6693898340000146,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 85,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11456
+            }
+          },
+          "sha256": "6038e16dfac2d59a722ffd1af8d7663011c1afe543532bf8e92977dee7632bdf",
+          "total_vehicles": 60420,
+          "unique_routes": 367
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 60931,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11456
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 60931
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.724561207999983,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 96,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11456
+            }
+          },
+          "sha256": "be474ab3b7230350bbc17f41e637e33935b2946130115913168a5f8f76d3d511",
+          "total_vehicles": 60931,
+          "unique_routes": 396
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 60890,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11456
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 60890
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.7749157910000122,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11456
+            }
+          },
+          "sha256": "8d6e11334cafad4244fb57d901fabbccee0b26871d30577a1abc73d9c28b234b",
+          "total_vehicles": 60890,
+          "unique_routes": 383
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72",
+      "archive_content_key": "1fe659e7a0b9b25f51035ac11e39495d38095fddc84da5341cf567cd319fb35a",
+      "build_key": "9c7ad9c97b6bdbc6",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 236553440,
+      "resident_bytes_after_release": 925990912,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 49826,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9733
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 49826
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.5883756249999976,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 134,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9733
+            }
+          },
+          "sha256": "44413462fceb856dcba5d9f8a5fc45cd0d54568509236c8eb72a85b06501bfda",
+          "total_vehicles": 49826,
+          "unique_routes": 424
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 51105,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9733
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 51105
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.6061903749999829,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9733
+            }
+          },
+          "sha256": "3137ef8ca6e3e8dc0305577e5feab9d6fdf0ec5d601a764c02c67777db4e70cd",
+          "total_vehicles": 51105,
+          "unique_routes": 477
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 49415,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9733
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 49415
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6381626249999783,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 136,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9733
+            }
+          },
+          "sha256": "7caf6a8c373bcbfd21ffa4a75513776ad8e042a7c7f4aae8ae2a0b19142fafa0",
+          "total_vehicles": 49415,
+          "unique_routes": 436
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33",
+      "archive_content_key": "cfb86558a8bd4bc690af033ef274c6242601f0308edc60706644a76dc89af478",
+      "build_key": "b7e7cef8b702abae",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 237552864,
+      "resident_bytes_after_release": 927989760,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 56266,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10329
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 56266
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6456475419999776,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 127,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10329
+            }
+          },
+          "sha256": "a832cf124fefc8d89784bce5eef9c6119a5627490eda4ea470074da80415de51",
+          "total_vehicles": 56266,
+          "unique_routes": 410
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 57232,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10329
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 57232
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.7296071659999939,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10329
+            }
+          },
+          "sha256": "25753bc5c2db9880d7a1e24a29d6248ed2c896d15c7c99481e68308696d95b0d",
+          "total_vehicles": 57232,
+          "unique_routes": 422
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 55232,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10329
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 55232
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6523824590000231,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 137,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10329
+            }
+          },
+          "sha256": "61400b3120cb403d61702e8cd57160837028654017d13dc623bff0c217c37f88",
+          "total_vehicles": 55232,
+          "unique_routes": 430
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06",
+      "archive_content_key": "537def3d6b4c300eb024d205203346487bcca04e1837c5de6817aaf5cc1c8083",
+      "build_key": "c796667235591888",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 238159120,
+      "resident_bytes_after_release": 991920128,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 62110,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11248
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 62110
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.7076406250000105,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 85,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11248
+            }
+          },
+          "sha256": "257be9fb379333b1ad094edc7a29c5aec8175ea641dbce663187e9dccbe0f553",
+          "total_vehicles": 62110,
+          "unique_routes": 360
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 62446,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11248
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 62446
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.7748552090000089,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 97,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11248
+            }
+          },
+          "sha256": "c041ea54d0c00d503b3cbbcc855fcecb349b413bebb43d6cf2d0a812fe1d2e08",
+          "total_vehicles": 62446,
+          "unique_routes": 409
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 62291,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11248
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 62291
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.7816531249999912,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11248
+            }
+          },
+          "sha256": "48e45142f127996f08aea9e47bfeb4266d6dd7c1a336408fe027bb123f7f8aee",
+          "total_vehicles": 62291,
+          "unique_routes": 395
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225121-de7e3e34-015d",
+      "archive_content_key": "e2547c2176d32d53510ec7f8b8b2b5fd8d3c88146d4537777883c2a8361163f1",
+      "build_key": "cc8eb82bc98de729",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 277251344,
+      "resident_bytes_after_release": 855375872,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 58967,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11219
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 58967
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.672174124999998,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 88,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11219
+            }
+          },
+          "sha256": "fc776c3b4f12ff0829eebc0a53c16748df52710d2e0b5b1c05377ff43ebb232d",
+          "total_vehicles": 58967,
+          "unique_routes": 365
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 59566,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11219
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 59566
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.7359322920000011,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 98,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11219
+            }
+          },
+          "sha256": "95227405b15530e6b616aff0bba4d70213d12fad2aac7f6593e57d3f2016eb48",
+          "total_vehicles": 59566,
+          "unique_routes": 415
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 59326,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11219
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 59326
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.7192334159999803,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11219
+            }
+          },
+          "sha256": "b4895a26b2e799b02cfd28d789f97a1bd9a1d952f6f08f62e7cc9ab66393d8a9",
+          "total_vehicles": 59326,
+          "unique_routes": 380
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225243-61cb7aca-8652",
+      "archive_content_key": "6bcae642202f42e526addd00e564acfc14c54334e24fa30c6b7b8d098b449a5b",
+      "build_key": "cff4da5d9bb7efb7",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 266667280,
+      "resident_bytes_after_release": 726974464,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 51603,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9230
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 51603
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6161128329999883,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 131,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9230
+            }
+          },
+          "sha256": "bd0dc44f38cd210bac35eb2150439853ae3894bc84a76ebaa402a86cf78d327c",
+          "total_vehicles": 51603,
+          "unique_routes": 402
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 52748,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9230
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 52748
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.6367065830000058,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9230
+            }
+          },
+          "sha256": "487f321e3ec6ba8237a7fdf27d94486a9ca3ff3401efb3b49c427ed91fb1618d",
+          "total_vehicles": 52748,
+          "unique_routes": 432
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 50836,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9230
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 50836
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6647910410000009,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 136,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9230
+            }
+          },
+          "sha256": "d72beac7ff5a205a63e3de0366322e9651a12c8c348beb6cf4e1d007bb84ddb5",
+          "total_vehicles": 50836,
+          "unique_routes": 437
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6",
+      "archive_content_key": "fb2be2d4d29d40d0e0d2adf9b864025be503c02b6aed5cf05887bee9849c73f1",
+      "build_key": "d42db159b3ee565f",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 268371216,
+      "resident_bytes_after_release": 645873664,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 56215,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10329
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 56215
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6820104169999865,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 127,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10329
+            }
+          },
+          "sha256": "20bdcde95676cc322849d329c58edcb8ce4b3a73fd618a464f3057a3379299be",
+          "total_vehicles": 56215,
+          "unique_routes": 416
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 57172,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10329
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 57172
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.6937584160000085,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10329
+            }
+          },
+          "sha256": "187e9f9640f2dfcf45eb45f636f13115df499fea06f75a6f55a5be7e6f5ca6eb",
+          "total_vehicles": 57172,
+          "unique_routes": 427
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 55226,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10329
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 55226
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6465493329999958,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 136,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10329
+            }
+          },
+          "sha256": "53fe459f53683d27e1582a337107f0455cd869235e5b26dd6abbd5a7a5ddcd8c",
+          "total_vehicles": 55226,
+          "unique_routes": 431
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225650-83f1213a-5e40",
+      "archive_content_key": "d620d265108ca5b83bdaeaeb094bcfa574dbf153b5965f2cd64deda352b05a12",
+      "build_key": "d482aa0afa27e9ce",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 265618704,
+      "resident_bytes_after_release": 650788864,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 51668,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9230
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 51668
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.5615296249999915,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 137,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9230
+            }
+          },
+          "sha256": "c50d5f1bb146f0afe4f19b6b91a30f6c84e0aa10de086e49d5002dae68f420ac",
+          "total_vehicles": 51668,
+          "unique_routes": 409
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 52766,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9230
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 52766
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.5910186250000038,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9230
+            }
+          },
+          "sha256": "0b25fad07359e31e96d45f5641d1d5f561f442e8cdc9ef3f55c74a946f6c7d06",
+          "total_vehicles": 52766,
+          "unique_routes": 427
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 50981,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9230
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 50981
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6183997499999805,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 136,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9230
+            }
+          },
+          "sha256": "f36fecd7c2cdda97652e13b468f4b0f03ce50dd46e41c9dedf39d42db040e40a",
+          "total_vehicles": 50981,
+          "unique_routes": 431
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225714-b593ac27-7b71",
+      "archive_content_key": "dffb422022663c0f901948b22d9e5dc8c495c8556976b2f7c69f413f79d3d4f0",
+      "build_key": "dae23c801891223c",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 266749200,
+      "resident_bytes_after_release": 702054400,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 49956,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9733
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 49956
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.5483246249999922,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9733
+            }
+          },
+          "sha256": "485d639f66713007db5c8bb889935fdb5067ea19c6e7c6b2b13d80aa2d7bd8e1",
+          "total_vehicles": 49956,
+          "unique_routes": 439
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 51232,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9733
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 51232
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.5656938749999938,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9733
+            }
+          },
+          "sha256": "5a6c62c86e5de2f4c96c3b9bbb599f1091c324925b172c1db9b33cb1e565533c",
+          "total_vehicles": 51232,
+          "unique_routes": 480
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 49630,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9733
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 49630
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6096962919999953,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 137,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9733
+            }
+          },
+          "sha256": "ee6f653d5c30cad39691a6826d442a4488c494c3eb342e5afd8113a5d2f81b5b",
+          "total_vehicles": 49630,
+          "unique_routes": 447
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225738-e3bfe154-7e43",
+      "archive_content_key": "9b6b99f5d8d0e43abd4d3e9847a522f9acf8f3aa4e128c2c15afd2b0caab52d3",
+      "build_key": "dce1407ed7d893a6",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 259802384,
+      "resident_bytes_after_release": 708362240,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 58977,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11219
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 58977
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6375739169999974,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 86,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11219
+            }
+          },
+          "sha256": "3d89d47bbca2dc13e2b3261514009d775428e8cbceed8c3daa9c3b045a2b6ce4",
+          "total_vehicles": 58977,
+          "unique_routes": 364
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 59531,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11219
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 59531
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.6980980000000159,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 98,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11219
+            }
+          },
+          "sha256": "5035cdbb02d708440f395266e3d53c9a6d452403143557b3dcde93d2f6233665",
+          "total_vehicles": 59531,
+          "unique_routes": 415
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 59356,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11219
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 59356
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6539754580000192,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11219
+            }
+          },
+          "sha256": "7f9cf4a11b0d34cffb803f2714986d2092716ca722063587afda31d063e386c2",
+          "total_vehicles": 59356,
+          "unique_routes": 393
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603",
+      "archive_content_key": "6c846a3f11cf44c5dd3eb09c15a411c6cdf694359e3bb7c0b18dd848a8c76fb0",
+      "build_key": "e72299dc2abeabcd",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 261653776,
+      "resident_bytes_after_release": 831127552,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 61895,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10901
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 61895
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6991587910000021,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 83,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10901
+            }
+          },
+          "sha256": "ffdffb204e7315e0b482d75ce39df25e0db085133a76cddefe8353637fcdb920",
+          "total_vehicles": 61895,
+          "unique_routes": 352
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 62159,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10901
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 62159
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.7103107910000119,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 97,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10901
+            }
+          },
+          "sha256": "d7c9356fc9d1b7daafaf248a06345377d7f0dda6ef23690e35727e6696e5b59c",
+          "total_vehicles": 62159,
+          "unique_routes": 381
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 61964,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10901
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 61964
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.7498881669999946,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10901
+            }
+          },
+          "sha256": "cb9a13513e01ccd3fe20b335d14bc61fb6315aff51baffe5b899680986ca20da",
+          "total_vehicles": 61964,
+          "unique_routes": 367
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230407-7f119ae2-9f58",
+      "archive_content_key": "c2a0ec057231f73ebed89226f9b3911de162033c235c1316aea265410d5d4803",
+      "build_key": "e9b489b9b469e9b6",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 277333264,
+      "resident_bytes_after_release": 847888384,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 51598,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9230
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 51598
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.5791940000000011,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 133,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9230
+            }
+          },
+          "sha256": "308ffe628160cd5625c142afa04f77e59618778a4c1ba31054f7296dd50df734",
+          "total_vehicles": 51598,
+          "unique_routes": 401
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 52660,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9230
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 52660
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 1.0039863750000109,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9230
+            }
+          },
+          "sha256": "e458bba64e57d850dc08beffdc2bda546a7dd3edf0c528710044fb16c62ffbed",
+          "total_vehicles": 52660,
+          "unique_routes": 419
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 50635,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 9230
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 50635
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.6272134999999821,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 134,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 9230
+            }
+          },
+          "sha256": "930c3c97ea738dece9e59ea0532d43328f1978259cefc0847d050759d1d787d1",
+          "total_vehicles": 50635,
+          "unique_routes": 407
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230432-5b265029-5e0f",
+      "archive_content_key": "b743107496ca4d8756a67697d41ceb1e15463d042222683fcfd7e79cc62f3140",
+      "build_key": "eb0bd33739d5e926",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 279725328,
+      "resident_bytes_after_release": 910032896,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 60535,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11456
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 60535
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6766931660000068,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 86,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11456
+            }
+          },
+          "sha256": "270ebf3678806e588e53afee51fbe35b4084b5e3271b38b7a3f3dd37a3348f46",
+          "total_vehicles": 60535,
+          "unique_routes": 364
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 60983,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11456
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 60983
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.7147224590000008,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 98,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11456
+            }
+          },
+          "sha256": "2c35a15afddce9708f5e269a44d0f7a785709755d58e633b3f1a5a44359085f3",
+          "total_vehicles": 60983,
+          "unique_routes": 415
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 60853,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 11456
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 60853
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.7339128749999873,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 11456
+            }
+          },
+          "sha256": "f07567a27026474aca406087af900de26950da61bd4f7a96b32d7256a8723b1e",
+          "total_vehicles": 60853,
+          "unique_routes": 395
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230455-3e34ff00-af60",
+      "archive_content_key": "8b853bfc6d2659af4a7699963614489e5cc9600194f5837761f4579898f83633",
+      "build_key": "eb5d47e234425a98",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "declared_routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 282576144,
+      "resident_bytes_after_release": 913031168,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 51221,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10281
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 51221
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.5603798330000132,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 136,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10281
+            }
+          },
+          "sha256": "5d414ff6130c136c6d8efca864e19de3d29dfd292f42a31dd8126b50489a38b5",
+          "total_vehicles": 51221,
+          "unique_routes": 427
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 52453,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10281
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 52453
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.584103749999997,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 138,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10281
+            }
+          },
+          "sha256": "e3206f8e2881dd45402fa811c85dac52ab7a6ecb256a175ae5af0ff5c1f7acb8",
+          "total_vehicles": 52453,
+          "unique_routes": 484
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 50860,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10281
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 50860
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.616897750000021,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 133,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10281
+            }
+          },
+          "sha256": "52c21301ad8439a46e0b723761b57ef621892e4a436c3f149cca6031ba4ec59e",
+          "total_vehicles": 50860,
+          "unique_routes": 433
+        }
+      }
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230620-a893719c-a662",
+      "archive_content_key": "bec4f0d0bb89a6c0239e98d7ebaad911ed0807857f79be2533604dbec41641f5",
+      "build_key": "f3d1a9ac4d14bd7a",
+      "catalogs": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "declared_routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+          "sha256_matches_declared": true
+        }
+      },
+      "daily_units": 65,
+      "phys_footprint_bytes_after_release": 284378384,
+      "resident_bytes_after_release": 915374080,
+      "variants": {
+        "q10": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 61915,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10901
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 61915
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v1.rou.xml",
+          "parse_s": 0.6924508330000094,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 85,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10901
+            }
+          },
+          "sha256": "36eb2e6779044ad6a3f71739308cedde60d7ad266b472137ecf726c3ed8c2c65",
+          "total_vehicles": 61915,
+          "unique_routes": 354
+        },
+        "q50": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 62178,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10901
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 62178
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated.rou.xml",
+          "parse_s": 0.7329089160000422,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 97,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10901
+            }
+          },
+          "sha256": "375ea2f7a9ab0e4ab296e562246b660a39fdcf0b376be23eeb45e2adb8118427",
+          "total_vehicles": 62178,
+          "unique_routes": 384
+        },
+        "q90": {
+          "byte_census": {
+            "closure_substring": 0,
+            "embedded_route_tags": 62139,
+            "flow_tags": 0,
+            "reverse_substring": {
+              "26842525_26355153_0": 10901
+            },
+            "trip_tags": 0,
+            "vehicle_tags": 62139
+          },
+          "closure_route_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "closure_unique_routes": 0,
+          "closure_vehicles": 0,
+          "file": "calibrated_v2.rou.xml",
+          "parse_s": 0.7352592500000128,
+          "reverse": {
+            "26842525_26355153_0": {
+              "unique_routes": 99,
+              "uturn_onto_closure_vehicles": 0,
+              "vehicles": 10901
+            }
+          },
+          "sha256": "ddd3d093c6b6e31a34150981bbcca0fc6d340edd41b0651ce648a7678962d55d",
+          "total_vehicles": 62139,
+          "unique_routes": 368
+        }
+      }
+    }
+  ],
+  "catalogs": {
+    "77e237f04c746a4fb1fac7e790fff419": {
+      "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+      "edge_routes": {
+        "26355153_26842525_0": 0,
+        "26842525_26355153_0": 91
+      },
+      "edge_substring_bytes": {
+        "26355153_26842525_0": 0,
+        "26842525_26355153_0": 91
+      },
+      "present": true,
+      "routes": 435,
+      "routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4"
+    },
+    "8548c8191269d61bce2f9bbe85e7785d": {
+      "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+      "edge_routes": {
+        "26355153_26842525_0": 0,
+        "26842525_26355153_0": 100
+      },
+      "edge_substring_bytes": {
+        "26355153_26842525_0": 0,
+        "26842525_26355153_0": 100
+      },
+      "present": true,
+      "routes": 434,
+      "routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+    }
+  },
+  "classification": {
+    "catalog_closure_substring_bytes": 0,
+    "catalog_routes_containing_closure": 0,
+    "catalog_routes_containing_reverse": {
+      "26842525_26355153_0": 191
+    },
+    "category": "catalog_coverage",
+    "closure_is_registry_unmeasured_opposite": [
+      {
+        "edge_id": "26355153_26842525_0",
+        "measured_edges": [
+          "26842525_26355153_0"
+        ],
+        "measurement_status": "unmeasured_estimated",
+        "role": "opposite_direction",
+        "sensor_id": "133"
+      }
+    ],
+    "edge_valid_and_reachable": true,
+    "reverse_edge_carries_traffic_in_every_archive": true,
+    "rule": "traffic_present if any archive has a crossing; else wrong_edge if the edge is absent or has no incoming connection; else demand_archives_lack_the_street if the reverse (same street) edge is empty in any archive; else catalog_coverage if no route in the recorded catalogs contains the edge; else calibration_selects_no_candidate"
+  },
+  "content_key": "0ad3f52ca39b59e480a96f0fd8711cea4be2d28400133ecbe168c16d8ff3a2e3",
+  "contract_files": {
+    "data_in/sensors.json": "41db5d452cb104405d8bd6ac6b78e2c7748dcfe641a9266c7229a4fc7edf1f20",
+    "sumo/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+  },
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "d072a8f6ca91f84753e72fc13513ea7127c6f8189a31138712effe76eb67c019",
+    "path": "validation/benchmarks/wci_closure_edge_census_v1.py",
+    "sha256": "54229737c4976c15264fe331aa37bb6ed9c1226a7e74ee8672679c765d3c3bbf"
+  },
+  "git": {
+    "head": "401b38677e4578cdfd08ca88d1eef43e5127919f",
+    "tracked_changes": [
+      " M web/data/od_matrix.csv",
+      " M web/data/od_matrix.json",
+      " M web/data/validation.json"
+    ]
+  },
+  "memory": {
+    "samples": [
+      {
+        "archives": 30,
+        "cpu_s": 115.14704499999999,
+        "label": "resolved",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 613777408,
+        "minor_faults": 781001,
+        "pageins": 1814,
+        "phys_footprint_bytes": 200344440,
+        "resident_bytes": 354189312,
+        "sys_s": 9.469743,
+        "user_s": 105.773384,
+        "wall_s": 114.285976833
+      },
+      {
+        "cpu_s": 119.779939,
+        "label": "after_archive_1",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 663699456,
+        "minor_faults": 830561,
+        "pageins": 1814,
+        "phys_footprint_bytes": 222413736,
+        "resident_bytes": 493322240,
+        "sys_s": 9.767168999999999,
+        "user_s": 110.108852,
+        "wall_s": 118.927029042
+      },
+      {
+        "cpu_s": 124.60725,
+        "label": "after_archive_2",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 727105536,
+        "minor_faults": 873544,
+        "pageins": 1814,
+        "phys_footprint_bytes": 230736856,
+        "resident_bytes": 553484288,
+        "sys_s": 10.073035,
+        "user_s": 114.630292,
+        "wall_s": 123.84074554200001
+      },
+      {
+        "cpu_s": 129.928081,
+        "label": "after_archive_3",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 895188992,
+        "minor_faults": 925591,
+        "pageins": 1814,
+        "phys_footprint_bytes": 223872080,
+        "resident_bytes": 681377792,
+        "sys_s": 10.445499,
+        "user_s": 119.578659,
+        "wall_s": 129.192565417
+      },
+      {
+        "cpu_s": 134.823019,
+        "label": "after_archive_4",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 895188992,
+        "minor_faults": 962758,
+        "pageins": 1814,
+        "phys_footprint_bytes": 226477136,
+        "resident_bytes": 683982848,
+        "sys_s": 10.777762,
+        "user_s": 124.141333,
+        "wall_s": 134.152432917
+      },
+      {
+        "cpu_s": 139.486203,
+        "label": "after_archive_5",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 895188992,
+        "minor_faults": 998256,
+        "pageins": 1814,
+        "phys_footprint_bytes": 217269328,
+        "resident_bytes": 674775040,
+        "sys_s": 11.065061,
+        "user_s": 128.517221,
+        "wall_s": 138.831648458
+      },
+      {
+        "cpu_s": 144.97321399999998,
+        "label": "after_archive_6",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1020166144,
+        "minor_faults": 1049329,
+        "pageins": 1814,
+        "phys_footprint_bytes": 223937712,
+        "resident_bytes": 802127872,
+        "sys_s": 11.412977,
+        "user_s": 133.656315,
+        "wall_s": 144.3554775
+      },
+      {
+        "cpu_s": 150.210688,
+        "label": "after_archive_7",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1022935040,
+        "minor_faults": 1089431,
+        "pageins": 1814,
+        "phys_footprint_bytes": 225084592,
+        "resident_bytes": 819953664,
+        "sys_s": 11.755892,
+        "user_s": 138.550879,
+        "wall_s": 149.660548208
+      },
+      {
+        "cpu_s": 155.20526099999998,
+        "label": "after_archive_8",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1022935040,
+        "minor_faults": 1127604,
+        "pageins": 1814,
+        "phys_footprint_bytes": 220267696,
+        "resident_bytes": 823476224,
+        "sys_s": 12.060022,
+        "user_s": 143.241316,
+        "wall_s": 154.663927625
+      },
+      {
+        "cpu_s": 160.234955,
+        "label": "after_archive_9",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1022935040,
+        "minor_faults": 1165800,
+        "pageins": 1814,
+        "phys_footprint_bytes": 224265392,
+        "resident_bytes": 827473920,
+        "sys_s": 12.34748,
+        "user_s": 147.983555,
+        "wall_s": 159.697979417
+      },
+      {
+        "cpu_s": 165.22663899999998,
+        "label": "after_archive_10",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1022935040,
+        "minor_faults": 1203315,
+        "pageins": 1814,
+        "phys_footprint_bytes": 225150128,
+        "resident_bytes": 829358080,
+        "sys_s": 12.62454,
+        "user_s": 152.698178,
+        "wall_s": 164.698150875
+      },
+      {
+        "cpu_s": 170.33748799999998,
+        "label": "after_archive_11",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1023115264,
+        "minor_faults": 1240946,
+        "pageins": 1814,
+        "phys_footprint_bytes": 227427504,
+        "resident_bytes": 831635456,
+        "sys_s": 12.903817,
+        "user_s": 157.529751,
+        "wall_s": 169.813858875
+      },
+      {
+        "cpu_s": 175.589249,
+        "label": "after_archive_12",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1031602176,
+        "minor_faults": 1278328,
+        "pageins": 1814,
+        "phys_footprint_bytes": 230360240,
+        "resident_bytes": 842907648,
+        "sys_s": 13.214287,
+        "user_s": 162.471044,
+        "wall_s": 175.109706292
+      },
+      {
+        "cpu_s": 180.343038,
+        "label": "after_archive_13",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1031602176,
+        "minor_faults": 1307355,
+        "pageins": 1814,
+        "phys_footprint_bytes": 233718960,
+        "resident_bytes": 852656128,
+        "sys_s": 13.466453,
+        "user_s": 166.972648,
+        "wall_s": 179.95338175
+      },
+      {
+        "cpu_s": 185.126107,
+        "label": "after_archive_14",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1031602176,
+        "minor_faults": 1335640,
+        "pageins": 1814,
+        "phys_footprint_bytes": 232866992,
+        "resident_bytes": 853803008,
+        "sys_s": 13.729039,
+        "user_s": 171.493149,
+        "wall_s": 184.766712208
+      },
+      {
+        "cpu_s": 190.583498,
+        "label": "after_archive_15",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1102905344,
+        "minor_faults": 1373595,
+        "pageins": 1814,
+        "phys_footprint_bytes": 231654624,
+        "resident_bytes": 921075712,
+        "sys_s": 14.030542,
+        "user_s": 176.649038,
+        "wall_s": 190.253785125
+      },
+      {
+        "cpu_s": 195.9804,
+        "label": "after_archive_16",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1102905344,
+        "minor_faults": 1405089,
+        "pageins": 1814,
+        "phys_footprint_bytes": 233194720,
+        "resident_bytes": 922615808,
+        "sys_s": 14.329581,
+        "user_s": 181.746897,
+        "wall_s": 195.66592375
+      },
+      {
+        "cpu_s": 200.723946,
+        "label": "after_archive_17",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1102905344,
+        "minor_faults": 1429315,
+        "pageins": 1814,
+        "phys_footprint_bytes": 236553440,
+        "resident_bytes": 925990912,
+        "sys_s": 14.564126,
+        "user_s": 186.255899,
+        "wall_s": 200.414531375
+      },
+      {
+        "cpu_s": 205.855984,
+        "label": "after_archive_18",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1102905344,
+        "minor_faults": 1458054,
+        "pageins": 1814,
+        "phys_footprint_bytes": 237552864,
+        "resident_bytes": 927989760,
+        "sys_s": 14.836621,
+        "user_s": 191.115419,
+        "wall_s": 205.552899792
+      },
+      {
+        "cpu_s": 211.334489,
+        "label": "after_archive_19",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1166360576,
+        "minor_faults": 1493707,
+        "pageins": 1814,
+        "phys_footprint_bytes": 238159120,
+        "resident_bytes": 991920128,
+        "sys_s": 15.137409,
+        "user_s": 196.293154,
+        "wall_s": 211.036417417
+      },
+      {
+        "cpu_s": 216.60779499999998,
+        "label": "after_archive_20",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1166360576,
+        "minor_faults": 1521160,
+        "pageins": 1814,
+        "phys_footprint_bytes": 277251344,
+        "resident_bytes": 855375872,
+        "sys_s": 15.438636,
+        "user_s": 201.265235,
+        "wall_s": 216.356015417
+      },
+      {
+        "cpu_s": 221.423663,
+        "label": "after_archive_21",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1166360576,
+        "minor_faults": 1551635,
+        "pageins": 1814,
+        "phys_footprint_bytes": 266667280,
+        "resident_bytes": 726974464,
+        "sys_s": 15.697635,
+        "user_s": 205.822108,
+        "wall_s": 221.260019792
+      },
+      {
+        "cpu_s": 226.546848,
+        "label": "after_archive_22",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1166360576,
+        "minor_faults": 1580695,
+        "pageins": 1814,
+        "phys_footprint_bytes": 268371216,
+        "resident_bytes": 645873664,
+        "sys_s": 16.010832,
+        "user_s": 210.632096,
+        "wall_s": 226.464252458
+      },
+      {
+        "cpu_s": 231.2494,
+        "label": "after_archive_23",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1166360576,
+        "minor_faults": 1602328,
+        "pageins": 1814,
+        "phys_footprint_bytes": 265618704,
+        "resident_bytes": 650788864,
+        "sys_s": 16.244762,
+        "user_s": 215.100718,
+        "wall_s": 231.185285958
+      },
+      {
+        "cpu_s": 235.813235,
+        "label": "after_archive_24",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1166360576,
+        "minor_faults": 1625507,
+        "pageins": 1814,
+        "phys_footprint_bytes": 266749200,
+        "resident_bytes": 702054400,
+        "sys_s": 16.444237,
+        "user_s": 219.465076,
+        "wall_s": 235.759723208
+      },
+      {
+        "cpu_s": 240.849097,
+        "label": "after_archive_25",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1166360576,
+        "minor_faults": 1651284,
+        "pageins": 1814,
+        "phys_footprint_bytes": 259802384,
+        "resident_bytes": 708362240,
+        "sys_s": 16.670157,
+        "user_s": 224.275019,
+        "wall_s": 240.804254625
+      },
+      {
+        "cpu_s": 246.111098,
+        "label": "after_archive_26",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1166360576,
+        "minor_faults": 1687644,
+        "pageins": 1814,
+        "phys_footprint_bytes": 261653776,
+        "resident_bytes": 831127552,
+        "sys_s": 16.914659,
+        "user_s": 229.29252,
+        "wall_s": 246.07471375
+      },
+      {
+        "cpu_s": 251.03702099999998,
+        "label": "after_archive_27",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1166360576,
+        "minor_faults": 1707665,
+        "pageins": 1814,
+        "phys_footprint_bytes": 277333264,
+        "resident_bytes": 847888384,
+        "sys_s": 17.16899,
+        "user_s": 233.964111,
+        "wall_s": 251.229959958
+      },
+      {
+        "cpu_s": 256.281282,
+        "label": "after_archive_28",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1166360576,
+        "minor_faults": 1737565,
+        "pageins": 1814,
+        "phys_footprint_bytes": 279725328,
+        "resident_bytes": 910032896,
+        "sys_s": 17.439923,
+        "user_s": 238.937441,
+        "wall_s": 256.496412208
+      },
+      {
+        "cpu_s": 260.943746,
+        "label": "after_archive_29",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1166360576,
+        "minor_faults": 1756127,
+        "pageins": 1814,
+        "phys_footprint_bytes": 282576144,
+        "resident_bytes": 913031168,
+        "sys_s": 17.64736,
+        "user_s": 243.392465,
+        "wall_s": 261.165454458
+      },
+      {
+        "cpu_s": 266.24544199999997,
+        "label": "after_archive_30",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1166360576,
+        "minor_faults": 1783237,
+        "pageins": 1814,
+        "phys_footprint_bytes": 284378384,
+        "resident_bytes": 915374080,
+        "sys_s": 17.906156,
+        "user_s": 248.435368,
+        "wall_s": 266.482412458
+      },
+      {
+        "cpu_s": 266.245684,
+        "label": "end",
+        "lifetime_max_phys_footprint_bytes": 490472216,
+        "major_faults": 1814,
+        "max_rss_bytes": 1166360576,
+        "minor_faults": 1783237,
+        "pageins": 1814,
+        "phys_footprint_bytes": 284378384,
+        "resident_bytes": 915374080,
+        "sys_s": 17.906168,
+        "user_s": 248.435604,
+        "wall_s": 266.48265654200003
+      }
+    ],
+    "system_after": {
+      "compressor_occupied_bytes": 4892999680,
+      "compressor_stored_bytes": 21628944384,
+      "free_bytes": 232439808,
+      "page_size_bytes": 16384,
+      "scope": "system-wide",
+      "swap_total_mb": 6144.0,
+      "swap_used_mb": 5115.19,
+      "swapins_total": 1073074,
+      "swapouts_total": 1525186
+    },
+    "system_before": {
+      "compressor_occupied_bytes": 4751327232,
+      "compressor_stored_bytes": 21447966720,
+      "free_bytes": 510492672,
+      "page_size_bytes": 16384,
+      "scope": "system-wide",
+      "swap_total_mb": 6144.0,
+      "swap_used_mb": 5115.19,
+      "swapins_total": 1073055,
+      "swapouts_total": 1525186
+    }
+  },
+  "network_contract": {
+    "26355153_26842525_0": {
+      "exists": true,
+      "from_node": "26355153",
+      "incoming_connections": [
+        "165154328_26355153_0",
+        "26842525_26355153_0",
+        "91615277_26355153_0",
+        "96523321_26355153_0"
+      ],
+      "lanes": [
+        {
+          "allow": null,
+          "disallow": null,
+          "id": "26355153_26842525_0_0",
+          "speed": "13.89"
+        }
+      ],
+      "outgoing_connections": [
+        "26842525_26355153_0",
+        "26842525_26842526_0"
+      ],
+      "reverse_edges": [
+        "26842525_26355153_0"
+      ],
+      "reverse_rule": "edges whose SUMO from/to attributes are this edge's to/from; the edge-ID string is not parsed",
+      "to_node": "26842525"
+    }
+  },
+  "output_sha256": "8f01e425da5e4b876af9c8ab20d107f3a11b8eaf311349c309b2d77cedeca0ad",
+  "production_sources": {
+    "tools/build_window_cost_index.py": "b5b14be2f285de406d938a7c8393be2b1e8eb6d64378eb528bd9fb5cee9829f6",
+    "traffic_sim/core/closure_calendar.py": "0956f98db1b1d24363957d839743c4708f74a86dfe14a0039e3e9e92d129082e",
+    "traffic_sim/simulation/deterministic_disruption.py": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472",
+    "traffic_sim/simulation/disruption.py": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9",
+    "traffic_sim/simulation/independent_daily.py": "6ae4eba74fb0df6ec3068cf757164d43e0595fed102001457bab3d7c3446f689",
+    "traffic_sim/simulation/monthly_demand.py": "0879d1fdd41e95643c3626fdda51b81e08edaa9be4ef957a33a517cda6890778"
+  },
+  "profile": "runs/step5_code_approved_20260915b/profile/profile.json",
+  "profile_sha256": "399f764272120470b2a32015ed5b1deb24d1ec1b0a786d5646ada104d69a23af",
+  "qualified_demand_manifest": {
+    "content_key": "2cb32dcddfeb9bb99513fe1ae9cdcc44f0935435b78a278fa6eb3786060159ec",
+    "evidence_id": "subhour-monthly-qualify-2026-09-15b",
+    "path": "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+    "sha256": "1b609f705e08ab7a9c266a974a5976d33660209f0de914c95f66b3189d46f576"
+  },
+  "question": "does any calibrated vehicle in the 30 qualified archives cross the frozen spec's closure edge",
+  "registry_roles": [
+    {
+      "edge_id": "26355153_26842525_0",
+      "measured_edges": [
+        "26842525_26355153_0"
+      ],
+      "measurement_status": "unmeasured_estimated",
+      "role": "opposite_direction",
+      "sensor_id": "133"
+    },
+    {
+      "edge_id": "26842525_26355153_0",
+      "measurement_semantics": "directional",
+      "role": "measured_edge",
+      "sensor_id": "133"
+    }
+  ],
+  "release_evidence": false,
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6"
+  },
+  "schema": "wci_closure_edge_census_v1",
+  "spec": {
+    "content_key": "383c9130a45370c2f296",
+    "directed_edges": [
+      "26355153_26842525_0"
+    ],
+    "search_id": "subhour-cold-ledger-profile-2027-09"
+  },
+  "totals": {
+    "archives": 30,
+    "archives_with_closure_traffic": [],
+    "closure_substring_bytes": 0,
+    "closure_vehicles": 0,
+    "parsed_equals_vehicle_tags": true,
+    "reverse_vehicles": {
+      "26842525_26355153_0": 945429
+    },
+    "reverse_vehicles_by_archive": [
+      {
+        "26842525_26355153_0": 29199
+      },
+      {
+        "26842525_26355153_0": 30843
+      },
+      {
+        "26842525_26355153_0": 34368
+      },
+      {
+        "26842525_26355153_0": 30843
+      },
+      {
+        "26842525_26355153_0": 29199
+      },
+      {
+        "26842525_26355153_0": 32703
+      },
+      {
+        "26842525_26355153_0": 33657
+      },
+      {
+        "26842525_26355153_0": 30987
+      },
+      {
+        "26842525_26355153_0": 33657
+      },
+      {
+        "26842525_26355153_0": 30987
+      },
+      {
+        "26842525_26355153_0": 33897
+      },
+      {
+        "26842525_26355153_0": 34368
+      },
+      {
+        "26842525_26355153_0": 27690
+      },
+      {
+        "26842525_26355153_0": 30843
+      },
+      {
+        "26842525_26355153_0": 32703
+      },
+      {
+        "26842525_26355153_0": 34368
+      },
+      {
+        "26842525_26355153_0": 29199
+      },
+      {
+        "26842525_26355153_0": 30987
+      },
+      {
+        "26842525_26355153_0": 33744
+      },
+      {
+        "26842525_26355153_0": 33657
+      },
+      {
+        "26842525_26355153_0": 27690
+      },
+      {
+        "26842525_26355153_0": 30987
+      },
+      {
+        "26842525_26355153_0": 27690
+      },
+      {
+        "26842525_26355153_0": 29199
+      },
+      {
+        "26842525_26355153_0": 33657
+      },
+      {
+        "26842525_26355153_0": 32703
+      },
+      {
+        "26842525_26355153_0": 27690
+      },
+      {
+        "26842525_26355153_0": 34368
+      },
+      {
+        "26842525_26355153_0": 30843
+      },
+      {
+        "26842525_26355153_0": 32703
+      }
+    ],
+    "total_vehicles": 5068896,
+    "uturn_onto_closure_vehicles": 0,
+    "variant_files": 90
+  },
+  "wall_s": 266.48265654200003
+}
