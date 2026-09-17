@@ -1,0 +1,110 @@
+{
+  "content_key": "4e87e205565f6f953cddf0001d8bf4474c5f58c743dd92f88151494006156d01",
+  "kind": "closure_search_canary_spec",
+  "provenance": {
+    "chosen": {
+      "archives": 30,
+      "archives_with_traffic": 30,
+      "catalog_routes": {
+        "weekday": 100,
+        "weekend": 91
+      },
+      "daily_units": 1950,
+      "daily_units_with_traffic": 1950,
+      "edge_id": "26842525_26355153_0",
+      "effect_eligible": false,
+      "from_node": "26842525",
+      "measurement_status": "measured",
+      "nearest_sensor": {
+        "basis": "registry",
+        "midpoint_distance_m": 0.0,
+        "sensor_id": "133"
+      },
+      "pre_canary_eligible": true,
+      "reason_codes": [
+        "canary_not_run"
+      ],
+      "registry_roles": [
+        {
+          "role": "measured_edge",
+          "sensor_id": "133"
+        }
+      ],
+      "rejection_reason_codes": [],
+      "screen_dist_sensor_m": 11.0,
+      "structural_rank": 2,
+      "structurally_survivable": true,
+      "to_node": "26355153",
+      "vehicles": {
+        "q10": 315143,
+        "q50": 315143,
+        "q90": 315143
+      }
+    },
+    "derivation": "identical to the source spec except directed_edges and search_id",
+    "effect_census": {
+      "content_key": "63019b12950215e325e90bd9f012f93ea0c2ff9956a03c43484aa25d0c0f9b6a",
+      "path": "validation/effect_eligibility_census_20260917-v2.json"
+    },
+    "profile": {
+      "path": "runs/step5_code_approved_20260915b/profile/profile.json",
+      "sha256": "399f764272120470b2a32015ed5b1deb24d1ec1b0a786d5646ada104d69a23af"
+    },
+    "selection_rule": "the first of the six structurally surviving roads (unchanged survivability order) that passes the pre-canary stage of effect_eligibility_v2 over all 30 qualified archives",
+    "source_spec": {
+      "content_key": "383c9130a45370c2f296",
+      "directed_edges": [
+        "26355153_26842525_0"
+      ],
+      "path": "validation/subhour_monthly_search_profile_spec_v1.json",
+      "search_id": "subhour-cold-ledger-profile-2027-09",
+      "sha256": "10f3939a69b6f0bb6e74eb2b1e08a2b513cf54fa5610dd4a25d4d8366c1261aa"
+    },
+    "source_spec_left_unchanged": true
+  },
+  "purpose": "bounded nonzero WindowCostIndex canary; an automatically selected performance case, not a user closure",
+  "release_evidence": false,
+  "schema": "wci_effect_canary_spec_v1",
+  "spec": {
+    "allowed_weekdays": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "blackout_dates": [],
+    "closure_type": "full",
+    "content_key": "d38038fd495414129508",
+    "demand_build_id": "forecast-2027",
+    "directed_edges": [
+      "26842525_26355153_0"
+    ],
+    "dst_policy": "exclude_transition_dates",
+    "duration_basis": "required_work_time",
+    "interday_policy": "independent_daily_reset_v1",
+    "kind": "closure_search",
+    "max_consecutive_start_days": 5,
+    "min_consecutive_start_days": 5,
+    "objective_profile": "displaced_vehicles_and_detour_v1",
+    "permitted_daily_band": {
+      "earliest_start": "00:00",
+      "latest_end": "24:00"
+    },
+    "permitted_date_end": "2027-09-30",
+    "permitted_date_start": "2027-09-01",
+    "policy_status": "user_supplied_unverified",
+    "required_work_minutes": 2400,
+    "resolution_minutes": 15,
+    "same_daily_window": true,
+    "schema_version": 1,
+    "search_id": "subhour-cold-ledger-profile-2027-09-effect-canary-v1-fdc134ec4e",
+    "source": "forecast",
+    "timezone": "Europe/Stockholm",
+    "work_allocation_policy": "exact_equal_daily_v1",
+    "work_to_closure_assumption": "one_to_one"
+  },
+  "spec_content_key": "d38038fd495414129508"
+}

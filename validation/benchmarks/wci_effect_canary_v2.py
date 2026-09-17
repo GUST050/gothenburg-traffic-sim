@@ -1,25 +1,24 @@
-"""Bounded NONZERO WindowCostIndex canary on an effect-eligible case.
+"""Bounded NONZERO WindowCostIndex canary on an append-only canary spec.
 
-The first current-code canary (``wci_current_code_canary_v1``) proved speed
-and exactness only on the frozen profile spec, whose directed edge no vehicle
-crosses. This canary takes the road the new automatic benchmark rule chooses
-(``effect_eligibility_census_v1`` -> ``new_rule_choice[0]``), derives a
-benchmark spec that differs from the frozen profile spec ONLY in its
-``directed_edges`` (and therefore its search id and content key), and then:
+The case comes from ``validation/wci_effect_canary_spec_*`` written by
+``effect_eligibility_census_v2``: the frozen profile spec with only its
+directed edge replaced by the first structural road that passed the
+pre-canary stage of ``effect_eligibility_v2``. The frozen spec is never
+edited. This driver:
 
-1. computes an independent oracle for 1-3 build keys through the production
+1. verifies the canary spec (content key, spec content key, provenance and
+   the census it names, whose production sources must still match);
+2. computes an independent oracle for 1-3 build keys through the production
    per-file path (``ArchiveDisruptionProvider`` with a fresh
    ``DailyCostCache``), in its own process;
-2. runs the unmodified production ``_raw_index_records`` for 1, 2 and 3 of
+3. runs the unmodified production ``_raw_index_records`` for 1, 2 and 3 of
    those build keys, each in a fresh process, with only the unit population
-   filtered at ``daily_unit_records`` (as in the first canary).
+   filtered at ``daily_unit_records``;
+4. completes ``effect_eligibility_v2`` with the canary stage over a single
+   read of the canary archives.
 
-A real candidate spans five consecutive work dates, hence five build keys, so
-no whole candidate fits in 1-3 keys. Costs are therefore compared per daily
-unit, with the production reduction a candidate uses
-(``parent_closure_cost`` and ``sum_daily_disruption`` over that unit's
-records): candidate_id, cost, daily_unit_ids and per_variant must match the
-oracle exactly.
+A candidate spans five build keys, so no whole candidate fits in 1-3 keys;
+costs are compared per daily unit with the production candidate reduction.
 
 Starts no SUMO, builds no demand or catalog, writes no index file, runs no
 ledger, and writes only a fresh oracle cache and its own append-only evidence.
@@ -28,7 +27,6 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
-import hashlib
 import json
 import subprocess
 import sys
@@ -49,7 +47,7 @@ from wci_current_code_canary_v1 import (  # noqa: E402
     _verified,
 )
 
-SCHEMA = "wci_effect_canary_v1"
+SCHEMA = "wci_effect_canary_v2"
 KEY_COUNTS = (1, 2, 3)
 PRODUCTION_SOURCES = (
     "tools/build_window_cost_index.py",
@@ -68,12 +66,31 @@ COST_FIELDS = ("added_vehicle_hours", "added_metres_total",
                "vehicles_affected", "vehicles_no_detour")
 
 
-def derived_spec(spec, edge: str):
-    """The frozen profile spec with only its directed edge replaced."""
-    token = hashlib.sha256(edge.encode("utf-8")).hexdigest()[:10]
-    return dataclasses.replace(
-        spec, search_id=f"{spec.search_id}-effect-{token}",
-        directed_edges=(edge,))
+def load_canary_spec(path: Path):
+    """The canary spec, refused unless every binding still holds."""
+    from traffic_sim.core.contracts import ClosureSearchSpec
+
+    record = _verified(path)
+    spec = ClosureSearchSpec.from_dict(record["spec"])
+    if spec.content_key != record["spec_content_key"]:
+        raise SystemExit("canary spec content key drifted")
+    provenance = record["provenance"]
+    source = provenance["source_spec"]
+    if common.file_sha256(ROOT / source["path"]) != source["sha256"]:
+        raise SystemExit("the source spec changed after the canary spec")
+    census = _verified(Path(provenance["effect_census"]["path"]))
+    if census["content_key"] != provenance["effect_census"]["content_key"]:
+        raise SystemExit("canary spec names a different census")
+    stale = [name for name, sha in census["production_sources"].items()
+             if common.file_sha256(ROOT / name) != sha]
+    if stale:
+        raise SystemExit(f"effect census binds stale sources: {stale}")
+    chosen = provenance["chosen"]
+    if not (chosen["structurally_survivable"]
+            and chosen["pre_canary_eligible"]
+            and tuple(spec.directed_edges) == (chosen["edge_id"],)):
+        raise SystemExit("canary spec does not name a pre-canary edge")
+    return spec, record
 
 
 def _population(builder, bound, spec, wanted):
@@ -124,7 +141,7 @@ def oracle_worker(args) -> None:
 
     started = time.perf_counter()
     bound = builder._bound_inputs(args.profile)
-    spec = derived_spec(bound["spec"], args.edge)
+    spec, _record = load_canary_spec(args.canary_spec)
     wanted = set(json.loads(args.build_keys))
     units, required = _population(builder, bound, spec, wanted)
     index = builder._archives_for_build_key(bound["runs_root"])
@@ -132,12 +149,14 @@ def oracle_worker(args) -> None:
     cache = DailyCostCache(Path(args.oracle_root))
     archives, identities, digests = {}, {}, {}
     for key in sorted(wanted):
-        matches = builder.find_demand_archives(
+        match = builder.find_demand_archives(
             bound["runs_root"], required[key],
             qualified_manifest=bound["qualified_manifest"],
-            _archive_index=index)
-        archive = Path(matches[0]["archive"]).resolve()
-        archives[key] = str(archive)
+            _archive_index=index)[0]
+        archive = Path(match["archive"]).resolve()
+        archives[key] = {"archive": str(archive),
+                         "archive_content_key": match["archive_content_key"],
+                         "outputs": match["outputs"]}
         provider = ArchiveDisruptionProvider(
             spec, archive=archive, network=network, cache=cache)
         identities[key] = common.digest(dict(provider.identity()))
@@ -216,7 +235,7 @@ def canary_worker(args) -> None:
     phases: Dict[str, Any] = {}
     cpu, started = _cpu(), time.perf_counter()
     bound = builder._bound_inputs(args.profile)
-    spec = derived_spec(bound["spec"], args.edge)
+    spec, _record = load_canary_spec(args.canary_spec)
     _timed_phase(phases, "bound_inputs", cpu, started)
     cpu, started = _cpu(), time.perf_counter()
     units, _required = _population(
@@ -226,9 +245,8 @@ def canary_worker(args) -> None:
     cache = DailyCostCache(Path(args.oracle_root))
     (records, oracle, raw), counters = _run_raw_index(
         builder, bound, spec, units, cache, phases)
-    sampler.sample("raw_index_records")
     comparison = builder.WindowCostIndex(
-        bound_identity={"schema": SCHEMA, "edge": args.edge},
+        bound_identity={"schema": SCHEMA, "spec": spec.content_key},
         records=records,
         preparation_time_s=phases["raw_index_records"]["wall_s"],
     ).compare_oracle(oracle)
@@ -250,6 +268,10 @@ def canary_worker(args) -> None:
         "affected_vehicles_total": sum(
             int(item.get("vehicles_affected") or 0)
             for unit in records.values() for item in unit["records"]),
+        "affected_daily_units": sum(
+            1 for unit in records.values()
+            if any(int(item.get("vehicles_affected") or 0) > 0
+                   for item in unit["records"])),
         "positive_costs": sum(
             1 for item in costs.values()
             if any(float(item["cost"][field]) > 0 for field in COST_FIELDS)),
@@ -278,21 +300,6 @@ def _runs_listing(runs_root: Path) -> Dict[str, Any]:
                                    if n.startswith("demand-"))}
 
 
-def _choose_edge(census_path: Path) -> Dict[str, Any]:
-    census = _verified(census_path)
-    stale = [path for path, sha in census["production_sources"].items()
-             if common.file_sha256(ROOT / path) != sha]
-    if stale:
-        raise SystemExit(f"effect census binds stale sources: {stale}")
-    edge = census["summary"]["new_rule_choice"][0]
-    row = next(item for item in census["candidates"]
-               if item["edge_id"] == edge)
-    if not (row["structurally_survivable"] and row["pre_canary_eligible"]):
-        raise SystemExit(f"{edge} is not pre-canary eligible")
-    return {"edge": edge, "row": row,
-            "census_content_key": census["content_key"]}
-
-
 def _checks(runs: Dict[int, Dict[str, Any]],
             oracle: Mapping[str, Any]) -> Dict[str, Any]:
     checks: Dict[str, Any] = {}
@@ -307,6 +314,7 @@ def _checks(runs: Dict[int, Dict[str, Any]],
                 not run["provider_identity_mismatches"]),
             "affected_vehicles_total_positive": (
                 run["affected_vehicles_total"] > 0),
+            "affected_daily_unit_present": run["affected_daily_units"] > 0,
             "positive_cost_present": run["positive_costs"] > 0,
             "one_archive_index_build": counters.get(
                 "archive_index_build") == 1,
@@ -323,8 +331,89 @@ def _checks(runs: Dict[int, Dict[str, Any]],
     return checks
 
 
-def _record(args, choice, phase_cost, keys, oracle, runs, checks,
-            assessment, observed):
+def _final_assessment(spec, bound, oracle, run):
+    """Complete effect_eligibility_v2 over one read of the canary archives."""
+    from tools import cost_ordered_benchmark as bench
+    from traffic_sim.simulation import effect_eligibility as effect
+
+    variant_by_file = {name: variant
+                       for variant, name in effect.VARIANT_FILENAMES.items()}
+    refs = [effect.ArchiveRef(
+        build_key=key, archive=Path(item["archive"]),
+        content_key=item["archive_content_key"],
+        route_sha256={variant_by_file[out["name"]]: out["sha256"]
+                      for out in item["outputs"]
+                      if out["name"] in variant_by_file})
+        for key, item in sorted(oracle["archives"].items())]
+    network_edges, catalog_root = bench._effect_sources(ROOT)
+    (edge,) = spec.directed_edges
+    inventory = effect.build_inventory(refs, [edge],
+                                       catalog_root=catalog_root)
+    units = bench._daily_units_by_build_key(spec, bound["runs_root"])
+    verdict = effect.assess(
+        edge, inventory, network_edges=network_edges, daily_units=units,
+        canary=effect.CanaryResult(
+            affected_vehicles_total=run["affected_vehicles_total"],
+            affected_daily_units=run["affected_daily_units"],
+            positive_costs=run["positive_costs"]))
+    return verdict.to_dict(), common.digest(inventory.to_dict())
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--profile", type=Path, required=True)
+    parser.add_argument("--canary-spec", type=Path, required=True)
+    parser.add_argument("--phase-cost-evidence", type=Path)
+    parser.add_argument("--oracle-root", type=Path, required=True)
+    parser.add_argument("--out", type=Path)
+    parser.add_argument("--worker", choices=("oracle", "canary"))
+    parser.add_argument("--build-keys")
+    args = parser.parse_args()
+    if args.worker == "oracle":
+        oracle_worker(args)
+        return 0
+    if args.worker == "canary":
+        canary_worker(args)
+        return 0
+    if args.out is None or args.out.exists():
+        raise SystemExit(f"evidence path missing or already exists: {args.out}")
+    if args.oracle_root.exists():
+        raise SystemExit(f"oracle root must be fresh: {args.oracle_root}")
+    if args.phase_cost_evidence is None:
+        raise SystemExit("--phase-cost-evidence is required")
+
+    from tools import build_window_cost_index as builder
+
+    spec, spec_record = load_canary_spec(args.canary_spec)
+    phase_cost = _verified(args.phase_cost_evidence)
+    keys = [item["build_key"] for item in phase_cost["selection"]["chosen"]]
+    bound = builder._bound_inputs(args.profile)
+    runs_root = Path(bound["runs_root"])
+    sumo_before, runs_before = _sumo_processes(), _runs_listing(runs_root)
+    base = [sys.executable, str(Path(__file__).resolve()),
+            "--profile", str(args.profile),
+            "--canary-spec", str(args.canary_spec),
+            "--oracle-root", str(args.oracle_root)]
+    oracle = common.run_worker(base + ["--worker", "oracle",
+                                       "--build-keys", json.dumps(keys)])
+    print(json.dumps({"oracle_units": oracle["daily_units"],
+                      "oracle_wall_s": round(oracle["wall_s"], 1)}),
+          flush=True)
+    runs = {}
+    for count in KEY_COUNTS:
+        runs[count] = common.run_worker(base + [
+            "--worker", "canary", "--build-keys", json.dumps(keys[:count])])
+        print(json.dumps({key: runs[count][key] for key in (
+            "daily_units", "affected_vehicles_total", "affected_daily_units",
+            "positive_costs", "phases", "counters")}), flush=True)
+    checks = _checks(runs, oracle)
+    sumo_after, runs_after = _sumo_processes(), _runs_listing(runs_root)
+    checks["execution_boundary"] = {
+        "no_sumo_process_started": sumo_after <= sumo_before,
+        "no_demand_archive_created": runs_after == runs_before,
+    }
+    assessment, inventory_digest = _final_assessment(
+        spec, bound, oracle, runs[3])
     passed = (all(all(group.values()) for group in checks.values())
               and assessment["effect_eligible"])
     record = {
@@ -339,19 +428,13 @@ def _record(args, choice, phase_cost, keys, oracle, runs, checks,
         "production_sources": common.source_bindings(PRODUCTION_SOURCES),
         "git": common.git_state(),
         "runtime": common.runtime_manifest(),
-        "profile": str(args.profile),
-        "profile_sha256": common.file_sha256(args.profile),
-        "case_choice": {
-            "rule": ("first road of benchmark_roads over the 30 qualified "
-                     "archives"),
-            "effect_census": str(args.effect_census),
-            "effect_census_content_key": choice["census_content_key"],
-            "edge": choice["edge"],
-            "census_row": choice["row"],
-        },
-        "derived_spec": oracle["spec"],
-        "derived_spec_note": ("identical to the frozen profile spec except "
-                              "directed_edges, search_id and content_key"),
+        "profile": {"path": str(args.profile),
+                    "sha256": common.file_sha256(args.profile)},
+        "canary_spec": {"path": str(args.canary_spec),
+                        "content_key": spec_record["content_key"],
+                        "spec_content_key": spec.content_key,
+                        "search_id": spec.search_id,
+                        "directed_edges": list(spec.directed_edges)},
         "build_keys": {"source": str(args.phase_cost_evidence),
                        "source_content_key": phase_cost["content_key"],
                        "keys": keys},
@@ -366,99 +449,31 @@ def _record(args, choice, phase_cost, keys, oracle, runs, checks,
         "runs": [runs[count] for count in KEY_COUNTS],
         "contract_checks": checks,
         "effect_assessment": assessment,
-        **observed,
+        "effect_inventory_digest": inventory_digest,
+        "sumo_processes": {"before": sumo_before, "after": sumo_after},
+        "runs_root_listing": {"before": runs_before, "after": runs_after},
     }
     record["output_sha256"] = common.digest({
-        "derived_spec": oracle["spec"],
+        "canary_spec": record["canary_spec"],
         "oracle_unit_digests": oracle["oracle_unit_digests"],
         "runs": {str(count): {k: runs[count][k] for k in (
             "records_digest", "unit_digests", "unit_costs", "counters",
             "oracle_comparison", "affected_vehicles_total",
-            "positive_costs")} for count in KEY_COUNTS},
+            "affected_daily_units", "positive_costs")}
+            for count in KEY_COUNTS},
         "contract_checks": checks,
         "effect_assessment": assessment,
     })
-    return record, passed
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--profile", type=Path, required=True)
-    parser.add_argument("--effect-census", type=Path)
-    parser.add_argument("--phase-cost-evidence", type=Path)
-    parser.add_argument("--oracle-root", type=Path, required=True)
-    parser.add_argument("--out", type=Path)
-    parser.add_argument("--worker", choices=("oracle", "canary"))
-    parser.add_argument("--edge")
-    parser.add_argument("--build-keys")
-    args = parser.parse_args()
-    if args.worker == "oracle":
-        oracle_worker(args)
-        return 0
-    if args.worker == "canary":
-        canary_worker(args)
-        return 0
-    if args.out is None or args.out.exists():
-        raise SystemExit(f"evidence path missing or already exists: {args.out}")
-    if args.oracle_root.exists():
-        raise SystemExit(f"oracle root must be fresh: {args.oracle_root}")
-    if args.effect_census is None or args.phase_cost_evidence is None:
-        raise SystemExit("--effect-census and --phase-cost-evidence needed")
-
-    from traffic_sim.simulation import effect_eligibility as effect
-    from traffic_sim.simulation.metadata import network_edge_ids
-
-    choice = _choose_edge(args.effect_census)
-    phase_cost = _verified(args.phase_cost_evidence)
-    keys = [item["build_key"] for item in phase_cost["selection"]["chosen"]]
-    profile = json.loads(args.profile.read_text(encoding="utf-8"))
-    runs_root = Path(profile["runs_root"])
-    sumo_before, runs_before = _sumo_processes(), _runs_listing(runs_root)
-    base = [sys.executable, str(Path(__file__).resolve()),
-            "--profile", str(args.profile),
-            "--oracle-root", str(args.oracle_root),
-            "--edge", choice["edge"]]
-    oracle = common.run_worker(base + ["--worker", "oracle",
-                                       "--build-keys", json.dumps(keys)])
-    print(json.dumps({"oracle_units": oracle["daily_units"],
-                      "oracle_wall_s": round(oracle["wall_s"], 1)}),
-          flush=True)
-    runs = {}
-    for count in KEY_COUNTS:
-        runs[count] = common.run_worker(base + [
-            "--worker", "canary", "--build-keys", json.dumps(keys[:count])])
-        print(json.dumps({"keys": count, "units": runs[count]["daily_units"],
-                          "affected": runs[count]["affected_vehicles_total"],
-                          "positive_costs": runs[count]["positive_costs"],
-                          "phases": runs[count]["phases"]}), flush=True)
-    sumo_after, runs_after = _sumo_processes(), _runs_listing(runs_root)
-    checks = _checks(runs, oracle)
-    checks["execution_boundary"] = {
-        "no_sumo_process_started": sumo_after <= sumo_before,
-        "no_demand_archive_created": runs_after == runs_before,
-    }
-    evidence = effect.collect_evidence(
-        [choice["edge"]],
-        network_edges=network_edge_ids(ROOT / "sumo" / "net.net.xml"),
-        archives=[Path(path) for path in oracle["archives"].values()],
-        catalog_root=ROOT / "sumo" / "route_catalog")[choice["edge"]]
-    assessment = effect.assess(evidence.with_canary(
-        affected_vehicles_total=runs[3]["affected_vehicles_total"],
-        positive_costs=runs[3]["positive_costs"])).to_dict()
-    record, passed = _record(
-        args, choice, phase_cost, keys, oracle, runs, checks, assessment,
-        {"sumo_processes": {"before": sumo_before, "after": sumo_after},
-         "runs_root_listing": {"before": runs_before, "after": runs_after}})
     published = common.publish(args.out, record)
     print(json.dumps({
         "status": record["status"],
-        "edge": choice["edge"],
-        "derived_spec": oracle["spec"],
+        "canary_spec": record["canary_spec"],
         "checks": checks,
         "effect_assessment": {k: assessment[k] for k in (
             "pre_canary_eligible", "effect_eligible", "reasons")},
         "runs": [{"keys": count, "units": runs[count]["daily_units"],
                   "affected": runs[count]["affected_vehicles_total"],
+                  "affected_units": runs[count]["affected_daily_units"],
                   "positive_costs": runs[count]["positive_costs"],
                   "raw_index_records_s": round(
                       runs[count]["phases"]["raw_index_records"]["wall_s"],

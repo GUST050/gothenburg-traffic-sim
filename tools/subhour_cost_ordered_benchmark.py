@@ -188,6 +188,7 @@ def _metadata_inventory(runs_root: Path, qualified_manifest: Mapping[str, Any] |
     # These helpers read demand_meta/routes and the topology survivability
     # screen only.  They do not import or glob validation/*outcome* records.
     items: list[dict[str, Any]] = []
+    cases: list[tuple[Any, Mapping[str, Any] | None]] = []
     for spec in base.discovered_specs(Path(runs_root)):
         profile = base._structural_profile(spec)
         if int(profile["candidate_count"]) < 6:
@@ -211,7 +212,43 @@ def _metadata_inventory(runs_root: Path, qualified_manifest: Mapping[str, Any] |
         item["selection_tuple"] = list(outcome_free_tuple(item))
         item["selection_sha256"] = _key(outcome_free_tuple(item))
         items.append(item)
-    return sorted(items, key=lambda item: item["selection_sha256"])
+        cases.append((spec, _effect_archives(spec, Path(runs_root),
+                                             qualified_manifest)))
+    # Discovery is structural; this automatic selection also needs a real
+    # traffic effect in the archives each case resolves to (effect
+    # eligibility, pre-canary stage). Every archive is read once for all cases.
+    verdicts, _summary = base.effect_screen_cases(
+        [(spec, archives) for spec, archives in cases if archives is not None],
+        runs_root=Path(runs_root))
+    kept = []
+    for item in items:
+        verdict = verdicts.get(item["search_content_key"])
+        if verdict is None or not verdict["pre_canary_eligible"]:
+            continue
+        item["effect_eligible_pre_canary"] = True
+        kept.append(item)
+    return sorted(kept, key=lambda item: item["selection_sha256"])
+
+
+def _effect_archives(spec: Any, runs_root: Path,
+                     qualified_manifest: Mapping[str, Any] | None
+                     ) -> Mapping[str, Any] | None:
+    """The archives a case resolves to, for the effect screen only."""
+    if qualified_manifest is None:
+        return base._resolved_archives_for_spec(spec, runs_root)
+    matches = _metadata_archive_matches(spec, runs_root, qualified_manifest)
+    if matches is None:
+        return None
+    variant_by_file = {name: variant
+                       for variant, name in base.VARIANT_FILENAMES.items()}
+    return {key: {"archive": str(Path(match["archive"]).resolve()),
+                  "archive_content_key": match.get("archive_content_key"),
+                  # The validator already hashed these against the manifest.
+                  "routes": {variant_by_file[item["name"]]:
+                             {"sha256": item["sha256"]}
+                             for item in match.get("outputs") or ()
+                             if item.get("name") in variant_by_file}}
+            for key, (_demand, match) in matches.items()}
 
 
 def _spec_has_metadata_archives(spec: Any, runs_root: Path,
@@ -256,9 +293,10 @@ def _spec_has_metadata_archives(spec: Any, runs_root: Path,
     return required <= available
 
 
-def _metadata_archives_for_spec(spec: Any, runs_root: Path,
-                                qualified_manifest: Mapping[str, Any]) -> dict[str, dict[str, Any]] | None:
-    """Resolve candidate archives from metadata without validating outcomes."""
+def _metadata_archive_matches(spec: Any, runs_root: Path,
+                              qualified_manifest: Mapping[str, Any]
+                              ) -> dict[str, tuple[Any, Mapping[str, Any]]] | None:
+    """Build key -> (demand spec, validated archive match), or None."""
     from traffic_sim.core.closure_calendar import iter_closure_schedules
     from traffic_sim.simulation.independent_daily import daily_unit_records
     from traffic_sim.simulation.monthly_demand import (
@@ -277,8 +315,7 @@ def _metadata_archives_for_spec(spec: Any, runs_root: Path,
             item = build_schedule()
             demand = resolver._required(item)
             required[demand.build_key] = demand
-    index_key = str(Path(runs_root).resolve())
-    result: dict[str, dict[str, Any]] = {}
+    result: dict[str, tuple[Any, Mapping[str, Any]]] = {}
     for key, demand in sorted(required.items()):
         # Bind a succeeded, immutable current-source archive.  A metadata-only
         # lexicographic lookup can select a stale historical directory even
@@ -303,11 +340,24 @@ def _metadata_archives_for_spec(spec: Any, runs_root: Path,
             _ARCHIVE_MATCH_CACHE[match_key] = tuple(matches)
         if not matches:
             return None
-        archive = Path(matches[0]["archive"])
+        result[key] = (demand, matches[0])
+    return result
+
+
+def _metadata_archives_for_spec(spec: Any, runs_root: Path,
+                                qualified_manifest: Mapping[str, Any]) -> dict[str, dict[str, Any]] | None:
+    """Resolve candidate archives from metadata without validating outcomes."""
+    matches = _metadata_archive_matches(spec, runs_root, qualified_manifest)
+    if matches is None:
+        return None
+    result: dict[str, dict[str, Any]] = {}
+    for key, (demand, match) in matches.items():
+        archive = Path(match["archive"])
         routes = {variant: archive / filename
                   for variant, filename in base.VARIANT_FILENAMES.items()}
         result[key] = {
             "archive": str(archive.resolve()),
+            "archive_content_key": match.get("archive_content_key"),
             "epoch_sim": f"{demand.start_date}T00:00:00",
             "n_intervals": demand.days * 96,
             "demand_build_spec": demand.to_dict(),
