@@ -1,0 +1,1092 @@
+{
+  "archive_set": {
+    "archive_build_keys_equal_qualified_manifest": true,
+    "archives": 30,
+    "digest": "9580e17a7d8828f9bab99158643f054589ecbb64a756a7a28e5cc56ecf979c5b",
+    "qualified": 30
+  },
+  "candidates": [
+    {
+      "archives_with_vehicle": 0,
+      "catalog_pool_keys": [
+        "weekday:8548c8191269d61bce2f9bbe85e7785d",
+        "weekend:77e237f04c746a4fb1fac7e790fff419"
+      ],
+      "catalog_routes": {
+        "weekday": 0,
+        "weekend": 0
+      },
+      "edge_id": "26355153_26842525_0",
+      "effect_eligible": false,
+      "from_node": "26355153",
+      "measurement_status": "unmeasured_opposite_of_sensor",
+      "nearest_sensor": {
+        "basis": "registry",
+        "midpoint_distance_m": 0.0,
+        "sensor_id": "133"
+      },
+      "new_rule_rank": null,
+      "pre_canary_eligible": false,
+      "reasons": [
+        "no_catalog_route_uses_edge",
+        "no_archive_vehicle_crosses_edge",
+        "canary_not_run"
+      ],
+      "registry_roles": [
+        {
+          "measurement_status": "unmeasured_estimated",
+          "role": "opposite_direction",
+          "sensor_id": "133"
+        }
+      ],
+      "rejection_reasons": [
+        "no_catalog_route_uses_edge",
+        "no_archive_vehicle_crosses_edge"
+      ],
+      "reverse_edges": [
+        "26842525_26355153_0"
+      ],
+      "screen_dist_sensor_m": 11.0,
+      "structurally_survivable": true,
+      "to_node": "26842525",
+      "vehicles": {
+        "q10": 0,
+        "q50": 0,
+        "q90": 0
+      },
+      "vehicles_total": 0
+    },
+    {
+      "archives_with_vehicle": 30,
+      "catalog_pool_keys": [
+        "weekday:8548c8191269d61bce2f9bbe85e7785d",
+        "weekend:77e237f04c746a4fb1fac7e790fff419"
+      ],
+      "catalog_routes": {
+        "weekday": 100,
+        "weekend": 91
+      },
+      "edge_id": "26842525_26355153_0",
+      "effect_eligible": false,
+      "from_node": "26842525",
+      "measurement_status": "measured",
+      "nearest_sensor": {
+        "basis": "registry",
+        "midpoint_distance_m": 0.0,
+        "sensor_id": "133"
+      },
+      "new_rule_rank": 1,
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "registry_roles": [
+        {
+          "measurement_semantics": "directional",
+          "role": "measured_edge",
+          "sensor_id": "133"
+        }
+      ],
+      "rejection_reasons": [],
+      "reverse_edges": [
+        "26355153_26842525_0"
+      ],
+      "screen_dist_sensor_m": 11.0,
+      "structurally_survivable": true,
+      "to_node": "26355153",
+      "vehicles": {
+        "q10": 315143,
+        "q50": 315143,
+        "q90": 315143
+      },
+      "vehicles_total": 945429
+    },
+    {
+      "archives_with_vehicle": 30,
+      "catalog_pool_keys": [
+        "weekday:8548c8191269d61bce2f9bbe85e7785d",
+        "weekend:77e237f04c746a4fb1fac7e790fff419"
+      ],
+      "catalog_routes": {
+        "weekday": 58,
+        "weekend": 56
+      },
+      "edge_id": "26355153_96523321_0",
+      "effect_eligible": false,
+      "from_node": "26355153",
+      "measurement_status": "measured",
+      "nearest_sensor": {
+        "basis": "registry",
+        "midpoint_distance_m": 0.0,
+        "sensor_id": "134"
+      },
+      "new_rule_rank": 2,
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "registry_roles": [
+        {
+          "measurement_semantics": "directional",
+          "role": "measured_edge",
+          "sensor_id": "134"
+        }
+      ],
+      "rejection_reasons": [],
+      "reverse_edges": [
+        "96523321_26355153_0"
+      ],
+      "screen_dist_sensor_m": 25.8,
+      "structurally_survivable": true,
+      "to_node": "96523321",
+      "vehicles": {
+        "q10": 264671,
+        "q50": 264671,
+        "q90": 264671
+      },
+      "vehicles_total": 794013
+    },
+    {
+      "archives_with_vehicle": 30,
+      "catalog_pool_keys": [
+        "weekday:8548c8191269d61bce2f9bbe85e7785d",
+        "weekend:77e237f04c746a4fb1fac7e790fff419"
+      ],
+      "catalog_routes": {
+        "weekday": 52,
+        "weekend": 51
+      },
+      "edge_id": "96523321_26355153_0",
+      "effect_eligible": false,
+      "from_node": "96523321",
+      "measurement_status": "unmeasured_opposite_of_sensor",
+      "nearest_sensor": {
+        "basis": "registry",
+        "midpoint_distance_m": 0.0,
+        "sensor_id": "134"
+      },
+      "new_rule_rank": 3,
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "registry_roles": [
+        {
+          "measurement_status": "unmeasured_estimated",
+          "role": "opposite_direction",
+          "sensor_id": "134"
+        }
+      ],
+      "rejection_reasons": [],
+      "reverse_edges": [
+        "26355153_96523321_0"
+      ],
+      "screen_dist_sensor_m": 25.8,
+      "structurally_survivable": true,
+      "to_node": "26355153",
+      "vehicles": {
+        "q10": 172225,
+        "q50": 234922,
+        "q90": 254212
+      },
+      "vehicles_total": 661359
+    },
+    {
+      "archives_with_vehicle": 0,
+      "catalog_pool_keys": [
+        "weekday:8548c8191269d61bce2f9bbe85e7785d",
+        "weekend:77e237f04c746a4fb1fac7e790fff419"
+      ],
+      "catalog_routes": {
+        "weekday": 0,
+        "weekend": 0
+      },
+      "edge_id": "8710974792_1759741980_0",
+      "effect_eligible": false,
+      "from_node": "8710974792",
+      "measurement_status": "not_in_sensor_registry",
+      "nearest_sensor": {
+        "basis": "midpoint great-circle to measured sensor edge",
+        "midpoint_distance_m": 91.1,
+        "sensor_id": "2276"
+      },
+      "new_rule_rank": null,
+      "pre_canary_eligible": false,
+      "reasons": [
+        "no_catalog_route_uses_edge",
+        "no_archive_vehicle_crosses_edge",
+        "canary_not_run"
+      ],
+      "registry_roles": [],
+      "rejection_reasons": [
+        "no_catalog_route_uses_edge",
+        "no_archive_vehicle_crosses_edge"
+      ],
+      "reverse_edges": [],
+      "screen_dist_sensor_m": 76.4,
+      "structurally_survivable": true,
+      "to_node": "1759741980",
+      "vehicles": {
+        "q10": 0,
+        "q50": 0,
+        "q90": 0
+      },
+      "vehicles_total": 0
+    },
+    {
+      "archives_with_vehicle": 30,
+      "catalog_pool_keys": [
+        "weekday:8548c8191269d61bce2f9bbe85e7785d",
+        "weekend:77e237f04c746a4fb1fac7e790fff419"
+      ],
+      "catalog_routes": {
+        "weekday": 1,
+        "weekend": 1
+      },
+      "edge_id": "9037093028_1305379743_0",
+      "effect_eligible": false,
+      "from_node": "9037093028",
+      "measurement_status": "not_in_sensor_registry",
+      "nearest_sensor": {
+        "basis": "midpoint great-circle to measured sensor edge",
+        "midpoint_distance_m": 87.6,
+        "sensor_id": "1076"
+      },
+      "new_rule_rank": 4,
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "registry_roles": [],
+      "rejection_reasons": [],
+      "reverse_edges": [],
+      "screen_dist_sensor_m": 86.8,
+      "structurally_survivable": true,
+      "to_node": "1305379743",
+      "vehicles": {
+        "q10": 40473,
+        "q50": 42528,
+        "q90": 42887
+      },
+      "vehicles_total": 125888
+    },
+    {
+      "archives_with_vehicle": 30,
+      "catalog_pool_keys": [
+        "weekday:8548c8191269d61bce2f9bbe85e7785d",
+        "weekend:77e237f04c746a4fb1fac7e790fff419"
+      ],
+      "catalog_routes": {
+        "weekday": 76,
+        "weekend": 90
+      },
+      "edge_id": "9037093028_30420757_0",
+      "effect_eligible": false,
+      "from_node": "9037093028",
+      "measurement_status": "not_in_sensor_registry",
+      "nearest_sensor": {
+        "basis": "midpoint great-circle to measured sensor edge",
+        "midpoint_distance_m": 60.0,
+        "sensor_id": "1076"
+      },
+      "new_rule_rank": 5,
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "registry_roles": [],
+      "rejection_reasons": [],
+      "reverse_edges": [],
+      "screen_dist_sensor_m": 111.3,
+      "structurally_survivable": true,
+      "to_node": "30420757",
+      "vehicles": {
+        "q10": 396232,
+        "q50": 396952,
+        "q90": 397558
+      },
+      "vehicles_total": 1190742
+    },
+    {
+      "archives_with_vehicle": 30,
+      "catalog_pool_keys": [
+        "weekday:8548c8191269d61bce2f9bbe85e7785d",
+        "weekend:77e237f04c746a4fb1fac7e790fff419"
+      ],
+      "catalog_routes": {
+        "weekday": 57,
+        "weekend": 55
+      },
+      "edge_id": "96523321_96523748_0",
+      "effect_eligible": false,
+      "from_node": "96523321",
+      "measurement_status": "not_in_sensor_registry",
+      "nearest_sensor": {
+        "basis": "midpoint great-circle to measured sensor edge",
+        "midpoint_distance_m": 93.5,
+        "sensor_id": "134"
+      },
+      "new_rule_rank": 6,
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "registry_roles": [],
+      "rejection_reasons": [],
+      "reverse_edges": [
+        "96523748_96523321_0"
+      ],
+      "screen_dist_sensor_m": 111.6,
+      "structurally_survivable": true,
+      "to_node": "96523748",
+      "vehicles": {
+        "q10": 257188,
+        "q50": 251546,
+        "q90": 229857
+      },
+      "vehicles_total": 738591
+    }
+  ],
+  "census_helper": {
+    "path": "validation/benchmarks/wci_closure_edge_census_v1.py",
+    "sha256": "54229737c4976c15264fe331aa37bb6ed9c1226a7e74ee8672679c765d3c3bbf"
+  },
+  "content_key": "200a1019bf43b1c7e6a47ef6fe34944f42607522d0fe06812143a1518b7eec8f",
+  "contract_files": {
+    "data_in/sensors.json": "41db5d452cb104405d8bd6ac6b78e2c7748dcfe641a9266c7229a4fc7edf1f20",
+    "sumo/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "validation/closure_survivability_screen_v2.json": "c790b7a5139f15d80c5e278bf3bcc7067179ce9a43c4155e3d69b9aedea34026",
+    "web/data/network.geojson": "92cbcf3895b3d1428d3713a0e919cf6679f00a8e5d00e7974182345d088a1dbf"
+  },
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/effect_eligibility_census_v1.py",
+    "sha256": "15d8698348cc4c8cc9f4ae8f42e9682b964b8415f88b9335c5c38c5006369907"
+  },
+  "full_screen": [
+    {
+      "edge_id": "26355153_26842525_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 0,
+          "q50": 0,
+          "q90": 0
+        },
+        "archives": 30,
+        "archives_with_vehicle": 0,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 0,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 0
+        },
+        "edge_id": "26355153_26842525_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": false,
+      "reasons": [
+        "no_catalog_route_uses_edge",
+        "no_archive_vehicle_crosses_edge",
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "26842525_26355153_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 315143,
+          "q50": 315143,
+          "q90": 315143
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 100,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 91
+        },
+        "edge_id": "26842525_26355153_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "26355153_96523321_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 264671,
+          "q50": 264671,
+          "q90": 264671
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 58,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 56
+        },
+        "edge_id": "26355153_96523321_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "96523321_26355153_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 172225,
+          "q50": 234922,
+          "q90": 254212
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 52,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 51
+        },
+        "edge_id": "96523321_26355153_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "8710974792_1759741980_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 0,
+          "q50": 0,
+          "q90": 0
+        },
+        "archives": 30,
+        "archives_with_vehicle": 0,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 0,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 0
+        },
+        "edge_id": "8710974792_1759741980_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": false,
+      "reasons": [
+        "no_catalog_route_uses_edge",
+        "no_archive_vehicle_crosses_edge",
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "9037093028_1305379743_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 40473,
+          "q50": 42528,
+          "q90": 42887
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 1,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 1
+        },
+        "edge_id": "9037093028_1305379743_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "9037093028_30420757_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 396232,
+          "q50": 396952,
+          "q90": 397558
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 76,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 90
+        },
+        "edge_id": "9037093028_30420757_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "96523321_96523748_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 257188,
+          "q50": 251546,
+          "q90": 229857
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 57,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 55
+        },
+        "edge_id": "96523321_96523748_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "96523748_96523321_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 143155,
+          "q50": 193925,
+          "q90": 189610
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 47,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 46
+        },
+        "edge_id": "96523748_96523321_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "1300365504_91615275_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 0,
+          "q50": 0,
+          "q90": 0
+        },
+        "archives": 30,
+        "archives_with_vehicle": 0,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 0,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 0
+        },
+        "edge_id": "1300365504_91615275_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": false,
+      "reasons": [
+        "no_catalog_route_uses_edge",
+        "no_archive_vehicle_crosses_edge",
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "7532496152_559960490_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 224254,
+          "q50": 202580,
+          "q90": 182576
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 32,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 27
+        },
+        "edge_id": "7532496152_559960490_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "96523105_96523603_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 138909,
+          "q50": 189529,
+          "q90": 186506
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 46,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 45
+        },
+        "edge_id": "96523105_96523603_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "96523603_96523105_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 248385,
+          "q50": 242576,
+          "q90": 223982
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 55,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 53
+        },
+        "edge_id": "96523603_96523105_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "30420904_60789862_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 226282,
+          "q50": 265654,
+          "q90": 360156
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 127,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 124
+        },
+        "edge_id": "30420904_60789862_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "60789862_30420904_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 0,
+          "q50": 54,
+          "q90": 103
+        },
+        "archives": 30,
+        "archives_with_vehicle": 22,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 1,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 1
+        },
+        "edge_id": "60789862_30420904_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "1455778261_1463940578_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 234180,
+          "q50": 284697,
+          "q90": 334919
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 70,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 77
+        },
+        "edge_id": "1455778261_1463940578_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "1300365504_318486259_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 140958,
+          "q50": 121550,
+          "q90": 135606
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 27,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 20
+        },
+        "edge_id": "1300365504_318486259_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "7532496152_1338661557_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 14288,
+          "q50": 12427,
+          "q90": 14140
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 2,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 2
+        },
+        "edge_id": "7532496152_1338661557_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "8709855498_91615275_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 104161,
+          "q50": 99890,
+          "q90": 86912
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 34,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 33
+        },
+        "edge_id": "8709855498_91615275_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "60789862_8722747921_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 884,
+          "q50": 1204,
+          "q90": 2038
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 5,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 7
+        },
+        "edge_id": "60789862_8722747921_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "25734037_25734041_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 0,
+          "q50": 0,
+          "q90": 0
+        },
+        "archives": 30,
+        "archives_with_vehicle": 0,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 0,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 0
+        },
+        "edge_id": "25734037_25734041_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": false,
+      "reasons": [
+        "no_catalog_route_uses_edge",
+        "no_archive_vehicle_crosses_edge",
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "25734041_25734037_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 0,
+          "q50": 0,
+          "q90": 0
+        },
+        "archives": 30,
+        "archives_with_vehicle": 0,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 0,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 0
+        },
+        "edge_id": "25734041_25734037_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": false,
+      "reasons": [
+        "no_catalog_route_uses_edge",
+        "no_archive_vehicle_crosses_edge",
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "25734041_3473721571_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 34652,
+          "q50": 34473,
+          "q90": 41183
+        },
+        "archives": 30,
+        "archives_with_vehicle": 30,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 12,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 12
+        },
+        "edge_id": "25734041_3473721571_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": true,
+      "reasons": [
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    },
+    {
+      "edge_id": "3473721571_25734041_0",
+      "evidence": {
+        "archive_vehicles": {
+          "q10": 0,
+          "q50": 0,
+          "q90": 0
+        },
+        "archives": 30,
+        "archives_with_vehicle": 0,
+        "canary_affected_vehicles_total": null,
+        "canary_positive_costs": null,
+        "catalog_routes": {
+          "weekday:8548c8191269d61bce2f9bbe85e7785d": 0,
+          "weekend:77e237f04c746a4fb1fac7e790fff419": 0
+        },
+        "edge_id": "3473721571_25734041_0",
+        "in_network": true,
+        "pool_problems": []
+      },
+      "pre_canary_eligible": false,
+      "reasons": [
+        "no_catalog_route_uses_edge",
+        "no_archive_vehicle_crosses_edge",
+        "canary_not_run"
+      ],
+      "structurally_survivable": true
+    }
+  ],
+  "git": {
+    "head": "10518aeba002268a0110f9ebd0171605e73d0343",
+    "tracked_changes": [
+      " M AGENT_NOTES.md",
+      " M IMPROVEMENT_PLAN.md",
+      " M TASKS.md",
+      " M tests/test_cost_ordered_benchmark_discovery.py",
+      " M tools/cost_ordered_benchmark.py",
+      " M web/data/od_matrix.csv",
+      " M web/data/od_matrix.json",
+      " M web/data/validation.json"
+    ]
+  },
+  "memory": {
+    "samples": [
+      {
+        "cpu_s": 116.88696499999999,
+        "label": "end",
+        "lifetime_max_phys_footprint_bytes": 323961552,
+        "major_faults": 132,
+        "max_rss_bytes": 441581568,
+        "minor_faults": 950095,
+        "pageins": 132,
+        "phys_footprint_bytes": 142148424,
+        "resident_bytes": 277692416,
+        "sys_s": 7.934819,
+        "user_s": 112.159733,
+        "wall_s": 117.238694084
+      }
+    ]
+  },
+  "output_sha256": "85a990025ec144d5f87700be955ebdd783f06a9972373e75093c2431b028abaa",
+  "production_sources": {
+    "tools/cost_ordered_benchmark.py": "e7b160efe3c72736ec9ebe4dac4c874edb7e3c4d50a3f34b2a07fda0a15d1684",
+    "traffic_sim/demand/route_support.py": "027d93a3f30197d2866bfda22a5079758d6d10133fd52542b02bff0b0802aacb",
+    "traffic_sim/simulation/deterministic_disruption.py": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472",
+    "traffic_sim/simulation/effect_eligibility.py": "9421056f45019c16a512bf3ac51135fff9dcc717f9929c6ebce2dc2f92cbbd99",
+    "traffic_sim/simulation/metadata.py": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4"
+  },
+  "profile": "runs/step5_code_approved_20260915b/profile/profile.json",
+  "profile_sha256": "399f764272120470b2a32015ed5b1deb24d1ec1b0a786d5646ada104d69a23af",
+  "qualified_demand_manifest": {
+    "content_key": "2cb32dcddfeb9bb99513fe1ae9cdcc44f0935435b78a278fa6eb3786060159ec",
+    "evidence_id": "subhour-monthly-qualify-2026-09-15b",
+    "path": "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+    "sha256": "1b609f705e08ab7a9c266a974a5976d33660209f0de914c95f66b3189d46f576"
+  },
+  "release_evidence": false,
+  "road_selection_rule": "structural survivability (closure_survivability_screen_v2, unchanged), then effect_eligibility_v1 before any canary (edge in network, bound catalog pools intact, a catalog route and an archive vehicle use the edge), then dist_sensor_m and edge_id; first 6",
+  "runs_root": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "effect_eligibility_census_v1",
+  "summary": {
+    "canary_stage": "not run here; effect_eligible stays false with canary_not_run until wci_effect_canary_v1 records the canary",
+    "new_rule_choice": [
+      "26842525_26355153_0",
+      "26355153_96523321_0",
+      "96523321_26355153_0",
+      "9037093028_1305379743_0",
+      "9037093028_30420757_0",
+      "96523321_96523748_0"
+    ],
+    "screened_roads": 24,
+    "screened_roads_effect_capable": 18,
+    "structural_six": [
+      "26355153_26842525_0",
+      "26842525_26355153_0",
+      "26355153_96523321_0",
+      "96523321_26355153_0",
+      "8710974792_1759741980_0",
+      "9037093028_1305379743_0"
+    ],
+    "structural_six_effect_capable": [
+      "26842525_26355153_0",
+      "26355153_96523321_0",
+      "96523321_26355153_0",
+      "9037093028_1305379743_0"
+    ]
+  }
+}

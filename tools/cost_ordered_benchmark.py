@@ -55,6 +55,8 @@ from traffic_sim.simulation.deterministic_disruption import (  # noqa: E402
 )
 from traffic_sim.simulation import cost_ordered_execution as coe  # noqa: E402
 from traffic_sim.simulation import cost_ordered_search as cos  # noqa: E402
+from traffic_sim.simulation import effect_eligibility  # noqa: E402
+from traffic_sim.simulation.metadata import network_edge_ids  # noqa: E402
 from traffic_sim.simulation.monthly_search import (  # noqa: E402
     MonthlySearchPolicy,
 )
@@ -139,6 +141,8 @@ SEMANTIC_SOURCES = (
     "traffic_sim/simulation/cost_ordered_search.py",
     "traffic_sim/simulation/deterministic_disruption.py",
     "traffic_sim/simulation/disruption.py",
+    # Decides which roads automatic discovery may build a case on.
+    "traffic_sim/simulation/effect_eligibility.py",
     "traffic_sim/simulation/envelope.py",
     "traffic_sim/simulation/execution.py",
     "traffic_sim/simulation/finalist_decision.py",
@@ -477,6 +481,18 @@ DISCOVERY_ROAD_LIMIT = 6
 SURVIVABILITY_SCREEN = (
     ROOT / "validation" / "closure_survivability_screen_v2.json")
 
+#: Automatic road choice needs two separate properties. Survivability says a
+#: closure leaves the network usable; it says nothing about whether any
+#: calibrated vehicle uses the road. The frozen 2026-09 profile closed an
+#: unmeasured carriageway 11 m from sensor 133 that no catalog route and no
+#: vehicle uses, so every candidate cost exactly zero.
+ROAD_SELECTION_RULE = (
+    "structural survivability (closure_survivability_screen_v2, unchanged), "
+    "then effect_eligibility_v1 before any canary (edge in network, bound "
+    "catalog pools intact, a catalog route and an archive vehicle use the "
+    "edge), then dist_sensor_m and edge_id; first "
+    f"{DISCOVERY_ROAD_LIMIT}")
+
 
 def archive_calendar(runs_root: Path) -> dict[str, dict[str, Any]]:
     """Single-day calibrated archives on disk, keyed by their work date.
@@ -584,7 +600,9 @@ def _date_runs(dates: Sequence[str],
     return [item for item in runs if item]
 
 
-def surviving_roads(path: Path = SURVIVABILITY_SCREEN) -> list[dict[str, Any]]:
+def surviving_roads(path: Path = SURVIVABILITY_SCREEN,
+                    limit: int | None = DISCOVERY_ROAD_LIMIT,
+                    ) -> list[dict[str, Any]]:
     """Edges that survive their own closure, from the frozen topology screen.
 
     A structural criterion, available before any outcome: an edge that severs a
@@ -603,15 +621,71 @@ def surviving_roads(path: Path = SURVIVABILITY_SCREEN) -> list[dict[str, Any]]:
     # measured part of the network), then by edge id.
     surviving.sort(key=lambda item: (float(item.get("dist_sensor_m", 1e9)),
                                      str(item.get("edge_id"))))
-    return surviving[:DISCOVERY_ROAD_LIMIT]
+    return surviving if limit is None else surviving[:limit]
 
 
-def discovered_specs(runs_root: Path) -> tuple[ClosureSearchSpec, ...]:
+def _complete_archives(runs_root: Path) -> list[Path]:
+    """Archives with metadata and all three variant route files."""
+    root = Path(runs_root)
+    if not root.is_dir():
+        return []
+    return [archive for archive in sorted(root.glob("demand-*"))
+            if (archive / "demand_meta.json").is_file()
+            and all((archive / name).is_file()
+                    for name in VARIANT_FILENAMES.values())]
+
+
+def _effect_sources(data_root: Path) -> tuple[frozenset[str], Path]:
+    """The network and catalog root the effect screen reads.
+
+    A missing network yields no edges, so every road fails closed with
+    ``edge_not_in_network`` rather than being assumed present.
+    """
+    network = Path(data_root) / "sumo" / "net.net.xml"
+    edges = network_edge_ids(network) if network.is_file() else frozenset()
+    return edges, Path(data_root) / "sumo" / "route_catalog"
+
+
+def road_screen(runs_root: Path, *,
+                data_root: Path = ROOT) -> list[dict[str, Any]]:
+    """Every structurally surviving road with its effect verdict, in order.
+
+    ``structurally_survivable`` and ``effect`` are separate on purpose: the
+    first is the unchanged survivability screen, the second asks whether the
+    archive library can observe the closure at all. No outcome, cost or
+    winner is read; the canary stage stays ``canary_not_run`` here.
+    """
+    roads = surviving_roads(limit=None)
+    network_edges, catalog_root = _effect_sources(data_root)
+    evidence = effect_eligibility.collect_evidence(
+        [str(road["edge_id"]) for road in roads],
+        network_edges=network_edges,
+        archives=_complete_archives(runs_root),
+        catalog_root=catalog_root)
+    return [{
+        **road,
+        "structurally_survivable": bool(road.get("survives_topology")),
+        "effect": effect_eligibility.assess(
+            evidence[str(road["edge_id"])]).to_dict(),
+    } for road in roads]
+
+
+def benchmark_roads(runs_root: Path, *,
+                    data_root: Path = ROOT) -> list[dict[str, Any]]:
+    """Roads automatic discovery may use: survivable AND effect-capable."""
+    eligible = [road for road in road_screen(runs_root, data_root=data_root)
+                if road["structurally_survivable"]
+                and road["effect"]["pre_canary_eligible"]]
+    return eligible[:DISCOVERY_ROAD_LIMIT]
+
+
+def discovered_specs(runs_root: Path, *,
+                     data_root: Path = ROOT) -> tuple[ClosureSearchSpec, ...]:
     """Cases built around dates the archive library actually contains."""
     by_source = candidate_work_calendar(runs_root)
     if not by_source:
         return ()
-    roads = surviving_roads()
+    roads = benchmark_roads(runs_root, data_root=data_root)
     if not roads:
         return ()
     weekdays = (0, 1, 2, 3, 4)
@@ -902,7 +976,8 @@ def _structural_profile(spec: ClosureSearchSpec) -> dict[str, Any]:
 
 
 def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
-                *, from_archives: bool = False) -> dict[str, Any]:
+                *, from_archives: bool = False,
+                data_root: Path = ROOT) -> dict[str, Any]:
     """Pick the case with the most structurally eligible candidates.
 
     Deliberately blind to outcomes: it never runs a search, never prices a
@@ -913,8 +988,16 @@ def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
     archives = _archive_index(runs_root)
     evaluated = []
     resolution_cache: dict[str, tuple[dict[str, Any], ...]] = {}
-    specs = (discovered_specs(runs_root) if from_archives
-             else _candidate_specs())
+    specs = (discovered_specs(runs_root, data_root=data_root)
+             if from_archives else _candidate_specs())
+    screened = ([{
+        "edge_id": road["edge_id"],
+        "dist_sensor_m": road.get("dist_sensor_m"),
+        "structurally_survivable": road["structurally_survivable"],
+        "pre_canary_eligible": road["effect"]["pre_canary_eligible"],
+        "reasons": road["effect"]["reasons"],
+    } for road in road_screen(runs_root, data_root=data_root)]
+        if from_archives else [])
     for spec in specs:
         profile = _structural_profile(spec)
         resolved = (_resolved_archives_for_spec(
@@ -955,6 +1038,9 @@ def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
         "case_source": ("discovered_from_archive_metadata" if from_archives
                         else "fixed_v1_candidate_specs"),
         "evaluated_case_count": len(evaluated),
+        "road_selection_rule": (ROAD_SELECTION_RULE if from_archives
+                                else None),
+        "road_screen": screened,
     }
 
 
@@ -963,7 +1049,8 @@ def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT,
                        data_root: Path = ROOT,
                        outcome_path: Path = DEFAULT_OUTCOME) -> dict[str, Any]:
     data_root = Path(data_root).resolve()
-    selection = select_case(runs_root, from_archives=from_archives)
+    selection = select_case(runs_root, from_archives=from_archives,
+                            data_root=data_root)
     selected = selection["selected"]
     archives = _archive_index(runs_root)
 
@@ -984,6 +1071,8 @@ def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT,
             "evaluated_case_count": selection["evaluated_case_count"],
             "minimum_structural_candidates": MINIMUM_STRUCTURAL_CANDIDATES,
             "archives_available": selection["archives_available"],
+            "road_selection_rule": selection["road_selection_rule"],
+            "road_screen": selection["road_screen"],
             "evaluated": [
                 {key: item[key] for key in (
                     "search_id", "candidate_count", "unique_daily_unit_count",

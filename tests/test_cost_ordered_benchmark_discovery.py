@@ -13,6 +13,7 @@ history. Both mistakes are structural, and both are closed here:
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import date, timedelta
 from pathlib import Path
@@ -22,6 +23,31 @@ import pytest
 import tools.cost_ordered_benchmark as bench
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# Automatic discovery also requires an observable effect (effect_eligibility).
+# These fixtures therefore declare it explicitly: one bound catalog pool and
+# one vehicle per variant over every road the survivability screen names.
+# tests/test_effect_eligibility.py covers the libraries that lack it.
+_SCREEN_EDGES = tuple(
+    item["edge_id"] for item in json.loads(
+        bench.SURVIVABILITY_SCREEN.read_text(encoding="utf-8")
+    )["candidate_pool"]["edges"])
+_POOL_KEY = "fixture-pool"
+_CATALOG_TEXT = "<routes>" + "".join(
+    f'<route id="r{n}" edges="{edge}"/>'
+    for n, edge in enumerate(_SCREEN_EDGES)) + "</routes>"
+_CATALOG_SHA256 = hashlib.sha256(_CATALOG_TEXT.encode("utf-8")).hexdigest()
+
+
+@pytest.fixture(autouse=True)
+def _library_observes_every_screened_road(monkeypatch, tmp_path):
+    catalog_root = tmp_path / "fixture-route-catalog"
+    (catalog_root / _POOL_KEY).mkdir(parents=True)
+    (catalog_root / _POOL_KEY / "catalog.rou.xml").write_text(
+        _CATALOG_TEXT, encoding="utf-8")
+    monkeypatch.setattr(
+        bench, "_effect_sources",
+        lambda data_root: (frozenset(_SCREEN_EDGES), catalog_root))
 
 
 @pytest.fixture(autouse=True)
@@ -61,10 +87,16 @@ def _archive(root: Path, work_date: str, *, source: str = "historical",
             "structural_reference_date": "2025-09-16",
             "purpose": "standard" if days == 1 else "closure_envelope",
         },
+        "candidate_catalog": {
+            "keys": {"weekday": _POOL_KEY},
+            "artifacts": {"weekday": {"routes_sha256": _CATALOG_SHA256}},
+        },
     }), encoding="utf-8")
+    route = " ".join(_SCREEN_EDGES)
     for variant in variants:
         (directory / bench.VARIANT_FILENAMES[variant]).write_text(
-            f"<routes id='{work_date}-{variant}'/>", encoding="utf-8")
+            f"<routes id='{work_date}-{variant}'><vehicle id='v0' depart='0'>"
+            f"<route edges='{route}'/></vehicle></routes>", encoding="utf-8")
     return directory
 
 
@@ -170,7 +202,7 @@ class TestDiscoveryBuildsRunnableCases:
     def test_distinct_edges_never_share_a_search_workspace_id(
             self, tmp_path, monkeypatch):
         _archive(tmp_path, "2025-09-16")
-        monkeypatch.setattr(bench, "surviving_roads", lambda: [
+        monkeypatch.setattr(bench, "benchmark_roads", lambda *_, **__: [
             {"edge_id": "123_456_0"},
             {"edge_id": "123_789_0"},
         ])

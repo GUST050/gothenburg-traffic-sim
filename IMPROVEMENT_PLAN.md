@@ -1547,6 +1547,117 @@ ompröva den riktade stängningskanten eller katalogtäckningen, kvalificera ett
 fall med verkliga korsningar och först därefter köra en liten icke-noll-canary.
 WCI förblir opt-in och **inte adopterat**.
 
+**Varför benchmarken valde en riktning utan trafik, och reparationen — 2026-09-17.**
+
+*Spårning.* `validation/closure_edge_lineage_census_20260917-v2.json`
+(content key `35041043…`, output-hash `8ece9b53…`) följer kanten bakåt och
+räknar varje kant i kedjan och dess motriktning i alla 30 kvalificerade arkiv,
+ett i taget. Motriktningen tas från nätets `from`/`to`. v2 har samma
+output-hash som den ocommittade v1-körningen; v1 binder källbytes från före
+reparationen och committas därför inte. Kedjan:
+
+1. `validation/closure_survivability_screen_v2.json` (2026-08-10) tar med
+   riktade kanter inom 400 m från en sensor, som sekundär- eller tertiärgata och
+   minst 30 m långa. Varje riktning bedöms för sig.
+2. `tools/cost_ordered_benchmark.surviving_roads` sorterar de överlevande
+   kanterna på `dist_sensor_m` och kant-ID och tar de 6 första. Båda
+   körbanorna vid sensor 133 ligger 11,0 m bort och hamnar först.
+3. `discovered_specs` bygger en spec per kant med `directed_edges=(edge,)`.
+   Sub-hour-registreringarna 2026-08-31 valde fall ur den mängden genom
+   hashsortering.
+4. I `3f20d70` fick den frysta profilspecen kanten
+   `26355153_26842525_0`, utan motivering. Specens förfäder använde
+   `26842526_96527131_0`.
+
+*Användarens väg är korrekt.* Webbgränssnittet ritar varje riktad kant som en
+egen linje med sitt GeoJSON-`id`, och ett klick växlar exakt det ID:t
+(`web/render.js`, `web/app.js`). `serve.py` validerar och vidarebefordrar
+`directed_edges` oförändrade. `closure_seconds` skapar exakt en stängning per
+listad kant, och `ClosureRouteResolver` matchar exakta ID:n. Inget av detta
+ändrades. `serve.py` avvisar dessutom (422) en kant som den aktiva efterfrågan
+inte bär alls. Det är befintligt beteende och ändrades inte heller.
+
+*Rotorsak.* `surviving_roads` bevisar strukturell genomförbarhet, alltså att
+stängningen lämnar nätet användbart. Benchmark- och profilurvalet saknade en
+separat kontroll av trafikpåverkan. Närhet till en sensor bevisar inget
+ruttstöd, vilket `traffic_sim/demand/route_support.py` redan konstaterar.
+Därför kunde automatiken välja en omätt motriktning som ingen rutt använder.
+
+*Reparation (endast automatiskt benchmarkurval).* Kontraktet
+`traffic_sim/simulation/effect_eligibility.py` (`effect_eligibility_v1`)
+kräver följande:
+
+* **Före canary:** kanten finns i nätet; varje arkivs bundna katalogpooler
+  finns och matchar sin deklarerade SHA-256; minst en katalogrutt använder
+  kanten; minst ett arkiv har verkliga fordon över den.
+* **Efter canary:** `affected_vehicles_total > 0` och minst en kostnad > 0.
+
+`effect_eligible` blir sant först när båda stegen har klarats. Varje fel får
+ett namngivet skäl. `tools/cost_ordered_benchmark` har nu
+`road_screen`, som redovisar `structurally_survivable` och `effect` sida vid
+sida, och `benchmark_roads`, som kräver båda. `discovered_specs` använder
+`benchmark_roads`. Urvalsposten och registreringen bär `road_selection_rule`
+och `road_screen`, och den nya modulen ingår i `SEMANTIC_SOURCES`.
+`surviving_roads` ger samma resultat som tidigare (utökad endast med en valfri
+`limit`), och survivability-skärmen är orörd. Användarvalda stängningar
+passerar aldrig detta kontrakt.
+
+*Diagnostik.* `validation/effect_eligibility_census_20260917-v1.json`
+(content key `200a1019…`, output-hash `85a99002…`) kör produktionens
+`road_screen` mot de 30 kvalificerade arkiven. Arkivmängden kontrolleras mot
+det kvalificerade manifestet. Fordonsräkningen stämmer exakt med
+lineage-censusens oberoende räknare.
+
+| Kant | from → to | Närmaste sensor | Mätstatus | Katalog vardag/helg | Fordon q10/q50/q90 | Strukturellt | Effekt före canary | Avvisningsorsak |
+|---|---|---|---|---:|---:|---|---|---|
+| `26355153_26842525_0` | 26355153 → 26842525 | 133 (register) | omätt motriktning | 0 / 0 | 0 / 0 / 0 | ja | nej | `no_catalog_route_uses_edge`, `no_archive_vehicle_crosses_edge` |
+| `26842525_26355153_0` | 26842525 → 26355153 | 133 (register) | mätt | 100 / 91 | 315 143 ×3 | ja | ja | – |
+| `26355153_96523321_0` | 26355153 → 96523321 | 134 (register) | mätt | 58 / 56 | 264 671 ×3 | ja | ja | – |
+| `96523321_26355153_0` | 96523321 → 26355153 | 134 (register) | omätt motriktning | 52 / 51 | 172 225 / 234 922 / 254 212 | ja | ja | – |
+| `8710974792_1759741980_0` | 8710974792 → 1759741980 | 2276 (91,1 m) | ej i registret | 0 / 0 | 0 / 0 / 0 | ja | nej | `no_catalog_route_uses_edge`, `no_archive_vehicle_crosses_edge` |
+| `9037093028_1305379743_0` | 9037093028 → 1305379743 | 1076 (87,6 m) | ej i registret | 1 / 1 | 40 473 / 42 528 / 42 887 | ja | ja | – |
+
+Av skärmens 24 överlevande vägar klarar 18 steget före canary. Den nya regeln
+väljer i ordning `26842525_26355153_0`, `26355153_96523321_0`,
+`96523321_26355153_0`, `9037093028_1305379743_0`, `9037093028_30420757_0` och
+`96523321_96523748_0`. Närmaste sensor för vägar utanför registret mäts som
+avstånd mellan geometriska mittpunkter.
+
+*Icke-noll-canary.* `validation/wci_effect_canary_20260917-v1.json`
+(content key `02e19009…`, output-hash `1db140c9…`, status **PASS**) tar
+regelns första väg, `26842525_26355153_0`. Den härledda specen
+`subhour-cold-ledger-profile-2027-09-effect-fdc134ec4e` (content key
+`d38038fd…`) skiljer sig från den frysta profilspecen bara i kanten.
+
+* **Orakel:** beräknat oberoende i en egen process med produktionens
+  per-fil-väg (`ArchiveDisruptionProvider` och en färsk `DailyCostCache`):
+  195 dagenheter på 991,8 s.
+* **Produktionsväg:** oförändrade `_raw_index_records`, med samma
+  enhetsfilter som den första canaryn.
+
+| Build keys | Dagenheter | Berörda fordon (summa per enhet och variant) | Enheter med kostnad > 0 | `_raw_index_records` | Indexbyggen | Valideringar |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 65 | 232 845 | 65 | 40,56 s | 1 | 1 |
+| 2 | 130 | 514 533 | 130 | 62,77 s | 1 | 2 |
+| 3 | 195 | 866 217 | 195 | 87,25 s | 1 | 3 |
+
+Alla körningar är fältidentiska och kompletta mot oraklet och har identiska
+provideridentiteter. Kostnaden per enhet (`candidate_id`, `cost`,
+`daily_unit_ids`, `per_variant`) är exakt densamma i båda vägarna. 1- och
+2-nyckelskörningarna är byte-identiska med motsvarande enheter i
+3-nyckelskörningen. Ingen SUMO-process startades och inget demandarkiv
+skapades. Med canaryn blir `effect_eligible` sant för kanten.
+
+En hel kandidat spänner över fem dagar och därmed fem build keys. Kostnaden
+jämförs därför per dagenhet, med produktionens kandidatreduktion. Tiderna gäller
+en trafikerad kant och är högre än nollfallets 25,2/31,5/38,3 s. De är inget
+underlag för en projektion av ett helt bygge.
+
+*Kvar:* den frysta profilspecen är oförändrad och ger fortfarande bara
+nollkostnader. Ett nytt benchmark- eller profilfall för månaden ska väljas med
+den nya regeln och frysas, och först därefter kan ett fullständigt WCI-bygge
+övervägas. Steg 6 är inte startat.
+
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 
 **Filer:** `build_sumo_demand.py`, `monthly_demand.py:_resolve_new_release`,

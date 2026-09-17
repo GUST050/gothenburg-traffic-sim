@@ -1,0 +1,4918 @@
+{
+  "archives": {
+    "06cc309e4779897c": {
+      "archive": "demand-20260913-215415-af2d83e6-bc11",
+      "archive_content_key": "5849d34a9a69723c34e2aafcec82c4c968b68864a69d892ad46ad5c2d8b889e0",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 49851,
+        "q50": 51175,
+        "q90": 49497
+      },
+      "variant_sha256": {
+        "q10": "40bad0d2fde6196a887baeb170f7965ea98c7fa96148ef2d8fa1f755f3561e3c",
+        "q50": "17301074ec3dae1b27833a611054e179cdec4bfc4a4e41fac01a9b0e10246ee8",
+        "q90": "3dff89dff38f4981bcb807c64ab0755043aacb5b136f8d9ee1f4b7cf9997ab2c"
+      }
+    },
+    "084cedb913d5197c": {
+      "archive": "demand-20260913-220012-de032bcb-2165",
+      "archive_content_key": "bef93cdbf6d3c0a20328b69935ad6f8ca18745fdc87b157d8ff15020b55e83ed",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 51347,
+        "q50": 52643,
+        "q90": 50955
+      },
+      "variant_sha256": {
+        "q10": "3cbd37a04e437c8b210606b60048db2e2dbc44a0681b9c6dd9b82ee436510a39",
+        "q50": "398a64fea8b9b3df9367f119f9092346b4b52aeb60248a5cac3efecab028b077",
+        "q90": "122788b946eee790eadf0e731e5b16cb58244417acee3c511a70c5aef778418f"
+      }
+    },
+    "0a6c5266d76b5b39": {
+      "archive": "demand-20260913-220648-791840d4-c887",
+      "archive_content_key": "c988c98a618cab201fabcd9285c72b05951e9937070bb160903b0dc37f2a6eaf",
+      "catalog_pools": [
+        "weekday"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 60445,
+        "q50": 60948,
+        "q90": 60772
+      },
+      "variant_sha256": {
+        "q10": "9a078f48dbe0d75a86cdb8dd7de118050763f2ae2b450cb4acceb513372a08b2",
+        "q50": "ee1a689e629c0bca1839089e9c4f51e0979174b17ffdc42c90f7a71d7c017dd6",
+        "q90": "ac0f2ccd4496dd94889c561bc6e11e85abbe1e9137bac22242aa8f0f42efd8d9"
+      }
+    },
+    "16f1d6176c7a9133": {
+      "archive": "demand-20260913-221303-3a1fda45-188f",
+      "archive_content_key": "ffb8c79b719e45d8fae852db3e81611ee0ac3e1c5f79774806c1f1c02e293f6c",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 51327,
+        "q50": 52575,
+        "q90": 51008
+      },
+      "variant_sha256": {
+        "q10": "6fdad2fdc92b136e6b686ead579b3d3212c88df6fce02e8255fbc782b506f4fe",
+        "q50": "baadb761bb649f3b7310faffc18ff3d6d10001240bfbd452e0a3d5397a2c581e",
+        "q90": "7da0f419b0af68a2c93a7b0ac859df117cdd412d376a44f7432688e613ac687e"
+      }
+    },
+    "187fca60022dedc5": {
+      "archive": "demand-20260913-221533-52837f59-7e5d",
+      "archive_content_key": "228429ec61688bd93b4676d3d4e742489d29c65d64737ac96144ea2a23dbdac5",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 49836,
+        "q50": 51172,
+        "q90": 49371
+      },
+      "variant_sha256": {
+        "q10": "9462e3e00a8e635bcee36cce7158e326c355772d269b0ed44ff8465f6f2882a2",
+        "q50": "3c54203309c5c3f030d552bf77328c0d6e729abfc44865944fdde1f19bbec9f0",
+        "q90": "dc8b1912ec0df5fbd345a50b027ef24715405f7fce1399c160478769997d7fc6"
+      }
+    },
+    "2d4f272bb3dfc5d2": {
+      "archive": "demand-20260913-221806-7415a4c6-0d68",
+      "archive_content_key": "ecec806d1a819d447e714bb4234dd5d471429e2d09e2cd328a10eb3b62f8df99",
+      "catalog_pools": [
+        "weekday"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 62009,
+        "q50": 62219,
+        "q90": 61951
+      },
+      "variant_sha256": {
+        "q10": "dfff4f46ba78ff584bb53ed44385ac4910c4ea28da46ce891d238b8c7aeb6155",
+        "q50": "0e55e40b67ee6ed3d4b59afa99e768fd39e51c59a06f90e94bab919e0ef4f5c2",
+        "q90": "2e948048e35aefc063298703d9da79a133c5b08490ffb6cb11bfa572877e72ec"
+      }
+    },
+    "340168e305f8381e": {
+      "archive": "demand-20260913-222404-4b5941dd-77c7",
+      "archive_content_key": "56160da62dcdddefa2e3f7d4de751061428920f2201504b4a650769b09a1cb5c",
+      "catalog_pools": [
+        "weekday"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 58842,
+        "q50": 59513,
+        "q90": 59358
+      },
+      "variant_sha256": {
+        "q10": "19b2f83089271eb581aba30993edf4fa178c3f8ed2ffc8d08da34095ec0e13fd",
+        "q50": "0a3e194825aa61dca1cbfe2aae08ce32a068ce201a55f03e81e475a032a779e1",
+        "q90": "00c037ec2f5862509d6b2c40bb935f20e419194cf47937deb60379548069218c"
+      }
+    },
+    "3f5d86eed8fe5c17": {
+      "archive": "demand-20260913-222709-889e6f89-d6d5",
+      "archive_content_key": "782f2e480f945e03af3e3fda8b2ce5bd2dc76dae8460ff46777a1de3fff2e65b",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 56194,
+        "q50": 57063,
+        "q90": 54929
+      },
+      "variant_sha256": {
+        "q10": "27b19bcdb06f2b599f167e8f2e7f61ab269292a06e6d3ef3020f91d4d6b38f27",
+        "q50": "62d36af702fda24d713843609534883279bc8fafdca4edbfc90add927c0bc6e6",
+        "q90": "6a80bf4b215a47ae2c5e477f18e8e0dfd69502d440eef88d6047b92d9685c667"
+      }
+    },
+    "4008e6387839d7a3": {
+      "archive": "demand-20260913-223016-ef0f3cf3-44e9",
+      "archive_content_key": "f4c156ddfe278bee41a5e983e7a33edca2c31e14e357e54e371747ce97fdcd20",
+      "catalog_pools": [
+        "weekday"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 59137,
+        "q50": 59695,
+        "q90": 59490
+      },
+      "variant_sha256": {
+        "q10": "6f7e524cef8eeffb588d1bc165ec80b241fa6edf67192e76f4854d2731d11861",
+        "q50": "9056963ef718ed0ff45d7dd85769f64bad22f090ce1228d1bcaf0c67642e4527",
+        "q90": "7af51749923336e5321f0478c9ac78ed8ae91dbe955978313ac1921419942173"
+      }
+    },
+    "5803fd9aa62080cb": {
+      "archive": "demand-20260913-223222-19b614fb-7ce8",
+      "archive_content_key": "d44a8994a0330ce60d8325a91034001f49a93cdea90cfa00797bc2c6589f8304",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 56142,
+        "q50": 57132,
+        "q90": 55032
+      },
+      "variant_sha256": {
+        "q10": "b936b1d31714073419bcbd140fabaaeef756cd1f25db27b0bac902b6ff9bbd9f",
+        "q50": "ff306b69100450d54c3ad7e8ba0710c89f58f81bc49b3c927831846280b01a87",
+        "q90": "d31af09df6dacd7c06c9e7f061964e51f3ca7ba3721ee62367ba68cb44a7302e"
+      }
+    },
+    "5fcc585e03915396": {
+      "archive": "demand-20260913-223440-de070de9-581d",
+      "archive_content_key": "ff2c496d06510641f95d1c1a0c543a0dfc8b0728958f92f73a22f8e638e1e154",
+      "catalog_pools": [
+        "weekday"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 59831,
+        "q50": 60279,
+        "q90": 60155
+      },
+      "variant_sha256": {
+        "q10": "1e06f46f3cb26fbf6c3b7a2b107995615b4f781ba08d5d29f1387316158b09a1",
+        "q50": "b3867df491cad6605f0b54b6a627b7d082e85f4bfb2d698b3d57d219c2009fda",
+        "q90": "aa11a76e9566551ed16ff6e95112da0d4dd6146418572df1daaaf2cdbd1f36ee"
+      }
+    },
+    "657fa0b9f3268e78": {
+      "archive": "demand-20260913-223744-a3782377-418d",
+      "archive_content_key": "926b9383658a7267699e63869117819c74d8801a55dae8398fe0dea199825ff7",
+      "catalog_pools": [
+        "weekday"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 60632,
+        "q50": 61122,
+        "q90": 60968
+      },
+      "variant_sha256": {
+        "q10": "19f1905418cc59ccd931657445c38e3cc5caf60d72cca1d67ab5c83a9b6ba142",
+        "q50": "2ba6e528c43ff9fd90ef82b6ba2ab79505c60274c82e6d58be702b832d31cfa0",
+        "q90": "c468ced358b28b3054a1fe94a6d80648e25f90f5561523a66cab01bf1b48e4ed"
+      }
+    },
+    "6e3416af316f91cc": {
+      "archive": "demand-20260913-223804-04518454-6d14",
+      "archive_content_key": "e3a33894fd71177975d33e55024bac2d65877251e7c81e23cb6b7a2d2d494552",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 51641,
+        "q50": 52726,
+        "q90": 50626
+      },
+      "variant_sha256": {
+        "q10": "69175cc51448ee4660679195066a2049361500a3ea741b1c9dcbc2a33b082b13",
+        "q50": "85401a2a37d789f5922abf5f5738ad30b371f0557615cadb08d49dd5eb4dea3f",
+        "q90": "d2599a88c1c0a42d34ccd2ff3a43b94f9caf9603a7289bd89143515f0c0b82a5"
+      }
+    },
+    "7e395749f1712cb4": {
+      "archive": "demand-20260913-223825-2bbb1a66-845d",
+      "archive_content_key": "c54eb87e4e6225c4d54b00db8d9cc02b937566b89176840e535756fa71eb9a5e",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 51421,
+        "q50": 52640,
+        "q90": 51110
+      },
+      "variant_sha256": {
+        "q10": "9e65a929e224abc7021561669b0d2b057273913a54d68cba7bfab58a3bbee651",
+        "q50": "57e1f2b02e4f2b3b61103b2eae2bcab1045615ef6cfb7fc8d65cd772bc7f6e25",
+        "q90": "97cd530ce0a8e18b7969924e82c9904b68f337572865fb0c35fd80923368b25f"
+      }
+    },
+    "8dcbe1518a5b0898": {
+      "archive": "demand-20260913-224149-53fb2fd0-6182",
+      "archive_content_key": "76be17a75c7ae517491ee1aec369b6c72bd51851ab5c8555ff5b2ef4abe6d470",
+      "catalog_pools": [
+        "weekday"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 61904,
+        "q50": 62188,
+        "q90": 62057
+      },
+      "variant_sha256": {
+        "q10": "ace6cd24a2f9b0e8fc110111b9918696e2da1ab8b9d3d950ece2afcac9ec8174",
+        "q50": "25f6f39f2852e535e8404d0a650f1c53bec684496d282edb1a18fb4c530ad1ff",
+        "q90": "22371a743996db4cd48104daa717668356ba5a967f242e2a1c0d90f8aa402e5b"
+      }
+    },
+    "90a93715895966dc": {
+      "archive": "demand-20260913-224309-23459e2e-c9ef",
+      "archive_content_key": "8e47519b0f6cf3fca62832e19e5e0d1d28e47844c9f76413850345b02d597c28",
+      "catalog_pools": [
+        "weekday"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 60420,
+        "q50": 60931,
+        "q90": 60890
+      },
+      "variant_sha256": {
+        "q10": "6038e16dfac2d59a722ffd1af8d7663011c1afe543532bf8e92977dee7632bdf",
+        "q50": "be474ab3b7230350bbc17f41e637e33935b2946130115913168a5f8f76d3d511",
+        "q90": "8d6e11334cafad4244fb57d901fabbccee0b26871d30577a1abc73d9c28b234b"
+      }
+    },
+    "9c7ad9c97b6bdbc6": {
+      "archive": "demand-20260913-224428-7dfb00a9-cd72",
+      "archive_content_key": "1fe659e7a0b9b25f51035ac11e39495d38095fddc84da5341cf567cd319fb35a",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 49826,
+        "q50": 51105,
+        "q90": 49415
+      },
+      "variant_sha256": {
+        "q10": "44413462fceb856dcba5d9f8a5fc45cd0d54568509236c8eb72a85b06501bfda",
+        "q50": "3137ef8ca6e3e8dc0305577e5feab9d6fdf0ec5d601a764c02c67777db4e70cd",
+        "q90": "7caf6a8c373bcbfd21ffa4a75513776ad8e042a7c7f4aae8ae2a0b19142fafa0"
+      }
+    },
+    "b7e7cef8b702abae": {
+      "archive": "demand-20260913-224643-2bbcf31e-3b33",
+      "archive_content_key": "cfb86558a8bd4bc690af033ef274c6242601f0308edc60706644a76dc89af478",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 56266,
+        "q50": 57232,
+        "q90": 55232
+      },
+      "variant_sha256": {
+        "q10": "a832cf124fefc8d89784bce5eef9c6119a5627490eda4ea470074da80415de51",
+        "q50": "25753bc5c2db9880d7a1e24a29d6248ed2c896d15c7c99481e68308696d95b0d",
+        "q90": "61400b3120cb403d61702e8cd57160837028654017d13dc623bff0c217c37f88"
+      }
+    },
+    "c796667235591888": {
+      "archive": "demand-20260913-224959-e136d191-ae06",
+      "archive_content_key": "537def3d6b4c300eb024d205203346487bcca04e1837c5de6817aaf5cc1c8083",
+      "catalog_pools": [
+        "weekday"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 62110,
+        "q50": 62446,
+        "q90": 62291
+      },
+      "variant_sha256": {
+        "q10": "257be9fb379333b1ad094edc7a29c5aec8175ea641dbce663187e9dccbe0f553",
+        "q50": "c041ea54d0c00d503b3cbbcc855fcecb349b413bebb43d6cf2d0a812fe1d2e08",
+        "q90": "48e45142f127996f08aea9e47bfeb4266d6dd7c1a336408fe027bb123f7f8aee"
+      }
+    },
+    "cc8eb82bc98de729": {
+      "archive": "demand-20260913-225121-de7e3e34-015d",
+      "archive_content_key": "e2547c2176d32d53510ec7f8b8b2b5fd8d3c88146d4537777883c2a8361163f1",
+      "catalog_pools": [
+        "weekday"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 58967,
+        "q50": 59566,
+        "q90": 59326
+      },
+      "variant_sha256": {
+        "q10": "fc776c3b4f12ff0829eebc0a53c16748df52710d2e0b5b1c05377ff43ebb232d",
+        "q50": "95227405b15530e6b616aff0bba4d70213d12fad2aac7f6593e57d3f2016eb48",
+        "q90": "b4895a26b2e799b02cfd28d789f97a1bd9a1d952f6f08f62e7cc9ab66393d8a9"
+      }
+    },
+    "cff4da5d9bb7efb7": {
+      "archive": "demand-20260913-225243-61cb7aca-8652",
+      "archive_content_key": "6bcae642202f42e526addd00e564acfc14c54334e24fa30c6b7b8d098b449a5b",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 51603,
+        "q50": 52748,
+        "q90": 50836
+      },
+      "variant_sha256": {
+        "q10": "bd0dc44f38cd210bac35eb2150439853ae3894bc84a76ebaa402a86cf78d327c",
+        "q50": "487f321e3ec6ba8237a7fdf27d94486a9ca3ff3401efb3b49c427ed91fb1618d",
+        "q90": "d72beac7ff5a205a63e3de0366322e9651a12c8c348beb6cf4e1d007bb84ddb5"
+      }
+    },
+    "d42db159b3ee565f": {
+      "archive": "demand-20260913-225307-3abbaf06-06d6",
+      "archive_content_key": "fb2be2d4d29d40d0e0d2adf9b864025be503c02b6aed5cf05887bee9849c73f1",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 56215,
+        "q50": 57172,
+        "q90": 55226
+      },
+      "variant_sha256": {
+        "q10": "20bdcde95676cc322849d329c58edcb8ce4b3a73fd618a464f3057a3379299be",
+        "q50": "187e9f9640f2dfcf45eb45f636f13115df499fea06f75a6f55a5be7e6f5ca6eb",
+        "q90": "53fe459f53683d27e1582a337107f0455cd869235e5b26dd6abbd5a7a5ddcd8c"
+      }
+    },
+    "d482aa0afa27e9ce": {
+      "archive": "demand-20260913-225650-83f1213a-5e40",
+      "archive_content_key": "d620d265108ca5b83bdaeaeb094bcfa574dbf153b5965f2cd64deda352b05a12",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 51668,
+        "q50": 52766,
+        "q90": 50981
+      },
+      "variant_sha256": {
+        "q10": "c50d5f1bb146f0afe4f19b6b91a30f6c84e0aa10de086e49d5002dae68f420ac",
+        "q50": "0b25fad07359e31e96d45f5641d1d5f561f442e8cdc9ef3f55c74a946f6c7d06",
+        "q90": "f36fecd7c2cdda97652e13b468f4b0f03ce50dd46e41c9dedf39d42db040e40a"
+      }
+    },
+    "dae23c801891223c": {
+      "archive": "demand-20260913-225714-b593ac27-7b71",
+      "archive_content_key": "dffb422022663c0f901948b22d9e5dc8c495c8556976b2f7c69f413f79d3d4f0",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 49956,
+        "q50": 51232,
+        "q90": 49630
+      },
+      "variant_sha256": {
+        "q10": "485d639f66713007db5c8bb889935fdb5067ea19c6e7c6b2b13d80aa2d7bd8e1",
+        "q50": "5a6c62c86e5de2f4c96c3b9bbb599f1091c324925b172c1db9b33cb1e565533c",
+        "q90": "ee6f653d5c30cad39691a6826d442a4488c494c3eb342e5afd8113a5d2f81b5b"
+      }
+    },
+    "dce1407ed7d893a6": {
+      "archive": "demand-20260913-225738-e3bfe154-7e43",
+      "archive_content_key": "9b6b99f5d8d0e43abd4d3e9847a522f9acf8f3aa4e128c2c15afd2b0caab52d3",
+      "catalog_pools": [
+        "weekday"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 58977,
+        "q50": 59531,
+        "q90": 59356
+      },
+      "variant_sha256": {
+        "q10": "3d89d47bbca2dc13e2b3261514009d775428e8cbceed8c3daa9c3b045a2b6ce4",
+        "q50": "5035cdbb02d708440f395266e3d53c9a6d452403143557b3dcde93d2f6233665",
+        "q90": "7f9cf4a11b0d34cffb803f2714986d2092716ca722063587afda31d063e386c2"
+      }
+    },
+    "e72299dc2abeabcd": {
+      "archive": "demand-20260913-230115-82a40eaf-7603",
+      "archive_content_key": "6c846a3f11cf44c5dd3eb09c15a411c6cdf694359e3bb7c0b18dd848a8c76fb0",
+      "catalog_pools": [
+        "weekday"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 61895,
+        "q50": 62159,
+        "q90": 61964
+      },
+      "variant_sha256": {
+        "q10": "ffdffb204e7315e0b482d75ce39df25e0db085133a76cddefe8353637fcdb920",
+        "q50": "d7c9356fc9d1b7daafaf248a06345377d7f0dda6ef23690e35727e6696e5b59c",
+        "q90": "cb9a13513e01ccd3fe20b335d14bc61fb6315aff51baffe5b899680986ca20da"
+      }
+    },
+    "e9b489b9b469e9b6": {
+      "archive": "demand-20260913-230407-7f119ae2-9f58",
+      "archive_content_key": "c2a0ec057231f73ebed89226f9b3911de162033c235c1316aea265410d5d4803",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 51598,
+        "q50": 52660,
+        "q90": 50635
+      },
+      "variant_sha256": {
+        "q10": "308ffe628160cd5625c142afa04f77e59618778a4c1ba31054f7296dd50df734",
+        "q50": "e458bba64e57d850dc08beffdc2bda546a7dd3edf0c528710044fb16c62ffbed",
+        "q90": "930c3c97ea738dece9e59ea0532d43328f1978259cefc0847d050759d1d787d1"
+      }
+    },
+    "eb0bd33739d5e926": {
+      "archive": "demand-20260913-230432-5b265029-5e0f",
+      "archive_content_key": "b743107496ca4d8756a67697d41ceb1e15463d042222683fcfd7e79cc62f3140",
+      "catalog_pools": [
+        "weekday"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 60535,
+        "q50": 60983,
+        "q90": 60853
+      },
+      "variant_sha256": {
+        "q10": "270ebf3678806e588e53afee51fbe35b4084b5e3271b38b7a3f3dd37a3348f46",
+        "q50": "2c35a15afddce9708f5e269a44d0f7a785709755d58e633b3f1a5a44359085f3",
+        "q90": "f07567a27026474aca406087af900de26950da61bd4f7a96b32d7256a8723b1e"
+      }
+    },
+    "eb5d47e234425a98": {
+      "archive": "demand-20260913-230455-3e34ff00-af60",
+      "archive_content_key": "8b853bfc6d2659af4a7699963614489e5cc9600194f5837761f4579898f83633",
+      "catalog_pools": [
+        "weekday",
+        "weekend"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 51221,
+        "q50": 52453,
+        "q90": 50860
+      },
+      "variant_sha256": {
+        "q10": "5d414ff6130c136c6d8efca864e19de3d29dfd292f42a31dd8126b50489a38b5",
+        "q50": "e3206f8e2881dd45402fa811c85dac52ab7a6ecb256a175ae5af0ff5c1f7acb8",
+        "q90": "52c21301ad8439a46e0b723761b57ef621892e4a436c3f149cca6031ba4ec59e"
+      }
+    },
+    "f3d1a9ac4d14bd7a": {
+      "archive": "demand-20260913-230620-a893719c-a662",
+      "archive_content_key": "bec4f0d0bb89a6c0239e98d7ebaad911ed0807857f79be2533604dbec41641f5",
+      "catalog_pools": [
+        "weekday"
+      ],
+      "daily_units": 65,
+      "total_vehicles": {
+        "q10": 61915,
+        "q50": 62178,
+        "q90": 62139
+      },
+      "variant_sha256": {
+        "q10": "36eb2e6779044ad6a3f71739308cedde60d7ad266b472137ecf726c3ed8c2c65",
+        "q50": "375ea2f7a9ab0e4ab296e562246b660a39fdcf0b376be23eeb45e2adb8118427",
+        "q90": "ddd3d093c6b6e31a34150981bbcca0fc6d340edd41b0651ce648a7678962d55d"
+      }
+    }
+  },
+  "catalog_pools": {
+    "weekday": {
+      "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+      "per_edge": {
+        "26355153_26842525_0": 0,
+        "26355153_96523321_0": 58,
+        "26842525_26355153_0": 100,
+        "26842526_96527131_0": 0,
+        "8710974792_1759741980_0": 0,
+        "9037093028_1305379743_0": 1,
+        "96523321_26355153_0": 52,
+        "96527131_26842526_0": 67
+      },
+      "routes": 434,
+      "routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+    },
+    "weekend": {
+      "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+      "per_edge": {
+        "26355153_26842525_0": 0,
+        "26355153_96523321_0": 56,
+        "26842525_26355153_0": 91,
+        "26842526_96527131_0": 0,
+        "8710974792_1759741980_0": 0,
+        "9037093028_1305379743_0": 1,
+        "96523321_26355153_0": 51,
+        "96527131_26842526_0": 60
+      },
+      "routes": 435,
+      "routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4"
+    }
+  },
+  "census_helper": {
+    "path": "validation/benchmarks/wci_closure_edge_census_v1.py",
+    "sha256": "54229737c4976c15264fe331aa37bb6ed9c1226a7e74ee8672679c765d3c3bbf"
+  },
+  "content_key": "35041043dd82d71a05b0db9ad077bcd143b54d5ef7acb6edab5a9cb6cc257319",
+  "contract_checks": {
+    "closure_seconds_edges": [
+      "26355153_26842525_0"
+    ],
+    "closure_seconds_equals_spec_edges": true,
+    "closure_seconds_note": "closure_seconds emits one closure per spec.directed_edges entry; no street or reverse expansion exists",
+    "closure_seconds_units_checked": 1,
+    "live_demand_gate": "serve.py _require_supported_closure_edges rejects (HTTP 422) any directed edge absent from the live sumo/calibrated*.rou.xml; the tool path that produced the profile spec has no such gate",
+    "live_demand_supported": {
+      "26355153_26842525_0": false,
+      "26355153_96523321_0": true,
+      "26842525_26355153_0": true,
+      "26842526_96527131_0": false,
+      "8710974792_1759741980_0": false,
+      "9037093028_1305379743_0": true,
+      "96523321_26355153_0": true,
+      "96527131_26842526_0": true
+    }
+  },
+  "contract_files": {
+    "data_in/sensors.json": "41db5d452cb104405d8bd6ac6b78e2c7748dcfe641a9266c7229a4fc7edf1f20",
+    "sumo/calibrated.rou.xml": "375ea2f7a9ab0e4ab296e562246b660a39fdcf0b376be23eeb45e2adb8118427",
+    "sumo/calibrated_v1.rou.xml": "36eb2e6779044ad6a3f71739308cedde60d7ad266b472137ecf726c3ed8c2c65",
+    "sumo/calibrated_v2.rou.xml": "ddd3d093c6b6e31a34150981bbcca0fc6d340edd41b0651ce648a7678962d55d",
+    "sumo/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "validation/closure_survivability_screen_v2.json": "c790b7a5139f15d80c5e278bf3bcc7067179ce9a43c4155e3d69b9aedea34026",
+    "validation/golden_monthly_search_spec_v6.json": "093c7e92bc0b471ae56a2711e6cab99e20ab9c6d4abc2a2ded5be3d81b1ec0b9",
+    "validation/independent_daily_benchmark_spec_v1.json": "ef5792d224183bbbfe637157cd703c56d052ff11e46057c03c3aad0ba5c3bed7",
+    "validation/subhour_bounded_sumo_registration_20260831-impl.json": "5cd5fd9bb7a92664544ea9c2c38f4483e0a847f5ea6ad5bf3eb8e735eb7d3b43",
+    "validation/subhour_bounded_sumo_registration_20260831-v38.json": "079492fc141a0e7f648da7624e3d4aa689505cf134f8e0bc0b90e928971ac6c9",
+    "validation/subhour_monthly_search_profile_spec_v1.json": "10f3939a69b6f0bb6e74eb2b1e08a2b513cf54fa5610dd4a25d4d8366c1261aa",
+    "web/data/network.geojson": "92cbcf3895b3d1428d3713a0e919cf6679f00a8e5d00e7974182345d088a1dbf"
+  },
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/closure_edge_lineage_census_v1.py",
+    "sha256": "3270b5eb5d64726ef68b2ccf82cfc239163c2fd76043024be3b7cd09dbb7ecfb"
+  },
+  "edges": {
+    "26355153_26842525_0": {
+      "archives_with_traffic": 0,
+      "catalog_routes": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "routes": 0
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "routes": 0
+        }
+      },
+      "daily_units_exposed": 0,
+      "daily_units_exposed_note": "units whose archive has at least one crossing vehicle in any variant; the closure-window predicate is not applied",
+      "edge_id": "26355153_26842525_0",
+      "in_lineage": true,
+      "is_profile_spec_edge": true,
+      "live_demand_supported": false,
+      "measurement_status": "unmeasured_opposite_of_sensor",
+      "network": {
+        "exists": true,
+        "from_node": "26355153",
+        "incoming_connections": [
+          "165154328_26355153_0",
+          "26842525_26355153_0",
+          "91615277_26355153_0",
+          "96523321_26355153_0"
+        ],
+        "lanes": [
+          {
+            "allow": null,
+            "disallow": null,
+            "id": "26355153_26842525_0_0",
+            "speed": "13.89"
+          }
+        ],
+        "outgoing_connections": [
+          "26842525_26355153_0",
+          "26842525_26842526_0"
+        ],
+        "reverse_edges": [
+          "26842525_26355153_0"
+        ],
+        "reverse_rule": "edges whose SUMO from/to attributes are this edge's to/from; the edge-ID string is not parsed",
+        "to_node": "26842525"
+      },
+      "network_geojson": {
+        "bidirectional": false,
+        "dist_sensor_m": 11.0,
+        "highway": "tertiary",
+        "name": "L\u00e4raregatan",
+        "sensor_id": null
+      },
+      "nonzero_canary_usable": false,
+      "per_build_key": {
+        "06cc309e4779897c": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "084cedb913d5197c": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "0a6c5266d76b5b39": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "16f1d6176c7a9133": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "187fca60022dedc5": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "2d4f272bb3dfc5d2": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "340168e305f8381e": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "3f5d86eed8fe5c17": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "4008e6387839d7a3": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "5803fd9aa62080cb": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "5fcc585e03915396": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "657fa0b9f3268e78": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "6e3416af316f91cc": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "7e395749f1712cb4": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "8dcbe1518a5b0898": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "90a93715895966dc": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "9c7ad9c97b6bdbc6": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "b7e7cef8b702abae": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "c796667235591888": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "cc8eb82bc98de729": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "cff4da5d9bb7efb7": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "d42db159b3ee565f": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "d482aa0afa27e9ce": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "dae23c801891223c": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "dce1407ed7d893a6": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "e72299dc2abeabcd": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "e9b489b9b469e9b6": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "eb0bd33739d5e926": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "eb5d47e234425a98": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "f3d1a9ac4d14bd7a": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        }
+      },
+      "reasons": [
+        "no route in any recorded catalog pool",
+        "no calibrated vehicle in any of the 30 archives"
+      ],
+      "registry_roles": [
+        {
+          "catalogue_verification": "verified",
+          "measurement_semantics": "directional",
+          "measurement_status": "unmeasured_estimated",
+          "resolved_by": "node_reverse",
+          "role": "opposite_direction",
+          "sensor_id": "133",
+          "snap_status": "approved",
+          "source": "Goteborgs Stad trafikmangder catalogue"
+        }
+      ],
+      "screen": {
+        "discovery_rank": 1,
+        "dist_sensor_m": 11.0,
+        "in_pool": true,
+        "survives_topology": true
+      },
+      "unique_routes_by_variant_summed_over_archives": {
+        "q10": 0,
+        "q50": 0,
+        "q90": 0
+      },
+      "vehicles": {
+        "q10": 0,
+        "q50": 0,
+        "q90": 0,
+        "total": 0
+      }
+    },
+    "26355153_96523321_0": {
+      "archives_with_traffic": 30,
+      "catalog_routes": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "routes": 58
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "routes": 56
+        }
+      },
+      "daily_units_exposed": 1950,
+      "daily_units_exposed_note": "units whose archive has at least one crossing vehicle in any variant; the closure-window predicate is not applied",
+      "edge_id": "26355153_96523321_0",
+      "in_lineage": true,
+      "is_profile_spec_edge": false,
+      "live_demand_supported": true,
+      "measurement_status": "measured",
+      "network": {
+        "exists": true,
+        "from_node": "26355153",
+        "incoming_connections": [
+          "165154328_26355153_0",
+          "26842525_26355153_0",
+          "91615277_26355153_0",
+          "96523321_26355153_0"
+        ],
+        "lanes": [
+          {
+            "allow": null,
+            "disallow": null,
+            "id": "26355153_96523321_0_0",
+            "speed": "13.89"
+          }
+        ],
+        "outgoing_connections": [
+          "96523321_26355153_0",
+          "96523321_96523748_0"
+        ],
+        "reverse_edges": [
+          "96523321_26355153_0"
+        ],
+        "reverse_rule": "edges whose SUMO from/to attributes are this edge's to/from; the edge-ID string is not parsed",
+        "to_node": "96523321"
+      },
+      "network_geojson": {
+        "bidirectional": false,
+        "dist_sensor_m": 25.8,
+        "highway": "tertiary",
+        "name": "Gibraltargatan",
+        "sensor_id": "134"
+      },
+      "nonzero_canary_usable": true,
+      "per_build_key": {
+        "06cc309e4779897c": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 7661
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 7661
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 7661
+          }
+        },
+        "084cedb913d5197c": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 8348
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 8348
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 8348
+          }
+        },
+        "0a6c5266d76b5b39": {
+          "q10": {
+            "unique_routes": 56,
+            "vehicles": 9526
+          },
+          "q50": {
+            "unique_routes": 56,
+            "vehicles": 9526
+          },
+          "q90": {
+            "unique_routes": 56,
+            "vehicles": 9526
+          }
+        },
+        "16f1d6176c7a9133": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 8348
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 8348
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 8348
+          }
+        },
+        "187fca60022dedc5": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 7661
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 7661
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 7661
+          }
+        },
+        "2d4f272bb3dfc5d2": {
+          "q10": {
+            "unique_routes": 56,
+            "vehicles": 9706
+          },
+          "q50": {
+            "unique_routes": 56,
+            "vehicles": 9706
+          },
+          "q90": {
+            "unique_routes": 56,
+            "vehicles": 9706
+          }
+        },
+        "340168e305f8381e": {
+          "q10": {
+            "unique_routes": 56,
+            "vehicles": 9260
+          },
+          "q50": {
+            "unique_routes": 56,
+            "vehicles": 9260
+          },
+          "q90": {
+            "unique_routes": 56,
+            "vehicles": 9260
+          }
+        },
+        "3f5d86eed8fe5c17": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 9011
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 9011
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 9011
+          }
+        },
+        "4008e6387839d7a3": {
+          "q10": {
+            "unique_routes": 56,
+            "vehicles": 9260
+          },
+          "q50": {
+            "unique_routes": 56,
+            "vehicles": 9260
+          },
+          "q90": {
+            "unique_routes": 56,
+            "vehicles": 9260
+          }
+        },
+        "5803fd9aa62080cb": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 9011
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 9011
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 9011
+          }
+        },
+        "5fcc585e03915396": {
+          "q10": {
+            "unique_routes": 56,
+            "vehicles": 9299
+          },
+          "q50": {
+            "unique_routes": 56,
+            "vehicles": 9299
+          },
+          "q90": {
+            "unique_routes": 56,
+            "vehicles": 9299
+          }
+        },
+        "657fa0b9f3268e78": {
+          "q10": {
+            "unique_routes": 56,
+            "vehicles": 9526
+          },
+          "q50": {
+            "unique_routes": 56,
+            "vehicles": 9526
+          },
+          "q90": {
+            "unique_routes": 56,
+            "vehicles": 9526
+          }
+        },
+        "6e3416af316f91cc": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 7925
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 7925
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 7925
+          }
+        },
+        "7e395749f1712cb4": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 8348
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 8348
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 8348
+          }
+        },
+        "8dcbe1518a5b0898": {
+          "q10": {
+            "unique_routes": 56,
+            "vehicles": 9706
+          },
+          "q50": {
+            "unique_routes": 56,
+            "vehicles": 9706
+          },
+          "q90": {
+            "unique_routes": 56,
+            "vehicles": 9706
+          }
+        },
+        "90a93715895966dc": {
+          "q10": {
+            "unique_routes": 56,
+            "vehicles": 9526
+          },
+          "q50": {
+            "unique_routes": 56,
+            "vehicles": 9526
+          },
+          "q90": {
+            "unique_routes": 56,
+            "vehicles": 9526
+          }
+        },
+        "9c7ad9c97b6bdbc6": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 7661
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 7661
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 7661
+          }
+        },
+        "b7e7cef8b702abae": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 9011
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 9011
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 9011
+          }
+        },
+        "c796667235591888": {
+          "q10": {
+            "unique_routes": 56,
+            "vehicles": 9624
+          },
+          "q50": {
+            "unique_routes": 56,
+            "vehicles": 9624
+          },
+          "q90": {
+            "unique_routes": 56,
+            "vehicles": 9624
+          }
+        },
+        "cc8eb82bc98de729": {
+          "q10": {
+            "unique_routes": 56,
+            "vehicles": 9260
+          },
+          "q50": {
+            "unique_routes": 56,
+            "vehicles": 9260
+          },
+          "q90": {
+            "unique_routes": 56,
+            "vehicles": 9260
+          }
+        },
+        "cff4da5d9bb7efb7": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 7925
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 7925
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 7925
+          }
+        },
+        "d42db159b3ee565f": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 9011
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 9011
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 9011
+          }
+        },
+        "d482aa0afa27e9ce": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 7925
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 7925
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 7925
+          }
+        },
+        "dae23c801891223c": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 7661
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 7661
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 7661
+          }
+        },
+        "dce1407ed7d893a6": {
+          "q10": {
+            "unique_routes": 56,
+            "vehicles": 9260
+          },
+          "q50": {
+            "unique_routes": 56,
+            "vehicles": 9260
+          },
+          "q90": {
+            "unique_routes": 56,
+            "vehicles": 9260
+          }
+        },
+        "e72299dc2abeabcd": {
+          "q10": {
+            "unique_routes": 56,
+            "vehicles": 9706
+          },
+          "q50": {
+            "unique_routes": 56,
+            "vehicles": 9706
+          },
+          "q90": {
+            "unique_routes": 56,
+            "vehicles": 9706
+          }
+        },
+        "e9b489b9b469e9b6": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 7925
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 7925
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 7925
+          }
+        },
+        "eb0bd33739d5e926": {
+          "q10": {
+            "unique_routes": 56,
+            "vehicles": 9526
+          },
+          "q50": {
+            "unique_routes": 56,
+            "vehicles": 9526
+          },
+          "q90": {
+            "unique_routes": 56,
+            "vehicles": 9526
+          }
+        },
+        "eb5d47e234425a98": {
+          "q10": {
+            "unique_routes": 62,
+            "vehicles": 8348
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 8348
+          },
+          "q90": {
+            "unique_routes": 62,
+            "vehicles": 8348
+          }
+        },
+        "f3d1a9ac4d14bd7a": {
+          "q10": {
+            "unique_routes": 56,
+            "vehicles": 9706
+          },
+          "q50": {
+            "unique_routes": 56,
+            "vehicles": 9706
+          },
+          "q90": {
+            "unique_routes": 56,
+            "vehicles": 9706
+          }
+        }
+      },
+      "reasons": [],
+      "registry_roles": [
+        {
+          "catalogue_verification": "verified",
+          "measurement_semantics": "directional",
+          "role": "measured_edge",
+          "sensor_id": "134",
+          "snap_status": "approved",
+          "source": "Goteborgs Stad trafikmangder catalogue"
+        }
+      ],
+      "screen": {
+        "discovery_rank": 3,
+        "dist_sensor_m": 25.8,
+        "in_pool": true,
+        "survives_topology": true
+      },
+      "unique_routes_by_variant_summed_over_archives": {
+        "q10": 1776,
+        "q50": 1776,
+        "q90": 1776
+      },
+      "vehicles": {
+        "q10": 264671,
+        "q50": 264671,
+        "q90": 264671,
+        "total": 794013
+      }
+    },
+    "26842525_26355153_0": {
+      "archives_with_traffic": 30,
+      "catalog_routes": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "routes": 100
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "routes": 91
+        }
+      },
+      "daily_units_exposed": 1950,
+      "daily_units_exposed_note": "units whose archive has at least one crossing vehicle in any variant; the closure-window predicate is not applied",
+      "edge_id": "26842525_26355153_0",
+      "in_lineage": true,
+      "is_profile_spec_edge": false,
+      "live_demand_supported": true,
+      "measurement_status": "measured",
+      "network": {
+        "exists": true,
+        "from_node": "26842525",
+        "incoming_connections": [
+          "26355153_26842525_0",
+          "26842526_26842525_0",
+          "305677016_26842525_0"
+        ],
+        "lanes": [
+          {
+            "allow": null,
+            "disallow": null,
+            "id": "26842525_26355153_0_0",
+            "speed": "13.89"
+          }
+        ],
+        "outgoing_connections": [
+          "26355153_165154328_0",
+          "26355153_26842525_0",
+          "26355153_91615277_0",
+          "26355153_96523321_0"
+        ],
+        "reverse_edges": [
+          "26355153_26842525_0"
+        ],
+        "reverse_rule": "edges whose SUMO from/to attributes are this edge's to/from; the edge-ID string is not parsed",
+        "to_node": "26355153"
+      },
+      "network_geojson": {
+        "bidirectional": false,
+        "dist_sensor_m": 11.0,
+        "highway": "tertiary",
+        "name": "L\u00e4raregatan",
+        "sensor_id": "133"
+      },
+      "nonzero_canary_usable": true,
+      "per_build_key": {
+        "06cc309e4779897c": {
+          "q10": {
+            "unique_routes": 133,
+            "vehicles": 9733
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 9733
+          },
+          "q90": {
+            "unique_routes": 137,
+            "vehicles": 9733
+          }
+        },
+        "084cedb913d5197c": {
+          "q10": {
+            "unique_routes": 137,
+            "vehicles": 10281
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 10281
+          },
+          "q90": {
+            "unique_routes": 128,
+            "vehicles": 10281
+          }
+        },
+        "0a6c5266d76b5b39": {
+          "q10": {
+            "unique_routes": 86,
+            "vehicles": 11456
+          },
+          "q50": {
+            "unique_routes": 97,
+            "vehicles": 11456
+          },
+          "q90": {
+            "unique_routes": 99,
+            "vehicles": 11456
+          }
+        },
+        "16f1d6176c7a9133": {
+          "q10": {
+            "unique_routes": 134,
+            "vehicles": 10281
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 10281
+          },
+          "q90": {
+            "unique_routes": 124,
+            "vehicles": 10281
+          }
+        },
+        "187fca60022dedc5": {
+          "q10": {
+            "unique_routes": 137,
+            "vehicles": 9733
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 9733
+          },
+          "q90": {
+            "unique_routes": 138,
+            "vehicles": 9733
+          }
+        },
+        "2d4f272bb3dfc5d2": {
+          "q10": {
+            "unique_routes": 84,
+            "vehicles": 10901
+          },
+          "q50": {
+            "unique_routes": 97,
+            "vehicles": 10901
+          },
+          "q90": {
+            "unique_routes": 99,
+            "vehicles": 10901
+          }
+        },
+        "340168e305f8381e": {
+          "q10": {
+            "unique_routes": 85,
+            "vehicles": 11219
+          },
+          "q50": {
+            "unique_routes": 98,
+            "vehicles": 11219
+          },
+          "q90": {
+            "unique_routes": 99,
+            "vehicles": 11219
+          }
+        },
+        "3f5d86eed8fe5c17": {
+          "q10": {
+            "unique_routes": 125,
+            "vehicles": 10329
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 10329
+          },
+          "q90": {
+            "unique_routes": 135,
+            "vehicles": 10329
+          }
+        },
+        "4008e6387839d7a3": {
+          "q10": {
+            "unique_routes": 85,
+            "vehicles": 11219
+          },
+          "q50": {
+            "unique_routes": 98,
+            "vehicles": 11219
+          },
+          "q90": {
+            "unique_routes": 99,
+            "vehicles": 11219
+          }
+        },
+        "5803fd9aa62080cb": {
+          "q10": {
+            "unique_routes": 124,
+            "vehicles": 10329
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 10329
+          },
+          "q90": {
+            "unique_routes": 138,
+            "vehicles": 10329
+          }
+        },
+        "5fcc585e03915396": {
+          "q10": {
+            "unique_routes": 88,
+            "vehicles": 11299
+          },
+          "q50": {
+            "unique_routes": 99,
+            "vehicles": 11299
+          },
+          "q90": {
+            "unique_routes": 99,
+            "vehicles": 11299
+          }
+        },
+        "657fa0b9f3268e78": {
+          "q10": {
+            "unique_routes": 84,
+            "vehicles": 11456
+          },
+          "q50": {
+            "unique_routes": 97,
+            "vehicles": 11456
+          },
+          "q90": {
+            "unique_routes": 99,
+            "vehicles": 11456
+          }
+        },
+        "6e3416af316f91cc": {
+          "q10": {
+            "unique_routes": 137,
+            "vehicles": 9230
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 9230
+          },
+          "q90": {
+            "unique_routes": 137,
+            "vehicles": 9230
+          }
+        },
+        "7e395749f1712cb4": {
+          "q10": {
+            "unique_routes": 138,
+            "vehicles": 10281
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 10281
+          },
+          "q90": {
+            "unique_routes": 134,
+            "vehicles": 10281
+          }
+        },
+        "8dcbe1518a5b0898": {
+          "q10": {
+            "unique_routes": 86,
+            "vehicles": 10901
+          },
+          "q50": {
+            "unique_routes": 97,
+            "vehicles": 10901
+          },
+          "q90": {
+            "unique_routes": 99,
+            "vehicles": 10901
+          }
+        },
+        "90a93715895966dc": {
+          "q10": {
+            "unique_routes": 85,
+            "vehicles": 11456
+          },
+          "q50": {
+            "unique_routes": 96,
+            "vehicles": 11456
+          },
+          "q90": {
+            "unique_routes": 99,
+            "vehicles": 11456
+          }
+        },
+        "9c7ad9c97b6bdbc6": {
+          "q10": {
+            "unique_routes": 134,
+            "vehicles": 9733
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 9733
+          },
+          "q90": {
+            "unique_routes": 136,
+            "vehicles": 9733
+          }
+        },
+        "b7e7cef8b702abae": {
+          "q10": {
+            "unique_routes": 127,
+            "vehicles": 10329
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 10329
+          },
+          "q90": {
+            "unique_routes": 137,
+            "vehicles": 10329
+          }
+        },
+        "c796667235591888": {
+          "q10": {
+            "unique_routes": 85,
+            "vehicles": 11248
+          },
+          "q50": {
+            "unique_routes": 97,
+            "vehicles": 11248
+          },
+          "q90": {
+            "unique_routes": 99,
+            "vehicles": 11248
+          }
+        },
+        "cc8eb82bc98de729": {
+          "q10": {
+            "unique_routes": 88,
+            "vehicles": 11219
+          },
+          "q50": {
+            "unique_routes": 98,
+            "vehicles": 11219
+          },
+          "q90": {
+            "unique_routes": 99,
+            "vehicles": 11219
+          }
+        },
+        "cff4da5d9bb7efb7": {
+          "q10": {
+            "unique_routes": 131,
+            "vehicles": 9230
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 9230
+          },
+          "q90": {
+            "unique_routes": 136,
+            "vehicles": 9230
+          }
+        },
+        "d42db159b3ee565f": {
+          "q10": {
+            "unique_routes": 127,
+            "vehicles": 10329
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 10329
+          },
+          "q90": {
+            "unique_routes": 136,
+            "vehicles": 10329
+          }
+        },
+        "d482aa0afa27e9ce": {
+          "q10": {
+            "unique_routes": 137,
+            "vehicles": 9230
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 9230
+          },
+          "q90": {
+            "unique_routes": 136,
+            "vehicles": 9230
+          }
+        },
+        "dae23c801891223c": {
+          "q10": {
+            "unique_routes": 138,
+            "vehicles": 9733
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 9733
+          },
+          "q90": {
+            "unique_routes": 137,
+            "vehicles": 9733
+          }
+        },
+        "dce1407ed7d893a6": {
+          "q10": {
+            "unique_routes": 86,
+            "vehicles": 11219
+          },
+          "q50": {
+            "unique_routes": 98,
+            "vehicles": 11219
+          },
+          "q90": {
+            "unique_routes": 99,
+            "vehicles": 11219
+          }
+        },
+        "e72299dc2abeabcd": {
+          "q10": {
+            "unique_routes": 83,
+            "vehicles": 10901
+          },
+          "q50": {
+            "unique_routes": 97,
+            "vehicles": 10901
+          },
+          "q90": {
+            "unique_routes": 99,
+            "vehicles": 10901
+          }
+        },
+        "e9b489b9b469e9b6": {
+          "q10": {
+            "unique_routes": 133,
+            "vehicles": 9230
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 9230
+          },
+          "q90": {
+            "unique_routes": 134,
+            "vehicles": 9230
+          }
+        },
+        "eb0bd33739d5e926": {
+          "q10": {
+            "unique_routes": 86,
+            "vehicles": 11456
+          },
+          "q50": {
+            "unique_routes": 98,
+            "vehicles": 11456
+          },
+          "q90": {
+            "unique_routes": 99,
+            "vehicles": 11456
+          }
+        },
+        "eb5d47e234425a98": {
+          "q10": {
+            "unique_routes": 136,
+            "vehicles": 10281
+          },
+          "q50": {
+            "unique_routes": 138,
+            "vehicles": 10281
+          },
+          "q90": {
+            "unique_routes": 133,
+            "vehicles": 10281
+          }
+        },
+        "f3d1a9ac4d14bd7a": {
+          "q10": {
+            "unique_routes": 85,
+            "vehicles": 10901
+          },
+          "q50": {
+            "unique_routes": 97,
+            "vehicles": 10901
+          },
+          "q90": {
+            "unique_routes": 99,
+            "vehicles": 10901
+          }
+        }
+      },
+      "reasons": [],
+      "registry_roles": [
+        {
+          "catalogue_verification": "verified",
+          "measurement_semantics": "directional",
+          "role": "measured_edge",
+          "sensor_id": "133",
+          "snap_status": "approved",
+          "source": "Goteborgs Stad trafikmangder catalogue"
+        }
+      ],
+      "screen": {
+        "discovery_rank": 2,
+        "dist_sensor_m": 11.0,
+        "in_pool": true,
+        "survives_topology": true
+      },
+      "unique_routes_by_variant_summed_over_archives": {
+        "q10": 3324,
+        "q50": 3572,
+        "q90": 3542
+      },
+      "vehicles": {
+        "q10": 315143,
+        "q50": 315143,
+        "q90": 315143,
+        "total": 945429
+      }
+    },
+    "26842526_96527131_0": {
+      "archives_with_traffic": 0,
+      "catalog_routes": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "routes": 0
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "routes": 0
+        }
+      },
+      "daily_units_exposed": 0,
+      "daily_units_exposed_note": "units whose archive has at least one crossing vehicle in any variant; the closure-window predicate is not applied",
+      "edge_id": "26842526_96527131_0",
+      "in_lineage": true,
+      "is_profile_spec_edge": false,
+      "live_demand_supported": false,
+      "measurement_status": "not_in_sensor_registry",
+      "network": {
+        "exists": true,
+        "from_node": "26842526",
+        "incoming_connections": [
+          "26842525_26842526_0",
+          "305677058_26842526_0",
+          "96527131_26842526_0"
+        ],
+        "lanes": [
+          {
+            "allow": null,
+            "disallow": null,
+            "id": "26842526_96527131_0_0",
+            "speed": "13.89"
+          }
+        ],
+        "outgoing_connections": [
+          "96527131_25734040_0",
+          "96527131_26842526_0",
+          "96527131_96528278_0"
+        ],
+        "reverse_edges": [
+          "96527131_26842526_0"
+        ],
+        "reverse_rule": "edges whose SUMO from/to attributes are this edge's to/from; the edge-ID string is not parsed",
+        "to_node": "96527131"
+      },
+      "network_geojson": {
+        "bidirectional": false,
+        "dist_sensor_m": 143.2,
+        "highway": "tertiary",
+        "name": "Viktor Rydbergsgatan",
+        "sensor_id": null
+      },
+      "nonzero_canary_usable": false,
+      "per_build_key": {
+        "06cc309e4779897c": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "084cedb913d5197c": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "0a6c5266d76b5b39": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "16f1d6176c7a9133": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "187fca60022dedc5": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "2d4f272bb3dfc5d2": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "340168e305f8381e": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "3f5d86eed8fe5c17": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "4008e6387839d7a3": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "5803fd9aa62080cb": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "5fcc585e03915396": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "657fa0b9f3268e78": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "6e3416af316f91cc": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "7e395749f1712cb4": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "8dcbe1518a5b0898": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "90a93715895966dc": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "9c7ad9c97b6bdbc6": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "b7e7cef8b702abae": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "c796667235591888": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "cc8eb82bc98de729": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "cff4da5d9bb7efb7": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "d42db159b3ee565f": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "d482aa0afa27e9ce": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "dae23c801891223c": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "dce1407ed7d893a6": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "e72299dc2abeabcd": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "e9b489b9b469e9b6": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "eb0bd33739d5e926": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "eb5d47e234425a98": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "f3d1a9ac4d14bd7a": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        }
+      },
+      "reasons": [
+        "no route in any recorded catalog pool",
+        "no calibrated vehicle in any of the 30 archives",
+        "not in the survivability screen"
+      ],
+      "registry_roles": [],
+      "screen": {
+        "discovery_rank": null,
+        "dist_sensor_m": null,
+        "in_pool": false,
+        "survives_topology": null
+      },
+      "unique_routes_by_variant_summed_over_archives": {
+        "q10": 0,
+        "q50": 0,
+        "q90": 0
+      },
+      "vehicles": {
+        "q10": 0,
+        "q50": 0,
+        "q90": 0,
+        "total": 0
+      }
+    },
+    "8710974792_1759741980_0": {
+      "archives_with_traffic": 0,
+      "catalog_routes": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "routes": 0
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "routes": 0
+        }
+      },
+      "daily_units_exposed": 0,
+      "daily_units_exposed_note": "units whose archive has at least one crossing vehicle in any variant; the closure-window predicate is not applied",
+      "edge_id": "8710974792_1759741980_0",
+      "in_lineage": true,
+      "is_profile_spec_edge": false,
+      "live_demand_supported": false,
+      "measurement_status": "not_in_sensor_registry",
+      "network": {
+        "exists": true,
+        "from_node": "8710974792",
+        "incoming_connections": [
+          "91615275_8710974792_0"
+        ],
+        "lanes": [
+          {
+            "allow": null,
+            "disallow": null,
+            "id": "8710974792_1759741980_0_0",
+            "speed": "13.89"
+          }
+        ],
+        "outgoing_connections": [
+          "1759741980_26193194_0",
+          "1759741980_91615277_0"
+        ],
+        "reverse_edges": [],
+        "reverse_rule": "edges whose SUMO from/to attributes are this edge's to/from; the edge-ID string is not parsed",
+        "to_node": "1759741980"
+      },
+      "network_geojson": {
+        "bidirectional": false,
+        "dist_sensor_m": 76.4,
+        "highway": "tertiary",
+        "name": "Aschebergsgatan",
+        "sensor_id": null
+      },
+      "nonzero_canary_usable": false,
+      "per_build_key": {
+        "06cc309e4779897c": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "084cedb913d5197c": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "0a6c5266d76b5b39": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "16f1d6176c7a9133": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "187fca60022dedc5": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "2d4f272bb3dfc5d2": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "340168e305f8381e": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "3f5d86eed8fe5c17": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "4008e6387839d7a3": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "5803fd9aa62080cb": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "5fcc585e03915396": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "657fa0b9f3268e78": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "6e3416af316f91cc": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "7e395749f1712cb4": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "8dcbe1518a5b0898": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "90a93715895966dc": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "9c7ad9c97b6bdbc6": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "b7e7cef8b702abae": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "c796667235591888": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "cc8eb82bc98de729": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "cff4da5d9bb7efb7": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "d42db159b3ee565f": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "d482aa0afa27e9ce": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "dae23c801891223c": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "dce1407ed7d893a6": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "e72299dc2abeabcd": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "e9b489b9b469e9b6": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "eb0bd33739d5e926": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "eb5d47e234425a98": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        },
+        "f3d1a9ac4d14bd7a": {
+          "q10": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q50": {
+            "unique_routes": 0,
+            "vehicles": 0
+          },
+          "q90": {
+            "unique_routes": 0,
+            "vehicles": 0
+          }
+        }
+      },
+      "reasons": [
+        "no route in any recorded catalog pool",
+        "no calibrated vehicle in any of the 30 archives"
+      ],
+      "registry_roles": [],
+      "screen": {
+        "discovery_rank": 5,
+        "dist_sensor_m": 76.4,
+        "in_pool": true,
+        "survives_topology": true
+      },
+      "unique_routes_by_variant_summed_over_archives": {
+        "q10": 0,
+        "q50": 0,
+        "q90": 0
+      },
+      "vehicles": {
+        "q10": 0,
+        "q50": 0,
+        "q90": 0,
+        "total": 0
+      }
+    },
+    "9037093028_1305379743_0": {
+      "archives_with_traffic": 30,
+      "catalog_routes": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "routes": 1
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "routes": 1
+        }
+      },
+      "daily_units_exposed": 1950,
+      "daily_units_exposed_note": "units whose archive has at least one crossing vehicle in any variant; the closure-window predicate is not applied",
+      "edge_id": "9037093028_1305379743_0",
+      "in_lineage": true,
+      "is_profile_spec_edge": false,
+      "live_demand_supported": true,
+      "measurement_status": "not_in_sensor_registry",
+      "network": {
+        "exists": true,
+        "from_node": "9037093028",
+        "incoming_connections": [
+          "9439210780_9037093028_0"
+        ],
+        "lanes": [
+          {
+            "allow": null,
+            "disallow": null,
+            "id": "9037093028_1305379743_0_0",
+            "speed": "13.89"
+          }
+        ],
+        "outgoing_connections": [
+          "1305379743_1305379746_0"
+        ],
+        "reverse_edges": [],
+        "reverse_rule": "edges whose SUMO from/to attributes are this edge's to/from; the edge-ID string is not parsed",
+        "to_node": "1305379743"
+      },
+      "network_geojson": {
+        "bidirectional": false,
+        "dist_sensor_m": 86.8,
+        "highway": "secondary",
+        "name": "Burg\u00e5rdsplatsen",
+        "sensor_id": null
+      },
+      "nonzero_canary_usable": true,
+      "per_build_key": {
+        "06cc309e4779897c": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1015
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1114
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1096
+          }
+        },
+        "084cedb913d5197c": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1057
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1179
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1163
+          }
+        },
+        "0a6c5266d76b5b39": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1632
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1694
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1740
+          }
+        },
+        "16f1d6176c7a9133": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1046
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1177
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1156
+          }
+        },
+        "187fca60022dedc5": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1037
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1116
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1091
+          }
+        },
+        "2d4f272bb3dfc5d2": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1721
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1750
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1783
+          }
+        },
+        "340168e305f8381e": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1557
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1658
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1725
+          }
+        },
+        "3f5d86eed8fe5c17": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1206
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1262
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1267
+          }
+        },
+        "4008e6387839d7a3": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1542
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1618
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1681
+          }
+        },
+        "5803fd9aa62080cb": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1217
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1271
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1249
+          }
+        },
+        "5fcc585e03915396": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1632
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1687
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1743
+          }
+        },
+        "657fa0b9f3268e78": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1645
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1667
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1765
+          }
+        },
+        "6e3416af316f91cc": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1091
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1154
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1116
+          }
+        },
+        "7e395749f1712cb4": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1062
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1177
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1147
+          }
+        },
+        "8dcbe1518a5b0898": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1717
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1758
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1788
+          }
+        },
+        "90a93715895966dc": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1651
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1716
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1761
+          }
+        },
+        "9c7ad9c97b6bdbc6": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1034
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1110
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1090
+          }
+        },
+        "b7e7cef8b702abae": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1219
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1270
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1249
+          }
+        },
+        "c796667235591888": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1717
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1761
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1802
+          }
+        },
+        "cc8eb82bc98de729": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1555
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1638
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1673
+          }
+        },
+        "cff4da5d9bb7efb7": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1082
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1139
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1115
+          }
+        },
+        "d42db159b3ee565f": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1214
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1263
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1246
+          }
+        },
+        "d482aa0afa27e9ce": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1088
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1138
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1125
+          }
+        },
+        "dae23c801891223c": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1039
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1125
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1092
+          }
+        },
+        "dce1407ed7d893a6": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1516
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1606
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1656
+          }
+        },
+        "e72299dc2abeabcd": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1693
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1738
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1784
+          }
+        },
+        "e9b489b9b469e9b6": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1084
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1146
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1135
+          }
+        },
+        "eb0bd33739d5e926": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1616
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1666
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1725
+          }
+        },
+        "eb5d47e234425a98": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1060
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1181
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1150
+          }
+        },
+        "f3d1a9ac4d14bd7a": {
+          "q10": {
+            "unique_routes": 1,
+            "vehicles": 1728
+          },
+          "q50": {
+            "unique_routes": 1,
+            "vehicles": 1749
+          },
+          "q90": {
+            "unique_routes": 1,
+            "vehicles": 1774
+          }
+        }
+      },
+      "reasons": [],
+      "registry_roles": [],
+      "screen": {
+        "discovery_rank": 6,
+        "dist_sensor_m": 86.8,
+        "in_pool": true,
+        "survives_topology": true
+      },
+      "unique_routes_by_variant_summed_over_archives": {
+        "q10": 30,
+        "q50": 30,
+        "q90": 30
+      },
+      "vehicles": {
+        "q10": 40473,
+        "q50": 42528,
+        "q90": 42887,
+        "total": 125888
+      }
+    },
+    "96523321_26355153_0": {
+      "archives_with_traffic": 30,
+      "catalog_routes": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "routes": 52
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "routes": 51
+        }
+      },
+      "daily_units_exposed": 1950,
+      "daily_units_exposed_note": "units whose archive has at least one crossing vehicle in any variant; the closure-window predicate is not applied",
+      "edge_id": "96523321_26355153_0",
+      "in_lineage": true,
+      "is_profile_spec_edge": false,
+      "live_demand_supported": true,
+      "measurement_status": "unmeasured_opposite_of_sensor",
+      "network": {
+        "exists": true,
+        "from_node": "96523321",
+        "incoming_connections": [
+          "26355153_96523321_0",
+          "96523394_96523321_0",
+          "96523748_96523321_0"
+        ],
+        "lanes": [
+          {
+            "allow": null,
+            "disallow": null,
+            "id": "96523321_26355153_0_0",
+            "speed": "13.89"
+          }
+        ],
+        "outgoing_connections": [
+          "26355153_165154328_0",
+          "26355153_26842525_0",
+          "26355153_91615277_0",
+          "26355153_96523321_0"
+        ],
+        "reverse_edges": [
+          "26355153_96523321_0"
+        ],
+        "reverse_rule": "edges whose SUMO from/to attributes are this edge's to/from; the edge-ID string is not parsed",
+        "to_node": "26355153"
+      },
+      "network_geojson": {
+        "bidirectional": false,
+        "dist_sensor_m": 25.8,
+        "highway": "tertiary",
+        "name": "Gibraltargatan",
+        "sensor_id": null
+      },
+      "nonzero_canary_usable": true,
+      "per_build_key": {
+        "06cc309e4779897c": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5198
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 7518
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 7470
+          }
+        },
+        "084cedb913d5197c": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5308
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 7837
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 7761
+          }
+        },
+        "0a6c5266d76b5b39": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 5867
+          },
+          "q50": {
+            "unique_routes": 51,
+            "vehicles": 7891
+          },
+          "q90": {
+            "unique_routes": 51,
+            "vehicles": 9136
+          }
+        },
+        "16f1d6176c7a9133": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5432
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 7644
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 7737
+          }
+        },
+        "187fca60022dedc5": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5088
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 7659
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 7525
+          }
+        },
+        "2d4f272bb3dfc5d2": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 6338
+          },
+          "q50": {
+            "unique_routes": 51,
+            "vehicles": 8102
+          },
+          "q90": {
+            "unique_routes": 51,
+            "vehicles": 9254
+          }
+        },
+        "340168e305f8381e": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 5776
+          },
+          "q50": {
+            "unique_routes": 51,
+            "vehicles": 7881
+          },
+          "q90": {
+            "unique_routes": 51,
+            "vehicles": 9109
+          }
+        },
+        "3f5d86eed8fe5c17": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5897
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 7951
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 8318
+          }
+        },
+        "4008e6387839d7a3": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 5927
+          },
+          "q50": {
+            "unique_routes": 51,
+            "vehicles": 7938
+          },
+          "q90": {
+            "unique_routes": 51,
+            "vehicles": 9111
+          }
+        },
+        "5803fd9aa62080cb": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5971
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 8003
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 8305
+          }
+        },
+        "5fcc585e03915396": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 5806
+          },
+          "q50": {
+            "unique_routes": 51,
+            "vehicles": 7845
+          },
+          "q90": {
+            "unique_routes": 51,
+            "vehicles": 9181
+          }
+        },
+        "657fa0b9f3268e78": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 5920
+          },
+          "q50": {
+            "unique_routes": 51,
+            "vehicles": 7977
+          },
+          "q90": {
+            "unique_routes": 51,
+            "vehicles": 9161
+          }
+        },
+        "6e3416af316f91cc": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5612
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 7640
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 7799
+          }
+        },
+        "7e395749f1712cb4": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5382
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 7740
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 7782
+          }
+        },
+        "8dcbe1518a5b0898": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 6161
+          },
+          "q50": {
+            "unique_routes": 51,
+            "vehicles": 8054
+          },
+          "q90": {
+            "unique_routes": 51,
+            "vehicles": 9264
+          }
+        },
+        "90a93715895966dc": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 5831
+          },
+          "q50": {
+            "unique_routes": 51,
+            "vehicles": 7907
+          },
+          "q90": {
+            "unique_routes": 51,
+            "vehicles": 9222
+          }
+        },
+        "9c7ad9c97b6bdbc6": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5093
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 7580
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 7525
+          }
+        },
+        "b7e7cef8b702abae": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 6058
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 8004
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 8425
+          }
+        },
+        "c796667235591888": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 5951
+          },
+          "q50": {
+            "unique_routes": 51,
+            "vehicles": 7744
+          },
+          "q90": {
+            "unique_routes": 51,
+            "vehicles": 9129
+          }
+        },
+        "cc8eb82bc98de729": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 5888
+          },
+          "q50": {
+            "unique_routes": 51,
+            "vehicles": 7881
+          },
+          "q90": {
+            "unique_routes": 51,
+            "vehicles": 9065
+          }
+        },
+        "cff4da5d9bb7efb7": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5719
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 7648
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 7797
+          }
+        },
+        "d42db159b3ee565f": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5963
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 7996
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 8285
+          }
+        },
+        "d482aa0afa27e9ce": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5639
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 7680
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 7761
+          }
+        },
+        "dae23c801891223c": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5079
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 7625
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 7535
+          }
+        },
+        "dce1407ed7d893a6": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 5932
+          },
+          "q50": {
+            "unique_routes": 51,
+            "vehicles": 7819
+          },
+          "q90": {
+            "unique_routes": 51,
+            "vehicles": 9102
+          }
+        },
+        "e72299dc2abeabcd": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 6254
+          },
+          "q50": {
+            "unique_routes": 51,
+            "vehicles": 8021
+          },
+          "q90": {
+            "unique_routes": 51,
+            "vehicles": 9319
+          }
+        },
+        "e9b489b9b469e9b6": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5614
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 7653
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 7839
+          }
+        },
+        "eb0bd33739d5e926": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 5925
+          },
+          "q50": {
+            "unique_routes": 51,
+            "vehicles": 7836
+          },
+          "q90": {
+            "unique_routes": 51,
+            "vehicles": 9192
+          }
+        },
+        "eb5d47e234425a98": {
+          "q10": {
+            "unique_routes": 57,
+            "vehicles": 5357
+          },
+          "q50": {
+            "unique_routes": 57,
+            "vehicles": 7743
+          },
+          "q90": {
+            "unique_routes": 57,
+            "vehicles": 7789
+          }
+        },
+        "f3d1a9ac4d14bd7a": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 6239
+          },
+          "q50": {
+            "unique_routes": 51,
+            "vehicles": 8105
+          },
+          "q90": {
+            "unique_routes": 51,
+            "vehicles": 9314
+          }
+        }
+      },
+      "reasons": [],
+      "registry_roles": [
+        {
+          "catalogue_verification": "verified",
+          "measurement_semantics": "directional",
+          "measurement_status": "unmeasured_estimated",
+          "resolved_by": "node_reverse",
+          "role": "opposite_direction",
+          "sensor_id": "134",
+          "snap_status": "approved",
+          "source": "Goteborgs Stad trafikmangder catalogue"
+        }
+      ],
+      "screen": {
+        "discovery_rank": 4,
+        "dist_sensor_m": 25.8,
+        "in_pool": true,
+        "survives_topology": true
+      },
+      "unique_routes_by_variant_summed_over_archives": {
+        "q10": 1626,
+        "q50": 1626,
+        "q90": 1626
+      },
+      "vehicles": {
+        "q10": 172225,
+        "q50": 234922,
+        "q90": 254212,
+        "total": 661359
+      }
+    },
+    "96527131_26842526_0": {
+      "archives_with_traffic": 30,
+      "catalog_routes": {
+        "weekday": {
+          "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+          "routes": 67
+        },
+        "weekend": {
+          "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+          "routes": 60
+        }
+      },
+      "daily_units_exposed": 1950,
+      "daily_units_exposed_note": "units whose archive has at least one crossing vehicle in any variant; the closure-window predicate is not applied",
+      "edge_id": "96527131_26842526_0",
+      "in_lineage": false,
+      "is_profile_spec_edge": false,
+      "live_demand_supported": true,
+      "measurement_status": "not_in_sensor_registry",
+      "network": {
+        "exists": true,
+        "from_node": "96527131",
+        "incoming_connections": [
+          "25734040_96527131_0",
+          "26842526_96527131_0",
+          "96528278_96527131_0"
+        ],
+        "lanes": [
+          {
+            "allow": null,
+            "disallow": null,
+            "id": "96527131_26842526_0_0",
+            "speed": "13.89"
+          }
+        ],
+        "outgoing_connections": [
+          "26842526_26842525_0",
+          "26842526_305677058_0",
+          "26842526_96527131_0"
+        ],
+        "reverse_edges": [
+          "26842526_96527131_0"
+        ],
+        "reverse_rule": "edges whose SUMO from/to attributes are this edge's to/from; the edge-ID string is not parsed",
+        "to_node": "26842526"
+      },
+      "network_geojson": {
+        "bidirectional": false,
+        "dist_sensor_m": 143.2,
+        "highway": "tertiary",
+        "name": "Viktor Rydbergsgatan",
+        "sensor_id": null
+      },
+      "nonzero_canary_usable": false,
+      "per_build_key": {
+        "06cc309e4779897c": {
+          "q10": {
+            "unique_routes": 86,
+            "vehicles": 6011
+          },
+          "q50": {
+            "unique_routes": 92,
+            "vehicles": 7578
+          },
+          "q90": {
+            "unique_routes": 92,
+            "vehicles": 8895
+          }
+        },
+        "084cedb913d5197c": {
+          "q10": {
+            "unique_routes": 90,
+            "vehicles": 6165
+          },
+          "q50": {
+            "unique_routes": 92,
+            "vehicles": 7880
+          },
+          "q90": {
+            "unique_routes": 92,
+            "vehicles": 9341
+          }
+        },
+        "0a6c5266d76b5b39": {
+          "q10": {
+            "unique_routes": 52,
+            "vehicles": 7720
+          },
+          "q50": {
+            "unique_routes": 64,
+            "vehicles": 7281
+          },
+          "q90": {
+            "unique_routes": 66,
+            "vehicles": 9314
+          }
+        },
+        "16f1d6176c7a9133": {
+          "q10": {
+            "unique_routes": 87,
+            "vehicles": 6202
+          },
+          "q50": {
+            "unique_routes": 92,
+            "vehicles": 7875
+          },
+          "q90": {
+            "unique_routes": 91,
+            "vehicles": 9334
+          }
+        },
+        "187fca60022dedc5": {
+          "q10": {
+            "unique_routes": 90,
+            "vehicles": 5820
+          },
+          "q50": {
+            "unique_routes": 92,
+            "vehicles": 7458
+          },
+          "q90": {
+            "unique_routes": 92,
+            "vehicles": 8880
+          }
+        },
+        "2d4f272bb3dfc5d2": {
+          "q10": {
+            "unique_routes": 50,
+            "vehicles": 7511
+          },
+          "q50": {
+            "unique_routes": 63,
+            "vehicles": 7031
+          },
+          "q90": {
+            "unique_routes": 66,
+            "vehicles": 8876
+          }
+        },
+        "340168e305f8381e": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 7489
+          },
+          "q50": {
+            "unique_routes": 65,
+            "vehicles": 7149
+          },
+          "q90": {
+            "unique_routes": 66,
+            "vehicles": 9172
+          }
+        },
+        "3f5d86eed8fe5c17": {
+          "q10": {
+            "unique_routes": 78,
+            "vehicles": 5992
+          },
+          "q50": {
+            "unique_routes": 91,
+            "vehicles": 7344
+          },
+          "q90": {
+            "unique_routes": 91,
+            "vehicles": 9303
+          }
+        },
+        "4008e6387839d7a3": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 7430
+          },
+          "q50": {
+            "unique_routes": 65,
+            "vehicles": 7238
+          },
+          "q90": {
+            "unique_routes": 66,
+            "vehicles": 9167
+          }
+        },
+        "5803fd9aa62080cb": {
+          "q10": {
+            "unique_routes": 77,
+            "vehicles": 6144
+          },
+          "q50": {
+            "unique_routes": 92,
+            "vehicles": 7440
+          },
+          "q90": {
+            "unique_routes": 91,
+            "vehicles": 9228
+          }
+        },
+        "5fcc585e03915396": {
+          "q10": {
+            "unique_routes": 54,
+            "vehicles": 7553
+          },
+          "q50": {
+            "unique_routes": 66,
+            "vehicles": 7220
+          },
+          "q90": {
+            "unique_routes": 66,
+            "vehicles": 9257
+          }
+        },
+        "657fa0b9f3268e78": {
+          "q10": {
+            "unique_routes": 50,
+            "vehicles": 7630
+          },
+          "q50": {
+            "unique_routes": 64,
+            "vehicles": 7357
+          },
+          "q90": {
+            "unique_routes": 66,
+            "vehicles": 9343
+          }
+        },
+        "6e3416af316f91cc": {
+          "q10": {
+            "unique_routes": 90,
+            "vehicles": 5481
+          },
+          "q50": {
+            "unique_routes": 92,
+            "vehicles": 6930
+          },
+          "q90": {
+            "unique_routes": 91,
+            "vehicles": 8390
+          }
+        },
+        "7e395749f1712cb4": {
+          "q10": {
+            "unique_routes": 91,
+            "vehicles": 6247
+          },
+          "q50": {
+            "unique_routes": 92,
+            "vehicles": 7987
+          },
+          "q90": {
+            "unique_routes": 92,
+            "vehicles": 9331
+          }
+        },
+        "8dcbe1518a5b0898": {
+          "q10": {
+            "unique_routes": 52,
+            "vehicles": 7592
+          },
+          "q50": {
+            "unique_routes": 63,
+            "vehicles": 6967
+          },
+          "q90": {
+            "unique_routes": 66,
+            "vehicles": 8857
+          }
+        },
+        "90a93715895966dc": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 7708
+          },
+          "q50": {
+            "unique_routes": 62,
+            "vehicles": 7201
+          },
+          "q90": {
+            "unique_routes": 66,
+            "vehicles": 9315
+          }
+        },
+        "9c7ad9c97b6bdbc6": {
+          "q10": {
+            "unique_routes": 87,
+            "vehicles": 5827
+          },
+          "q50": {
+            "unique_routes": 92,
+            "vehicles": 7451
+          },
+          "q90": {
+            "unique_routes": 92,
+            "vehicles": 8897
+          }
+        },
+        "b7e7cef8b702abae": {
+          "q10": {
+            "unique_routes": 80,
+            "vehicles": 6209
+          },
+          "q50": {
+            "unique_routes": 91,
+            "vehicles": 7417
+          },
+          "q90": {
+            "unique_routes": 91,
+            "vehicles": 9287
+          }
+        },
+        "c796667235591888": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 8093
+          },
+          "q50": {
+            "unique_routes": 64,
+            "vehicles": 7250
+          },
+          "q90": {
+            "unique_routes": 66,
+            "vehicles": 9217
+          }
+        },
+        "cc8eb82bc98de729": {
+          "q10": {
+            "unique_routes": 54,
+            "vehicles": 7458
+          },
+          "q50": {
+            "unique_routes": 65,
+            "vehicles": 7281
+          },
+          "q90": {
+            "unique_routes": 66,
+            "vehicles": 9203
+          }
+        },
+        "cff4da5d9bb7efb7": {
+          "q10": {
+            "unique_routes": 84,
+            "vehicles": 5626
+          },
+          "q50": {
+            "unique_routes": 92,
+            "vehicles": 6905
+          },
+          "q90": {
+            "unique_routes": 91,
+            "vehicles": 8437
+          }
+        },
+        "d42db159b3ee565f": {
+          "q10": {
+            "unique_routes": 80,
+            "vehicles": 6177
+          },
+          "q50": {
+            "unique_routes": 91,
+            "vehicles": 7329
+          },
+          "q90": {
+            "unique_routes": 91,
+            "vehicles": 9324
+          }
+        },
+        "d482aa0afa27e9ce": {
+          "q10": {
+            "unique_routes": 90,
+            "vehicles": 5616
+          },
+          "q50": {
+            "unique_routes": 91,
+            "vehicles": 6918
+          },
+          "q90": {
+            "unique_routes": 92,
+            "vehicles": 8442
+          }
+        },
+        "dae23c801891223c": {
+          "q10": {
+            "unique_routes": 91,
+            "vehicles": 5900
+          },
+          "q50": {
+            "unique_routes": 92,
+            "vehicles": 7613
+          },
+          "q90": {
+            "unique_routes": 92,
+            "vehicles": 8924
+          }
+        },
+        "dce1407ed7d893a6": {
+          "q10": {
+            "unique_routes": 52,
+            "vehicles": 7494
+          },
+          "q50": {
+            "unique_routes": 65,
+            "vehicles": 7352
+          },
+          "q90": {
+            "unique_routes": 66,
+            "vehicles": 9243
+          }
+        },
+        "e72299dc2abeabcd": {
+          "q10": {
+            "unique_routes": 49,
+            "vehicles": 7637
+          },
+          "q50": {
+            "unique_routes": 63,
+            "vehicles": 7051
+          },
+          "q90": {
+            "unique_routes": 66,
+            "vehicles": 8927
+          }
+        },
+        "e9b489b9b469e9b6": {
+          "q10": {
+            "unique_routes": 86,
+            "vehicles": 5443
+          },
+          "q50": {
+            "unique_routes": 91,
+            "vehicles": 6868
+          },
+          "q90": {
+            "unique_routes": 91,
+            "vehicles": 8430
+          }
+        },
+        "eb0bd33739d5e926": {
+          "q10": {
+            "unique_routes": 52,
+            "vehicles": 7759
+          },
+          "q50": {
+            "unique_routes": 65,
+            "vehicles": 7379
+          },
+          "q90": {
+            "unique_routes": 66,
+            "vehicles": 9431
+          }
+        },
+        "eb5d47e234425a98": {
+          "q10": {
+            "unique_routes": 89,
+            "vehicles": 6201
+          },
+          "q50": {
+            "unique_routes": 92,
+            "vehicles": 7845
+          },
+          "q90": {
+            "unique_routes": 91,
+            "vehicles": 9290
+          }
+        },
+        "f3d1a9ac4d14bd7a": {
+          "q10": {
+            "unique_routes": 51,
+            "vehicles": 7633
+          },
+          "q50": {
+            "unique_routes": 63,
+            "vehicles": 6893
+          },
+          "q90": {
+            "unique_routes": 66,
+            "vehicles": 8845
+          }
+        }
+      },
+      "reasons": [
+        "not in the survivability screen"
+      ],
+      "registry_roles": [],
+      "screen": {
+        "discovery_rank": null,
+        "dist_sensor_m": null,
+        "in_pool": false,
+        "survives_topology": null
+      },
+      "unique_routes_by_variant_summed_over_archives": {
+        "q10": 2096,
+        "q50": 2364,
+        "q90": 2387
+      },
+      "vehicles": {
+        "q10": 201768,
+        "q50": 219488,
+        "q90": 271900,
+        "total": 693156
+      }
+    }
+  },
+  "git": {
+    "head": "10518aeba002268a0110f9ebd0171605e73d0343",
+    "tracked_changes": [
+      " M AGENT_NOTES.md",
+      " M IMPROVEMENT_PLAN.md",
+      " M TASKS.md",
+      " M tests/test_cost_ordered_benchmark_discovery.py",
+      " M tools/cost_ordered_benchmark.py",
+      " M web/data/od_matrix.csv",
+      " M web/data/od_matrix.json",
+      " M web/data/validation.json"
+    ]
+  },
+  "lineage": {
+    "ancestor_spec_edges": {
+      "validation/golden_monthly_search_spec_v6.json": [
+        "26842526_96527131_0"
+      ],
+      "validation/independent_daily_benchmark_spec_v1.json": [
+        "26842526_96527131_0"
+      ]
+    },
+    "discovery": {
+      "edges": [
+        {
+          "dist_sensor_m": 11.0,
+          "edge_id": "26355153_26842525_0",
+          "rank": 1
+        },
+        {
+          "dist_sensor_m": 11.0,
+          "edge_id": "26842525_26355153_0",
+          "rank": 2
+        },
+        {
+          "dist_sensor_m": 25.8,
+          "edge_id": "26355153_96523321_0",
+          "rank": 3
+        },
+        {
+          "dist_sensor_m": 25.8,
+          "edge_id": "96523321_26355153_0",
+          "rank": 4
+        },
+        {
+          "dist_sensor_m": 76.4,
+          "edge_id": "8710974792_1759741980_0",
+          "rank": 5
+        },
+        {
+          "dist_sensor_m": 86.8,
+          "edge_id": "9037093028_1305379743_0",
+          "rank": 6
+        }
+      ],
+      "function": "tools.cost_ordered_benchmark.surviving_roads",
+      "order": "dist_sensor_m, then edge_id; first 6",
+      "spec_builder": "discovered_specs: one ClosureSearchSpec per discovered edge with directed_edges=(edge,)"
+    },
+    "policy_status_default": "user_supplied_unverified",
+    "policy_status_note": "user_supplied_unverified is the dataclass default, so its presence does not show that a user supplied the edge",
+    "profile_spec_history": [
+      {
+        "commit": "3f20d70",
+        "contains_edge": true,
+        "directed_edges": [
+          "26355153_26842525_0"
+        ],
+        "path": "validation/subhour_monthly_search_profile_spec_v1.json",
+        "policy_status": "user_supplied_unverified",
+        "search_id": "subhour-cold-ledger-profile-2027-09"
+      },
+      {
+        "commit": "6d735cc",
+        "contains_edge": false,
+        "directed_edges": [
+          "26842526_96527131_0"
+        ],
+        "path": "validation/independent_daily_benchmark_spec_v1.json",
+        "policy_status": "user_supplied_unverified",
+        "search_id": "independent-daily-bounded-benchmark-v1"
+      },
+      {
+        "commit": "9bb3e28",
+        "contains_edge": false,
+        "directed_edges": [
+          "26842526_96527131_0"
+        ],
+        "path": "validation/multi_envelope_forecast_smoke_spec_v1.json",
+        "policy_status": "user_supplied_unverified",
+        "search_id": "multi-envelope-forecast-smoke-2027-july-v1"
+      },
+      {
+        "commit": "bc9fda0",
+        "contains_edge": false,
+        "directed_edges": [
+          "26842526_96527131_0"
+        ],
+        "path": "validation/golden_monthly_search_spec_v6.json",
+        "policy_status": "user_supplied_unverified",
+        "search_id": "golden-monthly-search-2025-09-16-v6"
+      }
+    ],
+    "registrations": {
+      "validation/subhour_bounded_sumo_registration_20260831-impl.json": {
+        "distinct_edges": [
+          "26355153_26842525_0",
+          "26355153_96523321_0",
+          "26842525_26355153_0",
+          "8710974792_1759741980_0"
+        ],
+        "rule": "eligible metadata only; sort by sha256(canonical((demand_period, directed_edge, date, window, search_content_key, search_id))) and take the first member of each of four edge x two period strata, then fill in that same order",
+        "selected_edges": [
+          [
+            "26355153_26842525_0"
+          ],
+          [
+            "26355153_96523321_0"
+          ],
+          [
+            "26842525_26355153_0"
+          ],
+          [
+            "8710974792_1759741980_0"
+          ],
+          [
+            "26355153_26842525_0"
+          ],
+          [
+            "26355153_96523321_0"
+          ],
+          [
+            "26842525_26355153_0"
+          ],
+          [
+            "8710974792_1759741980_0"
+          ]
+        ]
+      },
+      "validation/subhour_bounded_sumo_registration_20260831-v38.json": {
+        "distinct_edges": [
+          "26355153_26842525_0",
+          "26355153_96523321_0",
+          "26842525_26355153_0",
+          "8710974792_1759741980_0"
+        ],
+        "rule": "eligible metadata only; sort by sha256(canonical((demand_period, directed_edge, date, window, search_content_key))) and take the first member of each lexicographically smallest four-edge x two-period stratum, then fill in that same order",
+        "selected_edges": [
+          [
+            "8710974792_1759741980_0"
+          ],
+          [
+            "26355153_26842525_0"
+          ],
+          [
+            "8710974792_1759741980_0"
+          ],
+          [
+            "26355153_26842525_0"
+          ],
+          [
+            "26355153_96523321_0"
+          ],
+          [
+            "26355153_96523321_0"
+          ],
+          [
+            "26842525_26355153_0"
+          ],
+          [
+            "26842525_26355153_0"
+          ]
+        ]
+      }
+    },
+    "screen": {
+      "path": "validation/closure_survivability_screen_v2.json",
+      "pool_size": 46,
+      "rule": "dist_sensor_m <= 400 m, length >= 30 m, road class in ['secondary', 'tertiary'], excluding every prior campaign edge and its junction neighbours",
+      "treats_directions_independently": true
+    }
+  },
+  "memory": {
+    "samples": [
+      {
+        "cpu_s": 116.38290099999999,
+        "label": "lineage",
+        "lifetime_max_phys_footprint_bytes": 488997632,
+        "major_faults": 131,
+        "max_rss_bytes": 608649216,
+        "minor_faults": 822084,
+        "pageins": 131,
+        "phys_footprint_bytes": 197280656,
+        "resident_bytes": 337313792,
+        "sys_s": 8.733154,
+        "user_s": 107.724213,
+        "wall_s": 115.062752333
+      },
+      {
+        "cpu_s": 224.16128899999998,
+        "label": "archives_scanned",
+        "lifetime_max_phys_footprint_bytes": 488997632,
+        "major_faults": 131,
+        "max_rss_bytes": 641138688,
+        "minor_faults": 1909600,
+        "pageins": 131,
+        "phys_footprint_bytes": 260981696,
+        "resident_bytes": 463175680,
+        "sys_s": 14.812894,
+        "user_s": 209.422859,
+        "wall_s": 223.216415458
+      },
+      {
+        "cpu_s": 224.218499,
+        "label": "end",
+        "lifetime_max_phys_footprint_bytes": 488997632,
+        "major_faults": 131,
+        "max_rss_bytes": 641138688,
+        "minor_faults": 1909813,
+        "pageins": 131,
+        "phys_footprint_bytes": 260981696,
+        "resident_bytes": 466649088,
+        "sys_s": 14.816701,
+        "user_s": 209.476263,
+        "wall_s": 223.277017833
+      }
+    ]
+  },
+  "output_sha256": "8ece9b53950f17baf0cbc95471c67f875213f05a952c6b923ca22ac37702dc6e",
+  "production_sources": {
+    "serve.py": "d2915acbe837d5e5dcd29d7dd8e12ea7c219ed14297e36cd8f0ec81451a399da",
+    "tools/build_window_cost_index.py": "b5b14be2f285de406d938a7c8393be2b1e8eb6d64378eb528bd9fb5cee9829f6",
+    "tools/cost_ordered_benchmark.py": "e7b160efe3c72736ec9ebe4dac4c874edb7e3c4d50a3f34b2a07fda0a15d1684",
+    "traffic_sim/core/contracts.py": "53818f1d6154bda8dc72a49f921cbeb9f01048d451612775d94b344c02e2255a",
+    "traffic_sim/demand/route_support.py": "027d93a3f30197d2866bfda22a5079758d6d10133fd52542b02bff0b0802aacb",
+    "traffic_sim/simulation/deterministic_disruption.py": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472",
+    "traffic_sim/simulation/disruption.py": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9",
+    "traffic_sim/simulation/independent_daily.py": "6ae4eba74fb0df6ec3068cf757164d43e0595fed102001457bab3d7c3446f689",
+    "traffic_sim/simulation/monthly_demand.py": "0879d1fdd41e95643c3626fdda51b81e08edaa9be4ef957a33a517cda6890778"
+  },
+  "profile": "runs/step5_code_approved_20260915b/profile/profile.json",
+  "profile_sha256": "399f764272120470b2a32015ed5b1deb24d1ec1b0a786d5646ada104d69a23af",
+  "qualified_demand_manifest": {
+    "content_key": "2cb32dcddfeb9bb99513fe1ae9cdcc44f0935435b78a278fa6eb3786060159ec",
+    "evidence_id": "subhour-monthly-qualify-2026-09-15b",
+    "path": "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+    "sha256": "1b609f705e08ab7a9c266a974a5976d33660209f0de914c95f66b3189d46f576"
+  },
+  "question": "why the frozen month spec closes a direction with no catalog traffic, and which directions could carry a nonzero canary",
+  "release_evidence": false,
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "closure_edge_lineage_census_v1",
+  "spec": {
+    "closure_type": "full",
+    "content_key": "383c9130a45370c2f296",
+    "directed_edges": [
+      "26355153_26842525_0"
+    ],
+    "policy_status": "user_supplied_unverified",
+    "search_id": "subhour-cold-ledger-profile-2027-09"
+  }
+}
