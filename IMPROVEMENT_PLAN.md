@@ -1631,9 +1631,9 @@ Orsakskoderna är exakt dessa, i denna ordning:
 | Kod | Betydelse |
 |---|---|
 | `missing_network_edge` | kanten finns inte i nätet |
-| `missing_required_pool` | en pool som arkiven kräver är obunden, saknas, har fel hash eller har ett konfliktande namn |
+| `missing_required_pool` | en pool som arkiven kräver är obunden, saknas, har fel hash, har ett konfliktande namn, går inte att läsa eller avviker från sin bundna metadata |
 | `no_catalog_route_support` | en bunden pool har ingen rutt över kanten (detalj: poolnamn) |
-| `missing_required_variant` | en variant saknas för en krävd build key; räknas aldrig som noll |
+| `missing_required_variant` | en variant saknas, är overifierad, går inte att läsa eller avviker från sitt deklarerade fordonsantal; räknas aldrig som noll |
 | `no_observed_archive_crossings` | q10, q50 eller q90 har inget passerande fordon, eller ingen dagenhet har trafik |
 | `incomplete_archive_coverage` | en krävd build key saknar kvalificerat arkiv |
 | `eligible` | inga av ovanstående |
@@ -1716,17 +1716,200 @@ produktionskällor, kontraktsfiler, output-hashar, spec-nyckel,
 inventeringsdrift och kedjan canary → spec → inventering. Tiderna är inget
 underlag för en projektion av ett helt bygge.
 
-*Kvar:*
-- Den frysta profilspecen är oförändrad och ger fortfarande bara
-  nollkostnader.
-- WCI är inte antaget. Ett fullständigt bygge kräver ett eget beslut.
-- `ARCHITECTURE.md` beskriver ännu inte urvalspolicyn.
-- Två testfel fanns redan före denna ändring och uppträder likadant på en ren
-  `10518ae`:
-  - sigilltestet: `demand/day_library.py` och `traffic_sim/ops/io_phases.py`
-    saknas i sigillet;
-  - det tidsberoende gate-S-fallet `performance-miss`.
-- Steg 6 är inte startat.
+*Kvar efter `9b12e13`:* se granskningen nedan.
+
+**Granskning av `10518ae..9b12e13` och beslutsunderlag för full WCI — 2026-09-17.**
+
+Granskningen gällde nettodiffen, inte commitmeddelandena. Utfall: **`9b12e13`
+avvisas som slutleverans.** Grundmodellen höll, men sju kontraktsbrister
+rättades med RED/GREEN-test. Kontraktet ändrades inte.
+
+*Det som höll:*
+- `surviving_roads` och `discovered_specs` gav samma digest (`a5a8fc0c…`, 6
+  vägar och 24 specar) i `10518ae` och i det aktuella trädet, mätt mot de
+  verkliga arkiven.
+- Effektkontrollen nås bara från de tre automatiska väljarna och
+  diagnostikdrivrarna. `serve.py`, `web/`, `traffic_sim/` och
+  `run_scenario.py` är orörda sedan `10518ae`.
+- Modulen ligger utanför `demand_source_paths` (39 sökvägar). Arkiven
+  validerades om utan fel av den nya censusen.
+- Gammal evidens är byte-identisk, och den frysta månadsspecen är identisk
+  med `10518ae`.
+
+*Fynd, i allvarlighetsordning, alla rättade:*
+1. **Hög.** Parserfel och överhoppade fordon blev inte reason codes
+   (`tools/closure_effect_eligibility.py`, `_parse_archive`).
+   - Oläsbar XML kraschade hela inventeringen.
+   - Ett fordon som refererar en namngiven rutt hoppas tyst över av
+     produktionsparsern och lästes därför som observerad nolltrafik.
+   - Nu jämförs varje variants fordonsantal med `pfe_fit_variants.*.vehicles`
+     i den hashbundna `demand_meta.json`. Varje katalog jämförs med
+     kandidatantalet i sin `catalog.meta.json`, som är bunden via
+     `metadata_sha256`.
+   - Avvikelser, lässfel och obunden metadata ger
+     `missing_required_variant` eller `missing_required_pool` med detaljen
+     `parse_error`, `vehicle_count_mismatch`, `route_count_mismatch` eller
+     `metadata_sha256_mismatch`. De blir aldrig `no_observed_*`.
+   - Alla 30 verkliga arkiv och båda katalogerna stämmer exakt och har bara
+     inline-rutter.
+2. **Hög.** Svitens registrering tappade policyn
+   (`tools/cost_ordered_benchmark_suite.py`, `build_registration`).
+   `record["selection"]` skrevs om utan `case_selection_policy`, så en
+   effektgrindad svit skulle ha tolkats som legacy. Dessutom byggdes
+   inventeringen två gånger, och andra gången mot fel `data_root`. Nu väljer
+   sviten en gång, skickar urvalet vidare och registrerar policy, regel och
+   inventering. Under v1 räknas bara ett uttryckligt `eligible: true`.
+3. **Medel.** Effektevidensen verifierades inte vid drift.
+   - Registreringarna bar bara en inventeringsnyckel.
+   - Nu bär ett v1-urval hela inventeringen.
+   - `verify_selection_evidence` rehashar varianter, kataloger, katalogmetadata
+     och `demand_meta.json`.
+   - `cost_ordered_benchmark.verify_bindings` och subhour-verifieraren
+     använder den, och subhour kräver dessutom att inventeringsnyckeln
+     reproduceras.
+   - Legacy-urval kräver ingen evidens.
+4. **Medel.** Minnet höll två stora varianter samtidigt. Den förra listan
+   levde kvar medan nästa fil parsades. Nu släpps varje tolkad fil innan
+   nästa läses, och ett test bevisar det med svaga referenser.
+5. **Medel.** Det fasta fallvalet märktes som effektgrindat.
+   `select_case(from_archives=False)` skrev `closure_effect_eligibility_v1`
+   fast inget screenades. Nu registreras `structural_survivability_v1`, och
+   en uttrycklig v1-begäran utan arkiv avvisas.
+6. **Låg.** Subhour-väljaren läste nät och kataloger från `ROOT` i stället
+   för registreringens `data_root`. Nu används `data_root` både vid bygge och
+   vid omräkning.
+7. **Låg.** Upptäcktstestets stubb angav ett gammalt filnamn och gav evidens
+   utan inventering. Nu returnerar den evidensen för en tom inventering.
+
+*RED/GREEN.* De uppdaterade testerna kördes mot `9b12e13` i en separat
+worktree, där bara fixturernas konstant `VARIANT_FIT_KEYS` lagts till.
+- 21 föll. Bland beteendeskälen: `ParseError`, en tolkad fil som fortfarande
+  hölls, fel policyetikett, dubbel skanning och sviten som valde ett fall
+  utan `eligible`.
+- Den namngivna rutten gav vid `9b12e13` `no_observed_archive_crossings`,
+  alltså exakt felet i fynd 1.
+- Sju discovery-fall föll bara för att stubben använder det nya API:et.
+- GREEN: 63 policy- och discoverytester går igenom. Den fokuserade sviten gav
+  483 godkända, 1 överhoppat och 1 fel (sigillet).
+
+*Ny evidens (append-only, `release_evidence: false`):*
+- **Inventering.** `validation/closure_effect_inventory_20260917-v2.json`
+  (content key `c298de42…`, inventering `458713e4…`, 104,0 s) ger samma sex
+  omdömen och samma ordning som v1.
+- **Spec.** `validation/wci_effect_canary_spec_20260917-v3.json` (content key
+  `919df52e…`) pekar på samma spec `d38038fd…`.
+- **Canary.** `validation/wci_effect_canary_20260917-v4.json` (content key
+  `e69c57b1…`) har status **PASS**. Oraklet, enhetsdigesterna,
+  enhetskostnaderna och postdigesterna är identiska med v3, och de berörda
+  fordonen är desamma (232 845 / 514 533 / 866 217).
+- **Beslutsunderlag.** `validation/wci_full_build_decision_20260917-v1.json`
+  (content key `8b20acf8…`).
+- **Bindningar.** Alla 87 kontroller räknades om från disk.
+- **Äldre evidens.** v1-inventeringen, spec v2 och canary v3 binder exakt
+  källorna i `9b12e13`. Vid nya HEAD rapporteras de därför som inaktuella,
+  vilket är avsett fail-closed-beteende.
+
+*Beslutsunderlag för full WCI: `DO_NOT_START_FULL_BUILD`.* Underlaget utgår
+från canary v3, med v4 som replikering.
+
+| Del | Status | Värde |
+|---|---|---|
+| `_bound_inputs` | mätt | 4,3–4,5 s (v3), 2,2–2,4 s (v4) |
+| arkivindex, 30 kataloger | mätt i full skala | 15,65–15,97 s, byggs en gång |
+| validering av alla 30 build keys | mätt i full skala | 95,73 s (summan av medianer) |
+| `_raw_index_records`, 1/2/3 nycklar | mätt | 39,71 / 62,80 / 86,44 s (v3); 19,82 / 31,11 / 42,72 s (v4) |
+| enbart mätning (förpass) | mätt | 0,53–0,54 s per körning |
+| oberoende orakel, 195 enheter | mätt i en skala | 999,7 s (v3), 495,2 s (v4) |
+| orakel för 1 950 enheter | **okänt** | ingen tillväxtlag; ett fullbygge läser i stället ledgerns cache, som inte finns för en effektkant |
+| indexskrivning och `load_index` | ej mätt | – |
+| indexerad ledger över 1 690 föräldrar | ej mätt | – |
+| toppminne, 1/2/3 nycklar | mätt | 0,78 / 1,43 / 2,15 GB |
+| räknare | mätt | index 1; valideringar 1/2/3; JSON-läsningar 34/38/42 |
+
+**Modellerad råfas för 30 nycklar (ingen WCI-tid):**
+- Linjär modell: 16,25 + 23,37 s/nyckel ≈ 717 s, med spannet 709–725 s över
+  stegen.
+- Komponentmodell: index 15,83 s + validering 95,73 s + beräkning 61,04 s
+  skalad ×10,009 (routebytes) eller ×10,065 (kryssande fordon) ≈ 722–726 s.
+  De tre stickprovsarkiven är precis 10,0 % av månaden.
+- Sammantaget blir det **709–726 s (11,8–12,1 min)** i det långsamma
+  maskinläget.
+- v4 körde samma kod och indata cirka 2× snabbare: CPU-kvoten var 0,49–0,50
+  i alla faser, även i ren mätning. Det är maskinens prestandaläge, som inte
+  registreras. Över båda lägena blir spannet **347–726 s**.
+- Modellen förutsätter inget minnestryck, vilket minnesmodellen motsäger.
+
+**Jämförelse (bara jämförbara delar):**
+- Arkivupplösningen var modellerad till 37 083 s för den gamla vägen (varav
+  30 860 s indexombyggen) och är nu mätt till 111,6 s.
+- Den misslyckade körningens råfas tog 31 271,161 s. Den prissatte dock en
+  kant utan kryssningar, så jämförelsen gäller samma funktion men inte samma
+  last.
+- Ledgerbaslinjen på 7 320,348 s kan bara jämföras med ett helt bygge, och
+  ett sådant är inte mätt. Råfasmodellen motsvarar 9,7–9,9 % av baslinjen,
+  vilket inte är något nyttopåstående.
+
+**Svar på frågorna:**
+1. **Är 8 h 41 min-defekten borta?** Ja, för sin orsak. Canaryn visar ett
+   indexbygge och en validering per build key, oberoende av antalet
+   dagenheter.
+2. **Vad är direkt mätt?** Bundna indata, indexbygget och alla 30
+   valideringar i full skala, råfasen och exaktheten vid 1–3 nycklar, oraklet
+   för 195 enheter och minnet vid 1–3 nycklar.
+3. **Vad är bara modellerat eller omätt?**
+   - Modellerat: råfasens beräkning och toppminnet för 30 nycklar.
+   - Omätt:
+     - månadsledger och cache för en effektkant;
+     - indexskrivning och laddning;
+     - indexerad ledger;
+     - beslutsjämförelse;
+     - beteende under minnestryck.
+4. **Kan retain-minnet fortfarande nå cirka 19 GB?** Ja. Modellen ger
+   19,8–21,5 GB (18,4–20,0 GiB) mot 19,58 GB i den misslyckade körningen och
+   24 GiB i maskinen. Produktionsloopen håller fortfarande alla arkiv; bara
+   diagnostikens streamloop är liten, modellerat ≤ 3,4 GB.
+5. **Ger ett fullbygge beslutsnyttig evidens nu?** Nej.
+   - Den enda månadsprofilen binder `26355153_26842525_0`, som policyn
+     avvisar, så bygget skulle prissätta noll igen.
+   - Tidsmätningen skulle inte representera en trafikerad kant.
+   - Retain-minnet ligger över gränsen.
+6. **Budget för ett framtida bygge:**
+   - råfasen: mjuk gräns 1 090 s, hård gräns 1 820 s;
+   - hela bygget: hårt tak 7 320,348 s;
+   - minne: livstidsfotavtryck högst 12 GiB och swaptillväxt högst 1 GiB.
+
+   Retain-loopen ryms inte i den minnesgränsen, men streamloopen gör det.
+7. **Automatiska stopp:** bygget ska avbrytas vid något av följande:
+   - profilens spec är inte effektberättigad, eller dess evidens har drivit;
+   - någon bunden hash har drivit;
+   - fotavtryck eller swap går över gränsen;
+   - råfasen passerar 1 820 s, eller hela bygget passerar 7 320,348 s;
+   - antalet indexbyggen är fler än 1, valideringarna fler än 30 eller
+     JSON-läsningarna fler än 150;
+   - populationen avviker från 1 950 / 5 850 / 1 690;
+   - något i oraklet saknas eller skiljer sig;
+   - månaden prissätts till noll;
+   - en SUMO-process startas eller ett demandarkiv skapas.
+
+*Före ett fullbygge krävs:*
+1. ett månadsfall fryst under `closure_effect_eligibility_v1`, eller ett
+   uttryckligt beslut att använda canary-specen;
+2. en månadsledger och dagkostnadscache för fallet, med eget beslut och egen
+   budget;
+3. en produktionsloop för råfasen som ryms i minnesgränsen och bevisas exakt
+   mot retain-loopen;
+4. en övervakare som tillämpar stoppvillkoren.
+
+*Testfel som fanns före ändringen:*
+- `test_the_seal_covers_the_real_import_closure` faller med samma lista
+  (`demand/__init__.py`, `demand/day_library.py`, `traffic_sim/ops/__init__.py`,
+  `traffic_sim/ops/io_phases.py`) på `10518ae` och i det aktuella trädet.
+- `test_real_registered_case_publishes_completeness_for_gate_s[performance-miss]`
+  är tidsberoende. Med `sumo/` tillgängligt gick det igenom 3/3 gånger på
+  både `10518ae` och det aktuella trädet i dag. Tidigare föll det på båda.
+  En ren worktree utan `sumo/` ger i stället `network drift` för båda
+  parametriseringarna och är ingen giltig jämförelsemiljö.
+- Gatarna ändrades inte. Steg 6 är inte startat.
 
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 

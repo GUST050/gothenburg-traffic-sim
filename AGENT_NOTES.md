@@ -7,26 +7,38 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `AUTOMATIC BENCHMARK SELECTION IS POLICY-VERSIONED; NONZERO WCI CANARY PASS; WCI NOT ADOPTED.` Work is in `/private/tmp/gs-step3-departure-bounds`, branch `claude/exciting-rubin-1e6k5m`, local commits above pushed `8b453da`; nothing pushed.
-- Root cause (unchanged): the frozen profile edge `26355153_26842525_0` (sensor 133's unmeasured opposite carriageway) came from automatic benchmark selection. `surviving_roads` proves structural feasibility only, and there was no traffic-effect check. This repairs automatic benchmark selection. The user's road choice, the UI, `serve.py` and `ClosureRouteResolver` were correct and were not changed.
-- Design (supersedes `ed73102` and `36a61de`):
-  - `surviving_roads` and `discovered_specs` are identical to `10518ae`.
-  - `tools/closure_effect_eligibility.py` is outside `demand_source_paths`. It defines policy `closure_effect_eligibility_v1`; the legacy policy is `structural_survivability_v1`, the default for artifacts without `case_selection_policy`, and unknown policies are refused.
-  - `build_inventory` takes candidate IDs and parses each catalog pool and each qualified archive variant once with `parse_route_vehicles`, into one table.
-  - `assess` emits the seven fixed reason codes. `eligible_in_order` filters first, then keeps the existing order. `verify_inventory` rehashes catalogs and variants to detect drift.
-  - Callers are `cost_ordered_benchmark.select_case`/`effect_screen_cases`, `cost_ordered_benchmark_suite.select_suite_cases` (now on `eligible`) and `subhour_cost_ordered_benchmark._metadata_inventory`/`select_cases`. Their verifiers replay with `policy_of(record)`.
-  - `traffic_sim/simulation/effect_eligibility.py` and the `36a61de` drivers were removed.
+- Focus and status: `REVIEWED AND REPAIRED THE VERSIONED CASE-SELECTION POLICY; ARCHITECTURE DOCUMENTED; FULL WCI BUILD DECIDED AGAINST FOR NOW.` Work is in `/private/tmp/gs-step3-departure-bounds`, branch `claude/exciting-rubin-1e6k5m`, local commits above pushed `8b453da`; nothing pushed.
+- Root cause (unchanged): automatic benchmark selection proved only structural survivability, so it froze `26355153_26842525_0`, which carries no traffic. The user's road choice, the UI, `serve.py`, `closure_seconds` and `ClosureRouteResolver` were correct and remain untouched.
+- Review of `10518ae..9b12e13`: rejected as final, and seven gaps were fixed with RED/GREEN.
+  1. **Parser problems.** `_parse_archive` let `ParseError` crash, and vehicles referencing a named route, which the production parser skips, read as observed zero. Variants are now checked against `demand_meta.json` `pfe_fit_variants.*.vehicles`, and catalogs against their hash-bound `catalog.meta.json` candidate count; any mismatch or read failure is a reason code.
+  2. **Suite registration.** The suite dropped `case_selection_policy` and screened twice with the wrong `data_root`. It now selects once, passes `selection=` to `base.build_registration`, and records the policy, rule and inventory.
+  3. **Evidence verification.** `verify_selection_evidence` rehashes the full inventory, including catalog metadata and `demand_meta`. It is called by `cost_ordered_benchmark.verify_bindings` and by subhour `verify_registration`, which also requires the inventory key to reproduce.
+  4. **Memory.** Only one parsed file is alive at a time.
+  5. **Fixed case path.** `select_case(from_archives=False)` records `structural_survivability_v1`, and a v1 request without archives raises.
+  6. **Subhour `data_root`.** Subhour screens against the registration's `data_root`.
+  7. **Discovery stub.** The stub returns contract-shaped evidence.
+
+  Structural discovery is byte-identical to `10518ae` (digest `a5a8fc0c…`, 6 roads and 24 specs).
 - Evidence:
-  - `validation/closure_effect_inventory_20260917-v1.json` (content key `57328bb0…`): 92 files, each parsed once; 4 of 6 candidates eligible.
-  - `validation/wci_effect_canary_spec_20260917-v2.json` (content key `e73a2a9a…`): spec `d38038fd…`, edge `26842525_26355153_0`. It binds the policy, the candidate-list digest, the manifest content key, the pool identities and the inventory evidence key.
-  - `validation/wci_effect_canary_20260917-v3.json` (content key `32154c81…`, PASS): the oracle took 999.7 s; `_raw_index_records` took 39.71/62.80/86.44 s for 1/2/3 keys, with 232,845/514,533/866,217 affected, every unit affected and every unit cost > 0; exact oracle and provider identity; no SUMO; no demand archive.
-  - Every hash binding was recomputed from disk, and the frozen September spec is identical to `10518ae`.
+  - `validation/closure_effect_inventory_20260917-v2.json` (`c298de42…`): same six verdicts; all 90 variants and both catalogs match their declared counts.
+  - `validation/wci_effect_canary_spec_20260917-v3.json` (`919df52e…`).
+  - `validation/wci_effect_canary_20260917-v4.json` (`e69c57b1…`, PASS): output-identical to v3; raw 19.82/31.11/42.72 s against v3's 39.71/62.80/86.44 s, with a CPU ratio of 0.49-0.50 in every phase, which is the machine's performance state.
+  - `validation/wci_full_build_decision_20260917-v1.json` (`8b20acf8…`, `DO_NOT_START_FULL_BUILD`): modelled 30-key raw phase 709-726 s (347-726 s over machine states); retain footprint 19.8-21.5 GB against 24 GiB RAM; oracle month unknown; budget of raw soft 1,090 s / hard 1,820 s, whole build 7,320.348 s, footprint 12 GiB, swap growth 1 GiB; 11 stop conditions.
+  - 87 binding checks were recomputed from disk. The older v1/v3 chain binds exactly the `9b12e13` sources.
 - Checks:
-  - RED was run in a scratch worktree at `36a61de`: 10 failures for the intended reasons. Drift tests failed under a no-rehash mutation of `verify_inventory`. GREEN: 49 passed.
-  - The focused suite gives 436 passed, 1 skipped and 2 failed. Both failures are pre-existing and identical on clean `10518ae` (seal-closure list; timing-dependent gate-S performance-miss).
-  - Project-profile pylint returns 0; `git diff --check` is clean.
-- Next action: freeze a month case under the new policy (or adopt the canary spec explicitly) before any full WCI build, which needs its own decision. Add the policy to `ARCHITECTURE.md`. Step 6 remains unstarted.
-- Environment and boundaries: use `/usr/bin/python3` (3.9.6). Preserve unrelated modified `web/data/od_matrix.csv`, `web/data/od_matrix.json`, `web/data/validation.json` and unrelated untracked files. No demand build, warming, SUMO run, catalog mutation or production activation was performed.
+  - RED: the updated tests against `9b12e13` gave 21 failures for the intended reasons.
+  - GREEN: 63 policy and discovery tests pass. The focused suite gives 483 passed, 1 skipped and 1 failed.
+  - The seal-closure failure is identical on `10518ae`.
+  - Gate-S `performance-miss` is timing-dependent: it passed 3/3 on both `10518ae` (with `sumo/` present) and HEAD today; a clean worktree without `sumo/` fails both parametrisations with `network drift`.
+  - Pylint returns 0 and `git diff --check` is clean.
+- Next action, before any full build:
+  1. an effect-eligible month case;
+  2. its month ledger and daily-cost cache;
+  3. a production raw loop within 12 GiB proven exact against retain;
+  4. a stop-condition supervisor.
+
+  Step 6 remains unstarted.
+- Environment and boundaries: use `/usr/bin/python3` (3.9.6). Preserve unrelated modified `web/data/od_matrix.csv`, `web/data/od_matrix.json`, `web/data/validation.json` and unrelated untracked files. No full WCI build, demand build, warming, SUMO run, catalog mutation or production activation was performed.
 <!-- CURRENT_HANDOFF_END -->
 
 <!-- CURRENT_HANDOFF_HISTORY_START -->

@@ -53,19 +53,33 @@ def _catalog(root: Path, key: str, routes) -> str:
     path = root / key / "catalog.rou.xml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_vehicles_xml(routes), encoding="utf-8")
+    (path.parent / "catalog.meta.json").write_text(json.dumps({
+        "candidates": {f"c{n}": {} for n in range(len(routes))}}),
+        encoding="utf-8")
     return _sha(path)
 
 
+def _pool(root: Path, key: str, routes) -> tuple[str, str, str]:
+    """(catalog key, routes sha256, metadata sha256) as an archive binds."""
+    routes_sha = _catalog(root, key, routes)
+    return key, routes_sha, _sha(root / key / "catalog.meta.json")
+
+
 def _archive(root: Path, name: str, *, variants, pools, extra=""):
-    """``variants``: variant -> routes; ``pools``: pool -> (key, sha)."""
+    """``variants``: variant -> routes; ``pools``: pool -> (key, sha[, meta])."""
     archive = root / name
     archive.mkdir(parents=True, exist_ok=True)
-    meta = {"demand_build_key": f"key-{name}"}
+    meta = {"demand_build_key": f"key-{name}",
+            "pfe_fit_variants": {
+                cee.VARIANT_FIT_KEYS[variant]: {"vehicles": len(routes)}
+                for variant, routes in variants.items()}}
     if pools is not None:
         meta["candidate_catalog"] = {
-            "keys": {pool: key for pool, (key, _sha) in pools.items()},
-            "artifacts": {pool: {"routes_sha256": sha}
-                          for pool, (_key, sha) in pools.items()}}
+            "keys": {pool: binding[0] for pool, binding in pools.items()},
+            "artifacts": {pool: {"routes_sha256": binding[1],
+                                 **({"metadata_sha256": binding[2]}
+                                    if len(binding) > 2 else {})}
+                          for pool, binding in pools.items()}}
     (archive / "demand_meta.json").write_text(json.dumps(meta),
                                               encoding="utf-8")
     hashes = {}
@@ -81,10 +95,8 @@ def _archive(root: Path, name: str, *, variants, pools, extra=""):
 @pytest.fixture
 def world(tmp_path):
     catalog_root = tmp_path / "catalog"
-    pools = {"weekday": ("pool-wd", _catalog(catalog_root, "pool-wd",
-                                             ["A X", "A Y"])),
-             "weekend": ("pool-we", _catalog(catalog_root, "pool-we",
-                                             ["A X"]))}
+    pools = {"weekday": _pool(catalog_root, "pool-wd", ["A X", "A Y"]),
+             "weekend": _pool(catalog_root, "pool-we", ["A X"])}
     refs = [
         _archive(tmp_path, "a1", variants=ALL_X, pools=pools),
         _archive(tmp_path, "a2", variants={"q10": ["A Y"], "q50": ["A"],
@@ -362,8 +374,7 @@ class TestSubhourSelection:
 def library(tmp_path, monkeypatch):
     """One synthetic day whose routes use only the measured reverse edge."""
     catalog_root = tmp_path / "catalog"
-    pool = ("pool-wd", _catalog(catalog_root, "pool-wd",
-                                [f"A {MEASURED_REVERSE}"]))
+    pool = _pool(catalog_root, "pool-wd", [f"A {MEASURED_REVERSE}"])
     runs = tmp_path / "runs"
     ref = _archive(runs, "demand-20250916-historical",
                    variants={variant: [f"A {MEASURED_REVERSE}"]
@@ -493,3 +504,208 @@ class TestUserClosuresKeepTheirMeaning:
             windows.setdefault(item["edge_id"], set()).add(
                 (item["begin_s"], item["end_s"]))
         assert windows[ZERO_EDGE] == windows[MEASURED_REVERSE]
+
+
+# --------------------------------------------------------------------------
+# Review of 10518ae..9b12e13: contracts the first delivery did not enforce.
+# --------------------------------------------------------------------------
+
+def _declare_vehicle_count(ref, variant, count):
+    meta_path = ref.archive / "demand_meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["pfe_fit_variants"][cee.VARIANT_FIT_KEYS[variant]]["vehicles"] = count
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+
+class TestParserProblemsAreReasonsNeverZeros:
+    def test_an_unreadable_variant_is_a_reason_not_a_crash_or_a_zero(
+            self, world):
+        path = world.refs[0].archive / VARIANT_FILENAMES["q50"]
+        path.write_text("<routes><vehicle", encoding="utf-8")
+        verdict = _verdict(world, "X")
+        assert cee.MISSING_REQUIRED_VARIANT in verdict.reason_codes
+        assert cee.NO_OBSERVED_ARCHIVE_CROSSINGS not in verdict.reason_codes
+        assert {"code": cee.MISSING_REQUIRED_VARIANT,
+                "detail": "q50@key-a1:parse_error"} in verdict.reasons
+
+    def test_an_unreadable_catalog_is_a_pool_reason_not_missing_support(
+            self, world):
+        path = world.catalog_root / "pool-we" / "catalog.rou.xml"
+        path.write_text("<routes><vehicle", encoding="utf-8")
+        verdict = _verdict(world, "X")
+        assert cee.MISSING_REQUIRED_POOL in verdict.reason_codes
+        assert cee.NO_CATALOG_ROUTE_SUPPORT not in verdict.reason_codes
+
+    def test_vehicles_the_parser_skips_are_a_reason_not_a_zero(self, world):
+        # The production parser only sees routes embedded in a vehicle. A
+        # vehicle referencing a named route is skipped, so its crossing would
+        # otherwise read as observed zero traffic.
+        named = ('<route id="r1" edges="A Z"/>'
+                 '<vehicle id="named" depart="9" route="r1"/>')
+        ref = _archive(world.root, "a8", variants=ALL_X,
+                       pools={"weekday": world.pools["weekday"]},
+                       extra=named)
+        _declare_vehicle_count(ref, "q50", 2)
+        verdict = _verdict(world, "Z", refs=[ref])
+        assert {"code": cee.MISSING_REQUIRED_VARIANT,
+                "detail": "q50@key-a8:vehicle_count_mismatch"} in (
+                    verdict.reasons)
+        assert cee.NO_OBSERVED_ARCHIVE_CROSSINGS not in verdict.reason_codes
+
+    def test_an_undeclared_vehicle_count_fails_closed(self, world):
+        meta_path = world.refs[0].archive / "demand_meta.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        del meta["pfe_fit_variants"]
+        meta_path.write_text(json.dumps(meta), encoding="utf-8")
+        verdict = _verdict(world, "X")
+        assert cee.MISSING_REQUIRED_VARIANT in verdict.reason_codes
+
+    def test_a_catalog_count_below_its_bound_metadata_fails_closed(
+            self, world):
+        meta_path = world.catalog_root / "pool-we" / "catalog.meta.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta["candidates"]["extra"] = {}
+        meta_path.write_text(json.dumps(meta), encoding="utf-8")
+        ref = _archive(world.root, "a9", variants=ALL_X, pools={
+            "weekend": ("pool-we",
+                        world.pools["weekend"][1], _sha(meta_path))})
+        verdict = _verdict(world, "X", refs=[ref])
+        assert {"code": cee.MISSING_REQUIRED_POOL,
+                "detail": "weekend:route_count_mismatch"} in verdict.reasons
+        assert cee.NO_CATALOG_ROUTE_SUPPORT not in verdict.reason_codes
+
+    def test_unbound_catalog_metadata_fails_closed(self, world):
+        ref = _archive(world.root, "a10", variants=ALL_X, pools={
+            "weekend": ("pool-we", world.pools["weekend"][1], "0" * 64)})
+        verdict = _verdict(world, "X", refs=[ref])
+        assert {"code": cee.MISSING_REQUIRED_POOL,
+                "detail": "weekend:metadata_sha256_mismatch"} in (
+                    verdict.reasons)
+
+
+class _Parsed(list):
+    """A weak-referenceable stand-in for one parsed file."""
+
+
+class TestOneLargeVariantInMemory:
+    def test_a_parsed_file_is_released_before_the_next_is_parsed(
+            self, world, monkeypatch):
+        import gc
+        import weakref
+
+        alive = []
+
+        def parser(path, **kwargs):
+            gc.collect()
+            leaked = [ref for ref in alive if ref() is not None]
+            assert not leaked, f"{len(leaked)} parsed file(s) still held"
+            parsed = _Parsed(parse_route_vehicles(path, **kwargs))
+            alive.append(weakref.ref(parsed))
+            return parsed
+
+        monkeypatch.setattr(cee, "parse_route_vehicles", parser)
+        cee.build_inventory(["X"], world.refs,
+                            catalog_root=world.catalog_root)
+        assert len(alive) == 8
+
+
+class TestFixedCasesAreNotLabelledEffectGated:
+    def test_the_fixed_case_path_records_the_structural_policy(
+            self, tmp_path):
+        selection = bench.select_case(tmp_path)
+        assert selection["case_selection_policy"] == cee.LEGACY_POLICY
+        assert selection["effect_rule"] is None
+
+    def test_effect_gating_without_archives_is_refused(self, tmp_path):
+        with pytest.raises(ValueError, match="archives"):
+            bench.select_case(tmp_path, policy=cee.POLICY)
+
+
+class TestEffectEvidenceIsBoundAndVerified:
+    def test_selection_evidence_verifies_until_a_catalog_drifts(
+            self, library, tmp_path):
+        selection = bench.select_case(library, from_archives=True)
+        evidence = selection["effect_inventory"]
+        assert evidence["record"]["content_key"] == (
+            evidence["inventory_content_key"])
+        record = {"selection": {"case_selection_policy": cee.POLICY,
+                                "effect_inventory": evidence}}
+        assert cee.verify_selection_evidence(record["selection"]) == []
+        assert not [problem for problem in
+                    bench.verify_bindings(record, library)
+                    if "effect" in problem]
+        path = Path(next(iter(evidence["record"]["catalogs"].values()))[
+            "path"])
+        path.write_text(_vehicles_xml(["A"]), encoding="utf-8")
+        assert any("effect inventory" in problem
+                   for problem in bench.verify_bindings(record, library))
+
+    def test_a_new_policy_selection_without_evidence_is_refused(self):
+        assert cee.verify_selection_evidence(
+            {"case_selection_policy": cee.POLICY})
+        assert cee.verify_selection_evidence({}) == []
+
+    def test_the_suite_registration_keeps_the_policy_and_screens_once(
+            self, monkeypatch, tmp_path):
+        calls = []
+        evaluated = [
+            {"search_id": f"s{n}", "search_content_key": f"{n}" * 20,
+             "spec": {"directed_edges": [f"edge-{n}"]},
+             "candidate_count": 13, "unique_daily_unit_count": 13,
+             "work_dates": [day], "work_dates_with_calibrated_archive": [day],
+             "structurally_eligible": True, "effect_eligible": True,
+             "eligible": True, "resolved_archives": {}}
+            for n, day in enumerate(["2027-03-22", "2027-07-15"] * 2)]
+        selection = {"evaluated": evaluated, "archives_available": 2,
+                     "case_selection_policy": cee.POLICY,
+                     "effect_rule": bench.EFFECT_SELECTION_RULE,
+                     "effect_inventory": {"inventory_content_key": "k"}}
+
+        def select_case(runs_root, **kwargs):
+            calls.append(kwargs)
+            return selection
+
+        def build_registration(runs_root, **kwargs):
+            if kwargs.get("selection") is None:
+                select_case(runs_root, from_archives=True)
+            return {"sources": {}, "selected_case": None}
+
+        monkeypatch.setattr(suite.base, "select_case", select_case)
+        monkeypatch.setattr(suite.base, "build_registration",
+                            build_registration)
+        record = suite.build_registration(tmp_path, data_root=tmp_path,
+                                          outcome_path=tmp_path / "o.json")
+        assert len(calls) == 1, "the effect inventory is built once"
+        assert calls[0].get("data_root") == tmp_path
+        assert record["selection"]["case_selection_policy"] == cee.POLICY
+        assert record["selection"]["effect_inventory"] == {
+            "inventory_content_key": "k"}
+
+    def test_a_policy_selection_without_eligibility_selects_nothing(self):
+        item = {"search_id": "s", "search_content_key": "k" * 20,
+                "spec": {"directed_edges": ["e"]}, "candidate_count": 13,
+                "unique_daily_unit_count": 13, "work_dates": ["2027-03-22"],
+                "structurally_eligible": True}
+        assert suite.select_suite_cases(
+            {"case_selection_policy": cee.POLICY, "evaluated": [item]}) == []
+        assert len(suite.select_suite_cases({"evaluated": [item]})) == 1
+
+
+class TestSubhourUsesTheRegisteredDataRoot:
+    def test_selection_screens_against_the_given_data_root(
+            self, subhour_world, monkeypatch, tmp_path):
+        subhour = subhour_world.module
+        seen = []
+        inner = subhour.base.effect_screen_cases
+
+        def screen(cases, **kwargs):
+            seen.append(kwargs.get("data_root"))
+            return inner(cases, **kwargs)
+
+        monkeypatch.setattr(subhour.base, "effect_screen_cases", screen)
+        subhour.select_cases(subhour_world.runs, data_root=tmp_path / "d")
+        subhour._recompute_selection(
+            {"data_root": str(tmp_path / "r"),
+             "selection": {"case_selection_policy": cee.POLICY}},
+            subhour_world.runs, None)
+        assert seen == [tmp_path / "d", (tmp_path / "r").resolve()]

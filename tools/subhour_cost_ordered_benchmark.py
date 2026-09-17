@@ -187,13 +187,17 @@ def outcome_free_tuple(item: Mapping[str, Any]) -> tuple[str, str, str, str, str
 def _metadata_inventory(runs_root: Path,
                         qualified_manifest: Mapping[str, Any] | None = None,
                         policy: str = closure_effect.POLICY,
-                        ) -> list[dict[str, Any]]:
+                        data_root: Path = ROOT,
+                        ) -> tuple[list[dict[str, Any]], Any]:
     """Build the complete eligible inventory without opening outcome files.
 
     ``structural_survivability_v1`` reproduces the historical inventory
     exactly; ``closure_effect_eligibility_v1`` additionally keeps only cases
-    with a verified traffic effect in the archives they resolve to.
+    with a verified traffic effect in the archives they resolve to, read from
+    ``data_root``'s network and catalogs. Returns the items and the effect
+    evidence (``None`` under the legacy policy).
     """
+    evidence = None
     # These helpers read demand_meta/routes and the topology survivability
     # screen only.  They do not import or glob validation/*outcome* records.
     items: list[dict[str, Any]] = []
@@ -228,16 +232,16 @@ def _metadata_inventory(runs_root: Path,
         # Discovery is structural; this automatic selection also needs a real
         # traffic effect. Every archive is parsed once for all cases, and the
         # frozen SHA order below is applied to the eligible cases unchanged.
-        verdicts, _summary = base.effect_screen_cases(
+        verdicts, evidence = base.effect_screen_cases(
             [(spec, archives) for spec, archives in cases
              if archives is not None],
-            runs_root=Path(runs_root))
+            runs_root=Path(runs_root), data_root=Path(data_root))
         items = closure_effect.eligible_in_order(
             items, lambda item: verdicts.get(item["search_content_key"]) or {},
             order_key=lambda item: item["selection_sha256"])
         for item in items:
             item["case_selection_policy"] = policy
-    return sorted(items, key=lambda item: item["selection_sha256"])
+    return sorted(items, key=lambda item: item["selection_sha256"]), evidence
 
 
 def _effect_archives(spec: Any, runs_root: Path,
@@ -381,7 +385,8 @@ def _metadata_archives_for_spec(spec: Any, runs_root: Path,
 
 def select_cases(runs_root: Path = base.DEFAULT_RUNS_ROOT,
                  qualified_manifest: Mapping[str, Any] | None = None,
-                 policy: str = closure_effect.POLICY) -> dict[str, Any]:
+                 policy: str = closure_effect.POLICY,
+                 data_root: Path = ROOT) -> dict[str, Any]:
     """Select eight cases with four edges and two demand periods."""
     if qualified_manifest is not None:
         validate_qualified_demand_manifest_shape(qualified_manifest)
@@ -389,7 +394,8 @@ def select_cases(runs_root: Path = base.DEFAULT_RUNS_ROOT,
             raise ValueError("Phase 3 requires a passing qualified-demand manifest")
     if policy not in closure_effect.POLICIES:
         raise ValueError(f"unknown case_selection_policy {policy!r}")
-    eligible = _metadata_inventory(Path(runs_root), qualified_manifest, policy)
+    eligible, effect_inventory = _metadata_inventory(
+        Path(runs_root), qualified_manifest, policy, data_root)
     edges = sorted({str(item["spec"]["directed_edges"][0])
                     for item in eligible})
     periods = sorted({str(item["demand_period"]) for item in eligible})
@@ -440,6 +446,7 @@ def select_cases(runs_root: Path = base.DEFAULT_RUNS_ROOT,
                                    for item in chosen}),
         "distinct_periods": sorted({item["demand_period"] for item in chosen}),
         "case_selection_policy": policy,
+        "effect_inventory": effect_inventory,
     }
 
 
@@ -450,10 +457,18 @@ def _recompute_selection(record: Mapping[str, Any], runs_root: Path,
 
     Registrations without ``case_selection_policy`` predate effect
     eligibility and are replayed with the structural policy, so their
-    historical selection and eligible-list digest stay reproducible.
+    historical selection and eligible-list digest stay reproducible. The
+    effect screen reads the registration's own data root.
     """
+    data_root = Path(record.get("data_root", ROOT)).resolve()
     return select_cases(runs_root, qualified_manifest,
-                        closure_effect.policy_of(record.get("selection")))
+                        closure_effect.policy_of(record.get("selection")),
+                        data_root)
+
+
+def _inventory_key(selection: Mapping[str, Any]) -> str | None:
+    return ((selection or {}).get("effect_inventory") or {}).get(
+        "inventory_content_key")
 
 
 def _source_digests() -> dict[str, str]:
@@ -480,7 +495,8 @@ def build_registration(
     qualified_manifest_path = Path(qualified_manifest_path).resolve()
     qualified_manifest = json.loads(qualified_manifest_path.read_text(encoding="utf-8"))
     validate_qualified_demand_manifest_shape(qualified_manifest)
-    selection = select_cases(runs_root, qualified_manifest)
+    selection = select_cases(runs_root, qualified_manifest,
+                             data_root=Path(data_root).resolve())
     selected: list[dict[str, Any]] = []
     archives: dict[str, Any] = {}
     # `select_cases` is the only selector.  Archive resolution is an input
@@ -532,6 +548,7 @@ def build_registration(
         "selection": {
             "rule": selection["rule"],
             "case_selection_policy": selection["case_selection_policy"],
+            "effect_inventory": selection["effect_inventory"],
             "eligible_list_digest": selection["eligible_list_digest"],
             "eligible_count": len(selection["eligible"]),
             "selected_ids": selected_ids,
@@ -639,8 +656,13 @@ def verify_registration(record: Mapping[str, Any], *, root: Path = ROOT,
             or qualified_manifest.get("content_key") != qualified_ref.get("content_key")
             or qualified_manifest.get("evidence_id") != qualified_ref.get("evidence_id")):
         raise ValueError("qualified-demand manifest binding drift")
+    drift = closure_effect.verify_selection_evidence(selection)
+    if drift:
+        raise ValueError(f"effect selection evidence drift: {drift}")
     recomputed_selection = _recompute_selection(record, runs_root,
                                                 qualified_manifest)
+    if _inventory_key(recomputed_selection) != _inventory_key(selection):
+        raise ValueError("effect inventory does not reproduce")
     if selected_ids != [str(item) for item in recomputed_selection["selected_ids"]]:
         raise ValueError("registration selected IDs do not follow the frozen rule")
     if selection.get("eligible_list_digest") != recomputed_selection["eligible_list_digest"]:

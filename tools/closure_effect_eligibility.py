@@ -22,8 +22,12 @@ applies):
 * every such archive binds catalog pools in metadata, each pool file exists
   and matches its declared SHA-256, and one pool name never maps to two
   catalogs [missing_required_pool];
-* every archive has q10, q50 and q90, each with a resolver-validated SHA-256
-  and unchanged while it was parsed [missing_required_variant];
+* every archive has q10, q50 and q90, each with a resolver-validated SHA-256,
+  unchanged while it was parsed, readable by the production parser, and
+  yielding exactly the vehicle count its ``demand_meta.json`` declares
+  [missing_required_variant];
+* every bound pool is readable and yields exactly the candidate count of its
+  hash-bound ``catalog.meta.json`` [missing_required_pool];
 * every bound pool has at least one catalog route using the edge
   [no_catalog_route_support];
 * each of q10, q50 and q90 has at least one vehicle crossing the edge, and
@@ -34,7 +38,11 @@ The inventory takes the candidate edge IDs, parses each catalog pool and each
 archive variant exactly once with the production route parser
 (``traffic_sim.simulation.disruption.parse_route_vehicles``), and freezes one
 table ``edge -> variant -> build_key -> crossing vehicles`` for all
-candidates. Archive variants are not rehashed here: their SHA-256 comes from
+candidates. A file the parser cannot read, or whose parsed vehicle count
+differs from its bound declaration (for example vehicles that reference a
+named route, which the production parser skips), is a reason code and never
+observed zero traffic. Only one parsed file is held in memory at a time.
+Archive variants are not rehashed here: their SHA-256 comes from
 the production resolver that validated them. ``verify_inventory`` rehashes
 every bound file later, so any catalog or archive drift invalidates the
 evidence.
@@ -51,6 +59,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
+from xml.etree import ElementTree as ET
 
 from traffic_sim.simulation.deterministic_disruption import VARIANT_FILENAMES
 from traffic_sim.simulation.disruption import parse_route_vehicles
@@ -59,6 +68,9 @@ POLICY = "closure_effect_eligibility_v1"
 LEGACY_POLICY = "structural_survivability_v1"
 POLICIES = (LEGACY_POLICY, POLICY)
 REQUIRED_VARIANTS = tuple(sorted(VARIANT_FILENAMES))
+#: Where ``demand_meta.json`` declares each variant's published vehicle count.
+VARIANT_FIT_KEYS = {"q50": "edge_shares", "q10": "edge_shares_q10",
+                    "q90": "edge_shares_q90"}
 
 MISSING_NETWORK_EDGE = "missing_network_edge"
 INCOMPLETE_ARCHIVE_COVERAGE = "incomplete_archive_coverage"
@@ -136,14 +148,49 @@ def _count(parsed, wanted: frozenset[str]) -> dict[str, int]:
     return counts
 
 
-def _bound_pools(archive: Path) -> dict[str, dict[str, str]]:
-    metadata = json.loads((archive / "demand_meta.json").read_text(
-        encoding="utf-8"))
+def _demand_meta(archive: Path) -> dict[str, Any]:
+    """The archive's metadata, or ``{}`` when it cannot be read."""
+    try:
+        metadata = json.loads((archive / "demand_meta.json").read_text(
+            encoding="utf-8"))
+    except (OSError, ValueError):  # ValueError covers JSON and Unicode
+        return {}
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _bound_pools(metadata: Mapping[str, Any]) -> dict[str, dict[str, str]]:
     catalog = metadata.get("candidate_catalog") or {}
     artifacts = catalog.get("artifacts") or {}
-    return {str(pool): {"key": str(key), "declared_sha256": str(
-                (artifacts.get(pool) or {}).get("routes_sha256", ""))}
+    return {str(pool): {
+                "key": str(key),
+                "declared_sha256": str(
+                    (artifacts.get(pool) or {}).get("routes_sha256", "")),
+                "metadata_sha256": str(
+                    (artifacts.get(pool) or {}).get("metadata_sha256", ""))}
             for pool, key in sorted((catalog.get("keys") or {}).items())}
+
+
+def _declared_vehicles(metadata: Mapping[str, Any], variant: str):
+    fit = (metadata.get("pfe_fit_variants") or {}).get(
+        VARIANT_FIT_KEYS[variant]) or {}
+    count = fit.get("vehicles")
+    return count if isinstance(count, int) else None
+
+
+def _parse_counted(path: Path, wanted: frozenset[str], parses):
+    """(vehicles, crossings, stable, error) with the parse released at once."""
+    before = _state(path)
+    parses[str(path)] = parses.get(str(path), 0) + 1
+    try:
+        parsed = parse_route_vehicles(path)
+    # Each read failure becomes a reason code, never observed zero traffic.
+    except (OSError, ValueError, ET.ParseError) as error:
+        return None, None, _state(path) == before, type(error).__name__
+    vehicles, counts = len(parsed), _count(parsed, wanted)
+    # Drop the only reference before the next file is parsed: one large
+    # variant in memory at a time.
+    del parsed
+    return vehicles, counts, _state(path) == before, None
 
 
 @dataclass(frozen=True)
@@ -175,25 +222,45 @@ class Inventory:
 
 
 def _parse_archive(ref: ArchiveRef, wanted, crossings, parses):
+    metadata = _demand_meta(Path(ref.archive))
     variants = {}
     for variant in REQUIRED_VARIANTS:
         path = Path(ref.archive) / VARIANT_FILENAMES[variant]
         if not path.is_file():
             variants[variant] = {"present": False}
             continue
-        before = _state(path)
-        parsed = parse_route_vehicles(path)
-        stable = _state(path) == before
-        parses[str(path)] = parses.get(str(path), 0) + 1
-        for edge, count in _count(parsed, wanted).items():
-            crossings[edge][variant][ref.build_key] = count
+        vehicles, counts, stable, error = _parse_counted(path, wanted, parses)
+        if counts is not None:
+            for edge, count in counts.items():
+                crossings[edge][variant][ref.build_key] = count
         variants[variant] = {
-            "present": True, "stable": stable, "vehicles": len(parsed),
+            "present": True, "stable": stable, "vehicles": vehicles,
+            "declared_vehicles": _declared_vehicles(metadata, variant),
+            "parse_error": error,
             "validated_sha256": (ref.variant_sha256 or {}).get(variant)}
+    meta_path = Path(ref.archive) / "demand_meta.json"
     return {"archive": str(Path(ref.archive).resolve()),
             "content_key": ref.content_key,
-            "pools": _bound_pools(Path(ref.archive)),
+            "demand_meta_sha256": (_sha256(meta_path)
+                                   if meta_path.is_file() else None),
+            "pools": _bound_pools(metadata),
             "variants": variants}
+
+
+def _catalog_candidates(directory: Path, metadata_sha256: Iterable[str]):
+    """(declared candidate count, metadata sha256) from bound metadata."""
+    path = directory / "catalog.meta.json"
+    if not path.is_file():
+        return None, None
+    digest = _sha256(path)
+    if digest not in set(metadata_sha256):
+        return None, digest
+    try:
+        candidates = json.loads(path.read_text(encoding="utf-8")).get(
+            "candidates")
+    except (OSError, ValueError, AttributeError):
+        return None, digest
+    return (len(candidates) if isinstance(candidates, dict) else None), digest
 
 
 def build_inventory(candidates: Iterable[str], archives: Sequence[ArchiveRef],
@@ -212,23 +279,31 @@ def build_inventory(candidates: Iterable[str], archives: Sequence[ArchiveRef],
     for record in records.values():
         for pool, binding in record["pools"].items():
             entry = catalogs.setdefault(binding["key"], {
-                "pools": [], "declared_sha256": []})
+                "pools": [], "declared_sha256": [],
+                "declared_metadata_sha256": []})
             if pool not in entry["pools"]:
                 entry["pools"].append(pool)
-            if binding["declared_sha256"] not in entry["declared_sha256"]:
-                entry["declared_sha256"].append(binding["declared_sha256"])
+            for field, value in (
+                    ("declared_sha256", binding["declared_sha256"]),
+                    ("declared_metadata_sha256",
+                     binding["metadata_sha256"])):
+                if value not in entry[field]:
+                    entry[field].append(value)
     catalog_routes: dict[str, dict[str, int]] = {}
     for key, entry in sorted(catalogs.items()):
         path = Path(catalog_root) / key / "catalog.rou.xml"
         entry.update(path=str(path.resolve()), present=path.is_file())
         if entry["present"]:
             entry["sha256"] = _sha256(path)
-            before = _state(path)
-            parsed = parse_route_vehicles(path)
-            entry["stable"] = _state(path) == before
-            parses[str(path)] = parses.get(str(path), 0) + 1
-            entry["vehicles"] = len(parsed)
-            catalog_routes[key] = _count(parsed, wanted)
+            vehicles, counts, stable, error = _parse_counted(
+                path, wanted, parses)
+            declared, metadata_sha = _catalog_candidates(
+                path.parent, entry["declared_metadata_sha256"])
+            entry.update(stable=stable, vehicles=vehicles, parse_error=error,
+                         declared_candidates=declared,
+                         metadata_sha256=metadata_sha)
+            if counts is not None:
+                catalog_routes[key] = counts
     return Inventory(candidates=tuple(sorted(wanted)), archives=records,
                      catalogs=catalogs, crossings=crossings,
                      catalog_routes=catalog_routes, parses=parses)
@@ -256,6 +331,37 @@ class Verdict:
                 "summary": dict(self.summary)}
 
 
+def _pool_problem(catalog: Mapping[str, Any],
+                  binding: Mapping[str, str]) -> str | None:
+    if not catalog["present"]:
+        return "missing"
+    if (catalog["sha256"] != binding["declared_sha256"]
+            or len(catalog["declared_sha256"]) != 1
+            or not catalog["stable"]):
+        return "sha256_mismatch"
+    if catalog.get("parse_error"):
+        return "parse_error"
+    if (catalog.get("metadata_sha256") != binding["metadata_sha256"]
+            or len(catalog["declared_metadata_sha256"]) != 1):
+        return "metadata_sha256_mismatch"
+    if catalog.get("declared_candidates") != catalog.get("vehicles"):
+        return "route_count_mismatch"
+    return None
+
+
+def _variant_problem(item: Mapping[str, Any]) -> str | None:
+    """``None`` when usable, else the reason detail suffix."""
+    if not item["present"]:
+        return ""
+    if not item["stable"] or not item["validated_sha256"]:
+        return ":unverified"
+    if item.get("parse_error"):
+        return ":parse_error"
+    if item.get("declared_vehicles") != item.get("vehicles"):
+        return ":vehicle_count_mismatch"
+    return None
+
+
 def _input_reasons(inventory: Inventory, keys: Sequence[str]):
     reasons = []
     pool_keys: dict[str, set[str]] = {}
@@ -266,20 +372,14 @@ def _input_reasons(inventory: Inventory, keys: Sequence[str]):
         for pool, binding in record["pools"].items():
             pool_keys.setdefault(pool, set()).add(binding["key"])
             catalog = inventory.catalogs[binding["key"]]
-            if not catalog["present"]:
-                reasons.append((MISSING_REQUIRED_POOL, f"{pool}:missing"))
-            elif (catalog["sha256"] != binding["declared_sha256"]
-                  or len(catalog["declared_sha256"]) != 1
-                  or not catalog["stable"]):
-                reasons.append((MISSING_REQUIRED_POOL,
-                                f"{pool}:sha256_mismatch"))
+            problem = _pool_problem(catalog, binding)
+            if problem:
+                reasons.append((MISSING_REQUIRED_POOL, f"{pool}:{problem}"))
         for variant in REQUIRED_VARIANTS:
-            item = record["variants"][variant]
-            if not item["present"]:
-                reasons.append((MISSING_REQUIRED_VARIANT, f"{variant}@{key}"))
-            elif not item["stable"] or not item["validated_sha256"]:
+            problem = _variant_problem(record["variants"][variant])
+            if problem is not None:
                 reasons.append((MISSING_REQUIRED_VARIANT,
-                                f"{variant}@{key}:unverified"))
+                                f"{variant}@{key}{problem}"))
     reasons.extend((MISSING_REQUIRED_POOL, f"{pool}:key_conflict")
                    for pool, used in sorted(pool_keys.items())
                    if len(used) > 1)
@@ -394,6 +494,36 @@ def screen_cases(cases: Sequence[tuple[Any, Mapping[str, Any]]], *,
     return verdicts, inventory
 
 
+def selection_evidence(inventory: Inventory) -> dict[str, Any]:
+    """The inventory a selection must carry so drift can be detected."""
+    return {"policy": POLICY, "inventory_content_key": inventory.content_key,
+            "archives": len(inventory.archives),
+            "files_parsed": len(inventory.parses),
+            "record": inventory.to_dict()}
+
+
+def verify_selection_evidence(selection: Mapping[str, Any] | None
+                              ) -> list[str]:
+    """Drift problems for a selection block; its own policy decides.
+
+    Legacy selections carry no effect evidence and need none. A selection
+    made under ``closure_effect_eligibility_v1`` must carry its inventory,
+    and every file that inventory bound must still hash the same.
+    """
+    if policy_of(selection) != POLICY:
+        return []
+    evidence = (selection or {}).get("effect_inventory") or {}
+    record = evidence.get("record")
+    if not isinstance(record, Mapping):
+        return ["effect inventory evidence is missing"]
+    problems = []
+    if record.get("content_key") != evidence.get("inventory_content_key"):
+        problems.append("effect inventory content key is not the bound one")
+    problems.extend(f"effect inventory: {problem}"
+                    for problem in verify_inventory(record))
+    return problems
+
+
 def verify_inventory(record: Mapping[str, Any]) -> list[str]:
     """Problems that invalidate inventory evidence now; empty when valid."""
     body = {key: value for key, value in record.items()
@@ -402,6 +532,10 @@ def verify_inventory(record: Mapping[str, Any]) -> list[str]:
     if _digest(body) != record.get("content_key"):
         problems.append("inventory content key mismatch")
     for key, archive in sorted((record.get("archives") or {}).items()):
+        meta = Path(archive["archive"]) / "demand_meta.json"
+        now = _sha256(meta) if meta.is_file() else None
+        if now != archive.get("demand_meta_sha256"):
+            problems.append(f"archive {key} demand_meta drifted")
         for variant, item in sorted(archive["variants"].items()):
             if not item.get("present"):
                 continue
@@ -414,4 +548,8 @@ def verify_inventory(record: Mapping[str, Any]) -> list[str]:
         if bool(catalog.get("present")) != path.is_file() or (
                 path.is_file() and _sha256(path) != catalog.get("sha256")):
             problems.append(f"catalog {key} drifted")
+        meta = path.parent / "catalog.meta.json"
+        now = _sha256(meta) if meta.is_file() else None
+        if catalog.get("present") and now != catalog.get("metadata_sha256"):
+            problems.append(f"catalog {key} metadata drifted")
     return problems

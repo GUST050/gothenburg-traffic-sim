@@ -3313,6 +3313,50 @@ before evidence and never launches an unreviewable fixer.
 The detailed rationale and primary sources are recorded in
 `docs/plans/AI_FLOW_STAGED_EVIDENCE_PROTOCOL_2026-08-31.md`.
 
+### Closure-case eligibility (2026-09-17)
+
+Two separate properties govern a directed closure edge. Neither implies the
+other.
+
+* **`structurally_survivable`**: closing the edge leaves the network usable
+  (`closure_survivability_screen_v2`, `surviving_roads`, `discovered_specs`).
+  Structural discovery may name an edge that no current route uses.
+* **`effect_eligible`**: the edge has a verified traffic effect in the exact
+  archives a case resolves to. Policy `closure_effect_eligibility_v1` lives in
+  `tools/closure_effect_eligibility.py`, outside `demand_source_paths`, so it
+  never changes a demand archive's identity.
+
+The rules are:
+
+1. **Directed IDs are preserved.** The UI, `serve.py`, `ClosureSearchSpec`,
+   `closure_seconds` and `ClosureRouteResolver` carry the listed directed
+   edge IDs unchanged. A two-way closure is an explicit list of both
+   directions; one listed direction never closes its reverse.
+2. **User closures are never screened.** A user-chosen closure of an edge
+   without traffic is valid, and its honest result is zero.
+3. **Only automatic selection requires an effect.** Cases a tool picks by
+   itself for a benchmark, WCI or performance run must be effect-eligible:
+   `cost_ordered_benchmark.select_case`, the benchmark suite and the sub-hour
+   selector. They filter on eligibility first and then keep their existing
+   stable or hash order; they never prefer the edge with the most traffic.
+   The fixed v1 case set has no archives, so it can only be selected
+   structurally.
+4. **Artifacts replay their own policy.** An artifact without
+   `case_selection_policy` was selected by `structural_survivability_v1` and
+   is verified with it. New effect-gated selections write
+   `closure_effect_eligibility_v1`. Unknown versions are refused, and a
+   verifier never substitutes the current default.
+5. **Effect evidence is content-bound and fail-closed.** The inventory parses
+   each catalog pool and each archive variant once with the production
+   parser. It binds archive content keys, variant, catalog and metadata
+   hashes, and the declared vehicle and candidate counts. A missing, unbound,
+   unreadable or miscounted input is a reason code (`missing_network_edge`,
+   `incomplete_archive_coverage`, `missing_required_pool`,
+   `missing_required_variant`, `no_catalog_route_support`,
+   `no_observed_archive_crossings`, `eligible`), never observed zero traffic.
+   A selection under the policy carries its inventory, and any later hash
+   drift invalidates it.
+
 ## Build order
 1. **B — observability module** (junction solves, bounds, alarms).
 2. **C — PFE-lite LP** (replaces routeSampler as primary; keeps its I/O).

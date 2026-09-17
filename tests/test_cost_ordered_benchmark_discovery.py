@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+import tools.closure_effect_eligibility as closure_effect
 import tools.cost_ordered_benchmark as bench
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,13 +45,17 @@ def _synthetic_archives_are_product_resolvable(monkeypatch):
     monkeypatch.setattr(bench, "_resolved_archives_for_spec", resolve)
 
     # These metadata-only libraries carry no routes. Automatic selection's
-    # effect-eligibility stage is exercised in tests/test_effect_eligibility.py
-    # on real (small) route files; here every structural case passes it.
+    # effect-eligibility stage is exercised in
+    # tests/test_closure_effect_eligibility.py on real (small) route files;
+    # here every structural case passes it, with the evidence of an
+    # inventory that bound no file.
     def every_case_has_effect(cases, **_kwargs):
+        empty = closure_effect.build_inventory((), (), catalog_root=Path())
         return ({spec.content_key: {"effect_eligible": True,
                                     "reason_codes": ["eligible"],
                                     "edges": []}
-                 for spec, _archives in cases}, None)
+                 for spec, _archives in cases},
+                closure_effect.selection_evidence(empty))
 
     monkeypatch.setattr(bench, "effect_screen_cases", every_case_has_effect)
 

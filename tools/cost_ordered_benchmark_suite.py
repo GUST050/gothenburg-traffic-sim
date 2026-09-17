@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import tools.closure_effect_eligibility as closure_effect  # noqa: E402
 import tools.cost_ordered_benchmark as base  # noqa: E402
 from traffic_sim.core.fingerprint import sha256_file  # noqa: E402
 REGISTRATION_SCHEMA = "cost_ordered_benchmark_suite_registration_v1"
@@ -60,12 +61,15 @@ def select_suite_cases(
     diversity are then maximised without consulting a cost, health result,
     winner, timeout or prior benchmark outcome.
     """
-    # `eligible` already applies the recorded case-selection policy (for
-    # closure_effect_eligibility_v1: structural AND effect-eligible). Older
-    # selections without the field were purely structural.
+    # The selection's own policy decides. Under closure_effect_eligibility_v1
+    # only an explicit `eligible` (structural AND effect) counts, so a record
+    # missing the field selects nothing; older selections were structural.
+    gated = closure_effect.policy_of(selection) == (
+        closure_effect.POLICY)
     eligible = [
         dict(item) for item in selection["evaluated"]
-        if item.get("eligible", item.get("structurally_eligible"))
+        if (item.get("eligible") is True if gated
+            else item.get("eligible", item.get("structurally_eligible")))
     ]
     eligible.sort(key=lambda item: (
         -int(item["candidate_count"]),
@@ -119,15 +123,19 @@ def build_registration(
     outcome_path: Path = DEFAULT_OUTCOME,
 ) -> dict[str, Any]:
     """Freeze the suite and every input before any suite outcome exists."""
-    # Reuse the mature source/runtime/network/policy seal. This first call is
-    # itself outcome-blind; its single selected case is replaced below.
+    # Select once: the effect inventory reads every archive variant, and the
+    # base registration reuses this selection rather than repeating it. The
+    # base call supplies the mature source/runtime/network/policy seal; it is
+    # outcome-blind, and its single selected case is replaced below.
+    selection = base.select_case(Path(runs_root), from_archives=True,
+                                 data_root=data_root)
     record = base.build_registration(
         runs_root,
         from_archives=True,
         data_root=data_root,
         outcome_path=outcome_path,
+        selection=selection,
     )
-    selection = base.select_case(Path(runs_root), from_archives=True)
     chosen = select_suite_cases(selection)
     distinct_dates = sorted({date for item in chosen for date in _dates(item)})
     distinct_edges = sorted({_edge(item) for item in chosen})
@@ -189,6 +197,12 @@ def build_registration(
             bool(item.get("structurally_eligible"))
             for item in selection["evaluated"]),
         "archives_available": selection["archives_available"],
+        "case_selection_policy": selection["case_selection_policy"],
+        "effect_rule": selection["effect_rule"],
+        "effect_inventory": selection["effect_inventory"],
+        "effect_eligible_case_count": sum(
+            bool(item.get("eligible"))
+            for item in selection["evaluated"]),
         "selected_case_count": len(chosen),
         "distinct_dates": distinct_dates,
         "distinct_edges": distinct_edges,

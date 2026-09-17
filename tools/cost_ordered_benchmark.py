@@ -674,12 +674,9 @@ def effect_screen_cases(
         cases, network_edges=network_edges, catalog_root=catalog_root,
         daily_units_for=lambda spec: _daily_units_by_build_key(
             spec, runs_root))
-    return verdicts, {
-        "policy": closure_effect.POLICY,
-        "inventory_content_key": inventory.content_key,
-        "archives": len(inventory.archives),
-        "files_parsed": len(inventory.parses),
-    }
+    # The full inventory travels with the selection so a verifier can detect
+    # catalog, archive or metadata drift without rebuilding it.
+    return verdicts, closure_effect.selection_evidence(inventory)
 
 
 def discovered_specs(runs_root: Path) -> tuple[ClosureSearchSpec, ...]:
@@ -985,7 +982,7 @@ def _structural_profile(spec: ClosureSearchSpec) -> dict[str, Any]:
 def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
                 *, from_archives: bool = False,
                 data_root: Path = ROOT,
-                policy: str = closure_effect.POLICY) -> dict[str, Any]:
+                policy: str | None = None) -> dict[str, Any]:
     """Pick the case with the most structurally eligible candidates.
 
     Deliberately blind to outcomes: it never runs a search, never prices a
@@ -993,9 +990,17 @@ def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
     signal is how many candidates the case can discriminate between, which is a
     property of the calendar and the archives on disk.
     """
+    if policy is None:
+        # The fixed v1 case set has no archives to screen, so it is, and is
+        # recorded as, the structural policy it was always selected under.
+        policy = (closure_effect.POLICY if from_archives
+                  else closure_effect.LEGACY_POLICY)
     if policy not in closure_effect.POLICIES:
         raise ValueError(f"unknown case_selection_policy {policy!r}")
-    gated = from_archives and policy == closure_effect.POLICY
+    gated = policy == closure_effect.POLICY
+    if gated and not from_archives:
+        raise ValueError(f"{policy} needs archives to screen; the fixed "
+                         "case set can only be selected structurally")
     archives = _archive_index(runs_root)
     covered_dates = {
         str(record.get("epoch_sim", ""))[:10]
@@ -1068,10 +1073,15 @@ def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
 def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT,
                        *, from_archives: bool = False,
                        data_root: Path = ROOT,
-                       outcome_path: Path = DEFAULT_OUTCOME) -> dict[str, Any]:
+                       outcome_path: Path = DEFAULT_OUTCOME,
+                       selection: Mapping[str, Any] | None = None,
+                       ) -> dict[str, Any]:
     data_root = Path(data_root).resolve()
-    selection = select_case(runs_root, from_archives=from_archives,
-                            data_root=data_root)
+    if selection is None:
+        # A caller that already selected (the suite) passes its selection so
+        # the effect inventory is built once per registration.
+        selection = select_case(runs_root, from_archives=from_archives,
+                                data_root=data_root)
     selected = selection["selected"]
     archives = _archive_index(runs_root)
 
@@ -1403,6 +1413,10 @@ def verify_bindings(registration: Mapping[str, Any],
             drift.append(f"bound demand metadata is missing: {meta}")
         elif sha256_file(meta) != archive.get("demand_meta_sha256"):
             drift.append(f"bound demand metadata changed: {meta}")
+    # The selection's own policy decides: legacy selections carry no effect
+    # evidence; effect-gated ones must still describe the files they read.
+    drift.extend(closure_effect.verify_selection_evidence(
+        registration.get("selection")))
     return drift
 
 
