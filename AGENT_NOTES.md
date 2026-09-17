@@ -7,35 +7,40 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `REVIEWED AND REPAIRED THE VERSIONED CASE-SELECTION POLICY; ARCHITECTURE DOCUMENTED; FULL WCI BUILD DECIDED AGAINST FOR NOW.` Work is in `/private/tmp/gs-step3-departure-bounds`, branch `claude/exciting-rubin-1e6k5m`, local commits above pushed `8b453da`; nothing pushed.
-- Root cause (unchanged): automatic benchmark selection proved only structural survivability, so it froze `26355153_26842525_0`, which carries no traffic. The user's road choice, the UI, `serve.py`, `closure_seconds` and `ClosureRouteResolver` were correct and remain untouched.
-- Review of `10518ae..9b12e13`: rejected as final, and seven gaps were fixed with RED/GREEN.
-  1. **Parser problems.** `_parse_archive` let `ParseError` crash, and vehicles referencing a named route, which the production parser skips, read as observed zero. Variants are now checked against `demand_meta.json` `pfe_fit_variants.*.vehicles`, and catalogs against their hash-bound `catalog.meta.json` candidate count; any mismatch or read failure is a reason code.
-  2. **Suite registration.** The suite dropped `case_selection_policy` and screened twice with the wrong `data_root`. It now selects once, passes `selection=` to `base.build_registration`, and records the policy, rule and inventory.
-  3. **Evidence verification.** `verify_selection_evidence` rehashes the full inventory, including catalog metadata and `demand_meta`. It is called by `cost_ordered_benchmark.verify_bindings` and by subhour `verify_registration`, which also requires the inventory key to reproduce.
-  4. **Memory.** Only one parsed file is alive at a time.
-  5. **Fixed case path.** `select_case(from_archives=False)` records `structural_survivability_v1`, and a v1 request without archives raises.
-  6. **Subhour `data_root`.** Subhour screens against the registration's `data_root`.
-  7. **Discovery stub.** The stub returns contract-shaped evidence.
-
-  Structural discovery is byte-identical to `10518ae` (digest `a5a8fc0c…`, 6 roads and 24 specs).
+- Focus and status: `WCI RAW PHASE MADE MEMORY-SAFE BY RESULT-NEUTRAL STREAMING; FULL WCI BUILD STILL DECIDED AGAINST.` Work is in `/private/tmp/gs-step3-departure-bounds`, branch `claude/exciting-rubin-1e6k5m`, local commits above pushed `8b453da`; nothing pushed.
+- Final review of `10518ae..f5608a7`: approved.
+  - The effect policy is reached only from the automatic selectors.
+  - Every frozen registration replays `structural_survivability_v1`, and unknown versions are refused.
+  - Parser, count and missing-file problems are reason codes, and effect evidence is rehashed.
+  - `data_root` is threaded through, and the module is outside `demand_source_paths`.
+  - Inventory v2, canary v4 and decision v1 bind exactly the `f5608a7` bytes.
+  - Non-blocking note: `catalog.meta.json` is read twice (hash and parse).
+- Implementation in `tools/build_window_cost_index.py`:
+  - `_resolve_units` builds one archive index and runs one validation per build key into frozen `_ArchiveDescriptor`s.
+  - `_stream_archive` opens one archive, re-binds its hashes to the validated outputs, checks that the costing sources are unchanged since the operation started, parses each variant once, prices that key's units and releases everything in `finally`.
+  - Errors name the build key and phase.
+  - Output is in unit-id order.
+  - `_retain_index_records` is a test oracle only.
+  - `write_index` in `traffic_sim/simulation/window_cost_index.py` is atomic and no-clobber (fsynced temp file plus `os.link`).
+  - No costing source changed.
 - Evidence:
-  - `validation/closure_effect_inventory_20260917-v2.json` (`c298de42…`): same six verdicts; all 90 variants and both catalogs match their declared counts.
-  - `validation/wci_effect_canary_spec_20260917-v3.json` (`919df52e…`).
-  - `validation/wci_effect_canary_20260917-v4.json` (`e69c57b1…`, PASS): output-identical to v3; raw 19.82/31.11/42.72 s against v3's 39.71/62.80/86.44 s, with a CPU ratio of 0.49-0.50 in every phase, which is the machine's performance state.
-  - `validation/wci_full_build_decision_20260917-v1.json` (`8b20acf8…`, `DO_NOT_START_FULL_BUILD`): modelled 30-key raw phase 709-726 s (347-726 s over machine states); retain footprint 19.8-21.5 GB against 24 GiB RAM; oracle month unknown; budget of raw soft 1,090 s / hard 1,820 s, whole build 7,320.348 s, footprint 12 GiB, swap growth 1 GiB; 11 stop conditions.
-  - 87 binding checks were recomputed from disk. The older v1/v3 chain binds exactly the `9b12e13` sources.
+  - **A/B/B/A** in `validation/benchmarks/wci_stream_ab_v1.py`; arm A runs from the clean worktree `/private/tmp/gs-wci-stream-ab-arm-a` at `f5608a7` with `sumo` symlinked.
+    - v1 (`fc093fe8…`) FAILED only because its memory gate also demanded a 25% reduction at 1 key. The v1 driver equals the current file with the documented gate revision reverted, verified byte for byte.
+    - v2 (`9a0aa0c8…`) PASS: identical records, oracle, provider-identity and unit-cost digests in all 12 runs.
+    - Footprint at 1/2/3 keys: A 771-790 / 1,407-1,418 / 2,120-2,124 MB; B 772-776 / 843-856 / 918-922 MB.
+    - 30-key model: stream 2.69-2.82 GiB, retain about 19 GiB.
+    - Raw wall ratio B/A 0.98-0.99. It was overlap-free in v2 but not fully in v1, so time is treated as neutral.
+  - **Decision record** `validation/wci_full_build_decision_20260917-v2.json` (`26669f69…`): `DO_NOT_START_FULL_BUILD`; the stream prerequisite is met; `supervisor_design` lists 15 metrics.
+  - All new content keys, driver, helper and arm-source bindings, and worker files were recomputed from disk.
 - Checks:
-  - RED: the updated tests against `9b12e13` gave 21 failures for the intended reasons.
-  - GREEN: 63 policy and discovery tests pass. The focused suite gives 483 passed, 1 skipped and 1 failed.
-  - The seal-closure failure is identical on `10518ae`.
-  - Gate-S `performance-miss` is timing-dependent: it passed 3/3 on both `10518ae` (with `sumo/` present) and HEAD today; a clean worktree without `sumo/` fails both parametrisations with `network drift`.
+  - Streaming tests: 9/16 failed first (RED), then 16/16 passed (GREEN). A leak mutation was caught.
+  - Broad suite: 1,486 passed, 1 skipped, 2 failed (pre-existing).
   - Pylint returns 0 and `git diff --check` is clean.
+  - Known failures, identical in the `f5608a7` worktree: the seal-closure test (same four modules) and `test_passage_section_is_judged_on_accuracy_not_exactness` (`'warn' == 'pass'`). Gate-S `performance-miss` is timing-dependent and passed 3/3 today.
 - Next action, before any full build:
   1. an effect-eligible month case;
-  2. its month ledger and daily-cost cache;
-  3. a production raw loop within 12 GiB proven exact against retain;
-  4. a stop-condition supervisor.
+  2. its month ledger and daily-cost cache under a separate decision;
+  3. implement the supervisor from `supervisor_design`.
 
   Step 6 remains unstarted.
 - Environment and boundaries: use `/usr/bin/python3` (3.9.6). Preserve unrelated modified `web/data/od_matrix.csv`, `web/data/od_matrix.json`, `web/data/validation.json` and unrelated untracked files. No full WCI build, demand build, warming, SUMO run, catalog mutation or production activation was performed.

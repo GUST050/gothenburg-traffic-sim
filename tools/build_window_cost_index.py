@@ -14,6 +14,7 @@ import hashlib
 import json
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -26,6 +27,7 @@ if str(ROOT) not in sys.path:
 from traffic_sim.core.closure_calendar import iter_closure_schedules
 from traffic_sim.core.contracts import ClosureSchedule, ClosureSearchSpec
 from traffic_sim.core.fingerprint import sha256_file
+from traffic_sim.simulation import deterministic_disruption
 from traffic_sim.simulation.deterministic_disruption import (
     ArchiveDisruptionProvider,
     DailyCostCache,
@@ -181,21 +183,36 @@ def _validate_profile_binding(profile: Mapping[str, Any],
         raise WindowCostIndexError("Phase 4 policy drifted")
 
 
-def _raw_index_records(
+@dataclass(frozen=True)
+class _ArchiveDescriptor:
+    """What the raw phase keeps about one build key before opening it."""
+
+    build_key: str
+    archive: Path
+    content_key: str | None
+    output_sha256: Mapping[str, str]
+    unit_ids: tuple[str, ...]
+
+
+def _phase_error(build_key: str, phase: str,
+                 error: Exception) -> WindowCostIndexError:
+    """Name the build key and phase; the original error stays the cause."""
+    return WindowCostIndexError(
+        f"build key {build_key}: {phase} failed: "
+        f"{type(error).__name__}: {error}")
+
+
+def _resolve_units(
     spec: ClosureSearchSpec,
     *,
     runs_root: Path,
-    oracle_cache: DailyCostCache,
     qualified_demand_manifest: Mapping[str, Any],
-) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, Any]]:
-    """Compute index records from route XML and return a separate oracle.
+) -> tuple[dict[str, tuple[dict[str, Any], ClosureSchedule, Path]],
+           tuple[_ArchiveDescriptor, ...]]:
+    """Every daily unit and one validated descriptor per build key.
 
-    ``ArchiveDisruptionProvider`` is deliberately constructed with
-    ``cache=None``.  It parses/group routes and performs interval aggregation
-    directly from the immutable archive inputs.  The returned oracle is read
-    only after that computation and is used solely for the field-by-field
-    comparison.  Keeping these maps separate prevents a warmed cache lookup
-    from becoming the implementation under test.
+    Shared by the streaming production loop and the retain test oracle, so
+    both price exactly the same population against the same proofs.
     """
     resolver = MonthlyDemandResolverRunner(
         spec,
@@ -205,7 +222,7 @@ def _raw_index_records(
         study_provenance_key="subhour-phase5-raw-index",
         qualified_demand_manifest=qualified_demand_manifest,
     )
-    # ONE content-derived archive index for the whole loop.  Each
+    # ONE content-derived archive index for the whole operation.  Each
     # `find_demand_archives` call used to rebuild it from metadata content, so
     # a 1,950-unit month re-read every archive's large `demand_meta.json` 1,950
     # times; sampling the 2026-09-16 attempt showed its 31,271 s preparation
@@ -229,8 +246,7 @@ def _raw_index_records(
 
     # Pass 2: the demand contract each unit needs, deduplicated by build key.
     # A month's 1,950 units resolve to 30 distinct build keys, so validating
-    # per unit re-proved the same 30 archives 1,950 times -- 1,950 full
-    # validations and 1,950 parses of the same large `demand_meta.json`.
+    # per unit re-proved the same 30 archives 1,950 times.
     required_by_unit: dict[str, Any] = {}
     required_by_key: dict[str, Any] = {}
     for unit_id, (_identity, schedule) in collected.items():
@@ -238,47 +254,255 @@ def _raw_index_records(
         required_by_unit[unit_id] = required
         required_by_key.setdefault(required.build_key, required)
 
-    # Pass 3: resolve and FULLY validate each distinct build key exactly once.
-    # The mapping is local to this call and derived from the content-validated
-    # records themselves; nothing here is keyed on a path, size or mtime, and
-    # no state survives the call.
-    descriptors: dict[str, Path] = {}
+    # Pass 3: resolve and FULLY validate each distinct build key exactly once,
+    # in build-key order, keeping only a small frozen descriptor.  Nothing
+    # here is keyed on a path, size or mtime, and no state survives the call.
+    descriptors: list[_ArchiveDescriptor] = []
+    archive_of: dict[str, Path] = {}
     for build_key, required in sorted(required_by_key.items()):
-        matches = find_demand_archives(
-            Path(runs_root), required,
-            qualified_manifest=qualified_demand_manifest,
-            _archive_index=archive_index)
+        try:
+            matches = find_demand_archives(
+                Path(runs_root), required,
+                qualified_manifest=qualified_demand_manifest,
+                _archive_index=archive_index)
+        except Exception as error:
+            raise _phase_error(build_key, "validate", error) from error
         if not matches:
             raise WindowCostIndexError(
                 f"no immutable demand archive for build key {build_key}")
-        descriptors[build_key] = Path(matches[0]["archive"]).resolve()
+        match = matches[0]
+        archive_of[build_key] = Path(match["archive"]).resolve()
+        descriptors.append(_ArchiveDescriptor(
+            build_key=build_key,
+            archive=archive_of[build_key],
+            content_key=match.get("archive_content_key"),
+            output_sha256={
+                str(item["name"]): str(item["sha256"])
+                for item in match.get("outputs") or ()},
+            unit_ids=tuple(sorted(
+                unit_id for unit_id, item in required_by_unit.items()
+                if item.build_key == build_key)),
+        ))
 
     # Pass 4: bind every unit to the archive its build key already proved.
-    units: dict[str, tuple[dict[str, Any], ClosureSchedule, Path]] = {
+    units = {
         unit_id: (identity, schedule,
-                  descriptors[required_by_unit[unit_id].build_key])
+                  archive_of[required_by_unit[unit_id].build_key])
         for unit_id, (identity, schedule) in collected.items()
     }
-
     if len(units) != EXPECTED_DAILY_UNITS:
         raise WindowCostIndexError(
             f"raw input population has {len(units)} units, expected "
             f"{EXPECTED_DAILY_UNITS}")
+    return units, tuple(descriptors)
 
-    network = NetworkCostModel()
-    indexed: dict[str, dict[str, Any]] = {}
-    oracle: dict[str, dict[str, Any]] = {}
-    provider_identities: dict[str, dict[str, Any]] = {}
-    timings = {
+
+def _timings() -> dict[str, float]:
+    return {
         "xml_parse": 0.0,
         "route_vehicle_grouping": 0.0,
         "shortest_path_detour": 0.0,
         "window_aggregation": 0.0,
     }
-    # Parse each immutable archive/variant exactly once and build one reusable
-    # exact window-cost index.  Its crossing-event and unique-OD detour tables
-    # are then queried for every daily unit; no window repeats XML grouping or
-    # shortest-path pricing.
+
+
+def _measurement(indexed, provider_identities, timings, *, loop,
+                 variant_indexes) -> dict[str, Any]:
+    return {
+        "daily_units": len(indexed),
+        "daily_variant_records": len(indexed) * 3,
+        "timings": timings,
+        "raw_input_algorithm": "ArchiveDisruptionProvider(cache=None)",
+        "raw_input_strategy": (
+            "parse_each_archive_variant_once; precompute crossing events and "
+            "unique-OD detours; aggregate each daily window by lookup"),
+        "raw_loop": loop,
+        "structural_reuse": {
+            "archive_variant_indexes": variant_indexes,
+            "window_queries": len(indexed) * 3,
+            "reused_route_vehicle_grouping": True,
+            "reused_unique_route_detours": True,
+        },
+        "provider_identities": provider_identities,
+    }
+
+
+def _unit_records(spec, provider, indexes, schedule, timings):
+    """One daily unit's three variant records, from the archive's indexes."""
+    if indexes is None:
+        # Compatibility branch for the deliberately tiny provider test
+        # doubles.  It is not reachable for the real CLI.
+        return tuple(provider.disruption(schedule))
+    inputs = provider.inputs
+    closures = closure_seconds(
+        spec, schedule, epoch=inputs.epoch, duration_s=inputs.duration_s)
+    return tuple({
+        "demand_variant": variant,
+        **indexes[variant].disruption(
+            closures,
+            timing=lambda phase, elapsed: timings.__setitem__(
+                phase, timings.get(phase, 0.0) + float(elapsed)),
+        )
+    } for variant in ("q10", "q50", "q90"))
+
+
+def _oracle_record(oracle_cache, provider, schedule, unit_id):
+    expected = oracle_cache.load(provider.cache_identity(schedule))
+    if expected is None:
+        raise WindowCostIndexError(
+            f"independent deterministic oracle is missing for {unit_id}")
+    return {"schedule_id": schedule.schedule_id,
+            "records": [dict(item) for item in expected]}
+
+
+def _verify_opened(descriptor: _ArchiveDescriptor, provider,
+                   sources: Mapping[str, str]) -> None:
+    """The opened archive is the validated one, under unchanged sources."""
+    inputs = provider.inputs
+    expected = {"demand_meta.json": inputs.demand_meta_sha256}
+    expected.update({inputs.variant_paths[variant].name: digest
+                     for variant, digest in inputs.variant_sha256.items()})
+    drifted = sorted(name for name, digest in expected.items()
+                     if descriptor.output_sha256.get(name) != digest)
+    if drifted:
+        raise WindowCostIndexError(
+            f"archive changed after validation: {drifted}")
+    if dict(provider.identity()["costing_sources"]) != dict(sources):
+        raise WindowCostIndexError(
+            "costing source changed during the raw phase")
+
+
+def _archive_indexes(spec, provider, network, timings):
+    """Parse each variant once and keep only its window-cost index."""
+    indexes = {}
+    for variant in ("q10", "q50", "q90"):
+        parsed = parse_route_vehicles(
+            provider.inputs.variant_paths[variant],
+            timing=lambda phase, elapsed: timings.__setitem__(
+                phase, timings.get(phase, 0.0) + float(elapsed)))
+        indexes[variant] = build_parsed_window_cost_index(
+            parsed, set(spec.directed_edges),
+            network.edge_time, network.edge_len,
+            adjacency=network.adjacency,
+            destination_access=network.destination_access,
+            timing=lambda phase, elapsed: timings.__setitem__(
+                phase, timings.get(phase, 0.0) + float(elapsed)),
+        )
+        del parsed
+    return indexes
+
+
+def _stream_archive(spec, descriptor, units, *, network, sources,
+                    oracle_cache, timings, out) -> int:
+    """Price every unit of one archive; nothing large outlives the call.
+
+    Returns the number of variant indexes built. ``out`` receives only the
+    final small records: indexed rows, oracle rows and provider identities.
+    """
+    phase = "open"
+    provider = indexes = None
+    try:
+        provider = ArchiveDisruptionProvider(
+            spec, archive=descriptor.archive, network=network, cache=None)
+        if getattr(provider, "inputs", None) is not None:
+            _verify_opened(descriptor, provider, sources)
+            phase = "parse"
+            indexes = _archive_indexes(spec, provider, network, timings)
+        phase = "compute"
+        for unit_id in descriptor.unit_ids:
+            _identity, schedule, _archive = units[unit_id]
+            provider_identity = getattr(provider, "identity", None)
+            if callable(provider_identity):
+                out["identities"][unit_id] = dict(provider_identity())
+            out["indexed"][unit_id] = {
+                "schedule_id": schedule.schedule_id,
+                "records": [dict(item) for item in _unit_records(
+                    spec, provider, indexes, schedule, timings)],
+            }
+            out["oracle"][unit_id] = _oracle_record(
+                oracle_cache, provider, schedule, unit_id)
+            if indexes is None:
+                for name, elapsed in provider.timing_snapshot().items():
+                    if name in timings:
+                        timings[name] += float(elapsed)
+        return len(indexes or ())
+    except Exception as error:
+        raise _phase_error(descriptor.build_key, phase, error) from error
+    finally:
+        # Release the archive even when it failed: a traceback keeps this
+        # frame alive, and the next operation must not inherit its routes.
+        del provider, indexes
+
+
+def _raw_index_records(
+    spec: ClosureSearchSpec,
+    *,
+    runs_root: Path,
+    oracle_cache: DailyCostCache,
+    qualified_demand_manifest: Mapping[str, Any],
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, Any]]:
+    """Compute index records from route XML and return a separate oracle.
+
+    Streams one archive at a time. Every build key is resolved and fully
+    validated once into a small descriptor first; then each archive is
+    opened, its three variants parsed once, all of its daily units priced,
+    and the archive released before the next one is opened. Only the final
+    records, oracle rows and provider identities are kept, and they are
+    returned in unit-id order, so the result never depends on how build keys
+    arrive or how long an archive took.
+
+    ``ArchiveDisruptionProvider`` is deliberately constructed with
+    ``cache=None``.  The oracle is read only after each unit's computation
+    and is used solely for the field-by-field comparison.  Keeping these maps
+    separate prevents a warmed cache lookup from becoming the implementation
+    under test.  An opened archive must still hash to what its validation
+    proved, and the costing sources must not change during the operation.
+    """
+    units, descriptors = _resolve_units(
+        spec, runs_root=runs_root,
+        qualified_demand_manifest=qualified_demand_manifest)
+    network = NetworkCostModel()
+    sources = dict(deterministic_disruption.costing_source_identity())
+    timings = _timings()
+    out: dict[str, dict[str, Any]] = {"indexed": {}, "oracle": {},
+                                      "identities": {}}
+    variant_indexes = 0
+    for descriptor in descriptors:
+        variant_indexes += _stream_archive(
+            spec, descriptor, units, network=network, sources=sources,
+            oracle_cache=oracle_cache, timings=timings, out=out)
+    order = sorted(units)
+    indexed = {unit_id: out["indexed"][unit_id] for unit_id in order}
+    oracle = {unit_id: out["oracle"][unit_id] for unit_id in order}
+    identities = {unit_id: out["identities"][unit_id] for unit_id in order
+                  if unit_id in out["identities"]}
+    return indexed, oracle, _measurement(
+        indexed, identities, timings,
+        loop="stream_one_archive_at_a_time",
+        variant_indexes=variant_indexes)
+
+
+def _retain_index_records(
+    spec: ClosureSearchSpec,
+    *,
+    runs_root: Path,
+    oracle_cache: DailyCostCache,
+    qualified_demand_manifest: Mapping[str, Any],
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, Any]]:
+    """TEST ORACLE ONLY: the f5608a7 loop that retains every archive.
+
+    It parses and indexes every archive before pricing any unit, which is
+    modelled at about 20 GB for the month.  Production uses the streaming
+    `_raw_index_records`; this stays so tests can prove the two identical.
+    """
+    units, _descriptors = _resolve_units(
+        spec, runs_root=runs_root,
+        qualified_demand_manifest=qualified_demand_manifest)
+    network = NetworkCostModel()
+    indexed: dict[str, dict[str, Any]] = {}
+    oracle: dict[str, dict[str, Any]] = {}
+    provider_identities: dict[str, dict[str, Any]] = {}
+    timings = _timings()
     parsed_by_archive: dict[Path, dict[str, tuple[Any, ...]]] = {}
     provider_by_archive: dict[Path, Any] = {}
     index_by_archive: dict[Path, dict[str, Any]] = {}
@@ -290,8 +514,6 @@ def _raw_index_records(
         provider_by_archive[archive] = provider
         inputs = getattr(provider, "inputs", None)
         if inputs is None:
-            # Keep small injected test doubles useful.  Production providers
-            # always expose ArchiveInputs and take the indexed path below.
             parsed_by_archive[archive] = {}
             continue
         parsed_by_archive[archive] = {
@@ -311,67 +533,28 @@ def _raw_index_records(
             )
             for variant in ("q10", "q50", "q90")
         }
-
     for unit_id in sorted(units):
-        identity, schedule, archive = units[unit_id]
+        _identity, schedule, archive = units[unit_id]
         provider = provider_by_archive[archive]
         provider_identity = getattr(provider, "identity", None)
         if callable(provider_identity):
             provider_identities[unit_id] = dict(provider_identity())
-        if parsed_by_archive[archive]:
-            inputs = provider.inputs
-            closed = set(spec.directed_edges)
-            closures = closure_seconds(
-                spec, schedule, epoch=inputs.epoch,
-                duration_s=inputs.duration_s)
-            raw_records = tuple({
-                "demand_variant": variant,
-                **index_by_archive[archive][variant].disruption(
-                    closures,
-                    timing=lambda phase, elapsed: timings.__setitem__(
-                        phase, timings.get(phase, 0.0) + float(elapsed)),
-                )
-            } for variant in ("q10", "q50", "q90"))
-        else:
-            # Compatibility branch for the deliberately tiny provider test
-            # double above.  It is not reachable for the real CLI.
-            raw_records = provider.disruption(schedule)
         indexed[unit_id] = {
             "schedule_id": schedule.schedule_id,
-            "records": [dict(item) for item in raw_records],
+            "records": [dict(item) for item in _unit_records(
+                spec, provider, index_by_archive.get(archive), schedule,
+                timings)],
         }
-        cache_identity = provider.cache_identity(schedule)
-        expected = oracle_cache.load(cache_identity)
-        if expected is None:
-            raise WindowCostIndexError(
-                f"independent deterministic oracle is missing for {unit_id}")
-        oracle[unit_id] = {
-            "schedule_id": schedule.schedule_id,
-            "records": [dict(item) for item in expected],
-        }
-        # Indexed production timings are recorded at the parse/routing seams
-        # above.  Compatibility providers expose their own cumulative timers.
+        oracle[unit_id] = _oracle_record(
+            oracle_cache, provider, schedule, unit_id)
         if not parsed_by_archive[archive]:
             for phase, elapsed in provider.timing_snapshot().items():
                 if phase in timings:
                     timings[phase] += float(elapsed)
-    return indexed, oracle, {
-        "daily_units": len(indexed),
-        "daily_variant_records": len(indexed) * 3,
-        "timings": timings,
-        "raw_input_algorithm": "ArchiveDisruptionProvider(cache=None)",
-        "raw_input_strategy": (
-            "parse_each_archive_variant_once; precompute crossing events and "
-            "unique-OD detours; aggregate each daily window by lookup"),
-        "structural_reuse": {
-            "archive_variant_indexes": sum(
-                len(value) for value in index_by_archive.values()),
-            "window_queries": len(indexed) * 3,
-            "reused_route_vehicle_grouping": True,
-            "reused_unique_route_detours": True,
-        },
-        "provider_identities": provider_identities,
-    }
+    return indexed, oracle, _measurement(
+        indexed, provider_identities, timings,
+        loop="retain_all_archives",
+        variant_indexes=sum(len(value) for value in index_by_archive.values()))
 
 
 def _bound_inputs(profile_path: Path) -> dict[str, Any]:

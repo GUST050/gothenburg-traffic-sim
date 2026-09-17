@@ -24,7 +24,7 @@ if str(ROOT) not in sys.path:
 
 from validation.benchmarks import wci_diag_common as common  # noqa: E402
 
-SCHEMA = "wci_full_build_decision_v1"
+SCHEMA = "wci_full_build_decision_v2"
 BUILD_KEYS = 30
 DAILY_UNITS = 1950
 GIB = 1024 ** 3
@@ -373,6 +373,68 @@ STOP_CONDITIONS = (
 )
 
 
+#: What the future full-build supervisor must read; design only, not built.
+SUPERVISOR_DESIGN = (
+    {"metric": "raw_phase_wall_s", "source": "phase timer around "
+     "_raw_index_records", "soft": 1090, "hard": 1820,
+     "action": "warn at soft, stop at hard"},
+    {"metric": "whole_build_wall_s", "source": "process start to publish",
+     "hard": LEDGER_BASELINE_S, "action": "stop"},
+    {"metric": "memory_bytes", "source": "max of process-tree RSS and "
+     "lifetime max physical footprint (proc_pid_rusage)",
+     "hard": FOOTPRINT_LIMIT_BYTES, "action": "stop"},
+    {"metric": "swap_growth_bytes", "source": "system vm.swapusage used, "
+     "relative to the start", "hard": SWAP_GROWTH_LIMIT_BYTES,
+     "action": "stop"},
+    {"metric": "telemetry_available", "source": "every sample above",
+     "hard": "a sample that cannot be read", "action": "stop (fail closed)"},
+    {"metric": "archive_index_build", "source": "io_phases counter",
+     "expected": 1, "action": "stop on any other value"},
+    {"metric": "archive_validate", "source": "io_phases counter",
+     "expected": "one per build key (30)", "action": "stop above"},
+    {"metric": "variant_parses_per_file", "source": "parse counter",
+     "expected": 1, "action": "stop above"},
+    {"metric": "population", "source": "raw phase and ledger",
+     "expected": {"daily_units": 1950, "variant_records": 5850,
+                  "parents": 1690}, "action": "stop on mismatch"},
+    {"metric": "sumo_processes", "source": "process census before, during "
+     "and after", "expected": 0, "action": "stop"},
+    {"metric": "affected_vehicles_total", "source": "raw phase records",
+     "expected": "> 0", "action": "stop: a zero month is no evidence"},
+    {"metric": "oracle_identity", "source": "compare_oracle",
+     "expected": "complete and field-identical", "action": "stop"},
+    {"metric": "provider_identity", "source": "provider identities vs the "
+     "bound daily-cost cache identities", "expected": "identical",
+     "action": "stop"},
+    {"metric": "ledger_identity", "source": "compare_decision_ledgers",
+     "expected": "identical", "action": "publish NOT_ADOPTED"},
+    {"metric": "input_drift", "source": "bound source, profile, manifest, "
+     "archive, catalog and effect-inventory hashes", "expected": "unchanged",
+     "action": "stop"},
+)
+
+
+def _stream_section(stream_ab) -> Optional[Dict[str, Any]]:
+    """The measured streaming raw loop, when its A/B evidence is given."""
+    if stream_ab is None:
+        return None
+    record, ref = stream_ab
+    analysis = record["analysis"]
+    return {
+        "evidence": ref,
+        "status": record["status"],
+        "production_loop": ("stream_one_archive_at_a_time"
+                            if record["status"] == "PASS" else "retain"),
+        "footprint_bytes": analysis["footprint_bytes"],
+        "footprint_reduction_vs_retain": (
+            analysis["footprint_reduction_vs_retain"]),
+        "month_footprint_model": analysis["month_footprint_model"],
+        "raw_wall_s": analysis["raw_wall_s"],
+        "time": analysis["time"],
+        "gates": analysis["gates"],
+    }
+
+
 def _answers(rows, memory, budget, profile_edges, inventory,
              share) -> Dict[str, Any]:
     counters = [row["counters"] for row in rows]
@@ -457,6 +519,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--resolution-model", type=Path, required=True)
     parser.add_argument("--retain-stream", type=Path, required=True)
     parser.add_argument("--profile", type=Path, required=True)
+    parser.add_argument("--stream-ab", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
 
@@ -491,6 +554,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "note": ("the replication ran about twice as fast on identical "
                      "code and inputs; the component model uses index and "
                      "validation times measured in the slower state")}
+    stream = _stream_section(_load(args.stream_ab) if args.stream_ab
+                             else None)
+    if stream is not None and stream["status"] == "PASS":
+        budget["production_raw_loop"] = stream["production_loop"]
+        budget["stream_path_fits"] = stream["gates"][
+            "month_model_under_limit_with_margin"]
     record = {
         "schema": SCHEMA,
         "release_evidence": False,
@@ -506,6 +575,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "inventory": inventory_ref,
             "archive_index_resolution_model": resolution_ref,
             "retain_stream_memory": retain_ref,
+            "stream_ab": stream["evidence"] if stream else None,
             "profile": {"path": str(args.profile),
                         "sha256": common.file_sha256(args.profile),
                         "content_key": profile.get("content_key"),
@@ -517,6 +587,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "raw_phase_model": raw_model,
         "replication": repeat,
         "memory_model": memory,
+        "streaming_raw_loop": stream,
+        "supervisor_design": {
+            "status": "design only; not implemented",
+            "metrics": list(SUPERVISOR_DESIGN),
+        },
         "oracle": _oracle(canary, replication),
         "comparison": _comparison(resolution, raw_model),
         "answers": _answers(rows, memory, budget, _profile_edges(profile),
@@ -527,15 +602,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "a month ledger and daily-cost cache for that case (the bound "
             "oracle and the baseline the build must beat), under its own "
             "decision and budget",
-            "a production raw loop whose modelled footprint fits "
-            "footprint_limit_bytes, proven exact against the retain loop",
-            "a supervisor that enforces every stop condition",
+            {"requirement": "a production raw loop whose modelled "
+             "footprint fits footprint_limit_bytes, proven exact against "
+             "the retain loop",
+             "met": bool(stream and stream["status"] == "PASS")},
+            "a supervisor that reads every supervisor_design metric and "
+            "enforces every stop condition",
         ],
     }
+    if stream is not None and stream["status"] == "PASS":
+        answers = record["answers"]
+        answers["4_can_retain_reach_19_gb"].update({
+            "production_loop_now": stream["production_loop"],
+            "stream_month_high_bytes": stream["month_footprint_model"][
+                "stream_high_at_30_bytes"],
+            "reading": ("the retain loop still would; production now streams "
+                        "one archive at a time and is modelled far below "
+                        "the limit"),
+        })
+        reasons = answers["5_would_a_full_build_be_decision_useful_now"][
+            "reasons"]
+        reasons[:] = [reason for reason in reasons
+                      if "retain footprint" not in reason] + [
+            "no supervisor enforces the stop conditions yet"]
     record["output_sha256"] = common.digest({
         key: record[key] for key in (
             "decision", "phases_by_key_count", "share_of_month",
-            "raw_phase_model", "replication", "memory_model", "oracle",
+            "raw_phase_model", "replication", "memory_model",
+            "streaming_raw_loop", "supervisor_design", "oracle",
             "comparison", "answers")})
     published = common.publish(args.out, record)
     print(json.dumps({

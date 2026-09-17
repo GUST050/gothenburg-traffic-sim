@@ -1911,6 +1911,139 @@ från canary v3, med v4 som replikering.
   parametriseringarna och är ingen giltig jämförelsemiljö.
 - Gatarna ändrades inte. Steg 6 är inte startat.
 
+**Minnessäker WCI-råfas genom streaming — 2026-09-17.**
+
+*Slutgranskning av `10518ae..f5608a7`: godkänd.*
+- Effektpolicyn nås bara från de tre automatiska väljarna.
+- Alla frysta cost-ordered- och sub-hour-registreringar tolkas som
+  `structural_survivability_v1` och kräver ingen effektevidens.
+- En okänd version, till exempel `closure_effect_eligibility_v2`, avvisas.
+- Parserfel, avvikande fordonsantal och saknade filer ger reason codes.
+- Verifieringen hashar om effektevidensen.
+- `data_root` följer med genom sviten och subhour-väljaren.
+- Modulen ligger utanför `demand_source_paths`.
+- Inventering v2, canary v4 och beslutsunderlag v1 binder exakt källkoden i
+  `f5608a7`, bekräftat mot `git show`.
+- Anmärkning, som inte blockerar: `catalog.meta.json` läses två gånger, en
+  gång för hash och en gång för tolkning. Filen är liten, och en rättning
+  hade gjort den bundna kedjan inaktuell.
+
+*Implementation (`tools/build_window_cost_index.py`).* `_raw_index_records`
+arbetar nu med ett arkiv i taget:
+1. `_resolve_units` bygger arkivindexet en gång, validerar varje build key en
+   gång i nyckelordning och behåller bara en liten fryst
+   `_ArchiveDescriptor` per nyckel: arkiv, content key, validerade
+   utdatahashar och dagenheternas ID:n.
+2. `_stream_archive` öppnar ett arkiv i taget och kräver att variant- och
+   metadatahasharna är de som valideringen bevisade. Källidentiteten för
+   kostnadsberäkningen får inte ha ändrats sedan operationens start.
+3. Varje variant parsas en gång till sitt index, och alla enheter för
+   nyckeln prissätts.
+4. Arkivet släpps, även vid fel, innan nästa öppnas.
+5. Resultatet kanoniseras i dagenhetsordning.
+
+Fel blir `WindowCostIndexError` med build key och fas (`validate`, `open`,
+`parse`, `compute`), och grundfelet ligger kvar som orsak. `write_index`
+(`traffic_sim/simulation/window_cost_index.py`) skriver nu atomärt och utan
+överskrivning: en fsyncad temporär fil länkas hårt till slutnamnet, så ett
+misslyckande lämnar ingen partiell fil. Retain-loopen finns kvar som
+`_retain_index_records`, men bara som testorakel. Ingen kostnadskälla
+ändrades, och därför är cachenycklarna för oraklet oförändrade.
+
+*RED/GREEN (`tests/test_wci_streaming.py`, 16 fall).* Testerna använder den
+riktiga leverantören, parsern och indexet på tre små arkiv med omväg,
+avskuren destination och nekad avgång.
+- RED: 9 av 16 föll mot den ursprungliga loopen, räknat efter att två
+  fixturfel rättats. Bland felen fanns saknat retain-orakel, ett arkiv som
+  fortfarande hölls och drift- och parserfel som inte namngavs.
+- GREEN: alla går igenom.
+- Livslängden mäts med svaga referenser utan `gc.collect`. En mutation som
+  läckte indexen fångades.
+- Testerna täcker:
+  - byteidentiska poster, orakel och provideridentiteter;
+  - ordning som inte beror på i vilken ordning build keys kommer;
+  - ett indexbygge och en validering per nyckel;
+  - högst en parse per variant;
+  - drift efter validering, källdrift under operationen och parserfel;
+  - misslyckad indexskrivning och en råfas som inte publicerar något index;
+  - att retain bara är testorakel.
+
+*A/B/B/A (`validation/benchmarks/wci_stream_ab_v1.py`).*
+- **Uppställning.** Arm A är retain-koden i `f5608a7`, körd från en ren
+  worktree som läser samma `sumo/`. Arm B är streamingkandidaten.
+- **Frysta indata.** Spec v3, canary v4 och den skrivskyddade orakelcachen
+  från v4. Armarna skiljer sig bara i de två kandidatfilerna, och alla
+  kostnadskällor är lika.
+- **v1** (`validation/wci_stream_ab_20260917-v1.json`, content key
+  `fc093fe8…`) **FAIL**, men bara på grund av min egen grinddefinition: den
+  krävde 25 % minnesminskning även vid 1 key, där båda looparna per
+  konstruktion håller ett arkiv. Drivern för v1 är den nuvarande filen utan
+  grindrevideringen; det är kontrollerat byte för byte.
+- **v2** (`validation/wci_stream_ab_20260917-v2.json`, content key
+  `9a0aa0c8…`) **PASS**, efter en ny, fullständig körning med den rättade
+  grinden.
+
+| Keys | Fotavtryck A (MB) | Fotavtryck B (MB) | Minskning | Max RSS A/B (MB) | Rå wall A (s) | Rå wall B (s) |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 771,0 / 789,8 | 776,4 / 772,2 | −0,7 % | 917–939 / 936–937 | 19,40 / 19,27 | 18,98 / 19,22 |
+| 2 | 1 407,2 / 1 418,2 | 842,8 / 856,3 | 39,1 % | 1 586–1 601 / 1 025–1 030 | 30,49 / 30,72 | 30,21 / 30,48 |
+| 3 | 2 119,7 / 2 124,1 | 921,7 / 918,2 | 56,5 % | 2 325–2 326 / 1 110–1 115 | 42,51 / 42,36 | 42,09 / 42,04 |
+
+- **Exakthet.** Alla fyra körningar per antal keys är identiska i:
+  - postdigest, postbytes, oraklet (lika med canary v4) och
+    provideridentiteterna;
+  - enhetskostnaderna (`candidate_id`, `cost`, `daily_unit_ids`,
+    `per_variant`);
+  - berörda fordon (232 845 / 514 533 / 866 217) och dagenheter.
+
+  Varje körning hade ett indexbygge, en validering per nyckel och en parse
+  per variantfil. Ingen SUMO-process startades, inget demandarkiv skapades
+  och orakelcachen är oförändrad.
+- **Minne.** Från 1 till 3 keys växer fotavtrycket 2,76× för retain men bara
+  1,19× för stream.
+  - **Modell för 30 keys:** stream 2,69 GiB i v2 och 2,82 GiB i v1, mot
+    retain 18,8–19,0 GiB. Det ligger långt under 75 % av 12 GiB.
+  - Den mindre tillväxten för stream, 73–78 MB per nyckel, kommer från de
+    behållna slutliga posterna och allokatorn.
+- **Tid.** Kvoten B/A var 0,988 / 0,992 / 0,991 i v2 och överlappsfri vid
+  alla tre antal keys. I v1 var kvoten 0,987 / 0,992 / 0,980, och
+  överlappsfri bara vid 2 och 3 keys.
+  - Grinden räknar v2 som en tidsvinst, men den är cirka 1 % och
+    reproducerades inte fullt ut i v1.
+  - Resultatet bedöms därför som **tidsneutralt**, och ingen tidsvinst för
+    en hel månad påstås.
+
+*Beslutsunderlag v2* (`validation/wci_full_build_decision_20260917-v2.json`,
+content key `26669f69…`): fortsatt `DO_NOT_START_FULL_BUILD`.
+- **Uppfyllt:** produktionsloopen är nu stream, och villkoret "ryms i 12 GiB
+  och är exakt mot retain" är uppfyllt.
+- **Kvar:**
+  - ett effektberättigat månadsfall;
+  - månadsledger och dagkostnadscache för det;
+  - en övervakare.
+- **Övervakardesign (bara design):** 15 mätvärden.
+  - Råfas: mjuk gräns 1 090 s, hård 1 820 s.
+  - Hela bygget: hård gräns 7 320,348 s.
+  - Minne (RSS och fotavtryck): hård gräns 12 GiB. Swaptillväxt: högst
+    1 GiB.
+  - Saknad telemetri ska stoppa bygget.
+  - Exakt ett indexbygge, en validering per build key och en parse per
+    variant.
+  - Populationen 1 950 / 5 850 / 1 690.
+  - Noll SUMO-processer och en månad som inte prissätts till noll.
+  - Identiskt orakel, identiska provideridentiteter och identisk ledger.
+  - Ingen indatadrift.
+
+*Kända baslinjefel, oförändrade och identiska i `f5608a7`-worktree:n:*
+- **Sigilltestet:** samma fyra moduler saknas i sigillet.
+- **`test_passage_section_is_judged_on_accuracy_not_exactness`:** faller med
+  `'warn' == 'pass'`.
+- **`performance-miss` i gate-S:** går igenom 3/3 gånger. Testet är
+  tidsberoende.
+
+Inga grindar försvagades. Steg 6 och ett fullständigt WCI-bygge har inte
+startats.
+
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 
 **Filer:** `build_sumo_demand.py`, `monthly_demand.py:_resolve_new_release`,

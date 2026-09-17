@@ -12,6 +12,8 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
+import tempfile
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -193,12 +195,29 @@ class WindowCostIndex:
 
 
 def write_index(path: Path, index: WindowCostIndex) -> None:
+    """Publish atomically and never replace: all bytes or no file.
+
+    The payload is written and fsynced under a temporary name in the same
+    directory, then hard-linked to the final name, which fails if anything
+    already exists there. A crash or an I/O error leaves no partial index
+    and never touches a previous one.
+    """
     path = Path(path)
     if path.exists():
         raise FileExistsError(f"refusing to overwrite window cost index: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(index.to_dict(), indent=2, sort_keys=True) + "\n",
-                    encoding="utf-8")
+    payload = (json.dumps(index.to_dict(), indent=2, sort_keys=True)
+               + "\n").encode("utf-8")
+    descriptor, temporary = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".partial", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(temporary, path)
+    finally:
+        os.unlink(temporary)
 
 
 def load_index(

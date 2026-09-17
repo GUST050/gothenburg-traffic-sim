@@ -3357,6 +3357,43 @@ The rules are:
    A selection under the policy carries its inventory, and any later hash
    drift invalidates it.
 
+### WindowCostIndex raw phase lifecycle (2026-09-17)
+
+`tools/build_window_cost_index._raw_index_records` builds the opt-in daily
+window-cost index from the archives. Its lifecycle is operation-local and
+streams one archive at a time:
+
+1. **Resolve.** The archive index is built once per operation. Every daily
+   unit is collected, and each distinct build key is resolved and fully
+   validated exactly once (`find_demand_archives`), in build-key order.
+   Only a small frozen descriptor is kept per key: the validated archive
+   path, its content key, the validated output hashes and its daily unit
+   IDs.
+2. **Open.** For one descriptor at a time, the provider opens the archive.
+   Its variant and metadata hashes must equal what validation proved, and
+   the costing-source identity must equal the one read at the start of the
+   operation. Otherwise the phase stops.
+3. **Parse and price.** Each variant is parsed once and turned into its
+   window-cost index. Every daily unit of that build key is priced from
+   those indexes, and its oracle row is read afterwards.
+4. **Release.** Only the final index rows, oracle rows and provider
+   identities survive. Parsed routes, indexes and the provider are released
+   before the next archive is opened, including when the archive fails.
+5. **Canonicalise.** Results are returned in daily-unit ID order, so they
+   never depend on the order in which build keys arrive or on how long an
+   archive took.
+
+There is no global cache and no path- or mtime-based validity; reuse exists
+only inside one operation and is bound to content. A failure is raised as
+`WindowCostIndexError` naming the build key and phase (`validate`, `open`,
+`parse` or `compute`), with the original error as its cause.
+`write_index` publishes atomically without replacing anything: it writes
+and fsyncs a temporary file, then hard-links it to the final name. A failed
+operation therefore leaves no partial index and never touches a previous
+one. `_retain_index_records`, which parses and indexes every archive before
+pricing any unit, is kept only as a test oracle; it is not a production
+path.
+
 ## Build order
 1. **B — observability module** (junction solves, bounds, alarms).
 2. **C — PFE-lite LP** (replaces routeSampler as primary; keeps its I/O).

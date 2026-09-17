@@ -1,0 +1,755 @@
+{
+  "answers": {
+    "1_is_the_8h41m_defect_gone": {
+      "answer": "yes, for its cause",
+      "evidence": {
+        "archive_index_build": [
+          1,
+          1,
+          1
+        ],
+        "archive_json_read": [
+          34,
+          38,
+          42
+        ],
+        "archive_validate": [
+          1,
+          2,
+          3
+        ],
+        "units": [
+          65,
+          130,
+          195
+        ]
+      },
+      "reading": "one index build and one validation per build key at 65, 130 and 195 units, where the failed run rebuilt the index for each of 1,950 units"
+    },
+    "2_measured_directly": [
+      "_bound_inputs (independent of key count)",
+      "archive index build over all 30 archive directories",
+      "validation of all 30 build keys",
+      "raw phase and exactness at 1, 2 and 3 build keys (1/10.009 of the month's route bytes)",
+      "independent oracle for 195 units",
+      "retain and stream footprints at 1-3 archives"
+    ],
+    "3_modelled_or_unmeasured": {
+      "modelled": [
+        "raw phase compute for 30 archives",
+        "peak footprint for 30 build keys"
+      ],
+      "unmeasured": [
+        "month ledger and daily-cost cache for an effect-eligible edge (the full build's oracle input)",
+        "index write and load_index at full scale",
+        "indexed adoption ledger over 1,690 parents",
+        "compare_decision_ledgers on a nonzero month",
+        "behaviour under memory pressure"
+      ]
+    },
+    "4_can_retain_reach_19_gb": {
+      "answer": "yes",
+      "predicted_bytes": 20643297584.0,
+      "production_loop_now": "stream_one_archive_at_a_time",
+      "reading": "the retain loop still would; production now streams one archive at a time and is modelled far below the limit",
+      "span_bytes": {
+        "high": 21518447864.0,
+        "low": 19768147304.0
+      },
+      "stream_month_high_bytes": 2888391728.0
+    },
+    "5_would_a_full_build_be_decision_useful_now": {
+      "answer": "no",
+      "profile_edges_rejected": {
+        "26355153_26842525_0": [
+          "no_catalog_route_support",
+          "no_observed_archive_crossings"
+        ]
+      },
+      "reasons": [
+        "the only month profile binds an edge that closure_effect_eligibility_v1 rejects; it would price zero again",
+        "its timing would not represent a carried edge, whose window aggregation dominates the canary's raw phase",
+        "no supervisor enforces the stop conditions yet"
+      ]
+    },
+    "6_budget": {
+      "footprint_limit_bytes": 12884901888,
+      "production_raw_loop": "stream_one_archive_at_a_time",
+      "raw_phase_hard_s": 1820,
+      "raw_phase_soft_s": 1090,
+      "retain_path_fits": false,
+      "stream_path_fits": true,
+      "swap_growth_limit_bytes": 1073741824,
+      "whole_build_hard_s": 7320.348,
+      "whole_build_reason": "past the ledger baseline a cold benefit is impossible, so the build answers nothing"
+    },
+    "7_stop_conditions": [
+      {
+        "condition": "the bound profile spec is not effect-eligible under closure_effect_eligibility_v1, or its inventory evidence drifted",
+        "id": "profile_not_effect_eligible"
+      },
+      {
+        "condition": "any bound source, profile, manifest, archive, catalog or metadata hash differs from its binding",
+        "id": "input_drift"
+      },
+      {
+        "condition": "sampled lifetime max phys footprint exceeds footprint_limit_bytes",
+        "id": "footprint_over_limit"
+      },
+      {
+        "condition": "system swap use grows by more than swap_growth_limit_bytes",
+        "id": "swap_growth_over_limit"
+      },
+      {
+        "condition": "_raw_index_records wall time exceeds raw_phase_hard_s",
+        "id": "raw_phase_over_hard_budget"
+      },
+      {
+        "condition": "total wall time exceeds the 7,320.348 s ledger baseline",
+        "id": "whole_build_over_baseline"
+      },
+      {
+        "condition": "archive_index_build > 1, archive_validate > 30 or archive_json_read > 30 + 4 * 30",
+        "id": "per_unit_resolution_returned"
+      },
+      {
+        "condition": "daily units != 1,950, variant records != 5,850 or parents != 1,690",
+        "id": "population_mismatch"
+      },
+      {
+        "condition": "any bound daily-cost record is missing or differs field by field",
+        "id": "oracle_incomplete_or_different"
+      },
+      {
+        "condition": "the raw phase finds no affected vehicle: a zero month is no decision evidence",
+        "id": "zero_priced_month"
+      },
+      {
+        "condition": "a SUMO process starts or a demand archive is created",
+        "id": "forbidden_side_effect"
+      }
+    ]
+  },
+  "canary_edge": "26842525_26355153_0",
+  "claim_boundary": "diagnostic decision record; nothing here is a full WindowCostIndex time or an adoption",
+  "comparison": {
+    "archive_resolution": {
+      "comparable": true,
+      "new_index_part_s": 15.825843707999999,
+      "new_measured_s": 111.55216366699997,
+      "old_index_part_s": 30860.3952306,
+      "old_modelled_s": 37082.606027935
+    },
+    "ledger_baseline": {
+      "baseline_s": 7320.348,
+      "caveat": "the baseline priced the zero edge and includes 1,075.8 s of observer overhead; the raw phase is only one part of a build, so no benefit is claimed",
+      "comparable_with": "a full end-to-end build only",
+      "raw_model_share": {
+        "high": 0.09916361586332696,
+        "low": 0.09687738468867871
+      }
+    },
+    "raw_phase_vs_failed_run": {
+      "caveat": "the failed run priced an edge with no crossings, so its window aggregation cost almost nothing; the new model prices a carried edge",
+      "comparable": "same function, different edge and code",
+      "new_modelled_s": {
+        "high": 725.9121770578738,
+        "low": 709.1761692509998
+      },
+      "old_observed_preparation_s": 31271.161479167,
+      "old_real_s": 31273.03
+    }
+  },
+  "content_key": "26669f69ba29adbf341c3c25b2d731f1c1a6b51aaf22a5e5098e52ed84d47ce5",
+  "decision": "DO_NOT_START_FULL_BUILD",
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_full_build_decision_v1.py",
+    "sha256": "1915f91afa5c154ac33315dafb4e46e7ecb22e5c282cd41c080f24458d712d52"
+  },
+  "git": {
+    "head": "f5608a7deed3d6a343400039f8a6059e11bcc607",
+    "tracked_changes": [
+      " M ARCHITECTURE.md",
+      " M tools/build_window_cost_index.py",
+      " M traffic_sim/simulation/window_cost_index.py",
+      " M validation/benchmarks/wci_full_build_decision_v1.py",
+      " M web/data/od_matrix.csv",
+      " M web/data/od_matrix.json",
+      " M web/data/validation.json"
+    ]
+  },
+  "inputs": {
+    "archive_index_resolution_model": {
+      "content_key": "c9246979f0b75e6d90e1216cd011a6af9ff80ce9fe1a385fa5f4485a4c969d78",
+      "path": "validation/archive_index_resolution_model_20260917-v2.json",
+      "sha256": "e0e5f1cb25d19aa0bb9348212bf245aec216456097c27aa124031ce022bc44a0"
+    },
+    "canary": {
+      "content_key": "32154c81e1ae16f94c4a727a11ffa245e244606387001e102e38c291f21cc49f",
+      "path": "validation/wci_effect_canary_20260917-v3.json",
+      "sha256": "fd8dd603293b75a9e494dad140e3fbafaa8c3e9d78283d865f54df8fe610637b"
+    },
+    "inventory": {
+      "content_key": "c298de42bd1d08e905217ac84364023be4012fbc086daf2660ac881a324d8b85",
+      "path": "validation/closure_effect_inventory_20260917-v2.json",
+      "sha256": "9296ee0da5025cd31083ab95b22c1dd5f91c3fb5117b72f4957a8b191333889f"
+    },
+    "profile": {
+      "bound_spec": {
+        "path": "/private/tmp/gs-step3-departure-bounds/validation/subhour_monthly_search_profile_spec_v1.json",
+        "search_content_key": "383c9130a45370c2f296",
+        "search_id": "subhour-cold-ledger-profile-2027-09"
+      },
+      "content_key": "46ee26660056e416e7cf1318efd551d51a4dd3b92b7b34f83e1af073fd02de08",
+      "path": "runs/step5_code_approved_20260915b/profile/profile.json",
+      "sha256": "399f764272120470b2a32015ed5b1deb24d1ec1b0a786d5646ada104d69a23af"
+    },
+    "replication_canary": {
+      "content_key": "e69c57b1d093b68cdde616e455c086216f113a4df259ae136dfaa095e0cbb980",
+      "path": "validation/wci_effect_canary_20260917-v4.json",
+      "sha256": "4d7ff325e6dc886597a5861d1f6c79e8ff66566520d0ef75107f3595acf884fd"
+    },
+    "retain_stream_memory": {
+      "content_key": "4f7eac05f0522aca88900df7e72e6a949b8e2e3dee68aa5e0c76370b233ef290",
+      "path": "validation/wci_retain_stream_memory_20260916-v1.json",
+      "sha256": "72eaf6d2f86506e6f713119b7d190dfd8a693202bf6088ccad44d29ce571053f"
+    },
+    "stream_ab": {
+      "content_key": "9a0aa0c86b07eb96260f8504b7aa2eb2346516c954b89ccb1465c0e694da81b2",
+      "path": "validation/wci_stream_ab_20260917-v2.json",
+      "sha256": "4ca4037f207df2edfcf52cd625fc8ba5a96701403ac43e410cd925f4632faf6d"
+    }
+  },
+  "memory_model": {
+    "kind": "modelled",
+    "machine_memory_bytes": 25769803776,
+    "retain_path": {
+      "basis": "canary lifetime max phys footprint at 1-3 build keys",
+      "earlier_projection_bytes": 19221116416.0,
+      "failed_build_peak_footprint_bytes": 19578747112,
+      "predicted_bytes": 20643297584.0,
+      "predicted_max_rss_bytes": 21070692352.0,
+      "production_loop_retains_all_archives": true,
+      "slope_bytes_per_key": 685433300.0,
+      "span_bytes": {
+        "high": 21518447864.0,
+        "low": 19768147304.0
+      }
+    },
+    "stream_path": {
+      "basis": "diagnostic stream loop at 3 archives (exact against retain-3); growth per archive extrapolated with the largest observed step",
+      "footprint_after_each_load_mb": [
+        755.8,
+        826.9,
+        912.8
+      ],
+      "is_production": false,
+      "predicted_high_bytes": 3389102489.5999994
+    }
+  },
+  "oracle": {
+    "daily_units": 195,
+    "kind": "measured at one scale only",
+    "month": {
+      "naive_per_unit_extrapolation_s": {
+        "high": 9997.17548583,
+        "low": 4951.54190083,
+        "use": "orientation only; not a model"
+      },
+      "reason": "only one scale (195 units) is measured, so no growth law is supported. A full build does not recompute this oracle: it reads the bound daily-cost cache of the month ledger, and no such cache exists for an effect-eligible edge",
+      "status": "unknown"
+    },
+    "per_unit_s": [
+      5.1267566594,
+      2.5392522568358973
+    ],
+    "separation": "measurement overhead of the canary; not part of the production raw phase",
+    "wall_s": [
+      999.7175485829999,
+      495.154190083
+    ]
+  },
+  "output_sha256": "ef666d6e1d071df3b173b2f9844239d9646e09d5c83f24a7eb47e9c6fda5d221",
+  "phases_by_key_count": [
+    {
+      "affected_vehicles": 232845,
+      "bound_inputs_s": 4.471821333,
+      "build_keys": 1,
+      "counters": {
+        "archive_index_build": 1,
+        "archive_json_read": 34,
+        "archive_sha256": 10,
+        "archive_validate": 1,
+        "archive_validated_path_events": 1,
+        "costing_provider_identity_events": 65
+      },
+      "daily_units": 65,
+      "lifetime_max_phys_footprint_bytes": 775455776,
+      "max_rss_bytes": 940064768,
+      "measurement_only_prepass_s": 0.5297938749999993,
+      "process_overhead_s": 0.02386083400000416,
+      "process_wall_s": 44.731551833,
+      "production_timings_s": {
+        "route_vehicle_grouping": 0.3298428340000008,
+        "shortest_path_detour": 0.0,
+        "window_aggregation": 15.488681875000015,
+        "xml_parse": 1.737936083000001
+      },
+      "raw_index_records_s": 39.706075790999996
+    },
+    {
+      "affected_vehicles": 514533,
+      "bound_inputs_s": 4.3342712500000005,
+      "build_keys": 2,
+      "counters": {
+        "archive_index_build": 1,
+        "archive_json_read": 38,
+        "archive_sha256": 20,
+        "archive_validate": 2,
+        "archive_validated_path_events": 2,
+        "costing_provider_identity_events": 130
+      },
+      "daily_units": 130,
+      "lifetime_max_phys_footprint_bytes": 1431717400,
+      "max_rss_bytes": 1590738944,
+      "measurement_only_prepass_s": 0.5443684589999993,
+      "process_overhead_s": 0.04678091500001358,
+      "process_wall_s": 67.729102541,
+      "production_timings_s": {
+        "route_vehicle_grouping": 0.7102458740000088,
+        "shortest_path_detour": 0.0,
+        "window_aggregation": 32.315574878000106,
+        "xml_parse": 3.725482042000003
+      },
+      "raw_index_records_s": 62.80368191699999
+    },
+    {
+      "affected_vehicles": 866217,
+      "bound_inputs_s": 4.3100827079999995,
+      "build_keys": 3,
+      "counters": {
+        "archive_index_build": 1,
+        "archive_json_read": 42,
+        "archive_sha256": 30,
+        "archive_validate": 3,
+        "archive_validated_path_events": 3,
+        "costing_provider_identity_events": 195
+      },
+      "daily_units": 195,
+      "lifetime_max_phys_footprint_bytes": 2146322376,
+      "max_rss_bytes": 2329395200,
+      "measurement_only_prepass_s": 0.5366806249999998,
+      "process_overhead_s": 0.07538495800000078,
+      "process_wall_s": 91.364162625,
+      "production_timings_s": {
+        "route_vehicle_grouping": 1.1194236250000031,
+        "shortest_path_detour": 0.0,
+        "window_aggregation": 49.48578081299989,
+        "xml_parse": 5.915587376000012
+      },
+      "raw_index_records_s": 86.442014334
+    }
+  ],
+  "prerequisites_before_a_full_build": [
+    "a month case frozen under closure_effect_eligibility_v1, or an explicit decision to adopt the canary spec",
+    "a month ledger and daily-cost cache for that case (the bound oracle and the baseline the build must beat), under its own decision and budget",
+    {
+      "met": true,
+      "requirement": "a production raw loop whose modelled footprint fits footprint_limit_bytes, proven exact against the retain loop"
+    },
+    "a supervisor that reads every supervisor_design metric and enforces every stop condition"
+  ],
+  "production_sources": {
+    "tools/build_window_cost_index.py": "6a4b2e068e9f28cc91d28aa0210aaf8cb2cb3fb5b8448d1e616ae61c30688696",
+    "tools/closure_effect_eligibility.py": "5226af5e848f6841b0b3fa14d4928cef2d8e870e246e0df9154463e5e13bb331",
+    "traffic_sim/simulation/disruption.py": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9",
+    "traffic_sim/simulation/monthly_demand.py": "0879d1fdd41e95643c3626fdda51b81e08edaa9be4ef957a33a517cda6890778",
+    "traffic_sim/simulation/window_cost_index.py": "4509db6ac2c1de2d280aab916140aae04805741f262d0a2c64fc15848bd1c886"
+  },
+  "raw_phase_model": {
+    "assumptions": [
+      "the archive index is built once over the 30 archive directories, as the canary counters show at 1-3 keys",
+      "validation is paid once per build key (median of three fresh processes per key, measured for all 30 keys)",
+      "parse, grouping and window aggregation scale with the sampled archives' share of route bytes or of crossing vehicles",
+      "no memory pressure: the modelled retain footprint below makes this assumption doubtful on a 24 GiB machine",
+      "warm file cache, as in every input measurement"
+    ],
+    "component": {
+      "archive_index_build_s": {
+        "kind": "measured at full scale",
+        "median": 15.825843707999999,
+        "runs": [
+          15.966082542000002,
+          15.825843707999999,
+          15.647195
+        ]
+      },
+      "compute_sampled_s": 61.03772579200002,
+      "predicted_by_crossings_s": 725.9121770578738,
+      "predicted_by_route_bytes_s": 722.4814668801108,
+      "validation_month_s": {
+        "kind": "measured for all 30 keys",
+        "value": 95.72631995899998
+      },
+      "validation_sampled_s": 9.578444833999995
+    },
+    "kind": "modelled",
+    "label": "modelled raw phase (_raw_index_records) for 30 build keys; NOT a full WindowCostIndex time",
+    "linear_in_build_keys": {
+      "increments_s": [
+        23.097606125999995,
+        23.638332417000015
+      ],
+      "intercept_s": 16.247985470999993,
+      "predicted_s": 717.2870636160002,
+      "slope_s_per_key": 23.367969271500005,
+      "span_over_increments_s": {
+        "high": 725.3979579810004,
+        "low": 709.1761692509998
+      }
+    },
+    "range_min": {
+      "high": 12.098536284297897,
+      "low": 11.819602820849997
+    },
+    "range_over_machine_states_s": {
+      "high": 725.9121770578738,
+      "low": 347.03853513833343,
+      "note": "the replication ran about twice as fast on identical code and inputs; the component model uses index and validation times measured in the slower state"
+    },
+    "range_s": {
+      "high": 725.9121770578738,
+      "low": 709.1761692509998
+    }
+  },
+  "release_evidence": false,
+  "replication": {
+    "cpu_ratio_to_canary": [
+      0.4974964049962537,
+      0.4943061814082982,
+      0.49319494409737763
+    ],
+    "identical_outputs": true,
+    "kind": "measured replication; outputs compared exactly",
+    "linear_in_build_keys": {
+      "intercept_s": 8.323617638333342,
+      "predicted_s": 351.7491057683333,
+      "slope_s_per_key": 11.447516270999998,
+      "span_over_increments_s": {
+        "high": 356.4596763983332,
+        "low": 347.03853513833343
+      }
+    },
+    "raw_index_records_s": [
+      19.823473583000002,
+      31.113970833000003,
+      42.718506125
+    ],
+    "reading": "CPU time moved with wall time in every phase, including the measurement-only prepass, so the difference is the machine's performance state, which no input records; a budget must assume the slower state",
+    "rows": [
+      {
+        "affected_vehicles": 232845,
+        "bound_inputs_s": 2.4160432920000003,
+        "build_keys": 1,
+        "counters": {
+          "archive_index_build": 1,
+          "archive_json_read": 34,
+          "archive_sha256": 10,
+          "archive_validate": 1,
+          "archive_validated_path_events": 1,
+          "costing_provider_identity_events": 65
+        },
+        "daily_units": 65,
+        "lifetime_max_phys_footprint_bytes": 771589200,
+        "max_rss_bytes": 938770432,
+        "measurement_only_prepass_s": 0.28244329199999996,
+        "process_overhead_s": 0.009414123999999191,
+        "process_wall_s": 22.531374291000002,
+        "production_timings_s": {
+          "route_vehicle_grouping": 0.15858154199999852,
+          "shortest_path_detour": 0.0,
+          "window_aggregation": 7.6182335889999635,
+          "xml_parse": 0.8964601670000008
+        },
+        "raw_index_records_s": 19.823473583000002
+      },
+      {
+        "affected_vehicles": 514533,
+        "bound_inputs_s": 2.183822917,
+        "build_keys": 2,
+        "counters": {
+          "archive_index_build": 1,
+          "archive_json_read": 38,
+          "archive_sha256": 20,
+          "archive_validate": 2,
+          "archive_validated_path_events": 2,
+          "costing_provider_identity_events": 130
+        },
+        "daily_units": 130,
+        "lifetime_max_phys_footprint_bytes": 1406305864,
+        "max_rss_bytes": 1595293696,
+        "measurement_only_prepass_s": 0.28570808299999984,
+        "process_overhead_s": 0.022092291999996405,
+        "process_wall_s": 33.605594124999996,
+        "production_timings_s": {
+          "route_vehicle_grouping": 0.33291058400000395,
+          "shortest_path_detour": 0.0,
+          "window_aggregation": 15.800628835000026,
+          "xml_parse": 1.8883612490000008
+        },
+        "raw_index_records_s": 31.113970833000003
+      },
+      {
+        "affected_vehicles": 866217,
+        "bound_inputs_s": 2.296851459,
+        "build_keys": 3,
+        "counters": {
+          "archive_index_build": 1,
+          "archive_json_read": 42,
+          "archive_sha256": 30,
+          "archive_validate": 3,
+          "archive_validated_path_events": 3,
+          "costing_provider_identity_events": 195
+        },
+        "daily_units": 195,
+        "lifetime_max_phys_footprint_bytes": 2111588392,
+        "max_rss_bytes": 2318811136,
+        "measurement_only_prepass_s": 0.2843097499999998,
+        "process_overhead_s": 0.04024879100000334,
+        "process_wall_s": 45.339916125,
+        "production_timings_s": {
+          "route_vehicle_grouping": 0.5256488750000017,
+          "shortest_path_detour": 0.0,
+          "window_aggregation": 23.927746086000095,
+          "xml_parse": 3.003889956999995
+        },
+        "raw_index_records_s": 42.718506125
+      }
+    ],
+    "wall_ratio_to_canary": [
+      0.4992554209422353,
+      0.49541634954013625,
+      0.494186842522452
+    ]
+  },
+  "schema": "wci_full_build_decision_v2",
+  "share_of_month": {
+    "archives": 30,
+    "crossings_month": 945429,
+    "crossings_sampled": 93930,
+    "route_bytes_month": 4910273400,
+    "route_bytes_sampled": 490583640,
+    "sampled_keys": [
+      "9c7ad9c97b6bdbc6",
+      "b7e7cef8b702abae",
+      "c796667235591888"
+    ],
+    "scale_by_crossings": 10.065250718620248,
+    "scale_by_route_bytes": 10.009044329321704
+  },
+  "streaming_raw_loop": {
+    "evidence": {
+      "content_key": "9a0aa0c86b07eb96260f8504b7aa2eb2346516c954b89ccb1465c0e694da81b2",
+      "path": "validation/wci_stream_ab_20260917-v2.json",
+      "sha256": "4ca4037f207df2edfcf52cd625fc8ba5a96701403ac43e410cd925f4632faf6d"
+    },
+    "footprint_bytes": {
+      "A": {
+        "1": [
+          770950176,
+          789824592
+        ],
+        "2": [
+          1407157736,
+          1418151448
+        ],
+        "3": [
+          2119682208,
+          2124073096
+        ]
+      },
+      "B": {
+        "1": [
+          776356872,
+          772211840
+        ],
+        "2": [
+          842761344,
+          856294552
+        ],
+        "3": [
+          921732248,
+          918193424
+        ]
+      }
+    },
+    "footprint_reduction_vs_retain": {
+      "1": -0.007013029075435329,
+      "2": 0.3914722350643425,
+      "3": 0.5651554537179
+    },
+    "gates": {
+      "exact": true,
+      "memory_clearly_lower": true,
+      "memory_sublinear": true,
+      "month_model_under_limit_with_margin": true,
+      "no_clear_time_regression": true
+    },
+    "month_footprint_model": {
+      "kind": "modelled",
+      "limit_bytes": 12884901888,
+      "margin_rule": "at most 75 % of the limit",
+      "retain_linear_at_30_bytes": 20219170294.666668,
+      "stream_high_at_30_bytes": 2888391728.0,
+      "stream_high_basis": "largest 3-key stream footprint plus the fitted per-key growth, floored at zero, for 27 more keys",
+      "stream_linear_at_30_bytes": 2887423766.6666665
+    },
+    "production_loop": "stream_one_archive_at_a_time",
+    "raw_wall_s": {
+      "A": {
+        "1": [
+          19.40233275,
+          19.274666292
+        ],
+        "2": [
+          30.490373333,
+          30.721842042
+        ],
+        "3": [
+          42.509197291,
+          42.360071792
+        ]
+      },
+      "B": {
+        "1": [
+          18.984335584,
+          19.215332333
+        ],
+        "2": [
+          30.212483792,
+          30.480713041
+        ],
+        "3": [
+          42.089553875,
+          42.035509583
+        ]
+      }
+    },
+    "status": "PASS",
+    "time": {
+      "overlap_free_by_count": {
+        "1": true,
+        "2": true,
+        "3": true
+      },
+      "raw_wall_ratio_b_over_a": {
+        "1": 0.9876585273722592,
+        "2": 0.9915209972581392,
+        "3": 0.9912311531247878
+      },
+      "time_win_proven": true
+    }
+  },
+  "supervisor_design": {
+    "metrics": [
+      {
+        "action": "warn at soft, stop at hard",
+        "hard": 1820,
+        "metric": "raw_phase_wall_s",
+        "soft": 1090,
+        "source": "phase timer around _raw_index_records"
+      },
+      {
+        "action": "stop",
+        "hard": 7320.348,
+        "metric": "whole_build_wall_s",
+        "source": "process start to publish"
+      },
+      {
+        "action": "stop",
+        "hard": 12884901888,
+        "metric": "memory_bytes",
+        "source": "max of process-tree RSS and lifetime max physical footprint (proc_pid_rusage)"
+      },
+      {
+        "action": "stop",
+        "hard": 1073741824,
+        "metric": "swap_growth_bytes",
+        "source": "system vm.swapusage used, relative to the start"
+      },
+      {
+        "action": "stop (fail closed)",
+        "hard": "a sample that cannot be read",
+        "metric": "telemetry_available",
+        "source": "every sample above"
+      },
+      {
+        "action": "stop on any other value",
+        "expected": 1,
+        "metric": "archive_index_build",
+        "source": "io_phases counter"
+      },
+      {
+        "action": "stop above",
+        "expected": "one per build key (30)",
+        "metric": "archive_validate",
+        "source": "io_phases counter"
+      },
+      {
+        "action": "stop above",
+        "expected": 1,
+        "metric": "variant_parses_per_file",
+        "source": "parse counter"
+      },
+      {
+        "action": "stop on mismatch",
+        "expected": {
+          "daily_units": 1950,
+          "parents": 1690,
+          "variant_records": 5850
+        },
+        "metric": "population",
+        "source": "raw phase and ledger"
+      },
+      {
+        "action": "stop",
+        "expected": 0,
+        "metric": "sumo_processes",
+        "source": "process census before, during and after"
+      },
+      {
+        "action": "stop: a zero month is no evidence",
+        "expected": "> 0",
+        "metric": "affected_vehicles_total",
+        "source": "raw phase records"
+      },
+      {
+        "action": "stop",
+        "expected": "complete and field-identical",
+        "metric": "oracle_identity",
+        "source": "compare_oracle"
+      },
+      {
+        "action": "stop",
+        "expected": "identical",
+        "metric": "provider_identity",
+        "source": "provider identities vs the bound daily-cost cache identities"
+      },
+      {
+        "action": "publish NOT_ADOPTED",
+        "expected": "identical",
+        "metric": "ledger_identity",
+        "source": "compare_decision_ledgers"
+      },
+      {
+        "action": "stop",
+        "expected": "unchanged",
+        "metric": "input_drift",
+        "source": "bound source, profile, manifest, archive, catalog and effect-inventory hashes"
+      }
+    ],
+    "status": "design only; not implemented"
+  }
+}
