@@ -7,43 +7,26 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `WCI RAW PHASE MADE MEMORY-SAFE BY RESULT-NEUTRAL STREAMING; FULL WCI BUILD STILL DECIDED AGAINST.` Work is in `/private/tmp/gs-step3-departure-bounds`, branch `claude/exciting-rubin-1e6k5m`, local commits above pushed `8b453da`; nothing pushed.
-- Final review of `10518ae..f5608a7`: approved.
-  - The effect policy is reached only from the automatic selectors.
-  - Every frozen registration replays `structural_survivability_v1`, and unknown versions are refused.
-  - Parser, count and missing-file problems are reason codes, and effect evidence is rehashed.
-  - `data_root` is threaded through, and the module is outside `demand_source_paths`.
-  - Inventory v2, canary v4 and decision v1 bind exactly the `f5608a7` bytes.
-  - Non-blocking note: `catalog.meta.json` is read twice (hash and parse).
-- Implementation in `tools/build_window_cost_index.py`:
-  - `_resolve_units` builds one archive index and runs one validation per build key into frozen `_ArchiveDescriptor`s.
-  - `_stream_archive` opens one archive, re-binds its hashes to the validated outputs, checks that the costing sources are unchanged since the operation started, parses each variant once, prices that key's units and releases everything in `finally`.
-  - Errors name the build key and phase.
-  - Output is in unit-id order.
-  - `_retain_index_records` is a test oracle only.
-  - `write_index` in `traffic_sim/simulation/window_cost_index.py` is atomic and no-clobber (fsynced temp file plus `os.link`).
-  - No costing source changed.
-- Evidence:
-  - **A/B/B/A** in `validation/benchmarks/wci_stream_ab_v1.py`; arm A runs from the clean worktree `/private/tmp/gs-wci-stream-ab-arm-a` at `f5608a7` with `sumo` symlinked.
-    - v1 (`fc093fe8…`) FAILED only because its memory gate also demanded a 25% reduction at 1 key. The v1 driver equals the current file with the documented gate revision reverted, verified byte for byte.
-    - v2 (`9a0aa0c8…`) PASS: identical records, oracle, provider-identity and unit-cost digests in all 12 runs.
-    - Footprint at 1/2/3 keys: A 771-790 / 1,407-1,418 / 2,120-2,124 MB; B 772-776 / 843-856 / 918-922 MB.
-    - 30-key model: stream 2.69-2.82 GiB, retain about 19 GiB.
-    - Raw wall ratio B/A 0.98-0.99. It was overlap-free in v2 but not fully in v1, so time is treated as neutral.
-  - **Decision record** `validation/wci_full_build_decision_20260917-v2.json` (`26669f69…`): `DO_NOT_START_FULL_BUILD`; the stream prerequisite is met; `supervisor_design` lists 15 metrics.
-  - All new content keys, driver, helper and arm-source bindings, and worker files were recomputed from disk.
-- Checks:
-  - Streaming tests: 9/16 failed first (RED), then 16/16 passed (GREEN). A leak mutation was caught.
-  - Broad suite: 1,486 passed, 1 skipped, 2 failed (pre-existing).
-  - Pylint returns 0 and `git diff --check` is clean.
-  - Known failures, identical in the `f5608a7` worktree: the seal-closure test (same four modules) and `test_passage_section_is_judged_on_accuracy_not_exactness` (`'warn' == 'pass'`). Gate-S `performance-miss` is timing-dependent and passed 3/3 today.
-- Next action, before any full build:
-  1. an effect-eligible month case;
-  2. its month ledger and daily-cost cache under a separate decision;
-  3. implement the supervisor from `supervisor_design`.
+- Focus and status: `MONTH CASE FROZEN AND GUARDED RUNNER IN PLACE; THE EXPENSIVE BUILD IS STILL BLOCKED ON ITS OWN LEDGER AND CACHE.` Work is in `/private/tmp/gs-step3-departure-bounds`, branch `claude/exciting-rubin-1e6k5m`, local commits above pushed `8b453da`; nothing pushed.
+- Final review of `f5608a7..d7983b8`: rejected, then repaired with RED/GREEN (11 failures, then 43 green).
+  1. Evidence publication used `write_text`; index and evidence now share one atomic, no-clobber publication with a directory fsync.
+  2. Nothing re-proved the inputs between the raw phase and publication; the raw measurement now carries `archive_bindings` and `costing_sources`, and `_verify_before_publication` runs before the index and before the evidence.
 
-  Step 6 remains unstarted.
-- Environment and boundaries: use `/usr/bin/python3` (3.9.6). Preserve unrelated modified `web/data/od_matrix.csv`, `web/data/od_matrix.json`, `web/data/validation.json` and unrelated untracked files. No full WCI build, demand build, warming, SUMO run, catalog mutation or production activation was performed.
+  Everything else held: streaming is the production path, retain is a test oracle, one index build, one validation per key, one parse per variant, order independent of descriptor order.
+- Month case: `validation/wci_month_case_registration_20260917-v1.json` (`568b4d99…`).
+  - `tools/freeze_wci_month_case.py` re-derives every candidate verdict from the census inventory instead of trusting its rows, then takes the first eligible candidate in the unchanged structural order: `26842525_26355153_0`.
+  - It binds the policy, the six candidates and their digest, every verdict, the qualified manifest, 30 archive content keys with q10/q50/q90 and `demand_meta` hashes, both catalog keys and hashes, the census (`ef462d4d…`, inventory `458713e4…`), the source bytes and the 1,690/1,950/5,850 population.
+  - `verify_registration` re-proves all of it; the guarded runner calls it in preflight.
+- Guarded runner: `tools/guarded_wci_build.py` plus the telemetry child `tools/wci_guarded_child.py`; the contract is in `ARCHITECTURE.md`.
+  - 55 tests with an injected clock, sampler and process adapter cover every limit and stop reason; real child processes cover SIGTERM, SIGKILL, grandchildren and reaping.
+  - The bounded guarded canary passed: 20.9 s total, raw 18.6 s, peak 919.7 MB, 232,845 affected vehicles, one index build, one validation, three parses, clean drift, no SUMO.
+- Cache preflight: `validation/wci_month_cache_preflight_20260917-v1.json` (`cff64138…`).
+  - 195 of 1,950 daily units are cached (3 build keys complete, 27 empty); the hits come from canary v4's oracle root, and the profile's own cache gives none because it was written for the zero edge.
+  - The missing 1,755 units are modelled at 4,456-8,997 s of oracle time, which is a lower bound on a ledger run.
+  - The runner refuses the existing profile: it binds spec `383c9130…`, not the registered `d38038fd…`.
+- Checks: the focused suites pass except the two known baseline failures (seal closure; validation-report passage). Pylint returns 0 and `git diff --check` is clean. Every new content key and source binding was recomputed from disk.
+- Next action: decide on a month ledger and daily-cost cache for `26842525_26355153_0`; only then can the guarded build run under the production budget. Step 6 remains unstarted.
+- Environment and boundaries: use `/usr/bin/python3` (3.9.6). Preserve unrelated modified `web/data/od_matrix.csv`, `web/data/od_matrix.json`, `web/data/validation.json` and unrelated untracked files. No full WCI build, month ledger, demand build, warming, SUMO run, catalog mutation or production activation was performed.
 <!-- CURRENT_HANDOFF_END -->
 
 <!-- CURRENT_HANDOFF_HISTORY_START -->

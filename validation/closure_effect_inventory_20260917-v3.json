@@ -1,0 +1,2434 @@
+{
+  "candidate_list_digest": "c348c2b6d4e3c4fd6122dc2e20d7fce247ef4545776ed8ef9ef23b3c3da63ac8",
+  "candidate_source": "tools.cost_ordered_benchmark.surviving_roads, unchanged",
+  "candidates": [
+    "26355153_26842525_0",
+    "26842525_26355153_0",
+    "26355153_96523321_0",
+    "96523321_26355153_0",
+    "8710974792_1759741980_0",
+    "9037093028_1305379743_0"
+  ],
+  "case_selection_policy": "closure_effect_eligibility_v1",
+  "catalog_pools": {
+    "weekday": {
+      "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+      "declared_sha256": [
+        "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+      ],
+      "sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+    },
+    "weekend": {
+      "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+      "declared_sha256": [
+        "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4"
+      ],
+      "sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4"
+    }
+  },
+  "content_key": "ef462d4d5eac0fb8ab8c91ceb1dd1888b1bb907fff0bd0e1ba3c310d1ca8a16d",
+  "contract_files": {
+    "data_in/sensors.json": "41db5d452cb104405d8bd6ac6b78e2c7748dcfe641a9266c7229a4fc7edf1f20",
+    "sumo/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "validation/closure_survivability_screen_v2.json": "c790b7a5139f15d80c5e278bf3bcc7067179ce9a43c4155e3d69b9aedea34026",
+    "validation/subhour_monthly_search_profile_spec_v1.json": "10f3939a69b6f0bb6e74eb2b1e08a2b513cf54fa5610dd4a25d4d8366c1261aa",
+    "web/data/network.geojson": "92cbcf3895b3d1428d3713a0e919cf6679f00a8e5d00e7974182345d088a1dbf"
+  },
+  "daily_units_by_build_key": {
+    "06cc309e4779897c": 65,
+    "084cedb913d5197c": 65,
+    "0a6c5266d76b5b39": 65,
+    "16f1d6176c7a9133": 65,
+    "187fca60022dedc5": 65,
+    "2d4f272bb3dfc5d2": 65,
+    "340168e305f8381e": 65,
+    "3f5d86eed8fe5c17": 65,
+    "4008e6387839d7a3": 65,
+    "5803fd9aa62080cb": 65,
+    "5fcc585e03915396": 65,
+    "657fa0b9f3268e78": 65,
+    "6e3416af316f91cc": 65,
+    "7e395749f1712cb4": 65,
+    "8dcbe1518a5b0898": 65,
+    "90a93715895966dc": 65,
+    "9c7ad9c97b6bdbc6": 65,
+    "b7e7cef8b702abae": 65,
+    "c796667235591888": 65,
+    "cc8eb82bc98de729": 65,
+    "cff4da5d9bb7efb7": 65,
+    "d42db159b3ee565f": 65,
+    "d482aa0afa27e9ce": 65,
+    "dae23c801891223c": 65,
+    "dce1407ed7d893a6": 65,
+    "e72299dc2abeabcd": 65,
+    "e9b489b9b469e9b6": 65,
+    "eb0bd33739d5e926": 65,
+    "eb5d47e234425a98": 65,
+    "f3d1a9ac4d14bd7a": 65
+  },
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/closure_effect_census_v1.py",
+    "sha256": "918eed613416af1906416ac63d2821a6ef6dbe7b09fc2f37470bd07d412c5d09"
+  },
+  "eligible_in_order": [
+    "26842525_26355153_0",
+    "26355153_96523321_0",
+    "96523321_26355153_0",
+    "9037093028_1305379743_0"
+  ],
+  "git": {
+    "head": "d7983b8a99d0592683fbae50a68a26ce9f86749b",
+    "tracked_changes": [
+      " M tests/test_wci_streaming.py",
+      " M tests/test_window_cost_index.py",
+      " M tools/build_window_cost_index.py",
+      " M traffic_sim/simulation/window_cost_index.py",
+      " M web/data/od_matrix.csv",
+      " M web/data/od_matrix.json",
+      " M web/data/validation.json"
+    ]
+  },
+  "helpers": {
+    "validation/benchmarks/wci_closure_edge_census_v1.py": "54229737c4976c15264fe331aa37bb6ed9c1226a7e74ee8672679c765d3c3bbf"
+  },
+  "inventory": {
+    "archives": {
+      "06cc309e4779897c": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-215415-af2d83e6-bc11",
+        "content_key": "5849d34a9a69723c34e2aafcec82c4c968b68864a69d892ad46ad5c2d8b889e0",
+        "demand_meta_sha256": "46bdf218fac1928b163dd810509efc3c8d34aabb2bcf91da754050c85946d092",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 49851,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "40bad0d2fde6196a887baeb170f7965ea98c7fa96148ef2d8fa1f755f3561e3c",
+            "vehicles": 49851
+          },
+          "q50": {
+            "declared_vehicles": 51175,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "17301074ec3dae1b27833a611054e179cdec4bfc4a4e41fac01a9b0e10246ee8",
+            "vehicles": 51175
+          },
+          "q90": {
+            "declared_vehicles": 49497,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "3dff89dff38f4981bcb807c64ab0755043aacb5b136f8d9ee1f4b7cf9997ab2c",
+            "vehicles": 49497
+          }
+        }
+      },
+      "084cedb913d5197c": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220012-de032bcb-2165",
+        "content_key": "bef93cdbf6d3c0a20328b69935ad6f8ca18745fdc87b157d8ff15020b55e83ed",
+        "demand_meta_sha256": "fd254f905bfc3a9c203b0a0019b56f1e6d30f686ad23fcaa6b1a168014863570",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 51347,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "3cbd37a04e437c8b210606b60048db2e2dbc44a0681b9c6dd9b82ee436510a39",
+            "vehicles": 51347
+          },
+          "q50": {
+            "declared_vehicles": 52643,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "398a64fea8b9b3df9367f119f9092346b4b52aeb60248a5cac3efecab028b077",
+            "vehicles": 52643
+          },
+          "q90": {
+            "declared_vehicles": 50955,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "122788b946eee790eadf0e731e5b16cb58244417acee3c511a70c5aef778418f",
+            "vehicles": 50955
+          }
+        }
+      },
+      "0a6c5266d76b5b39": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220648-791840d4-c887",
+        "content_key": "c988c98a618cab201fabcd9285c72b05951e9937070bb160903b0dc37f2a6eaf",
+        "demand_meta_sha256": "80d3b358f4e7f4cac26f64cf299b6cfa43d8b5d29033c57d13afb21415c5b3d4",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 60445,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "9a078f48dbe0d75a86cdb8dd7de118050763f2ae2b450cb4acceb513372a08b2",
+            "vehicles": 60445
+          },
+          "q50": {
+            "declared_vehicles": 60948,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "ee1a689e629c0bca1839089e9c4f51e0979174b17ffdc42c90f7a71d7c017dd6",
+            "vehicles": 60948
+          },
+          "q90": {
+            "declared_vehicles": 60772,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "ac0f2ccd4496dd94889c561bc6e11e85abbe1e9137bac22242aa8f0f42efd8d9",
+            "vehicles": 60772
+          }
+        }
+      },
+      "16f1d6176c7a9133": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221303-3a1fda45-188f",
+        "content_key": "ffb8c79b719e45d8fae852db3e81611ee0ac3e1c5f79774806c1f1c02e293f6c",
+        "demand_meta_sha256": "fc082ddb484574efc29a2d4707164f4a8316097daa19b4bba35e9b64c6ba7059",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 51327,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "6fdad2fdc92b136e6b686ead579b3d3212c88df6fce02e8255fbc782b506f4fe",
+            "vehicles": 51327
+          },
+          "q50": {
+            "declared_vehicles": 52575,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "baadb761bb649f3b7310faffc18ff3d6d10001240bfbd452e0a3d5397a2c581e",
+            "vehicles": 52575
+          },
+          "q90": {
+            "declared_vehicles": 51008,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "7da0f419b0af68a2c93a7b0ac859df117cdd412d376a44f7432688e613ac687e",
+            "vehicles": 51008
+          }
+        }
+      },
+      "187fca60022dedc5": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221533-52837f59-7e5d",
+        "content_key": "228429ec61688bd93b4676d3d4e742489d29c65d64737ac96144ea2a23dbdac5",
+        "demand_meta_sha256": "9f9b3796976032addeda308cb16d818d174154181ec327f039918221c3a0005b",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 49836,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "9462e3e00a8e635bcee36cce7158e326c355772d269b0ed44ff8465f6f2882a2",
+            "vehicles": 49836
+          },
+          "q50": {
+            "declared_vehicles": 51172,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "3c54203309c5c3f030d552bf77328c0d6e729abfc44865944fdde1f19bbec9f0",
+            "vehicles": 51172
+          },
+          "q90": {
+            "declared_vehicles": 49371,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "dc8b1912ec0df5fbd345a50b027ef24715405f7fce1399c160478769997d7fc6",
+            "vehicles": 49371
+          }
+        }
+      },
+      "2d4f272bb3dfc5d2": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221806-7415a4c6-0d68",
+        "content_key": "ecec806d1a819d447e714bb4234dd5d471429e2d09e2cd328a10eb3b62f8df99",
+        "demand_meta_sha256": "9d16c5b77cd80031f79216226e2d3a4b4558e6e641a29a39b416879f6a6c1049",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 62009,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "dfff4f46ba78ff584bb53ed44385ac4910c4ea28da46ce891d238b8c7aeb6155",
+            "vehicles": 62009
+          },
+          "q50": {
+            "declared_vehicles": 62219,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "0e55e40b67ee6ed3d4b59afa99e768fd39e51c59a06f90e94bab919e0ef4f5c2",
+            "vehicles": 62219
+          },
+          "q90": {
+            "declared_vehicles": 61951,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "2e948048e35aefc063298703d9da79a133c5b08490ffb6cb11bfa572877e72ec",
+            "vehicles": 61951
+          }
+        }
+      },
+      "340168e305f8381e": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222404-4b5941dd-77c7",
+        "content_key": "56160da62dcdddefa2e3f7d4de751061428920f2201504b4a650769b09a1cb5c",
+        "demand_meta_sha256": "4236b04930a5d880fcc970212164bd04a343226cf56496cd6556f1f6bd34dbfd",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 58842,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "19b2f83089271eb581aba30993edf4fa178c3f8ed2ffc8d08da34095ec0e13fd",
+            "vehicles": 58842
+          },
+          "q50": {
+            "declared_vehicles": 59513,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "0a3e194825aa61dca1cbfe2aae08ce32a068ce201a55f03e81e475a032a779e1",
+            "vehicles": 59513
+          },
+          "q90": {
+            "declared_vehicles": 59358,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "00c037ec2f5862509d6b2c40bb935f20e419194cf47937deb60379548069218c",
+            "vehicles": 59358
+          }
+        }
+      },
+      "3f5d86eed8fe5c17": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222709-889e6f89-d6d5",
+        "content_key": "782f2e480f945e03af3e3fda8b2ce5bd2dc76dae8460ff46777a1de3fff2e65b",
+        "demand_meta_sha256": "e7d97e3f7031cb3827118f7be5dd95519c3130fbfd0d0507a1207a638676adbd",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 56194,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "27b19bcdb06f2b599f167e8f2e7f61ab269292a06e6d3ef3020f91d4d6b38f27",
+            "vehicles": 56194
+          },
+          "q50": {
+            "declared_vehicles": 57063,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "62d36af702fda24d713843609534883279bc8fafdca4edbfc90add927c0bc6e6",
+            "vehicles": 57063
+          },
+          "q90": {
+            "declared_vehicles": 54929,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "6a80bf4b215a47ae2c5e477f18e8e0dfd69502d440eef88d6047b92d9685c667",
+            "vehicles": 54929
+          }
+        }
+      },
+      "4008e6387839d7a3": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223016-ef0f3cf3-44e9",
+        "content_key": "f4c156ddfe278bee41a5e983e7a33edca2c31e14e357e54e371747ce97fdcd20",
+        "demand_meta_sha256": "89c33f2f3379955a96a6ca93ae12192059839be8d464fb1fea04dc135e963bcb",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 59137,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "6f7e524cef8eeffb588d1bc165ec80b241fa6edf67192e76f4854d2731d11861",
+            "vehicles": 59137
+          },
+          "q50": {
+            "declared_vehicles": 59695,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "9056963ef718ed0ff45d7dd85769f64bad22f090ce1228d1bcaf0c67642e4527",
+            "vehicles": 59695
+          },
+          "q90": {
+            "declared_vehicles": 59490,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "7af51749923336e5321f0478c9ac78ed8ae91dbe955978313ac1921419942173",
+            "vehicles": 59490
+          }
+        }
+      },
+      "5803fd9aa62080cb": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223222-19b614fb-7ce8",
+        "content_key": "d44a8994a0330ce60d8325a91034001f49a93cdea90cfa00797bc2c6589f8304",
+        "demand_meta_sha256": "00f6fa1a125c27e72953c39711317f9e15ebbb4f43c007e38e9b93f209a9799c",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 56142,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "b936b1d31714073419bcbd140fabaaeef756cd1f25db27b0bac902b6ff9bbd9f",
+            "vehicles": 56142
+          },
+          "q50": {
+            "declared_vehicles": 57132,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "ff306b69100450d54c3ad7e8ba0710c89f58f81bc49b3c927831846280b01a87",
+            "vehicles": 57132
+          },
+          "q90": {
+            "declared_vehicles": 55032,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "d31af09df6dacd7c06c9e7f061964e51f3ca7ba3721ee62367ba68cb44a7302e",
+            "vehicles": 55032
+          }
+        }
+      },
+      "5fcc585e03915396": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d",
+        "content_key": "ff2c496d06510641f95d1c1a0c543a0dfc8b0728958f92f73a22f8e638e1e154",
+        "demand_meta_sha256": "717a523b6ebaa3da58e3def9d9549a27b8aad7e549963835f8279bf85f199c91",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 59831,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "1e06f46f3cb26fbf6c3b7a2b107995615b4f781ba08d5d29f1387316158b09a1",
+            "vehicles": 59831
+          },
+          "q50": {
+            "declared_vehicles": 60279,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "b3867df491cad6605f0b54b6a627b7d082e85f4bfb2d698b3d57d219c2009fda",
+            "vehicles": 60279
+          },
+          "q90": {
+            "declared_vehicles": 60155,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "aa11a76e9566551ed16ff6e95112da0d4dd6146418572df1daaaf2cdbd1f36ee",
+            "vehicles": 60155
+          }
+        }
+      },
+      "657fa0b9f3268e78": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223744-a3782377-418d",
+        "content_key": "926b9383658a7267699e63869117819c74d8801a55dae8398fe0dea199825ff7",
+        "demand_meta_sha256": "e92013bc7c28a4680b5c451e9f1d8d6da8326314cbe7651477e74373fb2e2f81",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 60632,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "19f1905418cc59ccd931657445c38e3cc5caf60d72cca1d67ab5c83a9b6ba142",
+            "vehicles": 60632
+          },
+          "q50": {
+            "declared_vehicles": 61122,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "2ba6e528c43ff9fd90ef82b6ba2ab79505c60274c82e6d58be702b832d31cfa0",
+            "vehicles": 61122
+          },
+          "q90": {
+            "declared_vehicles": 60968,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "c468ced358b28b3054a1fe94a6d80648e25f90f5561523a66cab01bf1b48e4ed",
+            "vehicles": 60968
+          }
+        }
+      },
+      "6e3416af316f91cc": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223804-04518454-6d14",
+        "content_key": "e3a33894fd71177975d33e55024bac2d65877251e7c81e23cb6b7a2d2d494552",
+        "demand_meta_sha256": "f8a3f715c4268dc38ea940e463f84107a8e9ce101d19eaa08d36b6ae34f85468",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 51641,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "69175cc51448ee4660679195066a2049361500a3ea741b1c9dcbc2a33b082b13",
+            "vehicles": 51641
+          },
+          "q50": {
+            "declared_vehicles": 52726,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "85401a2a37d789f5922abf5f5738ad30b371f0557615cadb08d49dd5eb4dea3f",
+            "vehicles": 52726
+          },
+          "q90": {
+            "declared_vehicles": 50626,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "d2599a88c1c0a42d34ccd2ff3a43b94f9caf9603a7289bd89143515f0c0b82a5",
+            "vehicles": 50626
+          }
+        }
+      },
+      "7e395749f1712cb4": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223825-2bbb1a66-845d",
+        "content_key": "c54eb87e4e6225c4d54b00db8d9cc02b937566b89176840e535756fa71eb9a5e",
+        "demand_meta_sha256": "dd84473f5051ba3a709392b5332cf40ed36d9d4249c8ec70e281e436f76305aa",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 51421,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "9e65a929e224abc7021561669b0d2b057273913a54d68cba7bfab58a3bbee651",
+            "vehicles": 51421
+          },
+          "q50": {
+            "declared_vehicles": 52640,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "57e1f2b02e4f2b3b61103b2eae2bcab1045615ef6cfb7fc8d65cd772bc7f6e25",
+            "vehicles": 52640
+          },
+          "q90": {
+            "declared_vehicles": 51110,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "97cd530ce0a8e18b7969924e82c9904b68f337572865fb0c35fd80923368b25f",
+            "vehicles": 51110
+          }
+        }
+      },
+      "8dcbe1518a5b0898": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224149-53fb2fd0-6182",
+        "content_key": "76be17a75c7ae517491ee1aec369b6c72bd51851ab5c8555ff5b2ef4abe6d470",
+        "demand_meta_sha256": "455e6d033f9f3ec7e7f61b9bf9d4df12af9fc86425a1545c8826a95320ce05dc",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 61904,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "ace6cd24a2f9b0e8fc110111b9918696e2da1ab8b9d3d950ece2afcac9ec8174",
+            "vehicles": 61904
+          },
+          "q50": {
+            "declared_vehicles": 62188,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "25f6f39f2852e535e8404d0a650f1c53bec684496d282edb1a18fb4c530ad1ff",
+            "vehicles": 62188
+          },
+          "q90": {
+            "declared_vehicles": 62057,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "22371a743996db4cd48104daa717668356ba5a967f242e2a1c0d90f8aa402e5b",
+            "vehicles": 62057
+          }
+        }
+      },
+      "90a93715895966dc": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224309-23459e2e-c9ef",
+        "content_key": "8e47519b0f6cf3fca62832e19e5e0d1d28e47844c9f76413850345b02d597c28",
+        "demand_meta_sha256": "84467e141600570b33c9f5bc12c5b7d54ac1ba13b424c61ac42dd31ff88a309c",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 60420,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "6038e16dfac2d59a722ffd1af8d7663011c1afe543532bf8e92977dee7632bdf",
+            "vehicles": 60420
+          },
+          "q50": {
+            "declared_vehicles": 60931,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "be474ab3b7230350bbc17f41e637e33935b2946130115913168a5f8f76d3d511",
+            "vehicles": 60931
+          },
+          "q90": {
+            "declared_vehicles": 60890,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "8d6e11334cafad4244fb57d901fabbccee0b26871d30577a1abc73d9c28b234b",
+            "vehicles": 60890
+          }
+        }
+      },
+      "9c7ad9c97b6bdbc6": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72",
+        "content_key": "1fe659e7a0b9b25f51035ac11e39495d38095fddc84da5341cf567cd319fb35a",
+        "demand_meta_sha256": "5136153beae3bffece06c8f4e47ca272e0d00b9758bf9f981cbba6784b377a58",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 49826,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "44413462fceb856dcba5d9f8a5fc45cd0d54568509236c8eb72a85b06501bfda",
+            "vehicles": 49826
+          },
+          "q50": {
+            "declared_vehicles": 51105,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "3137ef8ca6e3e8dc0305577e5feab9d6fdf0ec5d601a764c02c67777db4e70cd",
+            "vehicles": 51105
+          },
+          "q90": {
+            "declared_vehicles": 49415,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "7caf6a8c373bcbfd21ffa4a75513776ad8e042a7c7f4aae8ae2a0b19142fafa0",
+            "vehicles": 49415
+          }
+        }
+      },
+      "b7e7cef8b702abae": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33",
+        "content_key": "cfb86558a8bd4bc690af033ef274c6242601f0308edc60706644a76dc89af478",
+        "demand_meta_sha256": "57ad042825fc8b99cd631dff101ea8a53e8a8c23ce78949c8ed82093cb3f8d8f",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 56266,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "a832cf124fefc8d89784bce5eef9c6119a5627490eda4ea470074da80415de51",
+            "vehicles": 56266
+          },
+          "q50": {
+            "declared_vehicles": 57232,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "25753bc5c2db9880d7a1e24a29d6248ed2c896d15c7c99481e68308696d95b0d",
+            "vehicles": 57232
+          },
+          "q90": {
+            "declared_vehicles": 55232,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "61400b3120cb403d61702e8cd57160837028654017d13dc623bff0c217c37f88",
+            "vehicles": 55232
+          }
+        }
+      },
+      "c796667235591888": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06",
+        "content_key": "537def3d6b4c300eb024d205203346487bcca04e1837c5de6817aaf5cc1c8083",
+        "demand_meta_sha256": "fac578d254731afa6aadc321da71a1eb8108e9b5dd4ccda56874a195d06df635",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 62110,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "257be9fb379333b1ad094edc7a29c5aec8175ea641dbce663187e9dccbe0f553",
+            "vehicles": 62110
+          },
+          "q50": {
+            "declared_vehicles": 62446,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "c041ea54d0c00d503b3cbbcc855fcecb349b413bebb43d6cf2d0a812fe1d2e08",
+            "vehicles": 62446
+          },
+          "q90": {
+            "declared_vehicles": 62291,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "48e45142f127996f08aea9e47bfeb4266d6dd7c1a336408fe027bb123f7f8aee",
+            "vehicles": 62291
+          }
+        }
+      },
+      "cc8eb82bc98de729": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225121-de7e3e34-015d",
+        "content_key": "e2547c2176d32d53510ec7f8b8b2b5fd8d3c88146d4537777883c2a8361163f1",
+        "demand_meta_sha256": "6a4cc13ca19f7c680e48cf30c57e202422eee1d66f5123689918bde3a242617b",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 58967,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "fc776c3b4f12ff0829eebc0a53c16748df52710d2e0b5b1c05377ff43ebb232d",
+            "vehicles": 58967
+          },
+          "q50": {
+            "declared_vehicles": 59566,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "95227405b15530e6b616aff0bba4d70213d12fad2aac7f6593e57d3f2016eb48",
+            "vehicles": 59566
+          },
+          "q90": {
+            "declared_vehicles": 59326,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "b4895a26b2e799b02cfd28d789f97a1bd9a1d952f6f08f62e7cc9ab66393d8a9",
+            "vehicles": 59326
+          }
+        }
+      },
+      "cff4da5d9bb7efb7": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225243-61cb7aca-8652",
+        "content_key": "6bcae642202f42e526addd00e564acfc14c54334e24fa30c6b7b8d098b449a5b",
+        "demand_meta_sha256": "53297aae2913214be0f4f66136f77cb13ad5c623a213005fcc9f420cfb9f31d4",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 51603,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "bd0dc44f38cd210bac35eb2150439853ae3894bc84a76ebaa402a86cf78d327c",
+            "vehicles": 51603
+          },
+          "q50": {
+            "declared_vehicles": 52748,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "487f321e3ec6ba8237a7fdf27d94486a9ca3ff3401efb3b49c427ed91fb1618d",
+            "vehicles": 52748
+          },
+          "q90": {
+            "declared_vehicles": 50836,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "d72beac7ff5a205a63e3de0366322e9651a12c8c348beb6cf4e1d007bb84ddb5",
+            "vehicles": 50836
+          }
+        }
+      },
+      "d42db159b3ee565f": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6",
+        "content_key": "fb2be2d4d29d40d0e0d2adf9b864025be503c02b6aed5cf05887bee9849c73f1",
+        "demand_meta_sha256": "e8cf61acf568c594d6a3fbc2b841809a16ccc0464648d7089d05e47505ee1b02",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 56215,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "20bdcde95676cc322849d329c58edcb8ce4b3a73fd618a464f3057a3379299be",
+            "vehicles": 56215
+          },
+          "q50": {
+            "declared_vehicles": 57172,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "187e9f9640f2dfcf45eb45f636f13115df499fea06f75a6f55a5be7e6f5ca6eb",
+            "vehicles": 57172
+          },
+          "q90": {
+            "declared_vehicles": 55226,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "53fe459f53683d27e1582a337107f0455cd869235e5b26dd6abbd5a7a5ddcd8c",
+            "vehicles": 55226
+          }
+        }
+      },
+      "d482aa0afa27e9ce": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225650-83f1213a-5e40",
+        "content_key": "d620d265108ca5b83bdaeaeb094bcfa574dbf153b5965f2cd64deda352b05a12",
+        "demand_meta_sha256": "2fbbb810b6309b869c858f81562ff3f9ec46e6b0b0db46d7b74c6c0dea40487d",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 51668,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "c50d5f1bb146f0afe4f19b6b91a30f6c84e0aa10de086e49d5002dae68f420ac",
+            "vehicles": 51668
+          },
+          "q50": {
+            "declared_vehicles": 52766,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "0b25fad07359e31e96d45f5641d1d5f561f442e8cdc9ef3f55c74a946f6c7d06",
+            "vehicles": 52766
+          },
+          "q90": {
+            "declared_vehicles": 50981,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "f36fecd7c2cdda97652e13b468f4b0f03ce50dd46e41c9dedf39d42db040e40a",
+            "vehicles": 50981
+          }
+        }
+      },
+      "dae23c801891223c": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225714-b593ac27-7b71",
+        "content_key": "dffb422022663c0f901948b22d9e5dc8c495c8556976b2f7c69f413f79d3d4f0",
+        "demand_meta_sha256": "7535b0a541a927302575e85758ca370343d54c29c2abb066b2461409138ed91a",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 49956,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "485d639f66713007db5c8bb889935fdb5067ea19c6e7c6b2b13d80aa2d7bd8e1",
+            "vehicles": 49956
+          },
+          "q50": {
+            "declared_vehicles": 51232,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "5a6c62c86e5de2f4c96c3b9bbb599f1091c324925b172c1db9b33cb1e565533c",
+            "vehicles": 51232
+          },
+          "q90": {
+            "declared_vehicles": 49630,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "ee6f653d5c30cad39691a6826d442a4488c494c3eb342e5afd8113a5d2f81b5b",
+            "vehicles": 49630
+          }
+        }
+      },
+      "dce1407ed7d893a6": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225738-e3bfe154-7e43",
+        "content_key": "9b6b99f5d8d0e43abd4d3e9847a522f9acf8f3aa4e128c2c15afd2b0caab52d3",
+        "demand_meta_sha256": "74b94a4b0fd0e7f6bf1313106838ac86647651c49a426bc5716038c1bf65df40",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 58977,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "3d89d47bbca2dc13e2b3261514009d775428e8cbceed8c3daa9c3b045a2b6ce4",
+            "vehicles": 58977
+          },
+          "q50": {
+            "declared_vehicles": 59531,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "5035cdbb02d708440f395266e3d53c9a6d452403143557b3dcde93d2f6233665",
+            "vehicles": 59531
+          },
+          "q90": {
+            "declared_vehicles": 59356,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "7f9cf4a11b0d34cffb803f2714986d2092716ca722063587afda31d063e386c2",
+            "vehicles": 59356
+          }
+        }
+      },
+      "e72299dc2abeabcd": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603",
+        "content_key": "6c846a3f11cf44c5dd3eb09c15a411c6cdf694359e3bb7c0b18dd848a8c76fb0",
+        "demand_meta_sha256": "3043483d027fc8091f71d163cd08a608bfdc804558fcba2951ca00eff6a29e12",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 61895,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "ffdffb204e7315e0b482d75ce39df25e0db085133a76cddefe8353637fcdb920",
+            "vehicles": 61895
+          },
+          "q50": {
+            "declared_vehicles": 62159,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "d7c9356fc9d1b7daafaf248a06345377d7f0dda6ef23690e35727e6696e5b59c",
+            "vehicles": 62159
+          },
+          "q90": {
+            "declared_vehicles": 61964,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "cb9a13513e01ccd3fe20b335d14bc61fb6315aff51baffe5b899680986ca20da",
+            "vehicles": 61964
+          }
+        }
+      },
+      "e9b489b9b469e9b6": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230407-7f119ae2-9f58",
+        "content_key": "c2a0ec057231f73ebed89226f9b3911de162033c235c1316aea265410d5d4803",
+        "demand_meta_sha256": "1fb8360f965f556e8be1c616aa9bd07b54663f97137cec338dcf4e1286b61cbb",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 51598,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "308ffe628160cd5625c142afa04f77e59618778a4c1ba31054f7296dd50df734",
+            "vehicles": 51598
+          },
+          "q50": {
+            "declared_vehicles": 52660,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "e458bba64e57d850dc08beffdc2bda546a7dd3edf0c528710044fb16c62ffbed",
+            "vehicles": 52660
+          },
+          "q90": {
+            "declared_vehicles": 50635,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "930c3c97ea738dece9e59ea0532d43328f1978259cefc0847d050759d1d787d1",
+            "vehicles": 50635
+          }
+        }
+      },
+      "eb0bd33739d5e926": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230432-5b265029-5e0f",
+        "content_key": "b743107496ca4d8756a67697d41ceb1e15463d042222683fcfd7e79cc62f3140",
+        "demand_meta_sha256": "8ab6ecddfd8b2e7e52ca0de13295ec86b22882070cfc1f2929bb6726e5fffad0",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 60535,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "270ebf3678806e588e53afee51fbe35b4084b5e3271b38b7a3f3dd37a3348f46",
+            "vehicles": 60535
+          },
+          "q50": {
+            "declared_vehicles": 60983,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "2c35a15afddce9708f5e269a44d0f7a785709755d58e633b3f1a5a44359085f3",
+            "vehicles": 60983
+          },
+          "q90": {
+            "declared_vehicles": 60853,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "f07567a27026474aca406087af900de26950da61bd4f7a96b32d7256a8723b1e",
+            "vehicles": 60853
+          }
+        }
+      },
+      "eb5d47e234425a98": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230455-3e34ff00-af60",
+        "content_key": "8b853bfc6d2659af4a7699963614489e5cc9600194f5837761f4579898f83633",
+        "demand_meta_sha256": "3a700f6ecc536e720eee7fa4977b9fdc54a8a477c7e48640d8d496ebfabd5e5e",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          },
+          "weekend": {
+            "declared_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+            "key": "77e237f04c746a4fb1fac7e790fff419",
+            "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 51221,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "5d414ff6130c136c6d8efca864e19de3d29dfd292f42a31dd8126b50489a38b5",
+            "vehicles": 51221
+          },
+          "q50": {
+            "declared_vehicles": 52453,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "e3206f8e2881dd45402fa811c85dac52ab7a6ecb256a175ae5af0ff5c1f7acb8",
+            "vehicles": 52453
+          },
+          "q90": {
+            "declared_vehicles": 50860,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "52c21301ad8439a46e0b723761b57ef621892e4a436c3f149cca6031ba4ec59e",
+            "vehicles": 50860
+          }
+        }
+      },
+      "f3d1a9ac4d14bd7a": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230620-a893719c-a662",
+        "content_key": "bec4f0d0bb89a6c0239e98d7ebaad911ed0807857f79be2533604dbec41641f5",
+        "demand_meta_sha256": "d24f31f67c4157e5fff2298dc5d5e5282db7ebeda794520dde963882ab8badf4",
+        "pools": {
+          "weekday": {
+            "declared_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+            "key": "8548c8191269d61bce2f9bbe85e7785d",
+            "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+          }
+        },
+        "variants": {
+          "q10": {
+            "declared_vehicles": 61915,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "36eb2e6779044ad6a3f71739308cedde60d7ad266b472137ecf726c3ed8c2c65",
+            "vehicles": 61915
+          },
+          "q50": {
+            "declared_vehicles": 62178,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "375ea2f7a9ab0e4ab296e562246b660a39fdcf0b376be23eeb45e2adb8118427",
+            "vehicles": 62178
+          },
+          "q90": {
+            "declared_vehicles": 62139,
+            "parse_error": null,
+            "present": true,
+            "stable": true,
+            "validated_sha256": "ddd3d093c6b6e31a34150981bbcca0fc6d340edd41b0651ce648a7678962d55d",
+            "vehicles": 62139
+          }
+        }
+      }
+    },
+    "candidates": [
+      "26355153_26842525_0",
+      "26355153_96523321_0",
+      "26842525_26355153_0",
+      "8710974792_1759741980_0",
+      "9037093028_1305379743_0",
+      "96523321_26355153_0"
+    ],
+    "catalog_routes": {
+      "77e237f04c746a4fb1fac7e790fff419": {
+        "26355153_26842525_0": 0,
+        "26355153_96523321_0": 56,
+        "26842525_26355153_0": 91,
+        "8710974792_1759741980_0": 0,
+        "9037093028_1305379743_0": 1,
+        "96523321_26355153_0": 51
+      },
+      "8548c8191269d61bce2f9bbe85e7785d": {
+        "26355153_26842525_0": 0,
+        "26355153_96523321_0": 58,
+        "26842525_26355153_0": 100,
+        "8710974792_1759741980_0": 0,
+        "9037093028_1305379743_0": 1,
+        "96523321_26355153_0": 52
+      }
+    },
+    "catalogs": {
+      "77e237f04c746a4fb1fac7e790fff419": {
+        "declared_candidates": 435,
+        "declared_metadata_sha256": [
+          "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3"
+        ],
+        "declared_sha256": [
+          "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4"
+        ],
+        "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3",
+        "parse_error": null,
+        "path": "/private/tmp/gs-step3-departure-bounds/sumo/route_catalog/77e237f04c746a4fb1fac7e790fff419/catalog.rou.xml",
+        "pools": [
+          "weekend"
+        ],
+        "present": true,
+        "sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+        "stable": true,
+        "vehicles": 435
+      },
+      "8548c8191269d61bce2f9bbe85e7785d": {
+        "declared_candidates": 434,
+        "declared_metadata_sha256": [
+          "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d"
+        ],
+        "declared_sha256": [
+          "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+        ],
+        "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+        "parse_error": null,
+        "path": "/private/tmp/gs-step3-departure-bounds/sumo/route_catalog/8548c8191269d61bce2f9bbe85e7785d/catalog.rou.xml",
+        "pools": [
+          "weekday"
+        ],
+        "present": true,
+        "sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+        "stable": true,
+        "vehicles": 434
+      }
+    },
+    "content_key": "458713e43b932706170b1f0ee5bc3b94a13c7a1c925beb87c5b83c1835ff727d",
+    "crossings": {
+      "26355153_26842525_0": {
+        "q10": {
+          "06cc309e4779897c": 0,
+          "084cedb913d5197c": 0,
+          "0a6c5266d76b5b39": 0,
+          "16f1d6176c7a9133": 0,
+          "187fca60022dedc5": 0,
+          "2d4f272bb3dfc5d2": 0,
+          "340168e305f8381e": 0,
+          "3f5d86eed8fe5c17": 0,
+          "4008e6387839d7a3": 0,
+          "5803fd9aa62080cb": 0,
+          "5fcc585e03915396": 0,
+          "657fa0b9f3268e78": 0,
+          "6e3416af316f91cc": 0,
+          "7e395749f1712cb4": 0,
+          "8dcbe1518a5b0898": 0,
+          "90a93715895966dc": 0,
+          "9c7ad9c97b6bdbc6": 0,
+          "b7e7cef8b702abae": 0,
+          "c796667235591888": 0,
+          "cc8eb82bc98de729": 0,
+          "cff4da5d9bb7efb7": 0,
+          "d42db159b3ee565f": 0,
+          "d482aa0afa27e9ce": 0,
+          "dae23c801891223c": 0,
+          "dce1407ed7d893a6": 0,
+          "e72299dc2abeabcd": 0,
+          "e9b489b9b469e9b6": 0,
+          "eb0bd33739d5e926": 0,
+          "eb5d47e234425a98": 0,
+          "f3d1a9ac4d14bd7a": 0
+        },
+        "q50": {
+          "06cc309e4779897c": 0,
+          "084cedb913d5197c": 0,
+          "0a6c5266d76b5b39": 0,
+          "16f1d6176c7a9133": 0,
+          "187fca60022dedc5": 0,
+          "2d4f272bb3dfc5d2": 0,
+          "340168e305f8381e": 0,
+          "3f5d86eed8fe5c17": 0,
+          "4008e6387839d7a3": 0,
+          "5803fd9aa62080cb": 0,
+          "5fcc585e03915396": 0,
+          "657fa0b9f3268e78": 0,
+          "6e3416af316f91cc": 0,
+          "7e395749f1712cb4": 0,
+          "8dcbe1518a5b0898": 0,
+          "90a93715895966dc": 0,
+          "9c7ad9c97b6bdbc6": 0,
+          "b7e7cef8b702abae": 0,
+          "c796667235591888": 0,
+          "cc8eb82bc98de729": 0,
+          "cff4da5d9bb7efb7": 0,
+          "d42db159b3ee565f": 0,
+          "d482aa0afa27e9ce": 0,
+          "dae23c801891223c": 0,
+          "dce1407ed7d893a6": 0,
+          "e72299dc2abeabcd": 0,
+          "e9b489b9b469e9b6": 0,
+          "eb0bd33739d5e926": 0,
+          "eb5d47e234425a98": 0,
+          "f3d1a9ac4d14bd7a": 0
+        },
+        "q90": {
+          "06cc309e4779897c": 0,
+          "084cedb913d5197c": 0,
+          "0a6c5266d76b5b39": 0,
+          "16f1d6176c7a9133": 0,
+          "187fca60022dedc5": 0,
+          "2d4f272bb3dfc5d2": 0,
+          "340168e305f8381e": 0,
+          "3f5d86eed8fe5c17": 0,
+          "4008e6387839d7a3": 0,
+          "5803fd9aa62080cb": 0,
+          "5fcc585e03915396": 0,
+          "657fa0b9f3268e78": 0,
+          "6e3416af316f91cc": 0,
+          "7e395749f1712cb4": 0,
+          "8dcbe1518a5b0898": 0,
+          "90a93715895966dc": 0,
+          "9c7ad9c97b6bdbc6": 0,
+          "b7e7cef8b702abae": 0,
+          "c796667235591888": 0,
+          "cc8eb82bc98de729": 0,
+          "cff4da5d9bb7efb7": 0,
+          "d42db159b3ee565f": 0,
+          "d482aa0afa27e9ce": 0,
+          "dae23c801891223c": 0,
+          "dce1407ed7d893a6": 0,
+          "e72299dc2abeabcd": 0,
+          "e9b489b9b469e9b6": 0,
+          "eb0bd33739d5e926": 0,
+          "eb5d47e234425a98": 0,
+          "f3d1a9ac4d14bd7a": 0
+        }
+      },
+      "26355153_96523321_0": {
+        "q10": {
+          "06cc309e4779897c": 7661,
+          "084cedb913d5197c": 8348,
+          "0a6c5266d76b5b39": 9526,
+          "16f1d6176c7a9133": 8348,
+          "187fca60022dedc5": 7661,
+          "2d4f272bb3dfc5d2": 9706,
+          "340168e305f8381e": 9260,
+          "3f5d86eed8fe5c17": 9011,
+          "4008e6387839d7a3": 9260,
+          "5803fd9aa62080cb": 9011,
+          "5fcc585e03915396": 9299,
+          "657fa0b9f3268e78": 9526,
+          "6e3416af316f91cc": 7925,
+          "7e395749f1712cb4": 8348,
+          "8dcbe1518a5b0898": 9706,
+          "90a93715895966dc": 9526,
+          "9c7ad9c97b6bdbc6": 7661,
+          "b7e7cef8b702abae": 9011,
+          "c796667235591888": 9624,
+          "cc8eb82bc98de729": 9260,
+          "cff4da5d9bb7efb7": 7925,
+          "d42db159b3ee565f": 9011,
+          "d482aa0afa27e9ce": 7925,
+          "dae23c801891223c": 7661,
+          "dce1407ed7d893a6": 9260,
+          "e72299dc2abeabcd": 9706,
+          "e9b489b9b469e9b6": 7925,
+          "eb0bd33739d5e926": 9526,
+          "eb5d47e234425a98": 8348,
+          "f3d1a9ac4d14bd7a": 9706
+        },
+        "q50": {
+          "06cc309e4779897c": 7661,
+          "084cedb913d5197c": 8348,
+          "0a6c5266d76b5b39": 9526,
+          "16f1d6176c7a9133": 8348,
+          "187fca60022dedc5": 7661,
+          "2d4f272bb3dfc5d2": 9706,
+          "340168e305f8381e": 9260,
+          "3f5d86eed8fe5c17": 9011,
+          "4008e6387839d7a3": 9260,
+          "5803fd9aa62080cb": 9011,
+          "5fcc585e03915396": 9299,
+          "657fa0b9f3268e78": 9526,
+          "6e3416af316f91cc": 7925,
+          "7e395749f1712cb4": 8348,
+          "8dcbe1518a5b0898": 9706,
+          "90a93715895966dc": 9526,
+          "9c7ad9c97b6bdbc6": 7661,
+          "b7e7cef8b702abae": 9011,
+          "c796667235591888": 9624,
+          "cc8eb82bc98de729": 9260,
+          "cff4da5d9bb7efb7": 7925,
+          "d42db159b3ee565f": 9011,
+          "d482aa0afa27e9ce": 7925,
+          "dae23c801891223c": 7661,
+          "dce1407ed7d893a6": 9260,
+          "e72299dc2abeabcd": 9706,
+          "e9b489b9b469e9b6": 7925,
+          "eb0bd33739d5e926": 9526,
+          "eb5d47e234425a98": 8348,
+          "f3d1a9ac4d14bd7a": 9706
+        },
+        "q90": {
+          "06cc309e4779897c": 7661,
+          "084cedb913d5197c": 8348,
+          "0a6c5266d76b5b39": 9526,
+          "16f1d6176c7a9133": 8348,
+          "187fca60022dedc5": 7661,
+          "2d4f272bb3dfc5d2": 9706,
+          "340168e305f8381e": 9260,
+          "3f5d86eed8fe5c17": 9011,
+          "4008e6387839d7a3": 9260,
+          "5803fd9aa62080cb": 9011,
+          "5fcc585e03915396": 9299,
+          "657fa0b9f3268e78": 9526,
+          "6e3416af316f91cc": 7925,
+          "7e395749f1712cb4": 8348,
+          "8dcbe1518a5b0898": 9706,
+          "90a93715895966dc": 9526,
+          "9c7ad9c97b6bdbc6": 7661,
+          "b7e7cef8b702abae": 9011,
+          "c796667235591888": 9624,
+          "cc8eb82bc98de729": 9260,
+          "cff4da5d9bb7efb7": 7925,
+          "d42db159b3ee565f": 9011,
+          "d482aa0afa27e9ce": 7925,
+          "dae23c801891223c": 7661,
+          "dce1407ed7d893a6": 9260,
+          "e72299dc2abeabcd": 9706,
+          "e9b489b9b469e9b6": 7925,
+          "eb0bd33739d5e926": 9526,
+          "eb5d47e234425a98": 8348,
+          "f3d1a9ac4d14bd7a": 9706
+        }
+      },
+      "26842525_26355153_0": {
+        "q10": {
+          "06cc309e4779897c": 9733,
+          "084cedb913d5197c": 10281,
+          "0a6c5266d76b5b39": 11456,
+          "16f1d6176c7a9133": 10281,
+          "187fca60022dedc5": 9733,
+          "2d4f272bb3dfc5d2": 10901,
+          "340168e305f8381e": 11219,
+          "3f5d86eed8fe5c17": 10329,
+          "4008e6387839d7a3": 11219,
+          "5803fd9aa62080cb": 10329,
+          "5fcc585e03915396": 11299,
+          "657fa0b9f3268e78": 11456,
+          "6e3416af316f91cc": 9230,
+          "7e395749f1712cb4": 10281,
+          "8dcbe1518a5b0898": 10901,
+          "90a93715895966dc": 11456,
+          "9c7ad9c97b6bdbc6": 9733,
+          "b7e7cef8b702abae": 10329,
+          "c796667235591888": 11248,
+          "cc8eb82bc98de729": 11219,
+          "cff4da5d9bb7efb7": 9230,
+          "d42db159b3ee565f": 10329,
+          "d482aa0afa27e9ce": 9230,
+          "dae23c801891223c": 9733,
+          "dce1407ed7d893a6": 11219,
+          "e72299dc2abeabcd": 10901,
+          "e9b489b9b469e9b6": 9230,
+          "eb0bd33739d5e926": 11456,
+          "eb5d47e234425a98": 10281,
+          "f3d1a9ac4d14bd7a": 10901
+        },
+        "q50": {
+          "06cc309e4779897c": 9733,
+          "084cedb913d5197c": 10281,
+          "0a6c5266d76b5b39": 11456,
+          "16f1d6176c7a9133": 10281,
+          "187fca60022dedc5": 9733,
+          "2d4f272bb3dfc5d2": 10901,
+          "340168e305f8381e": 11219,
+          "3f5d86eed8fe5c17": 10329,
+          "4008e6387839d7a3": 11219,
+          "5803fd9aa62080cb": 10329,
+          "5fcc585e03915396": 11299,
+          "657fa0b9f3268e78": 11456,
+          "6e3416af316f91cc": 9230,
+          "7e395749f1712cb4": 10281,
+          "8dcbe1518a5b0898": 10901,
+          "90a93715895966dc": 11456,
+          "9c7ad9c97b6bdbc6": 9733,
+          "b7e7cef8b702abae": 10329,
+          "c796667235591888": 11248,
+          "cc8eb82bc98de729": 11219,
+          "cff4da5d9bb7efb7": 9230,
+          "d42db159b3ee565f": 10329,
+          "d482aa0afa27e9ce": 9230,
+          "dae23c801891223c": 9733,
+          "dce1407ed7d893a6": 11219,
+          "e72299dc2abeabcd": 10901,
+          "e9b489b9b469e9b6": 9230,
+          "eb0bd33739d5e926": 11456,
+          "eb5d47e234425a98": 10281,
+          "f3d1a9ac4d14bd7a": 10901
+        },
+        "q90": {
+          "06cc309e4779897c": 9733,
+          "084cedb913d5197c": 10281,
+          "0a6c5266d76b5b39": 11456,
+          "16f1d6176c7a9133": 10281,
+          "187fca60022dedc5": 9733,
+          "2d4f272bb3dfc5d2": 10901,
+          "340168e305f8381e": 11219,
+          "3f5d86eed8fe5c17": 10329,
+          "4008e6387839d7a3": 11219,
+          "5803fd9aa62080cb": 10329,
+          "5fcc585e03915396": 11299,
+          "657fa0b9f3268e78": 11456,
+          "6e3416af316f91cc": 9230,
+          "7e395749f1712cb4": 10281,
+          "8dcbe1518a5b0898": 10901,
+          "90a93715895966dc": 11456,
+          "9c7ad9c97b6bdbc6": 9733,
+          "b7e7cef8b702abae": 10329,
+          "c796667235591888": 11248,
+          "cc8eb82bc98de729": 11219,
+          "cff4da5d9bb7efb7": 9230,
+          "d42db159b3ee565f": 10329,
+          "d482aa0afa27e9ce": 9230,
+          "dae23c801891223c": 9733,
+          "dce1407ed7d893a6": 11219,
+          "e72299dc2abeabcd": 10901,
+          "e9b489b9b469e9b6": 9230,
+          "eb0bd33739d5e926": 11456,
+          "eb5d47e234425a98": 10281,
+          "f3d1a9ac4d14bd7a": 10901
+        }
+      },
+      "8710974792_1759741980_0": {
+        "q10": {
+          "06cc309e4779897c": 0,
+          "084cedb913d5197c": 0,
+          "0a6c5266d76b5b39": 0,
+          "16f1d6176c7a9133": 0,
+          "187fca60022dedc5": 0,
+          "2d4f272bb3dfc5d2": 0,
+          "340168e305f8381e": 0,
+          "3f5d86eed8fe5c17": 0,
+          "4008e6387839d7a3": 0,
+          "5803fd9aa62080cb": 0,
+          "5fcc585e03915396": 0,
+          "657fa0b9f3268e78": 0,
+          "6e3416af316f91cc": 0,
+          "7e395749f1712cb4": 0,
+          "8dcbe1518a5b0898": 0,
+          "90a93715895966dc": 0,
+          "9c7ad9c97b6bdbc6": 0,
+          "b7e7cef8b702abae": 0,
+          "c796667235591888": 0,
+          "cc8eb82bc98de729": 0,
+          "cff4da5d9bb7efb7": 0,
+          "d42db159b3ee565f": 0,
+          "d482aa0afa27e9ce": 0,
+          "dae23c801891223c": 0,
+          "dce1407ed7d893a6": 0,
+          "e72299dc2abeabcd": 0,
+          "e9b489b9b469e9b6": 0,
+          "eb0bd33739d5e926": 0,
+          "eb5d47e234425a98": 0,
+          "f3d1a9ac4d14bd7a": 0
+        },
+        "q50": {
+          "06cc309e4779897c": 0,
+          "084cedb913d5197c": 0,
+          "0a6c5266d76b5b39": 0,
+          "16f1d6176c7a9133": 0,
+          "187fca60022dedc5": 0,
+          "2d4f272bb3dfc5d2": 0,
+          "340168e305f8381e": 0,
+          "3f5d86eed8fe5c17": 0,
+          "4008e6387839d7a3": 0,
+          "5803fd9aa62080cb": 0,
+          "5fcc585e03915396": 0,
+          "657fa0b9f3268e78": 0,
+          "6e3416af316f91cc": 0,
+          "7e395749f1712cb4": 0,
+          "8dcbe1518a5b0898": 0,
+          "90a93715895966dc": 0,
+          "9c7ad9c97b6bdbc6": 0,
+          "b7e7cef8b702abae": 0,
+          "c796667235591888": 0,
+          "cc8eb82bc98de729": 0,
+          "cff4da5d9bb7efb7": 0,
+          "d42db159b3ee565f": 0,
+          "d482aa0afa27e9ce": 0,
+          "dae23c801891223c": 0,
+          "dce1407ed7d893a6": 0,
+          "e72299dc2abeabcd": 0,
+          "e9b489b9b469e9b6": 0,
+          "eb0bd33739d5e926": 0,
+          "eb5d47e234425a98": 0,
+          "f3d1a9ac4d14bd7a": 0
+        },
+        "q90": {
+          "06cc309e4779897c": 0,
+          "084cedb913d5197c": 0,
+          "0a6c5266d76b5b39": 0,
+          "16f1d6176c7a9133": 0,
+          "187fca60022dedc5": 0,
+          "2d4f272bb3dfc5d2": 0,
+          "340168e305f8381e": 0,
+          "3f5d86eed8fe5c17": 0,
+          "4008e6387839d7a3": 0,
+          "5803fd9aa62080cb": 0,
+          "5fcc585e03915396": 0,
+          "657fa0b9f3268e78": 0,
+          "6e3416af316f91cc": 0,
+          "7e395749f1712cb4": 0,
+          "8dcbe1518a5b0898": 0,
+          "90a93715895966dc": 0,
+          "9c7ad9c97b6bdbc6": 0,
+          "b7e7cef8b702abae": 0,
+          "c796667235591888": 0,
+          "cc8eb82bc98de729": 0,
+          "cff4da5d9bb7efb7": 0,
+          "d42db159b3ee565f": 0,
+          "d482aa0afa27e9ce": 0,
+          "dae23c801891223c": 0,
+          "dce1407ed7d893a6": 0,
+          "e72299dc2abeabcd": 0,
+          "e9b489b9b469e9b6": 0,
+          "eb0bd33739d5e926": 0,
+          "eb5d47e234425a98": 0,
+          "f3d1a9ac4d14bd7a": 0
+        }
+      },
+      "9037093028_1305379743_0": {
+        "q10": {
+          "06cc309e4779897c": 1015,
+          "084cedb913d5197c": 1057,
+          "0a6c5266d76b5b39": 1632,
+          "16f1d6176c7a9133": 1046,
+          "187fca60022dedc5": 1037,
+          "2d4f272bb3dfc5d2": 1721,
+          "340168e305f8381e": 1557,
+          "3f5d86eed8fe5c17": 1206,
+          "4008e6387839d7a3": 1542,
+          "5803fd9aa62080cb": 1217,
+          "5fcc585e03915396": 1632,
+          "657fa0b9f3268e78": 1645,
+          "6e3416af316f91cc": 1091,
+          "7e395749f1712cb4": 1062,
+          "8dcbe1518a5b0898": 1717,
+          "90a93715895966dc": 1651,
+          "9c7ad9c97b6bdbc6": 1034,
+          "b7e7cef8b702abae": 1219,
+          "c796667235591888": 1717,
+          "cc8eb82bc98de729": 1555,
+          "cff4da5d9bb7efb7": 1082,
+          "d42db159b3ee565f": 1214,
+          "d482aa0afa27e9ce": 1088,
+          "dae23c801891223c": 1039,
+          "dce1407ed7d893a6": 1516,
+          "e72299dc2abeabcd": 1693,
+          "e9b489b9b469e9b6": 1084,
+          "eb0bd33739d5e926": 1616,
+          "eb5d47e234425a98": 1060,
+          "f3d1a9ac4d14bd7a": 1728
+        },
+        "q50": {
+          "06cc309e4779897c": 1114,
+          "084cedb913d5197c": 1179,
+          "0a6c5266d76b5b39": 1694,
+          "16f1d6176c7a9133": 1177,
+          "187fca60022dedc5": 1116,
+          "2d4f272bb3dfc5d2": 1750,
+          "340168e305f8381e": 1658,
+          "3f5d86eed8fe5c17": 1262,
+          "4008e6387839d7a3": 1618,
+          "5803fd9aa62080cb": 1271,
+          "5fcc585e03915396": 1687,
+          "657fa0b9f3268e78": 1667,
+          "6e3416af316f91cc": 1154,
+          "7e395749f1712cb4": 1177,
+          "8dcbe1518a5b0898": 1758,
+          "90a93715895966dc": 1716,
+          "9c7ad9c97b6bdbc6": 1110,
+          "b7e7cef8b702abae": 1270,
+          "c796667235591888": 1761,
+          "cc8eb82bc98de729": 1638,
+          "cff4da5d9bb7efb7": 1139,
+          "d42db159b3ee565f": 1263,
+          "d482aa0afa27e9ce": 1138,
+          "dae23c801891223c": 1125,
+          "dce1407ed7d893a6": 1606,
+          "e72299dc2abeabcd": 1738,
+          "e9b489b9b469e9b6": 1146,
+          "eb0bd33739d5e926": 1666,
+          "eb5d47e234425a98": 1181,
+          "f3d1a9ac4d14bd7a": 1749
+        },
+        "q90": {
+          "06cc309e4779897c": 1096,
+          "084cedb913d5197c": 1163,
+          "0a6c5266d76b5b39": 1740,
+          "16f1d6176c7a9133": 1156,
+          "187fca60022dedc5": 1091,
+          "2d4f272bb3dfc5d2": 1783,
+          "340168e305f8381e": 1725,
+          "3f5d86eed8fe5c17": 1267,
+          "4008e6387839d7a3": 1681,
+          "5803fd9aa62080cb": 1249,
+          "5fcc585e03915396": 1743,
+          "657fa0b9f3268e78": 1765,
+          "6e3416af316f91cc": 1116,
+          "7e395749f1712cb4": 1147,
+          "8dcbe1518a5b0898": 1788,
+          "90a93715895966dc": 1761,
+          "9c7ad9c97b6bdbc6": 1090,
+          "b7e7cef8b702abae": 1249,
+          "c796667235591888": 1802,
+          "cc8eb82bc98de729": 1673,
+          "cff4da5d9bb7efb7": 1115,
+          "d42db159b3ee565f": 1246,
+          "d482aa0afa27e9ce": 1125,
+          "dae23c801891223c": 1092,
+          "dce1407ed7d893a6": 1656,
+          "e72299dc2abeabcd": 1784,
+          "e9b489b9b469e9b6": 1135,
+          "eb0bd33739d5e926": 1725,
+          "eb5d47e234425a98": 1150,
+          "f3d1a9ac4d14bd7a": 1774
+        }
+      },
+      "96523321_26355153_0": {
+        "q10": {
+          "06cc309e4779897c": 5198,
+          "084cedb913d5197c": 5308,
+          "0a6c5266d76b5b39": 5867,
+          "16f1d6176c7a9133": 5432,
+          "187fca60022dedc5": 5088,
+          "2d4f272bb3dfc5d2": 6338,
+          "340168e305f8381e": 5776,
+          "3f5d86eed8fe5c17": 5897,
+          "4008e6387839d7a3": 5927,
+          "5803fd9aa62080cb": 5971,
+          "5fcc585e03915396": 5806,
+          "657fa0b9f3268e78": 5920,
+          "6e3416af316f91cc": 5612,
+          "7e395749f1712cb4": 5382,
+          "8dcbe1518a5b0898": 6161,
+          "90a93715895966dc": 5831,
+          "9c7ad9c97b6bdbc6": 5093,
+          "b7e7cef8b702abae": 6058,
+          "c796667235591888": 5951,
+          "cc8eb82bc98de729": 5888,
+          "cff4da5d9bb7efb7": 5719,
+          "d42db159b3ee565f": 5963,
+          "d482aa0afa27e9ce": 5639,
+          "dae23c801891223c": 5079,
+          "dce1407ed7d893a6": 5932,
+          "e72299dc2abeabcd": 6254,
+          "e9b489b9b469e9b6": 5614,
+          "eb0bd33739d5e926": 5925,
+          "eb5d47e234425a98": 5357,
+          "f3d1a9ac4d14bd7a": 6239
+        },
+        "q50": {
+          "06cc309e4779897c": 7518,
+          "084cedb913d5197c": 7837,
+          "0a6c5266d76b5b39": 7891,
+          "16f1d6176c7a9133": 7644,
+          "187fca60022dedc5": 7659,
+          "2d4f272bb3dfc5d2": 8102,
+          "340168e305f8381e": 7881,
+          "3f5d86eed8fe5c17": 7951,
+          "4008e6387839d7a3": 7938,
+          "5803fd9aa62080cb": 8003,
+          "5fcc585e03915396": 7845,
+          "657fa0b9f3268e78": 7977,
+          "6e3416af316f91cc": 7640,
+          "7e395749f1712cb4": 7740,
+          "8dcbe1518a5b0898": 8054,
+          "90a93715895966dc": 7907,
+          "9c7ad9c97b6bdbc6": 7580,
+          "b7e7cef8b702abae": 8004,
+          "c796667235591888": 7744,
+          "cc8eb82bc98de729": 7881,
+          "cff4da5d9bb7efb7": 7648,
+          "d42db159b3ee565f": 7996,
+          "d482aa0afa27e9ce": 7680,
+          "dae23c801891223c": 7625,
+          "dce1407ed7d893a6": 7819,
+          "e72299dc2abeabcd": 8021,
+          "e9b489b9b469e9b6": 7653,
+          "eb0bd33739d5e926": 7836,
+          "eb5d47e234425a98": 7743,
+          "f3d1a9ac4d14bd7a": 8105
+        },
+        "q90": {
+          "06cc309e4779897c": 7470,
+          "084cedb913d5197c": 7761,
+          "0a6c5266d76b5b39": 9136,
+          "16f1d6176c7a9133": 7737,
+          "187fca60022dedc5": 7525,
+          "2d4f272bb3dfc5d2": 9254,
+          "340168e305f8381e": 9109,
+          "3f5d86eed8fe5c17": 8318,
+          "4008e6387839d7a3": 9111,
+          "5803fd9aa62080cb": 8305,
+          "5fcc585e03915396": 9181,
+          "657fa0b9f3268e78": 9161,
+          "6e3416af316f91cc": 7799,
+          "7e395749f1712cb4": 7782,
+          "8dcbe1518a5b0898": 9264,
+          "90a93715895966dc": 9222,
+          "9c7ad9c97b6bdbc6": 7525,
+          "b7e7cef8b702abae": 8425,
+          "c796667235591888": 9129,
+          "cc8eb82bc98de729": 9065,
+          "cff4da5d9bb7efb7": 7797,
+          "d42db159b3ee565f": 8285,
+          "d482aa0afa27e9ce": 7761,
+          "dae23c801891223c": 7535,
+          "dce1407ed7d893a6": 9102,
+          "e72299dc2abeabcd": 9319,
+          "e9b489b9b469e9b6": 7839,
+          "eb0bd33739d5e926": 9192,
+          "eb5d47e234425a98": 7789,
+          "f3d1a9ac4d14bd7a": 9314
+        }
+      }
+    },
+    "parses": {
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-215415-af2d83e6-bc11/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-215415-af2d83e6-bc11/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-215415-af2d83e6-bc11/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220012-de032bcb-2165/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220012-de032bcb-2165/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220012-de032bcb-2165/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220648-791840d4-c887/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220648-791840d4-c887/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220648-791840d4-c887/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221303-3a1fda45-188f/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221303-3a1fda45-188f/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221303-3a1fda45-188f/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221533-52837f59-7e5d/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221533-52837f59-7e5d/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221533-52837f59-7e5d/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221806-7415a4c6-0d68/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221806-7415a4c6-0d68/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221806-7415a4c6-0d68/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222404-4b5941dd-77c7/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222404-4b5941dd-77c7/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222404-4b5941dd-77c7/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222709-889e6f89-d6d5/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222709-889e6f89-d6d5/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222709-889e6f89-d6d5/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223016-ef0f3cf3-44e9/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223016-ef0f3cf3-44e9/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223016-ef0f3cf3-44e9/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223222-19b614fb-7ce8/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223222-19b614fb-7ce8/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223222-19b614fb-7ce8/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223744-a3782377-418d/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223744-a3782377-418d/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223744-a3782377-418d/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223804-04518454-6d14/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223804-04518454-6d14/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223804-04518454-6d14/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223825-2bbb1a66-845d/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223825-2bbb1a66-845d/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223825-2bbb1a66-845d/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224149-53fb2fd0-6182/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224149-53fb2fd0-6182/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224149-53fb2fd0-6182/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224309-23459e2e-c9ef/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224309-23459e2e-c9ef/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224309-23459e2e-c9ef/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225121-de7e3e34-015d/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225121-de7e3e34-015d/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225121-de7e3e34-015d/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225243-61cb7aca-8652/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225243-61cb7aca-8652/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225243-61cb7aca-8652/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225650-83f1213a-5e40/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225650-83f1213a-5e40/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225650-83f1213a-5e40/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225714-b593ac27-7b71/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225714-b593ac27-7b71/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225714-b593ac27-7b71/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225738-e3bfe154-7e43/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225738-e3bfe154-7e43/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225738-e3bfe154-7e43/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230407-7f119ae2-9f58/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230407-7f119ae2-9f58/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230407-7f119ae2-9f58/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230432-5b265029-5e0f/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230432-5b265029-5e0f/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230432-5b265029-5e0f/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230455-3e34ff00-af60/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230455-3e34ff00-af60/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230455-3e34ff00-af60/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230620-a893719c-a662/calibrated.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230620-a893719c-a662/calibrated_v1.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230620-a893719c-a662/calibrated_v2.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/sumo/route_catalog/77e237f04c746a4fb1fac7e790fff419/catalog.rou.xml": 1,
+      "/private/tmp/gs-step3-departure-bounds/sumo/route_catalog/8548c8191269d61bce2f9bbe85e7785d/catalog.rou.xml": 1
+    },
+    "policy": "closure_effect_eligibility_v1",
+    "schema": "closure_effect_inventory_v1"
+  },
+  "inventory_content_key": "458713e43b932706170b1f0ee5bc3b94a13c7a1c925beb87c5b83c1835ff727d",
+  "memory": {
+    "samples": [
+      {
+        "cpu_s": 100.443376,
+        "label": "inventory",
+        "lifetime_max_phys_footprint_bytes": 639697976,
+        "major_faults": 93,
+        "max_rss_bytes": 793640960,
+        "minor_faults": 2284032,
+        "pageins": 93,
+        "phys_footprint_bytes": 309445688,
+        "resident_bytes": 451805184,
+        "sys_s": 8.339109,
+        "user_s": 94.908065,
+        "wall_s": 101.45214454100001
+      },
+      {
+        "cpu_s": 103.12427500000001,
+        "label": "end",
+        "lifetime_max_phys_footprint_bytes": 639697976,
+        "major_faults": 93,
+        "max_rss_bytes": 793640960,
+        "minor_faults": 2284597,
+        "pageins": 93,
+        "phys_footprint_bytes": 293897272,
+        "resident_bytes": 377847808,
+        "sys_s": 8.806497,
+        "user_s": 97.121574,
+        "wall_s": 104.24110454100001
+      }
+    ]
+  },
+  "order_rule": "eligible candidates first, then the unchanged structural survivability order (dist_sensor_m, edge_id); the first wins",
+  "outcome": "canary spec written",
+  "output_sha256": "65c0aa45ea356dceaa5c5ec709a38b670eb9541c1b60a3aa5f87b5642e0bf9cc",
+  "production_sources": {
+    "tools/build_window_cost_index.py": "dcfc5e6412fc3b3d1ca46f6564d5588b56f6d5025d95db0b55d087247e2974cc",
+    "tools/closure_effect_eligibility.py": "5226af5e848f6841b0b3fa14d4928cef2d8e870e246e0df9154463e5e13bb331",
+    "tools/cost_ordered_benchmark.py": "0dbf41fb2175adc9ac7b59dea783d634465760d35dcaf0658589980fa25c7d3c",
+    "traffic_sim/core/contracts.py": "53818f1d6154bda8dc72a49f921cbeb9f01048d451612775d94b344c02e2255a",
+    "traffic_sim/simulation/deterministic_disruption.py": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472",
+    "traffic_sim/simulation/disruption.py": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9",
+    "traffic_sim/simulation/independent_daily.py": "6ae4eba74fb0df6ec3068cf757164d43e0595fed102001457bab3d7c3446f689",
+    "traffic_sim/simulation/metadata.py": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4",
+    "traffic_sim/simulation/monthly_demand.py": "0879d1fdd41e95643c3626fdda51b81e08edaa9be4ef957a33a517cda6890778"
+  },
+  "profile": {
+    "path": "runs/step5_code_approved_20260915b/profile/profile.json",
+    "sha256": "399f764272120470b2a32015ed5b1deb24d1ec1b0a786d5646ada104d69a23af"
+  },
+  "qualified_demand_manifest": {
+    "content_key": "2cb32dcddfeb9bb99513fe1ae9cdcc44f0935435b78a278fa6eb3786060159ec",
+    "evidence_id": "subhour-monthly-qualify-2026-09-15b",
+    "path": "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+    "sha256": "1b609f705e08ab7a9c266a974a5976d33660209f0de914c95f66b3189d46f576"
+  },
+  "release_evidence": false,
+  "rows": [
+    {
+      "archives": 30,
+      "archives_with_crossings": 0,
+      "catalog_routes": {
+        "weekday": 0,
+        "weekend": 0
+      },
+      "crossings": {
+        "q10": 0,
+        "q50": 0,
+        "q90": 0
+      },
+      "daily_units": 1950,
+      "daily_units_with_crossings": 0,
+      "edge_id": "26355153_26842525_0",
+      "effect_eligible": false,
+      "from_node": "26355153",
+      "measurement_status": "unmeasured_opposite_of_sensor",
+      "nearest_sensor": {
+        "basis": "registry",
+        "midpoint_distance_m": 0.0,
+        "sensor_id": "133"
+      },
+      "reason_codes": [
+        "no_catalog_route_support",
+        "no_observed_archive_crossings"
+      ],
+      "reasons": [
+        {
+          "code": "no_catalog_route_support",
+          "detail": "weekday"
+        },
+        {
+          "code": "no_catalog_route_support",
+          "detail": "weekend"
+        },
+        {
+          "code": "no_observed_archive_crossings",
+          "detail": "q10"
+        },
+        {
+          "code": "no_observed_archive_crossings",
+          "detail": "q50"
+        },
+        {
+          "code": "no_observed_archive_crossings",
+          "detail": "q90"
+        },
+        {
+          "code": "no_observed_archive_crossings",
+          "detail": "daily_units"
+        }
+      ],
+      "registry_roles": [
+        {
+          "role": "opposite_direction",
+          "sensor_id": "133"
+        }
+      ],
+      "screen_dist_sensor_m": 11.0,
+      "structural_rank": 1,
+      "structurally_survivable": true,
+      "to_node": "26842525"
+    },
+    {
+      "archives": 30,
+      "archives_with_crossings": 30,
+      "catalog_routes": {
+        "weekday": 100,
+        "weekend": 91
+      },
+      "crossings": {
+        "q10": 315143,
+        "q50": 315143,
+        "q90": 315143
+      },
+      "daily_units": 1950,
+      "daily_units_with_crossings": 1950,
+      "edge_id": "26842525_26355153_0",
+      "effect_eligible": true,
+      "from_node": "26842525",
+      "measurement_status": "measured",
+      "nearest_sensor": {
+        "basis": "registry",
+        "midpoint_distance_m": 0.0,
+        "sensor_id": "133"
+      },
+      "reason_codes": [
+        "eligible"
+      ],
+      "reasons": [
+        {
+          "code": "eligible",
+          "detail": null
+        }
+      ],
+      "registry_roles": [
+        {
+          "role": "measured_edge",
+          "sensor_id": "133"
+        }
+      ],
+      "screen_dist_sensor_m": 11.0,
+      "structural_rank": 2,
+      "structurally_survivable": true,
+      "to_node": "26355153"
+    },
+    {
+      "archives": 30,
+      "archives_with_crossings": 30,
+      "catalog_routes": {
+        "weekday": 58,
+        "weekend": 56
+      },
+      "crossings": {
+        "q10": 264671,
+        "q50": 264671,
+        "q90": 264671
+      },
+      "daily_units": 1950,
+      "daily_units_with_crossings": 1950,
+      "edge_id": "26355153_96523321_0",
+      "effect_eligible": true,
+      "from_node": "26355153",
+      "measurement_status": "measured",
+      "nearest_sensor": {
+        "basis": "registry",
+        "midpoint_distance_m": 0.0,
+        "sensor_id": "134"
+      },
+      "reason_codes": [
+        "eligible"
+      ],
+      "reasons": [
+        {
+          "code": "eligible",
+          "detail": null
+        }
+      ],
+      "registry_roles": [
+        {
+          "role": "measured_edge",
+          "sensor_id": "134"
+        }
+      ],
+      "screen_dist_sensor_m": 25.8,
+      "structural_rank": 3,
+      "structurally_survivable": true,
+      "to_node": "96523321"
+    },
+    {
+      "archives": 30,
+      "archives_with_crossings": 30,
+      "catalog_routes": {
+        "weekday": 52,
+        "weekend": 51
+      },
+      "crossings": {
+        "q10": 172225,
+        "q50": 234922,
+        "q90": 254212
+      },
+      "daily_units": 1950,
+      "daily_units_with_crossings": 1950,
+      "edge_id": "96523321_26355153_0",
+      "effect_eligible": true,
+      "from_node": "96523321",
+      "measurement_status": "unmeasured_opposite_of_sensor",
+      "nearest_sensor": {
+        "basis": "registry",
+        "midpoint_distance_m": 0.0,
+        "sensor_id": "134"
+      },
+      "reason_codes": [
+        "eligible"
+      ],
+      "reasons": [
+        {
+          "code": "eligible",
+          "detail": null
+        }
+      ],
+      "registry_roles": [
+        {
+          "role": "opposite_direction",
+          "sensor_id": "134"
+        }
+      ],
+      "screen_dist_sensor_m": 25.8,
+      "structural_rank": 4,
+      "structurally_survivable": true,
+      "to_node": "26355153"
+    },
+    {
+      "archives": 30,
+      "archives_with_crossings": 0,
+      "catalog_routes": {
+        "weekday": 0,
+        "weekend": 0
+      },
+      "crossings": {
+        "q10": 0,
+        "q50": 0,
+        "q90": 0
+      },
+      "daily_units": 1950,
+      "daily_units_with_crossings": 0,
+      "edge_id": "8710974792_1759741980_0",
+      "effect_eligible": false,
+      "from_node": "8710974792",
+      "measurement_status": "not_in_sensor_registry",
+      "nearest_sensor": {
+        "basis": "midpoint great-circle to measured sensor edge",
+        "midpoint_distance_m": 91.1,
+        "sensor_id": "2276"
+      },
+      "reason_codes": [
+        "no_catalog_route_support",
+        "no_observed_archive_crossings"
+      ],
+      "reasons": [
+        {
+          "code": "no_catalog_route_support",
+          "detail": "weekday"
+        },
+        {
+          "code": "no_catalog_route_support",
+          "detail": "weekend"
+        },
+        {
+          "code": "no_observed_archive_crossings",
+          "detail": "q10"
+        },
+        {
+          "code": "no_observed_archive_crossings",
+          "detail": "q50"
+        },
+        {
+          "code": "no_observed_archive_crossings",
+          "detail": "q90"
+        },
+        {
+          "code": "no_observed_archive_crossings",
+          "detail": "daily_units"
+        }
+      ],
+      "registry_roles": [],
+      "screen_dist_sensor_m": 76.4,
+      "structural_rank": 5,
+      "structurally_survivable": true,
+      "to_node": "1759741980"
+    },
+    {
+      "archives": 30,
+      "archives_with_crossings": 30,
+      "catalog_routes": {
+        "weekday": 1,
+        "weekend": 1
+      },
+      "crossings": {
+        "q10": 40473,
+        "q50": 42528,
+        "q90": 42887
+      },
+      "daily_units": 1950,
+      "daily_units_with_crossings": 1950,
+      "edge_id": "9037093028_1305379743_0",
+      "effect_eligible": true,
+      "from_node": "9037093028",
+      "measurement_status": "not_in_sensor_registry",
+      "nearest_sensor": {
+        "basis": "midpoint great-circle to measured sensor edge",
+        "midpoint_distance_m": 87.6,
+        "sensor_id": "1076"
+      },
+      "reason_codes": [
+        "eligible"
+      ],
+      "reasons": [
+        {
+          "code": "eligible",
+          "detail": null
+        }
+      ],
+      "registry_roles": [],
+      "screen_dist_sensor_m": 86.8,
+      "structural_rank": 6,
+      "structurally_survivable": true,
+      "to_node": "1305379743"
+    }
+  ],
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "closure_effect_inventory_evidence_v1",
+  "selected_edge": "26842525_26355153_0"
+}

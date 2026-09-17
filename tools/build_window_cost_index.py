@@ -32,6 +32,7 @@ from traffic_sim.simulation.deterministic_disruption import (
     ArchiveDisruptionProvider,
     DailyCostCache,
     NetworkCostModel,
+    VARIANT_FILENAMES,
     closure_seconds,
 )
 from traffic_sim.simulation.disruption import (
@@ -49,6 +50,7 @@ from traffic_sim.simulation.window_cost_index import (
     WindowCostIndex,
     WindowCostIndexError,
     load_index,
+    publish_new_file,
     write_index,
 )
 from traffic_sim.simulation.cost_ordered_execution import (
@@ -129,12 +131,11 @@ def _digest(payload: Any) -> str:
 
 
 def _publish(path: Path, record: Mapping[str, Any]) -> None:
-    path = Path(path)
-    if path.exists():
-        raise FileExistsError(f"refusing to overwrite Phase 5 evidence: {path}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n",
-                    encoding="utf-8")
+    """Append-only, atomic evidence publication."""
+    publish_new_file(
+        path,
+        (json.dumps(record, indent=2, sort_keys=True) + "\n").encode("utf-8"),
+        label="Phase 5 evidence")
 
 
 def _validate_profile_binding(profile: Mapping[str, Any],
@@ -307,8 +308,9 @@ def _timings() -> dict[str, float]:
 
 
 def _measurement(indexed, provider_identities, timings, *, loop,
-                 variant_indexes) -> dict[str, Any]:
+                 variant_indexes, bindings=None) -> dict[str, Any]:
     return {
+        **(bindings or {}),
         "daily_units": len(indexed),
         "daily_variant_records": len(indexed) * 3,
         "timings": timings,
@@ -353,6 +355,69 @@ def _oracle_record(oracle_cache, provider, schedule, unit_id):
             f"independent deterministic oracle is missing for {unit_id}")
     return {"schedule_id": schedule.schedule_id,
             "records": [dict(item) for item in expected]}
+
+
+RAW_INPUT_FILES = ("demand_meta.json", *sorted(VARIANT_FILENAMES.values()))
+
+
+def _archive_binding(descriptor: _ArchiveDescriptor) -> dict[str, Any]:
+    """The validated hashes of exactly the files the raw phase reads."""
+    return {"archive": str(descriptor.archive),
+            "content_key": descriptor.content_key,
+            "files": {name: descriptor.output_sha256.get(name)
+                      for name in RAW_INPUT_FILES}}
+
+
+def _verify_raw_inputs_unchanged(measurement: Mapping[str, Any]) -> None:
+    """Re-prove, from content, every input the raw phase priced.
+
+    Called immediately before the index and the evidence are published:
+    the costing sources must be the ones the operation started with, and
+    every archive file it read must still hash to its validated digest.
+    """
+    sources = dict(deterministic_disruption.costing_source_identity())
+    if sources != dict(measurement.get("costing_sources") or {}):
+        raise WindowCostIndexError(
+            "costing source changed before publication")
+    bindings = measurement.get("archive_bindings")
+    if not isinstance(bindings, Mapping) or not bindings:
+        raise WindowCostIndexError(
+            "the raw phase recorded no archive bindings to re-prove")
+    for build_key, binding in sorted(bindings.items()):
+        archive = Path(binding["archive"])
+        drifted = sorted(
+            name for name, digest in binding["files"].items()
+            if not digest or sha256_file(archive / name) != digest)
+        if drifted:
+            raise WindowCostIndexError(
+                f"build key {build_key}: {drifted} changed before "
+                "publication")
+
+
+def _verify_before_publication(profile_path: Path,
+                               bound: Mapping[str, Any],
+                               raw_measurement: Mapping[str, Any],
+                               raw_input_sources: Mapping[str, str]) -> None:
+    """Every binding the build started from must still hold."""
+    profile = json.loads(Path(profile_path).read_text(encoding="utf-8"))
+    _validate_profile_binding(profile, Path(profile_path))
+    if profile.get("content_key") != bound["profile"].get("content_key"):
+        raise WindowCostIndexError("Phase 4 profile changed before publication")
+    qualified = bound["qualified_ref"]
+    if sha256_file(Path(str(qualified["path"])).resolve()) != qualified[
+            "sha256"]:
+        raise WindowCostIndexError(
+            "qualified-demand manifest changed before publication")
+    if _raw_input_sources() != dict(raw_input_sources):
+        raise WindowCostIndexError("index builder source changed before "
+                                   "publication")
+    _verify_raw_inputs_unchanged(raw_measurement)
+
+
+def _raw_input_sources() -> dict[str, Any]:
+    return {relative: sha256_file(ROOT / relative)
+            for relative in ("tools/build_window_cost_index.py",
+                             "traffic_sim/simulation/window_cost_index.py")}
 
 
 def _verify_opened(descriptor: _ArchiveDescriptor, provider,
@@ -479,7 +544,13 @@ def _raw_index_records(
     return indexed, oracle, _measurement(
         indexed, identities, timings,
         loop="stream_one_archive_at_a_time",
-        variant_indexes=variant_indexes)
+        variant_indexes=variant_indexes,
+        bindings={
+            "costing_sources": sources,
+            "archive_bindings": {descriptor.build_key:
+                                 _archive_binding(descriptor)
+                                 for descriptor in descriptors},
+        })
 
 
 def _retain_index_records(
@@ -665,6 +736,7 @@ def build_from_profile(
     runs_root = bound["runs_root"]
     parents = bound["parents"]
     baseline_time_s = bound["baseline_time_s"]
+    raw_input_sources = _raw_input_sources()
     started = time.perf_counter()
     records, oracle_records, raw_measurement = _raw_index_records(
         spec, runs_root=runs_root, oracle_cache=DailyCostCache(cache_root),
@@ -689,13 +761,7 @@ def build_from_profile(
             (profile.get("bindings") or {}).get(
                 "producer_runtime_manifest", {})),
         "raw_input_algorithm": raw_measurement["raw_input_algorithm"],
-        "raw_input_sources": {
-            relative: sha256_file(ROOT / relative)
-            for relative in (
-                "tools/build_window_cost_index.py",
-                "traffic_sim/simulation/window_cost_index.py",
-            )
-        },
+        "raw_input_sources": dict(raw_input_sources),
         "provider_identities": raw_measurement["provider_identities"],
     }
     index = WindowCostIndex(
@@ -712,6 +778,8 @@ def build_from_profile(
         raise FileExistsError(f"index output root must be fresh: {index_out}")
     index_out.mkdir(parents=True, exist_ok=True)
     index_path = index_out / "window-cost-index.json"
+    _verify_before_publication(profile_path, bound, raw_measurement,
+                               raw_input_sources)
     persistence_started = time.perf_counter()
     write_index(index_path, index)
     persisted = load_index(
@@ -791,6 +859,8 @@ def build_from_profile(
         "fresh_index_root": str(index_out.resolve()),
     }
     evidence["content_key"] = _digest(evidence)
+    _verify_before_publication(profile_path, bound, raw_measurement,
+                               raw_input_sources)
     _publish(evidence_out, evidence)
     return evidence
 

@@ -1,0 +1,225 @@
+{
+ "argv": [
+  "/Library/Developer/CommandLineTools/usr/bin/python3",
+  "/private/tmp/gs-step3-departure-bounds/tools/wci_guarded_child.py",
+  "--job",
+  "canary",
+  "--telemetry",
+  "/private/tmp/gs-step3-departure-bounds/runs/step5_code_approved_20260915b/guarded-canary-20260917-v2/child-telemetry.json",
+  "--profile",
+  "/private/tmp/gs-step3-departure-bounds/runs/step5_code_approved_20260915b/profile/profile.json",
+  "--canary-spec",
+  "/private/tmp/gs-step3-departure-bounds/validation/wci_effect_canary_spec_20260917-v4.json",
+  "--oracle-root",
+  "/private/tmp/gs-step3-departure-bounds/runs/step5_code_approved_20260915b/effect-canary-oracle-20260917-v4",
+  "--build-keys",
+  "[\"9c7ad9c97b6bdbc6\"]"
+ ],
+ "bindings": {
+  "build_keys": [
+   "9c7ad9c97b6bdbc6"
+  ],
+  "canary_spec": {
+   "content_key": "2876ec795b0fe3cf9d7fd0b9c276c58cc139e243bc55a674a5050ee97c15b834",
+   "path": "validation/wci_effect_canary_spec_20260917-v4.json"
+  },
+  "inventory": {
+   "content_key": "ef462d4d5eac0fb8ab8c91ceb1dd1888b1bb907fff0bd0e1ba3c310d1ca8a16d",
+   "path": "validation/closure_effect_inventory_20260917-v3.json"
+  },
+  "oracle_root": "runs/step5_code_approved_20260915b/effect-canary-oracle-20260917-v4"
+ },
+ "content_key": "f88e9b3ec9bb535122eb209e4364cf2e4c9f919f1ba812a8fa82bb78e9e76f70",
+ "diagnostic": true,
+ "drift_identity": "0182723ce853ff2bbaae7dc2c7fbab290dc8c456e412c0406452e9a50854edeb",
+ "expectations": {
+  "build_keys": 1,
+  "daily_units": 65,
+  "ledger_required": false,
+  "parents": null,
+  "variant_files": 3,
+  "variant_records": 195
+ },
+ "limits": {
+  "drift_every_s": 30,
+  "kill_grace_s": 5,
+  "memory_hard_bytes": 4294967296,
+  "poll_s": 2,
+  "raw_hard_s": 300,
+  "raw_soft_s": 60,
+  "swap_growth_hard_bytes": 1073741824,
+  "telemetry_stale_s": 60,
+  "term_grace_s": 10,
+  "total_hard_s": 900
+ },
+ "mode": "canary",
+ "outcome": {
+  "child_output_tail": "",
+  "problems": [],
+  "reason": null,
+  "returncode": 0,
+  "state": "passed",
+  "status": {
+   "affected_vehicles_total": 232845,
+   "counters": {
+    "archive_index_build": 1,
+    "max_parses_per_file": 1,
+    "max_validations_per_key": 1,
+    "parsed_variant_files": 3,
+    "validated_build_keys": 1
+   },
+   "drift": {
+    "checked_elapsed_s": 20.942,
+    "identity": "0182723ce853ff2bbaae7dc2c7fbab290dc8c456e412c0406452e9a50854edeb",
+    "kind": "full",
+    "problems": []
+   },
+   "elapsed_s": 20.942,
+   "events": [
+    {
+     "elapsed_s": 0.091,
+     "kind": "started",
+     "pid": 29484
+    }
+   ],
+   "ledger": {
+    "identical": null,
+    "status": "not_applicable"
+   },
+   "memory": {
+    "checked_bytes": 0,
+    "footprint_bytes": 0,
+    "lifetime_max_footprint_bytes": 0,
+    "pids": [],
+    "resident_bytes": 0
+   },
+   "memory_peak": {
+    "at_elapsed_s": 12.491,
+    "bytes": 919699456,
+    "sample": {
+     "footprint_bytes": 754533576,
+     "lifetime_max_footprint_bytes": 777372872,
+     "pids": [
+      29484
+     ],
+     "resident_bytes": 919699456
+    }
+   },
+   "mode": "canary",
+   "oracle": {
+    "complete": true,
+    "identical": true,
+    "records": 195
+   },
+   "pgid": 29484,
+   "phase": "done",
+   "pid": 29484,
+   "population": {
+    "daily_units": 65,
+    "variant_records": 195
+   },
+   "provider_identity": {
+    "complete": true,
+    "units": 65
+   },
+   "published": null,
+   "raw_elapsed_s": 18.599978916,
+   "reason": null,
+   "schema": "wci_guarded_status_v1",
+   "sequence": 13,
+   "started_at": "2026-09-17T19:18:39.548410+00:00",
+   "state": "passed",
+   "stop": null,
+   "sumo_processes": 0,
+   "swap": {
+    "before_bytes": 5028446208,
+    "growth_bytes": 0,
+    "now_bytes": 5028446208
+   },
+   "warnings": []
+  },
+  "stop": null,
+  "telemetry": {
+   "affected_vehicles_total": 232845,
+   "counters": {
+    "archive_index_build": 1,
+    "archive_validate": {
+     "9c7ad9c97b6bdbc6": 1
+    },
+    "variant_parses": {
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72/calibrated_v2.rou.xml": 1
+    }
+   },
+   "error": null,
+   "job": "canary",
+   "ledger": {
+    "identical": null,
+    "status": "not_applicable"
+   },
+   "oracle": {
+    "complete": true,
+    "identical": true,
+    "records": 195
+   },
+   "pgid": 29484,
+   "phase": "done",
+   "phases": [
+    {
+     "monotonic": 0.523906875,
+     "phase": "bound_inputs"
+    },
+    {
+     "monotonic": 0.640593708,
+     "phase": "population"
+    },
+    {
+     "monotonic": 0.908528083,
+     "phase": "raw_index_records"
+    },
+    {
+     "monotonic": 19.739570125,
+     "phase": "oracle_compare"
+    },
+    {
+     "monotonic": 19.751152958,
+     "phase": "done"
+    }
+   ],
+   "pid": 29484,
+   "population": {
+    "daily_units": 65,
+    "variant_records": 195
+   },
+   "provider_identity": {
+    "complete": true,
+    "units": 65
+   },
+   "published": null,
+   "result": {
+    "status": "COMPLETE"
+   },
+   "schema": "wci_guarded_child_telemetry_v1",
+   "sequence": 26,
+   "written_monotonic": 19.751401875
+  }
+ },
+ "release_evidence": false,
+ "runner_sources": {
+  "/private/tmp/gs-step3-departure-bounds/run_scenario.py": "d0948b4a29d07b4f4fbe125600b7dcf25a7446bdc7337514c39edb30a679ceaf",
+  "/private/tmp/gs-step3-departure-bounds/tools/build_window_cost_index.py": "dcfc5e6412fc3b3d1ca46f6564d5588b56f6d5025d95db0b55d087247e2974cc",
+  "/private/tmp/gs-step3-departure-bounds/tools/closure_effect_eligibility.py": "5226af5e848f6841b0b3fa14d4928cef2d8e870e246e0df9154463e5e13bb331",
+  "/private/tmp/gs-step3-departure-bounds/tools/guarded_wci_build.py": "2d3ecc73d4885f0a0c4aba1435197885b19b3e3c7316b652abfd7c05fdd31ae9",
+  "/private/tmp/gs-step3-departure-bounds/tools/wci_guarded_child.py": "2e9f55c9a9c0baa2dfc2059a5e6f35287bf24165b25c2936a21b801a9434d181",
+  "/private/tmp/gs-step3-departure-bounds/traffic_sim/core/contracts.py": "53818f1d6154bda8dc72a49f921cbeb9f01048d451612775d94b344c02e2255a",
+  "/private/tmp/gs-step3-departure-bounds/traffic_sim/simulation/closure_ranking.py": "c0ba6eecd3c4ba07727f164372b46957f91f815358e1f8b703d927c20e0fda9d",
+  "/private/tmp/gs-step3-departure-bounds/traffic_sim/simulation/deterministic_disruption.py": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472",
+  "/private/tmp/gs-step3-departure-bounds/traffic_sim/simulation/disruption.py": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9",
+  "/private/tmp/gs-step3-departure-bounds/traffic_sim/simulation/independent_daily.py": "6ae4eba74fb0df6ec3068cf757164d43e0595fed102001457bab3d7c3446f689",
+  "/private/tmp/gs-step3-departure-bounds/traffic_sim/simulation/metadata.py": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4",
+  "/private/tmp/gs-step3-departure-bounds/traffic_sim/simulation/monthly_demand.py": "0879d1fdd41e95643c3626fdda51b81e08edaa9be4ef957a33a517cda6890778",
+  "/private/tmp/gs-step3-departure-bounds/traffic_sim/simulation/window_cost_index.py": "837267e4b137f1b06648717eec4b09fe7e3ca5777566feafc4442c9f7c8dff59"
+ },
+ "schema": "wci_guarded_run_v1"
+}

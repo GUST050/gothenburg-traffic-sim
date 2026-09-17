@@ -1,0 +1,138 @@
+{
+  "candidate_list_digest": "c348c2b6d4e3c4fd6122dc2e20d7fce247ef4545776ed8ef9ef23b3c3da63ac8",
+  "case_selection_policy": "closure_effect_eligibility_v1",
+  "catalog_pools": {
+    "weekday": {
+      "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+      "declared_sha256": [
+        "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+      ],
+      "sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+    },
+    "weekend": {
+      "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+      "declared_sha256": [
+        "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4"
+      ],
+      "sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4"
+    }
+  },
+  "chosen_edge": "26842525_26355153_0",
+  "chosen_verdict": {
+    "archives": 30,
+    "archives_with_crossings": 30,
+    "catalog_routes": {
+      "weekday": 100,
+      "weekend": 91
+    },
+    "crossings": {
+      "q10": 315143,
+      "q50": 315143,
+      "q90": 315143
+    },
+    "daily_units": 1950,
+    "daily_units_with_crossings": 1950,
+    "edge_id": "26842525_26355153_0",
+    "effect_eligible": true,
+    "from_node": "26842525",
+    "measurement_status": "measured",
+    "nearest_sensor": {
+      "basis": "registry",
+      "midpoint_distance_m": 0.0,
+      "sensor_id": "133"
+    },
+    "reason_codes": [
+      "eligible"
+    ],
+    "reasons": [
+      {
+        "code": "eligible",
+        "detail": null
+      }
+    ],
+    "registry_roles": [
+      {
+        "role": "measured_edge",
+        "sensor_id": "133"
+      }
+    ],
+    "screen_dist_sensor_m": 11.0,
+    "structural_rank": 2,
+    "structurally_survivable": true,
+    "to_node": "26355153"
+  },
+  "content_key": "2876ec795b0fe3cf9d7fd0b9c276c58cc139e243bc55a674a5050ee97c15b834",
+  "derivation": "identical to the source spec except directed_edges and search_id",
+  "inventory_content_key": "458713e43b932706170b1f0ee5bc3b94a13c7a1c925beb87c5b83c1835ff727d",
+  "inventory_evidence": {
+    "content_key": "ef462d4d5eac0fb8ab8c91ceb1dd1888b1bb907fff0bd0e1ba3c310d1ca8a16d",
+    "path": "validation/closure_effect_inventory_20260917-v3.json"
+  },
+  "kind": "closure_search_canary_spec",
+  "order_rule": "eligible candidates first, then the unchanged structural survivability order (dist_sensor_m, edge_id); the first wins",
+  "profile": {
+    "path": "runs/step5_code_approved_20260915b/profile/profile.json",
+    "sha256": "399f764272120470b2a32015ed5b1deb24d1ec1b0a786d5646ada104d69a23af"
+  },
+  "purpose": "bounded nonzero WindowCostIndex canary; an automatically selected performance case, not a user closure",
+  "qualified_demand_manifest": {
+    "content_key": "2cb32dcddfeb9bb99513fe1ae9cdcc44f0935435b78a278fa6eb3786060159ec",
+    "evidence_id": "subhour-monthly-qualify-2026-09-15b",
+    "path": "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+    "sha256": "1b609f705e08ab7a9c266a974a5976d33660209f0de914c95f66b3189d46f576"
+  },
+  "release_evidence": false,
+  "schema": "wci_effect_canary_spec_v2",
+  "source_spec": {
+    "content_key": "383c9130a45370c2f296",
+    "directed_edges": [
+      "26355153_26842525_0"
+    ],
+    "left_unchanged": true,
+    "path": "validation/subhour_monthly_search_profile_spec_v1.json",
+    "search_id": "subhour-cold-ledger-profile-2027-09",
+    "sha256": "10f3939a69b6f0bb6e74eb2b1e08a2b513cf54fa5610dd4a25d4d8366c1261aa"
+  },
+  "spec": {
+    "allowed_weekdays": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "blackout_dates": [],
+    "closure_type": "full",
+    "content_key": "d38038fd495414129508",
+    "demand_build_id": "forecast-2027",
+    "directed_edges": [
+      "26842525_26355153_0"
+    ],
+    "dst_policy": "exclude_transition_dates",
+    "duration_basis": "required_work_time",
+    "interday_policy": "independent_daily_reset_v1",
+    "kind": "closure_search",
+    "max_consecutive_start_days": 5,
+    "min_consecutive_start_days": 5,
+    "objective_profile": "displaced_vehicles_and_detour_v1",
+    "permitted_daily_band": {
+      "earliest_start": "00:00",
+      "latest_end": "24:00"
+    },
+    "permitted_date_end": "2027-09-30",
+    "permitted_date_start": "2027-09-01",
+    "policy_status": "user_supplied_unverified",
+    "required_work_minutes": 2400,
+    "resolution_minutes": 15,
+    "same_daily_window": true,
+    "schema_version": 1,
+    "search_id": "subhour-cold-ledger-profile-2027-09-effect-canary-v2-fdc134ec4e",
+    "source": "forecast",
+    "timezone": "Europe/Stockholm",
+    "work_allocation_policy": "exact_equal_daily_v1",
+    "work_to_closure_assumption": "one_to_one"
+  },
+  "spec_content_key": "d38038fd495414129508"
+}

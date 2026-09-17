@@ -402,3 +402,120 @@ def test_the_fixture_closes_the_edge_its_routes_cross():
     closures = dd.closure_seconds(
         spec, schedule, epoch=datetime(2027, 7, 15), duration_s=96 * 900)
     assert closures and all(item["edge_id"] == CLOSED for item in closures)
+
+
+# --------------------------------------------------------------------------
+# Review of f5608a7..d7983b8: publication must be atomic and drift-checked.
+# --------------------------------------------------------------------------
+
+class TestPublication:
+    def test_evidence_publication_is_atomic_and_never_replaces(
+            self, tmp_path, monkeypatch):
+        import os
+
+        path = tmp_path / "evidence.json"
+
+        def broken(_fd):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(os, "fsync", broken)
+        with pytest.raises(OSError, match="disk full"):
+            builder._publish(path, {"status": "PASS"})
+        assert list(tmp_path.iterdir()) == []
+        monkeypatch.undo()
+        path.write_text("previous", encoding="utf-8")
+        with pytest.raises(FileExistsError):
+            builder._publish(path, {"status": "PASS"})
+        assert path.read_text(encoding="utf-8") == "previous"
+        assert [item.name for item in tmp_path.iterdir()] == [path.name]
+
+    def test_the_directory_entry_is_made_durable(self, tmp_path,
+                                                 monkeypatch):
+        import os
+        import stat
+
+        synced = []
+        production = os.fsync
+
+        def recording(fd):
+            synced.append(stat.S_ISDIR(os.fstat(fd).st_mode))
+            return production(fd)
+
+        monkeypatch.setattr(os, "fsync", recording)
+        write_index(tmp_path / "window-cost-index.json", _small_index())
+        builder._publish(tmp_path / "evidence.json", {"status": "PASS"})
+        assert synced == [False, True, False, True]
+
+    def test_the_raw_phase_binds_what_it_read(self, world):
+        measurement = _run(world)[2]
+        assert measurement["costing_sources"] == dict(
+            dd.costing_source_identity())
+        bindings = measurement["archive_bindings"]
+        assert sorted(bindings) == sorted(world.archives)
+        for key, binding in bindings.items():
+            archive = world.archives[key]
+            assert binding["archive"] == str(archive.resolve())
+            assert binding["content_key"] == f"content-{key}"
+            assert binding["files"] == {
+                name: _sha(archive / name)
+                for name in ["demand_meta.json",
+                             *sorted(dd.VARIANT_FILENAMES.values())]}
+
+    def test_archive_drift_before_publication_is_refused(self, world):
+        measurement = _run(world)[2]
+        builder._verify_raw_inputs_unchanged(measurement)
+        key = sorted(world.archives)[0]
+        (world.archives[key] / dd.VARIANT_FILENAMES["q50"]).write_text(
+            "<routes/>", encoding="utf-8")
+        with pytest.raises(WindowCostIndexError, match=f"{key}.*publication"):
+            builder._verify_raw_inputs_unchanged(measurement)
+
+    def test_source_drift_before_publication_is_refused(
+            self, world, monkeypatch):
+        measurement = _run(world)[2]
+        production = dd.costing_source_identity
+        monkeypatch.setattr(dd, "costing_source_identity", lambda: {
+            **production(), "run_scenario.py": "f" * 64})
+        with pytest.raises(WindowCostIndexError, match="source"):
+            builder._verify_raw_inputs_unchanged(measurement)
+
+    def test_publication_is_preceded_by_a_drift_check(self, tmp_path,
+                                                      monkeypatch):
+        from tests.test_window_cost_index import _build_path_fixture
+
+        profile_path, *_rest = _build_path_fixture(
+            tmp_path, monkeypatch, baseline_time_s=1.0)
+        events = []
+        production_write = builder.write_index
+        production_publish = builder._publish
+        monkeypatch.setattr(
+            builder, "_verify_before_publication",
+            lambda *args, **kwargs: events.append("verify"))
+        monkeypatch.setattr(builder, "write_index", lambda *args: (
+            events.append("write_index"), production_write(*args))[1])
+        monkeypatch.setattr(builder, "_publish", lambda *args: (
+            events.append("publish"), production_publish(*args))[1])
+        builder.build_from_profile(
+            profile_path, index_out=tmp_path / "index",
+            evidence_out=tmp_path / "evidence.json", evidence_id="order")
+        assert events == ["verify", "write_index", "verify", "publish"]
+
+    def test_drift_before_publication_leaves_no_index_or_evidence(
+            self, tmp_path, monkeypatch):
+        from tests.test_window_cost_index import _build_path_fixture
+
+        profile_path, *_rest = _build_path_fixture(
+            tmp_path, monkeypatch, baseline_time_s=1.0)
+
+        def drifted(*_args, **_kwargs):
+            raise WindowCostIndexError("archive drifted before publication")
+
+        monkeypatch.setattr(builder, "_verify_before_publication", drifted)
+        index_out = tmp_path / "index"
+        evidence_out = tmp_path / "evidence.json"
+        with pytest.raises(WindowCostIndexError, match="publication"):
+            builder.build_from_profile(
+                profile_path, index_out=index_out,
+                evidence_out=evidence_out, evidence_id="drift")
+        assert not evidence_out.exists()
+        assert not (index_out / "window-cost-index.json").exists()

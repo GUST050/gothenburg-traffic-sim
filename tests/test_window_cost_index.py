@@ -694,6 +694,11 @@ def _build_path_fixture(tmp_path, monkeypatch, *, baseline_time_s,
              "daily_variant_records": len(records) * 3,
              "timings": {}}))
     monkeypatch.setattr(builder, "DailyCostCache", lambda root: object())
+    # The stubbed bound inputs name no real profile or archives, so the
+    # pre-publication drift check (tested on real files in
+    # tests/test_wci_streaming.py) is recorded rather than run here.
+    monkeypatch.setattr(builder, "_verify_before_publication",
+                        lambda *_args, **_kwargs: None)
     return profile_path, ledger, len(records), len(parents)
 
 

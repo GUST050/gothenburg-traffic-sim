@@ -2044,6 +2044,119 @@ content key `26669f69…`): fortsatt `DO_NOT_START_FULL_BUILD`.
 Inga grindar försvagades. Steg 6 och ett fullständigt WCI-bygge har inte
 startats.
 
+**Frysning av månadsfallet och en övervakad körväg — 2026-09-17.**
+
+*Slutgranskning av `f5608a7..d7983b8`: avvisad, sedan rättad.* Streamingen
+höll: produktionsvägen streamar, retain används bara som testorakel,
+arkivindexet byggs en gång, varje build key valideras en gång, varje variant
+parsas en gång och ordningen är oberoende av descriptorordningen. Två
+verkliga luckor fanns kvar, båda rättade med RED/GREEN (11 fel först, sedan
+43 gröna):
+
+1. **Evidensen publicerades inte atomärt.** `_publish` skrev med
+   `write_text`, så ett avbrott kunde lämna en halv evidensfil. Nu delar
+   index och evidens samma publicering: fsyncad temporärfil, hård länk till
+   slutnamnet och fsync av katalogposten. En befintlig fil skrivs aldrig
+   över.
+2. **Ingen driftkontroll före publicering.** Mellan råfasen och
+   publiceringen kontrollerades varken arkiv, källor, profil eller manifest.
+   Nu bär råfasens mätning `archive_bindings` och `costing_sources`, och
+   `_verify_before_publication` körs både före indexskrivningen och före
+   evidensen: profilbindningen, manifestets hash, byggarens källor och varje
+   läst arkivfil hashas om.
+
+En kvarstående anmärkning, som inte blockerar: A/B-evidensen band
+workerfilernas digester men inte filernas hashar. De nya dokumenten binder
+filhashar.
+
+*Månadsfallet är fryst.*
+`validation/wci_month_case_registration_20260917-v1.json` (content key
+`568b4d99…`) skapades av `tools/freeze_wci_month_case.py`, som inte litar på
+censusens rader utan räknar om varje kandidats omdöme ur inventeringen.
+
+* **Vald kant:** `26842525_26355153_0`, den första godkända i strukturell
+  ordning. Ordningen är `26842525_26355153_0`, `26355153_96523321_0`,
+  `96523321_26355153_0`, `9037093028_1305379743_0`. Den mest trafikerade
+  kanten väljs aldrig.
+* **Krav som kontrollerades:** båda katalogpoolerna har ruttstöd, q10, q50
+  och q90 har alla passerande fordon, alla 30 arkiv har trafik och 1 950
+  dagenheter har trafik.
+* **Bundet:** policyversion, kandidatlista med digest `c348c2b6…`, varje kandidats
+  strukturella och effektbaserade omdöme, manifestet
+  `subhour_qualified_demand_manifest_20260915b`, 30 arkivnycklar med
+  q10/q50/q90-hashar och `demand_meta`-hash, katalognycklar och hashar för
+  weekday och weekend, censusen `ef462d4d…` med inventering `458713e4…`,
+  källbindningar och populationen 1 690 parents, 1 950 dagenheter och
+  5 850 variantposter.
+* **Nollspecen** är byteidentisk, och registreringen prissätter ingenting.
+
+*Övervakad körväg.* `tools/guarded_wci_build.py` startar
+`tools/wci_guarded_child.py` som egen processgrupp. Kontraktet står i
+`ARCHITECTURE.md` under "Guarded WindowCostIndex build". Barnet lindar bara
+byggarens sömmar för att räkna och tidta.
+
+* **Tester:** 55 fall. Varje gräns körs med injicerad klocka, sampler och
+  processadapter, så inget test allokerar 12 GiB eller väntar på en verklig
+  tidsgräns.
+  - Täckta stopp: mjuk och hård råfasgräns, total tid, minne, swap, saknad
+    eller inaktuell telemetri, dubbelt indexbygge, fel antal valideringar
+    eller parsningar, fel population, SUMO-process, indatadrift, nollpris,
+    orakel-, provider- och ledgeravvikelse, barnkrasch, försvunnet barn och
+    Ctrl-C.
+  - Med verkliga barnprocesser: ett hängt barn som ignorerar SIGTERM dödas
+    med SIGKILL, ett barnbarn överlever inte stoppet, och ett barn som
+    avslutas rensas upp och bedöms.
+  - Mutationer som tog bort SIGKILL-eskaleringen respektive kontrollen av
+    överlevande barn fångades av testerna.
+* **Avgränsad canary under övervakning**
+  (`validation/wci_guarded_canary_20260917-v2.json`, diagnostisk budget):
+  status **passed** på 20,9 s, varav råfasen 18,6 s.
+  - Toppminne 919,7 MB.
+  - Ett indexbygge, en validering, tre variantparsningar.
+  - 232 845 berörda fordon över 65 dagenheter.
+  - Orakel komplett och identiskt, 65 provideridentiteter, ingen drift,
+    inga SUMO-processer.
+  - v1 kördes före rättningen som bevarar toppminnet och finns kvar som
+    historik.
+
+*Ledger- och cachepreflight*
+(`validation/wci_month_cache_preflight_20260917-v1.json`, content key
+`cff64138…`): läser bara.
+
+| Mått | Värde |
+|---|---:|
+| Dagenheter i månaden | 1 950 |
+| Cacheträffar | 195 |
+| Missar | 1 755 |
+| Build keys med komplett cache | 3 |
+| Build keys utan någon träff | 27 |
+
+* Träffarna kommer från canary v4:s orakelrot. Profilens egen cache ger noll
+  träffar, eftersom den skrevs för nollkanten och därför har en annan
+  identitet.
+* En fil som finns men inte beskriver den efterfrågade identiteten räknas
+  som miss.
+* **Uppskattad orakelkostnad för de 1 755 saknade enheterna: 4 456–8 997 s**,
+  modellerat från de två mätta canaryerna (2,54 respektive 5,13 s per
+  enhet). Det är en undre gräns för en månadsledgerkörning, som gör mer än
+  oraklet.
+* **Övervakaren vägrar starta i dag:** profilen binder specen
+  `383c9130…` (nollkanten), inte den registrerade `d38038fd…`.
+
+*Vad ett godkänt bygge skulle skapa:* först en månadsledger med
+`profile.json` och 1 950 cacheposter, sedan indexfilen, byggevidensen,
+statusfilerna och körningens evidens.
+
+*Kvar innan ett övervakat fullbygge:*
+1. en månadsledger och dagkostnadscache för `26842525_26355153_0`, med eget
+   beslut och egen budget;
+2. därefter kan det övervakade bygget köras med produktionsbudgeten.
+
+Kända baslinjefel är oförändrade: sigilltestet och
+`test_passage_section_is_judged_on_accuracy_not_exactness`. Inga grindar
+försvagades, och varken steg 6 eller ett fullständigt WCI-bygge har
+startats.
+
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 
 **Filer:** `build_sumo_demand.py`, `monthly_demand.py:_resolve_new_release`,

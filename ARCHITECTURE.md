@@ -3394,6 +3394,43 @@ one. `_retain_index_records`, which parses and indexes every archive before
 pricing any unit, is kept only as a test oracle; it is not a production
 path.
 
+### Guarded WindowCostIndex build (2026-09-17)
+
+An expensive month build runs only under `tools/guarded_wci_build.py`. The
+runner computes no cost: it starts `tools/wci_guarded_child.py` in its own
+process group, and the child wraps the builder's seams only to count and
+time them.
+
+**Preflight.** The runner refuses to start unless the month registration
+(`wci_month_case_registration_v1`) re-proves from disk, the profile binds
+that registration's spec and population, the outputs are fresh, no SUMO
+process is running, and every bound source, catalog, manifest and archive
+file hashes to what was registered.
+
+**While running.** Status is written atomically on every sample: state
+(preflight/running/stopping/stopped/failed/passed), start time and
+monotonic elapsed, phase, pid and process-group id, group memory with its
+peak, system swap before and now, counters, population, SUMO processes,
+last verified identity, and oracle/provider/ledger status as they arrive.
+The limits are raw phase soft 1,090 s and hard 1,820 s, whole run
+7,320.348 s, group RSS or footprint 12 GiB, swap growth 1 GiB, exactly one
+archive-index build, one validation per build key, one parse per variant
+file, the declared population, zero SUMO processes and no input drift.
+Mandatory telemetry that cannot be read stops the run: absence is never
+treated as health.
+
+**Stopping.** A stop publishes the reason and the last measurements, sends
+SIGTERM to the process group, waits a bounded time, escalates to SIGKILL
+only if members remain, waits until the group is empty, removes only this
+run's own unpublished `.partial` files and publishes append-only stop
+evidence. Previously valid artifacts are never touched.
+
+**PASS.** Only an exited child with complete telemetry can pass, and only
+when the counters, the population, a nonzero month, the oracle, the
+provider identity and the ledger all agree, the index and build evidence
+are published and self-consistent, and a final full drift check is clean. A
+child that disappears, or a group member that survives, is a failure.
+
 ## Build order
 1. **B — observability module** (junction solves, bounds, alarms).
 2. **C — PFE-lite LP** (replaces routeSampler as primary; keeps its I/O).

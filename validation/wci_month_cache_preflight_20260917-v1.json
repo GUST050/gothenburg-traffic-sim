@@ -1,0 +1,455 @@
+{
+  "cache": {
+    "chosen_edge": "26842525_26355153_0",
+    "hits_by_root": {
+      "canary_v1": 0,
+      "canary_v2": 0,
+      "canary_v3": 0,
+      "canary_v4": 195,
+      "profile": 0
+    },
+    "per_build_key": {
+      "06cc309e4779897c": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-215415-af2d83e6-bc11",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "b459979e5249fbb3b7680caba552350f0d6014525c1ca0faa8f315c6638f50e2",
+        "roots": []
+      },
+      "084cedb913d5197c": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220012-de032bcb-2165",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "db6a6396a0b7a97d05df5f06162ee66d590275990e1ba28ba153359336d352c9",
+        "roots": []
+      },
+      "0a6c5266d76b5b39": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220648-791840d4-c887",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "d2a7798003f5853a1d29ff1c71f7bbf3e30db59bc76ceefc36fd6e024a14ea75",
+        "roots": []
+      },
+      "16f1d6176c7a9133": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221303-3a1fda45-188f",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "e8ba22ec847fca37ca1e71c4148996a0a8f176e93f5cdc20d00023fa169c67bb",
+        "roots": []
+      },
+      "187fca60022dedc5": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221533-52837f59-7e5d",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "3f1261cdab0593135ed2d031c89626523b2d298baa8af01e81602fb2186495f3",
+        "roots": []
+      },
+      "2d4f272bb3dfc5d2": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221806-7415a4c6-0d68",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "de131f5264ccc7a4e37cef7131f6feb969a4bcf87ad55e2a5debe9a7bca008bd",
+        "roots": []
+      },
+      "340168e305f8381e": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222404-4b5941dd-77c7",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "a21efa5a62217f28c0a4a769ff7801161dfec7a5c3bc113a3950f18921bbe5a2",
+        "roots": []
+      },
+      "3f5d86eed8fe5c17": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222709-889e6f89-d6d5",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "10bfa43f6bffb9339f4e8580e489aaee1e635a9c27ed987b6295a174f8c44706",
+        "roots": []
+      },
+      "4008e6387839d7a3": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223016-ef0f3cf3-44e9",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "1acdd1b8ccfb727c7c080750c675cd114e7b68e79d8e41247dc17fdc8f78d983",
+        "roots": []
+      },
+      "5803fd9aa62080cb": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223222-19b614fb-7ce8",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "17be72dac65787faa6bb769d9926e852a31fb3f302ad6cc52f7b6c245f3719d4",
+        "roots": []
+      },
+      "5fcc585e03915396": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "2f5cf34c48052ebaaf05aebd8a69859b4e456c9901c5ebfcd64af8a4d4d95647",
+        "roots": []
+      },
+      "657fa0b9f3268e78": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223744-a3782377-418d",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "488d7df72047395bb41270f7ff4aca465bea2ba292352bd747636750005d4547",
+        "roots": []
+      },
+      "6e3416af316f91cc": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223804-04518454-6d14",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "d2534f45631983c13242fc2bd1b318c0f349aeddef072084446ad5a077e336e2",
+        "roots": []
+      },
+      "7e395749f1712cb4": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223825-2bbb1a66-845d",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "e35cbb9e5cbab58528b08ab0ac1ce7079e9a7315f99140d86f4905320cf8d618",
+        "roots": []
+      },
+      "8dcbe1518a5b0898": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224149-53fb2fd0-6182",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "40dacdacc4d9deaafe0c1bfef038c0349fd0f05c4f265b6f388f6d998650995d",
+        "roots": []
+      },
+      "90a93715895966dc": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224309-23459e2e-c9ef",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "3279c247d9b9fe5990fec6b72f184f716101d71367276d410b24256ff013621e",
+        "roots": []
+      },
+      "9c7ad9c97b6bdbc6": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72",
+        "daily_units": 65,
+        "hits": 65,
+        "misses": 0,
+        "provider_identity_digest": "effb2ec92289c5b65a20bc59445c6b791ad08e45217f4f775d6810c62b37e50c",
+        "roots": [
+          "canary_v4"
+        ]
+      },
+      "b7e7cef8b702abae": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33",
+        "daily_units": 65,
+        "hits": 65,
+        "misses": 0,
+        "provider_identity_digest": "1ce3ae0d11bc029061e3bd25d81ef379f175ff59d243a8fce6b902d6c4d57450",
+        "roots": [
+          "canary_v4"
+        ]
+      },
+      "c796667235591888": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06",
+        "daily_units": 65,
+        "hits": 65,
+        "misses": 0,
+        "provider_identity_digest": "5eff5fb4774dc4a578bf9652a9ce01ed9222f6d6c61d5bd7b5bf11a61c8d1a1f",
+        "roots": [
+          "canary_v4"
+        ]
+      },
+      "cc8eb82bc98de729": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225121-de7e3e34-015d",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "fd2d2e8ca2cd154676d850977df5a370347ae69a3d2786c5831d8fcb9bde2820",
+        "roots": []
+      },
+      "cff4da5d9bb7efb7": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225243-61cb7aca-8652",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "eddf89233a2883fb9ba32b2514826fe7f7cac556e10b8c1d2e8b1ffe86f474d1",
+        "roots": []
+      },
+      "d42db159b3ee565f": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "b92524caa6f0453a0d45400f8cbf852950d6df92442991a3024546142d9490cc",
+        "roots": []
+      },
+      "d482aa0afa27e9ce": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225650-83f1213a-5e40",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "c0390a9cc72a48f6f0090379ae70bc39ab5f51a0bee49487df72c4657ea0094c",
+        "roots": []
+      },
+      "dae23c801891223c": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225714-b593ac27-7b71",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "80b1e1c012bbae56c55634a7107bca517a6378ff9830008a5256697feec7379e",
+        "roots": []
+      },
+      "dce1407ed7d893a6": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225738-e3bfe154-7e43",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "1cbc44c20547f2d00d6312ea231010dea05adfaf849ea22a85ae21d4c5db994e",
+        "roots": []
+      },
+      "e72299dc2abeabcd": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "7f6eac1b83197f257e6066af947a003c17c9b791da242f50a1f4b5b7114f2728",
+        "roots": []
+      },
+      "e9b489b9b469e9b6": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230407-7f119ae2-9f58",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "4abd04165fc904dcd1be95ee2fa9cf381ddc729b8ee01a8ace4cdbf8a74b83f1",
+        "roots": []
+      },
+      "eb0bd33739d5e926": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230432-5b265029-5e0f",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "bacef0b75ca13027aabaffa45ab5749b4b16e1bc04620ab8afd93113a86b93d6",
+        "roots": []
+      },
+      "eb5d47e234425a98": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230455-3e34ff00-af60",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "14f3d20b3e4ba95720ab278379d2376f126dc92dab19e38671b338f0530d833a",
+        "roots": []
+      },
+      "f3d1a9ac4d14bd7a": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230620-a893719c-a662",
+        "daily_units": 65,
+        "hits": 0,
+        "misses": 65,
+        "provider_identity_digest": "fea8fe8aa2e882d286851a90b7774ff02ffb7e8778077befdc2631e594df3f64",
+        "roots": []
+      }
+    },
+    "roots": {
+      "canary_v1": "runs/step5_code_approved_20260915b/effect-canary-oracle-20260917",
+      "canary_v2": "runs/step5_code_approved_20260915b/effect-canary-oracle-20260917-v2",
+      "canary_v3": "runs/step5_code_approved_20260915b/effect-canary-oracle-20260917-v3",
+      "canary_v4": "runs/step5_code_approved_20260915b/effect-canary-oracle-20260917-v4",
+      "profile": "runs/step5_code_approved_20260915b/profile-daily-cost-cache"
+    },
+    "roots_present": [
+      "canary_v1",
+      "canary_v2",
+      "canary_v3",
+      "canary_v4",
+      "profile"
+    ],
+    "rule": "a hit is a stored record whose own identity matches the identity asked for; anything else is a miss",
+    "spec_content_key": "d38038fd495414129508",
+    "totals": {
+      "build_keys_complete": 3,
+      "build_keys_empty": 27,
+      "daily_units": 1950,
+      "hits": 195,
+      "misses": 1755
+    }
+  },
+  "claim_boundary": "a read-only preflight; it builds nothing and adopts nothing",
+  "content_key": "cff641381bade1f3acb2fe4c6de5dd17c47f38e7969b7e8883e9d626045cf8d3",
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_month_cache_preflight_v1.py",
+    "sha256": "c868b7d5f63a82e6d83ce1e0f6f33026105919b2c738f648952e881ee9bffd80"
+  },
+  "files_a_future_approved_build_would_create": {
+    "guarded_build": [
+      "<index-root>/window-cost-index.json",
+      "validation/<build evidence>.json (subhour_phase5_window_cost_index_evidence_v1)",
+      "<status-dir>/status.json and child-telemetry.json",
+      "validation/<runner evidence>.json (wci_guarded_run_v1)"
+    ],
+    "prerequisite_month_ledger": [
+      "runs/<id>/profile/profile.json (the baseline the index must beat)",
+      "runs/<id>/profile-daily-cost-cache/: one bound oracle record per daily unit (1,950 for this month)",
+      "runs/<id>/profile-daily-results/ and profile-releases/"
+    ]
+  },
+  "git": {
+    "head": "d7983b8a99d0592683fbae50a68a26ce9f86749b",
+    "tracked_changes": [
+      " M AGENT_NOTES.md",
+      " M ARCHITECTURE.md",
+      " M IMPROVEMENT_PLAN.md",
+      " M TASKS.md",
+      " M tests/test_wci_streaming.py",
+      " M tests/test_window_cost_index.py",
+      " M tools/build_window_cost_index.py",
+      " M traffic_sim/simulation/window_cost_index.py",
+      " M web/data/od_matrix.csv",
+      " M web/data/od_matrix.json",
+      " M web/data/validation.json"
+    ]
+  },
+  "inspected_profile": {
+    "bound_spec": {
+      "path": "/private/tmp/gs-step3-departure-bounds/validation/subhour_monthly_search_profile_spec_v1.json",
+      "search_content_key": "383c9130a45370c2f296",
+      "search_id": "subhour-cold-ledger-profile-2027-09"
+    },
+    "path": "runs/step5_code_approved_20260915b/profile/profile.json",
+    "sha256": "399f764272120470b2a32015ed5b1deb24d1ec1b0a786d5646ada104d69a23af"
+  },
+  "memory": {
+    "samples": [
+      {
+        "cpu_s": 11.396801,
+        "label": "cache_inspected",
+        "lifetime_max_phys_footprint_bytes": 362103576,
+        "major_faults": 132,
+        "max_rss_bytes": 454213632,
+        "minor_faults": 253745,
+        "pageins": 132,
+        "phys_footprint_bytes": 151667552,
+        "resident_bytes": 277053440,
+        "sys_s": 3.39719,
+        "user_s": 12.976245,
+        "wall_s": 11.669228
+      }
+    ]
+  },
+  "oracle_cost_model": {
+    "assumptions": [
+      "the measured oracle covered 195 units of 3 archives, about 10 % of the month's route bytes; per-unit cost is assumed to hold for the other archives",
+      "the two rates differ about twofold because the machine's performance state differed; a budget must assume the slower",
+      "a month ledger run also writes the cache and does other work, so this is a lower bound on that run, not its duration"
+    ],
+    "kind": "modelled from measured per-unit oracle time",
+    "measured": [
+      {
+        "content_key": "32154c81e1ae16f94c4a727a11ffa245e244606387001e102e38c291f21cc49f",
+        "daily_units": 195,
+        "path": "validation/wci_effect_canary_20260917-v3.json",
+        "per_unit_s": 5.1267566594,
+        "wall_s": 999.7175485829999
+      },
+      {
+        "content_key": "e69c57b1d093b68cdde616e455c086216f113a4df259ae136dfaa095e0cbb980",
+        "daily_units": 195,
+        "path": "validation/wci_effect_canary_20260917-v4.json",
+        "per_unit_s": 2.5392522568358973,
+        "wall_s": 495.154190083
+      }
+    ],
+    "missing_units": 1755,
+    "missing_units_s": {
+      "high": 8997.457937247,
+      "low": 4456.387710747
+    },
+    "per_unit_s": {
+      "high": 5.1267566594,
+      "low": 2.5392522568358973
+    }
+  },
+  "output_sha256": "a0216ea13261a999dae8e31254b7c2884441c8642690827ec963b89c5465846e",
+  "production_sources": {
+    "tools/build_window_cost_index.py": "dcfc5e6412fc3b3d1ca46f6564d5588b56f6d5025d95db0b55d087247e2974cc",
+    "tools/closure_effect_eligibility.py": "5226af5e848f6841b0b3fa14d4928cef2d8e870e246e0df9154463e5e13bb331",
+    "tools/freeze_wci_month_case.py": "0d5b32c316020b9cb8ea650e708b12c471fbd332034c6b4edb70bea7dfc86359",
+    "tools/guarded_wci_build.py": "2d3ecc73d4885f0a0c4aba1435197885b19b3e3c7316b652abfd7c05fdd31ae9",
+    "tools/wci_guarded_child.py": "2e9f55c9a9c0baa2dfc2059a5e6f35287bf24165b25c2936a21b801a9434d181",
+    "traffic_sim/simulation/deterministic_disruption.py": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472",
+    "traffic_sim/simulation/disruption.py": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9",
+    "traffic_sim/simulation/monthly_demand.py": "0879d1fdd41e95643c3626fdda51b81e08edaa9be4ef957a33a517cda6890778",
+    "traffic_sim/simulation/window_cost_index.py": "837267e4b137f1b06648717eec4b09fe7e3ca5777566feafc4442c9f7c8dff59"
+  },
+  "registration": {
+    "chosen_edge": "26842525_26355153_0",
+    "content_key": "568b4d99fef3817a78bebd91161fdfed149f474539e19bd33b1a80242e3b7a8f",
+    "path": "validation/wci_month_case_registration_20260917-v1.json",
+    "population": {
+      "build_keys": 30,
+      "daily_units": 1950,
+      "parents": 1690,
+      "units_per_build_key": [
+        65
+      ],
+      "variant_records": 5850
+    },
+    "sha256": "0c8e0e47eb410b98f95d5f07210a7695e790093a7ae5ea20bb18662557d1f3a8",
+    "spec_content_key": "d38038fd495414129508"
+  },
+  "release_evidence": false,
+  "runner_preflight": {
+    "argv": [
+      "/Library/Developer/CommandLineTools/usr/bin/python3",
+      "/private/tmp/gs-step3-departure-bounds/tools/wci_guarded_child.py",
+      "--job",
+      "build",
+      "--telemetry",
+      "/private/tmp/gs-step3-departure-bounds/validation/.preflight/status/child-telemetry.json",
+      "--profile",
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_code_approved_20260915b/profile/profile.json",
+      "--index-out",
+      "/private/tmp/gs-step3-departure-bounds/validation/.preflight/index",
+      "--evidence-out",
+      "/private/tmp/gs-step3-departure-bounds/validation/.preflight/build-evidence.json",
+      "--evidence-id",
+      "preflight-probe"
+    ],
+    "expectations": {
+      "build_keys": 30,
+      "daily_units": 1950,
+      "parents": 1690,
+      "variant_files": 90,
+      "variant_records": 5850
+    },
+    "limits": {
+      "memory_hard_bytes": 12884901888,
+      "raw_hard_s": 1820.0,
+      "raw_soft_s": 1090.0,
+      "swap_growth_hard_bytes": 1073741824,
+      "total_hard_s": 7320.348
+    },
+    "problems": [
+      "profile binds another spec: 383c9130a45370c2f296 != d38038fd495414129508"
+    ],
+    "would_start": false
+  },
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_month_cache_preflight_v1"
+}

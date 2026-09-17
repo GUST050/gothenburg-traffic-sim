@@ -1,0 +1,686 @@
+{
+ "archives": {
+  "06cc309e4779897c": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-215415-af2d83e6-bc11",
+   "archive_content_key": "5849d34a9a69723c34e2aafcec82c4c968b68864a69d892ad46ad5c2d8b889e0",
+   "demand_meta_sha256": "46bdf218fac1928b163dd810509efc3c8d34aabb2bcf91da754050c85946d092",
+   "variants": {
+    "q10": "40bad0d2fde6196a887baeb170f7965ea98c7fa96148ef2d8fa1f755f3561e3c",
+    "q50": "17301074ec3dae1b27833a611054e179cdec4bfc4a4e41fac01a9b0e10246ee8",
+    "q90": "3dff89dff38f4981bcb807c64ab0755043aacb5b136f8d9ee1f4b7cf9997ab2c"
+   }
+  },
+  "084cedb913d5197c": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220012-de032bcb-2165",
+   "archive_content_key": "bef93cdbf6d3c0a20328b69935ad6f8ca18745fdc87b157d8ff15020b55e83ed",
+   "demand_meta_sha256": "fd254f905bfc3a9c203b0a0019b56f1e6d30f686ad23fcaa6b1a168014863570",
+   "variants": {
+    "q10": "3cbd37a04e437c8b210606b60048db2e2dbc44a0681b9c6dd9b82ee436510a39",
+    "q50": "398a64fea8b9b3df9367f119f9092346b4b52aeb60248a5cac3efecab028b077",
+    "q90": "122788b946eee790eadf0e731e5b16cb58244417acee3c511a70c5aef778418f"
+   }
+  },
+  "0a6c5266d76b5b39": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220648-791840d4-c887",
+   "archive_content_key": "c988c98a618cab201fabcd9285c72b05951e9937070bb160903b0dc37f2a6eaf",
+   "demand_meta_sha256": "80d3b358f4e7f4cac26f64cf299b6cfa43d8b5d29033c57d13afb21415c5b3d4",
+   "variants": {
+    "q10": "9a078f48dbe0d75a86cdb8dd7de118050763f2ae2b450cb4acceb513372a08b2",
+    "q50": "ee1a689e629c0bca1839089e9c4f51e0979174b17ffdc42c90f7a71d7c017dd6",
+    "q90": "ac0f2ccd4496dd94889c561bc6e11e85abbe1e9137bac22242aa8f0f42efd8d9"
+   }
+  },
+  "16f1d6176c7a9133": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221303-3a1fda45-188f",
+   "archive_content_key": "ffb8c79b719e45d8fae852db3e81611ee0ac3e1c5f79774806c1f1c02e293f6c",
+   "demand_meta_sha256": "fc082ddb484574efc29a2d4707164f4a8316097daa19b4bba35e9b64c6ba7059",
+   "variants": {
+    "q10": "6fdad2fdc92b136e6b686ead579b3d3212c88df6fce02e8255fbc782b506f4fe",
+    "q50": "baadb761bb649f3b7310faffc18ff3d6d10001240bfbd452e0a3d5397a2c581e",
+    "q90": "7da0f419b0af68a2c93a7b0ac859df117cdd412d376a44f7432688e613ac687e"
+   }
+  },
+  "187fca60022dedc5": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221533-52837f59-7e5d",
+   "archive_content_key": "228429ec61688bd93b4676d3d4e742489d29c65d64737ac96144ea2a23dbdac5",
+   "demand_meta_sha256": "9f9b3796976032addeda308cb16d818d174154181ec327f039918221c3a0005b",
+   "variants": {
+    "q10": "9462e3e00a8e635bcee36cce7158e326c355772d269b0ed44ff8465f6f2882a2",
+    "q50": "3c54203309c5c3f030d552bf77328c0d6e729abfc44865944fdde1f19bbec9f0",
+    "q90": "dc8b1912ec0df5fbd345a50b027ef24715405f7fce1399c160478769997d7fc6"
+   }
+  },
+  "2d4f272bb3dfc5d2": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221806-7415a4c6-0d68",
+   "archive_content_key": "ecec806d1a819d447e714bb4234dd5d471429e2d09e2cd328a10eb3b62f8df99",
+   "demand_meta_sha256": "9d16c5b77cd80031f79216226e2d3a4b4558e6e641a29a39b416879f6a6c1049",
+   "variants": {
+    "q10": "dfff4f46ba78ff584bb53ed44385ac4910c4ea28da46ce891d238b8c7aeb6155",
+    "q50": "0e55e40b67ee6ed3d4b59afa99e768fd39e51c59a06f90e94bab919e0ef4f5c2",
+    "q90": "2e948048e35aefc063298703d9da79a133c5b08490ffb6cb11bfa572877e72ec"
+   }
+  },
+  "340168e305f8381e": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222404-4b5941dd-77c7",
+   "archive_content_key": "56160da62dcdddefa2e3f7d4de751061428920f2201504b4a650769b09a1cb5c",
+   "demand_meta_sha256": "4236b04930a5d880fcc970212164bd04a343226cf56496cd6556f1f6bd34dbfd",
+   "variants": {
+    "q10": "19b2f83089271eb581aba30993edf4fa178c3f8ed2ffc8d08da34095ec0e13fd",
+    "q50": "0a3e194825aa61dca1cbfe2aae08ce32a068ce201a55f03e81e475a032a779e1",
+    "q90": "00c037ec2f5862509d6b2c40bb935f20e419194cf47937deb60379548069218c"
+   }
+  },
+  "3f5d86eed8fe5c17": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222709-889e6f89-d6d5",
+   "archive_content_key": "782f2e480f945e03af3e3fda8b2ce5bd2dc76dae8460ff46777a1de3fff2e65b",
+   "demand_meta_sha256": "e7d97e3f7031cb3827118f7be5dd95519c3130fbfd0d0507a1207a638676adbd",
+   "variants": {
+    "q10": "27b19bcdb06f2b599f167e8f2e7f61ab269292a06e6d3ef3020f91d4d6b38f27",
+    "q50": "62d36af702fda24d713843609534883279bc8fafdca4edbfc90add927c0bc6e6",
+    "q90": "6a80bf4b215a47ae2c5e477f18e8e0dfd69502d440eef88d6047b92d9685c667"
+   }
+  },
+  "4008e6387839d7a3": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223016-ef0f3cf3-44e9",
+   "archive_content_key": "f4c156ddfe278bee41a5e983e7a33edca2c31e14e357e54e371747ce97fdcd20",
+   "demand_meta_sha256": "89c33f2f3379955a96a6ca93ae12192059839be8d464fb1fea04dc135e963bcb",
+   "variants": {
+    "q10": "6f7e524cef8eeffb588d1bc165ec80b241fa6edf67192e76f4854d2731d11861",
+    "q50": "9056963ef718ed0ff45d7dd85769f64bad22f090ce1228d1bcaf0c67642e4527",
+    "q90": "7af51749923336e5321f0478c9ac78ed8ae91dbe955978313ac1921419942173"
+   }
+  },
+  "5803fd9aa62080cb": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223222-19b614fb-7ce8",
+   "archive_content_key": "d44a8994a0330ce60d8325a91034001f49a93cdea90cfa00797bc2c6589f8304",
+   "demand_meta_sha256": "00f6fa1a125c27e72953c39711317f9e15ebbb4f43c007e38e9b93f209a9799c",
+   "variants": {
+    "q10": "b936b1d31714073419bcbd140fabaaeef756cd1f25db27b0bac902b6ff9bbd9f",
+    "q50": "ff306b69100450d54c3ad7e8ba0710c89f58f81bc49b3c927831846280b01a87",
+    "q90": "d31af09df6dacd7c06c9e7f061964e51f3ca7ba3721ee62367ba68cb44a7302e"
+   }
+  },
+  "5fcc585e03915396": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d",
+   "archive_content_key": "ff2c496d06510641f95d1c1a0c543a0dfc8b0728958f92f73a22f8e638e1e154",
+   "demand_meta_sha256": "717a523b6ebaa3da58e3def9d9549a27b8aad7e549963835f8279bf85f199c91",
+   "variants": {
+    "q10": "1e06f46f3cb26fbf6c3b7a2b107995615b4f781ba08d5d29f1387316158b09a1",
+    "q50": "b3867df491cad6605f0b54b6a627b7d082e85f4bfb2d698b3d57d219c2009fda",
+    "q90": "aa11a76e9566551ed16ff6e95112da0d4dd6146418572df1daaaf2cdbd1f36ee"
+   }
+  },
+  "657fa0b9f3268e78": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223744-a3782377-418d",
+   "archive_content_key": "926b9383658a7267699e63869117819c74d8801a55dae8398fe0dea199825ff7",
+   "demand_meta_sha256": "e92013bc7c28a4680b5c451e9f1d8d6da8326314cbe7651477e74373fb2e2f81",
+   "variants": {
+    "q10": "19f1905418cc59ccd931657445c38e3cc5caf60d72cca1d67ab5c83a9b6ba142",
+    "q50": "2ba6e528c43ff9fd90ef82b6ba2ab79505c60274c82e6d58be702b832d31cfa0",
+    "q90": "c468ced358b28b3054a1fe94a6d80648e25f90f5561523a66cab01bf1b48e4ed"
+   }
+  },
+  "6e3416af316f91cc": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223804-04518454-6d14",
+   "archive_content_key": "e3a33894fd71177975d33e55024bac2d65877251e7c81e23cb6b7a2d2d494552",
+   "demand_meta_sha256": "f8a3f715c4268dc38ea940e463f84107a8e9ce101d19eaa08d36b6ae34f85468",
+   "variants": {
+    "q10": "69175cc51448ee4660679195066a2049361500a3ea741b1c9dcbc2a33b082b13",
+    "q50": "85401a2a37d789f5922abf5f5738ad30b371f0557615cadb08d49dd5eb4dea3f",
+    "q90": "d2599a88c1c0a42d34ccd2ff3a43b94f9caf9603a7289bd89143515f0c0b82a5"
+   }
+  },
+  "7e395749f1712cb4": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223825-2bbb1a66-845d",
+   "archive_content_key": "c54eb87e4e6225c4d54b00db8d9cc02b937566b89176840e535756fa71eb9a5e",
+   "demand_meta_sha256": "dd84473f5051ba3a709392b5332cf40ed36d9d4249c8ec70e281e436f76305aa",
+   "variants": {
+    "q10": "9e65a929e224abc7021561669b0d2b057273913a54d68cba7bfab58a3bbee651",
+    "q50": "57e1f2b02e4f2b3b61103b2eae2bcab1045615ef6cfb7fc8d65cd772bc7f6e25",
+    "q90": "97cd530ce0a8e18b7969924e82c9904b68f337572865fb0c35fd80923368b25f"
+   }
+  },
+  "8dcbe1518a5b0898": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224149-53fb2fd0-6182",
+   "archive_content_key": "76be17a75c7ae517491ee1aec369b6c72bd51851ab5c8555ff5b2ef4abe6d470",
+   "demand_meta_sha256": "455e6d033f9f3ec7e7f61b9bf9d4df12af9fc86425a1545c8826a95320ce05dc",
+   "variants": {
+    "q10": "ace6cd24a2f9b0e8fc110111b9918696e2da1ab8b9d3d950ece2afcac9ec8174",
+    "q50": "25f6f39f2852e535e8404d0a650f1c53bec684496d282edb1a18fb4c530ad1ff",
+    "q90": "22371a743996db4cd48104daa717668356ba5a967f242e2a1c0d90f8aa402e5b"
+   }
+  },
+  "90a93715895966dc": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224309-23459e2e-c9ef",
+   "archive_content_key": "8e47519b0f6cf3fca62832e19e5e0d1d28e47844c9f76413850345b02d597c28",
+   "demand_meta_sha256": "84467e141600570b33c9f5bc12c5b7d54ac1ba13b424c61ac42dd31ff88a309c",
+   "variants": {
+    "q10": "6038e16dfac2d59a722ffd1af8d7663011c1afe543532bf8e92977dee7632bdf",
+    "q50": "be474ab3b7230350bbc17f41e637e33935b2946130115913168a5f8f76d3d511",
+    "q90": "8d6e11334cafad4244fb57d901fabbccee0b26871d30577a1abc73d9c28b234b"
+   }
+  },
+  "9c7ad9c97b6bdbc6": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72",
+   "archive_content_key": "1fe659e7a0b9b25f51035ac11e39495d38095fddc84da5341cf567cd319fb35a",
+   "demand_meta_sha256": "5136153beae3bffece06c8f4e47ca272e0d00b9758bf9f981cbba6784b377a58",
+   "variants": {
+    "q10": "44413462fceb856dcba5d9f8a5fc45cd0d54568509236c8eb72a85b06501bfda",
+    "q50": "3137ef8ca6e3e8dc0305577e5feab9d6fdf0ec5d601a764c02c67777db4e70cd",
+    "q90": "7caf6a8c373bcbfd21ffa4a75513776ad8e042a7c7f4aae8ae2a0b19142fafa0"
+   }
+  },
+  "b7e7cef8b702abae": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33",
+   "archive_content_key": "cfb86558a8bd4bc690af033ef274c6242601f0308edc60706644a76dc89af478",
+   "demand_meta_sha256": "57ad042825fc8b99cd631dff101ea8a53e8a8c23ce78949c8ed82093cb3f8d8f",
+   "variants": {
+    "q10": "a832cf124fefc8d89784bce5eef9c6119a5627490eda4ea470074da80415de51",
+    "q50": "25753bc5c2db9880d7a1e24a29d6248ed2c896d15c7c99481e68308696d95b0d",
+    "q90": "61400b3120cb403d61702e8cd57160837028654017d13dc623bff0c217c37f88"
+   }
+  },
+  "c796667235591888": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06",
+   "archive_content_key": "537def3d6b4c300eb024d205203346487bcca04e1837c5de6817aaf5cc1c8083",
+   "demand_meta_sha256": "fac578d254731afa6aadc321da71a1eb8108e9b5dd4ccda56874a195d06df635",
+   "variants": {
+    "q10": "257be9fb379333b1ad094edc7a29c5aec8175ea641dbce663187e9dccbe0f553",
+    "q50": "c041ea54d0c00d503b3cbbcc855fcecb349b413bebb43d6cf2d0a812fe1d2e08",
+    "q90": "48e45142f127996f08aea9e47bfeb4266d6dd7c1a336408fe027bb123f7f8aee"
+   }
+  },
+  "cc8eb82bc98de729": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225121-de7e3e34-015d",
+   "archive_content_key": "e2547c2176d32d53510ec7f8b8b2b5fd8d3c88146d4537777883c2a8361163f1",
+   "demand_meta_sha256": "6a4cc13ca19f7c680e48cf30c57e202422eee1d66f5123689918bde3a242617b",
+   "variants": {
+    "q10": "fc776c3b4f12ff0829eebc0a53c16748df52710d2e0b5b1c05377ff43ebb232d",
+    "q50": "95227405b15530e6b616aff0bba4d70213d12fad2aac7f6593e57d3f2016eb48",
+    "q90": "b4895a26b2e799b02cfd28d789f97a1bd9a1d952f6f08f62e7cc9ab66393d8a9"
+   }
+  },
+  "cff4da5d9bb7efb7": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225243-61cb7aca-8652",
+   "archive_content_key": "6bcae642202f42e526addd00e564acfc14c54334e24fa30c6b7b8d098b449a5b",
+   "demand_meta_sha256": "53297aae2913214be0f4f66136f77cb13ad5c623a213005fcc9f420cfb9f31d4",
+   "variants": {
+    "q10": "bd0dc44f38cd210bac35eb2150439853ae3894bc84a76ebaa402a86cf78d327c",
+    "q50": "487f321e3ec6ba8237a7fdf27d94486a9ca3ff3401efb3b49c427ed91fb1618d",
+    "q90": "d72beac7ff5a205a63e3de0366322e9651a12c8c348beb6cf4e1d007bb84ddb5"
+   }
+  },
+  "d42db159b3ee565f": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6",
+   "archive_content_key": "fb2be2d4d29d40d0e0d2adf9b864025be503c02b6aed5cf05887bee9849c73f1",
+   "demand_meta_sha256": "e8cf61acf568c594d6a3fbc2b841809a16ccc0464648d7089d05e47505ee1b02",
+   "variants": {
+    "q10": "20bdcde95676cc322849d329c58edcb8ce4b3a73fd618a464f3057a3379299be",
+    "q50": "187e9f9640f2dfcf45eb45f636f13115df499fea06f75a6f55a5be7e6f5ca6eb",
+    "q90": "53fe459f53683d27e1582a337107f0455cd869235e5b26dd6abbd5a7a5ddcd8c"
+   }
+  },
+  "d482aa0afa27e9ce": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225650-83f1213a-5e40",
+   "archive_content_key": "d620d265108ca5b83bdaeaeb094bcfa574dbf153b5965f2cd64deda352b05a12",
+   "demand_meta_sha256": "2fbbb810b6309b869c858f81562ff3f9ec46e6b0b0db46d7b74c6c0dea40487d",
+   "variants": {
+    "q10": "c50d5f1bb146f0afe4f19b6b91a30f6c84e0aa10de086e49d5002dae68f420ac",
+    "q50": "0b25fad07359e31e96d45f5641d1d5f561f442e8cdc9ef3f55c74a946f6c7d06",
+    "q90": "f36fecd7c2cdda97652e13b468f4b0f03ce50dd46e41c9dedf39d42db040e40a"
+   }
+  },
+  "dae23c801891223c": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225714-b593ac27-7b71",
+   "archive_content_key": "dffb422022663c0f901948b22d9e5dc8c495c8556976b2f7c69f413f79d3d4f0",
+   "demand_meta_sha256": "7535b0a541a927302575e85758ca370343d54c29c2abb066b2461409138ed91a",
+   "variants": {
+    "q10": "485d639f66713007db5c8bb889935fdb5067ea19c6e7c6b2b13d80aa2d7bd8e1",
+    "q50": "5a6c62c86e5de2f4c96c3b9bbb599f1091c324925b172c1db9b33cb1e565533c",
+    "q90": "ee6f653d5c30cad39691a6826d442a4488c494c3eb342e5afd8113a5d2f81b5b"
+   }
+  },
+  "dce1407ed7d893a6": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225738-e3bfe154-7e43",
+   "archive_content_key": "9b6b99f5d8d0e43abd4d3e9847a522f9acf8f3aa4e128c2c15afd2b0caab52d3",
+   "demand_meta_sha256": "74b94a4b0fd0e7f6bf1313106838ac86647651c49a426bc5716038c1bf65df40",
+   "variants": {
+    "q10": "3d89d47bbca2dc13e2b3261514009d775428e8cbceed8c3daa9c3b045a2b6ce4",
+    "q50": "5035cdbb02d708440f395266e3d53c9a6d452403143557b3dcde93d2f6233665",
+    "q90": "7f9cf4a11b0d34cffb803f2714986d2092716ca722063587afda31d063e386c2"
+   }
+  },
+  "e72299dc2abeabcd": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603",
+   "archive_content_key": "6c846a3f11cf44c5dd3eb09c15a411c6cdf694359e3bb7c0b18dd848a8c76fb0",
+   "demand_meta_sha256": "3043483d027fc8091f71d163cd08a608bfdc804558fcba2951ca00eff6a29e12",
+   "variants": {
+    "q10": "ffdffb204e7315e0b482d75ce39df25e0db085133a76cddefe8353637fcdb920",
+    "q50": "d7c9356fc9d1b7daafaf248a06345377d7f0dda6ef23690e35727e6696e5b59c",
+    "q90": "cb9a13513e01ccd3fe20b335d14bc61fb6315aff51baffe5b899680986ca20da"
+   }
+  },
+  "e9b489b9b469e9b6": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230407-7f119ae2-9f58",
+   "archive_content_key": "c2a0ec057231f73ebed89226f9b3911de162033c235c1316aea265410d5d4803",
+   "demand_meta_sha256": "1fb8360f965f556e8be1c616aa9bd07b54663f97137cec338dcf4e1286b61cbb",
+   "variants": {
+    "q10": "308ffe628160cd5625c142afa04f77e59618778a4c1ba31054f7296dd50df734",
+    "q50": "e458bba64e57d850dc08beffdc2bda546a7dd3edf0c528710044fb16c62ffbed",
+    "q90": "930c3c97ea738dece9e59ea0532d43328f1978259cefc0847d050759d1d787d1"
+   }
+  },
+  "eb0bd33739d5e926": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230432-5b265029-5e0f",
+   "archive_content_key": "b743107496ca4d8756a67697d41ceb1e15463d042222683fcfd7e79cc62f3140",
+   "demand_meta_sha256": "8ab6ecddfd8b2e7e52ca0de13295ec86b22882070cfc1f2929bb6726e5fffad0",
+   "variants": {
+    "q10": "270ebf3678806e588e53afee51fbe35b4084b5e3271b38b7a3f3dd37a3348f46",
+    "q50": "2c35a15afddce9708f5e269a44d0f7a785709755d58e633b3f1a5a44359085f3",
+    "q90": "f07567a27026474aca406087af900de26950da61bd4f7a96b32d7256a8723b1e"
+   }
+  },
+  "eb5d47e234425a98": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230455-3e34ff00-af60",
+   "archive_content_key": "8b853bfc6d2659af4a7699963614489e5cc9600194f5837761f4579898f83633",
+   "demand_meta_sha256": "3a700f6ecc536e720eee7fa4977b9fdc54a8a477c7e48640d8d496ebfabd5e5e",
+   "variants": {
+    "q10": "5d414ff6130c136c6d8efca864e19de3d29dfd292f42a31dd8126b50489a38b5",
+    "q50": "e3206f8e2881dd45402fa811c85dac52ab7a6ecb256a175ae5af0ff5c1f7acb8",
+    "q90": "52c21301ad8439a46e0b723761b57ef621892e4a436c3f149cca6031ba4ec59e"
+   }
+  },
+  "f3d1a9ac4d14bd7a": {
+   "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230620-a893719c-a662",
+   "archive_content_key": "bec4f0d0bb89a6c0239e98d7ebaad911ed0807857f79be2533604dbec41641f5",
+   "demand_meta_sha256": "d24f31f67c4157e5fff2298dc5d5e5282db7ebeda794520dde963882ab8badf4",
+   "variants": {
+    "q10": "36eb2e6779044ad6a3f71739308cedde60d7ad266b472137ecf726c3ed8c2c65",
+    "q50": "375ea2f7a9ab0e4ab296e562246b660a39fdcf0b376be23eeb45e2adb8118427",
+    "q90": "ddd3d093c6b6e31a34150981bbcca0fc6d340edd41b0651ce648a7678962d55d"
+   }
+  }
+ },
+ "canary_spec": {
+  "content_key": "2876ec795b0fe3cf9d7fd0b9c276c58cc139e243bc55a674a5050ee97c15b834",
+  "path": "/private/tmp/gs-step3-departure-bounds/validation/wci_effect_canary_spec_20260917-v4.json",
+  "sha256": "30d8a89d4652a0124663f364b05ec7e8bb445d0146cee7b00b3fe7311147087c"
+ },
+ "candidate_list_digest": "c348c2b6d4e3c4fd6122dc2e20d7fce247ef4545776ed8ef9ef23b3c3da63ac8",
+ "candidates": [
+  "26355153_26842525_0",
+  "26842525_26355153_0",
+  "26355153_96523321_0",
+  "96523321_26355153_0",
+  "8710974792_1759741980_0",
+  "9037093028_1305379743_0"
+ ],
+ "case_selection_policy": "closure_effect_eligibility_v1",
+ "catalogs": {
+  "weekday": {
+   "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+   "declared_candidates": 434,
+   "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+   "path": "/private/tmp/gs-step3-departure-bounds/sumo/route_catalog/8548c8191269d61bce2f9bbe85e7785d/catalog.rou.xml",
+   "routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+  },
+  "weekend": {
+   "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+   "declared_candidates": 435,
+   "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3",
+   "path": "/private/tmp/gs-step3-departure-bounds/sumo/route_catalog/77e237f04c746a4fb1fac7e790fff419/catalog.rou.xml",
+   "routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4"
+  }
+ },
+ "census": {
+  "content_key": "ef462d4d5eac0fb8ab8c91ceb1dd1888b1bb907fff0bd0e1ba3c310d1ca8a16d",
+  "inventory_content_key": "458713e43b932706170b1f0ee5bc3b94a13c7a1c925beb87c5b83c1835ff727d",
+  "path": "/private/tmp/gs-step3-departure-bounds/validation/closure_effect_inventory_20260917-v3.json",
+  "sha256": "0a430bfb3687f1ab8ecbc0d3918e07566711d37516d2e2f3f0615e1491ea991c"
+ },
+ "chosen_edge": "26842525_26355153_0",
+ "chosen_verdict": {
+  "edge_id": "26842525_26355153_0",
+  "effect_eligible": true,
+  "measurement_status": "measured",
+  "reason_codes": [
+   "eligible"
+  ],
+  "structural_rank": 2,
+  "structurally_survivable": true,
+  "summary": {
+   "archives": 30,
+   "archives_with_crossings": 30,
+   "catalog_routes": {
+    "weekday": 100,
+    "weekend": 91
+   },
+   "crossings": {
+    "q10": 315143,
+    "q50": 315143,
+    "q90": 315143
+   },
+   "daily_units": 1950,
+   "daily_units_with_crossings": 1950
+  }
+ },
+ "claim_boundary": "a registration and preflight of one month case; it prices nothing and adopts nothing",
+ "content_key": "568b4d99fef3817a78bebd91161fdfed149f474539e19bd33b1a80242e3b7a8f",
+ "daily_units_by_build_key": {
+  "06cc309e4779897c": 65,
+  "084cedb913d5197c": 65,
+  "0a6c5266d76b5b39": 65,
+  "16f1d6176c7a9133": 65,
+  "187fca60022dedc5": 65,
+  "2d4f272bb3dfc5d2": 65,
+  "340168e305f8381e": 65,
+  "3f5d86eed8fe5c17": 65,
+  "4008e6387839d7a3": 65,
+  "5803fd9aa62080cb": 65,
+  "5fcc585e03915396": 65,
+  "657fa0b9f3268e78": 65,
+  "6e3416af316f91cc": 65,
+  "7e395749f1712cb4": 65,
+  "8dcbe1518a5b0898": 65,
+  "90a93715895966dc": 65,
+  "9c7ad9c97b6bdbc6": 65,
+  "b7e7cef8b702abae": 65,
+  "c796667235591888": 65,
+  "cc8eb82bc98de729": 65,
+  "cff4da5d9bb7efb7": 65,
+  "d42db159b3ee565f": 65,
+  "d482aa0afa27e9ce": 65,
+  "dae23c801891223c": 65,
+  "dce1407ed7d893a6": 65,
+  "e72299dc2abeabcd": 65,
+  "e9b489b9b469e9b6": 65,
+  "eb0bd33739d5e926": 65,
+  "eb5d47e234425a98": 65,
+  "f3d1a9ac4d14bd7a": 65
+ },
+ "eligible_in_order": [
+  "26842525_26355153_0",
+  "26355153_96523321_0",
+  "96523321_26355153_0",
+  "9037093028_1305379743_0"
+ ],
+ "frozen_zero_spec": {
+  "directed_edges": [
+   "26355153_26842525_0"
+  ],
+  "left_unchanged": true,
+  "path": "/private/tmp/gs-step3-departure-bounds/validation/subhour_monthly_search_profile_spec_v1.json",
+  "sha256": "10f3939a69b6f0bb6e74eb2b1e08a2b513cf54fa5610dd4a25d4d8366c1261aa"
+ },
+ "is_full_build": false,
+ "kind": "month_case_registration",
+ "nonzero_canaries": [
+  {
+   "affected_vehicles_by_build_keys": {
+    "1": 232845
+   },
+   "content_key": "f88e9b3ec9bb535122eb209e4364cf2e4c9f919f1ba812a8fa82bb78e9e76f70",
+   "path": "/private/tmp/gs-step3-departure-bounds/validation/wci_guarded_canary_20260917-v2.json",
+   "schema": "wci_guarded_run_v1",
+   "status": "passed"
+  },
+  {
+   "affected_vehicles_by_build_keys": {
+    "1": 232845,
+    "2": 514533,
+    "3": 866217
+   },
+   "content_key": "9a0aa0c86b07eb96260f8504b7aa2eb2346516c954b89ccb1465c0e694da81b2",
+   "path": "/private/tmp/gs-step3-departure-bounds/validation/wci_stream_ab_20260917-v2.json",
+   "schema": "wci_stream_ab_v2",
+   "status": "PASS"
+  },
+  {
+   "affected_vehicles_by_build_keys": {
+    "1": 232845,
+    "2": 514533,
+    "3": 866217
+   },
+   "content_key": "e69c57b1d093b68cdde616e455c086216f113a4df259ae136dfaa095e0cbb980",
+   "path": "/private/tmp/gs-step3-departure-bounds/validation/wci_effect_canary_20260917-v4.json",
+   "schema": "wci_effect_canary_v3",
+   "status": "PASS"
+  }
+ ],
+ "order_rule": "effect-eligible candidates only, then the unchanged structural survivability order (dist_sensor_m, edge_id); the first one wins, never the busiest",
+ "outputs_a_future_guarded_build_would_create": [
+  "<index-root>/window-cost-index.json",
+  "<build evidence>.json (subhour_phase5_window_cost_index_evidence_v1)",
+  "<status-dir>/status.json and child-telemetry.json",
+  "<runner evidence>.json (wci_guarded_run_v1)"
+ ],
+ "population": {
+  "build_keys": 30,
+  "daily_units": 1950,
+  "parents": 1690,
+  "units_per_build_key": [
+   65
+  ],
+  "variant_records": 5850
+ },
+ "qualified_demand_manifest": {
+  "content_key": "2cb32dcddfeb9bb99513fe1ae9cdcc44f0935435b78a278fa6eb3786060159ec",
+  "evidence_id": "subhour-monthly-qualify-2026-09-15b",
+  "path": "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+  "sha256": "1b609f705e08ab7a9c266a974a5976d33660209f0de914c95f66b3189d46f576"
+ },
+ "release_evidence": false,
+ "schema": "wci_month_case_registration_v1",
+ "search_id": "subhour-cold-ledger-profile-2027-09-effect-canary-v2-fdc134ec4e",
+ "source_bindings": {
+  "tools/build_window_cost_index.py": "dcfc5e6412fc3b3d1ca46f6564d5588b56f6d5025d95db0b55d087247e2974cc",
+  "tools/closure_effect_eligibility.py": "5226af5e848f6841b0b3fa14d4928cef2d8e870e246e0df9154463e5e13bb331",
+  "tools/cost_ordered_benchmark.py": "0dbf41fb2175adc9ac7b59dea783d634465760d35dcaf0658589980fa25c7d3c",
+  "tools/freeze_wci_month_case.py": "0d5b32c316020b9cb8ea650e708b12c471fbd332034c6b4edb70bea7dfc86359",
+  "tools/guarded_wci_build.py": "2d3ecc73d4885f0a0c4aba1435197885b19b3e3c7316b652abfd7c05fdd31ae9",
+  "tools/wci_guarded_child.py": "2e9f55c9a9c0baa2dfc2059a5e6f35287bf24165b25c2936a21b801a9434d181",
+  "traffic_sim/core/contracts.py": "53818f1d6154bda8dc72a49f921cbeb9f01048d451612775d94b344c02e2255a",
+  "traffic_sim/simulation/deterministic_disruption.py": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472",
+  "traffic_sim/simulation/disruption.py": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9",
+  "traffic_sim/simulation/independent_daily.py": "6ae4eba74fb0df6ec3068cf757164d43e0595fed102001457bab3d7c3446f689",
+  "traffic_sim/simulation/metadata.py": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4",
+  "traffic_sim/simulation/monthly_demand.py": "0879d1fdd41e95643c3626fdda51b81e08edaa9be4ef957a33a517cda6890778",
+  "traffic_sim/simulation/window_cost_index.py": "837267e4b137f1b06648717eec4b09fe7e3ca5777566feafc4442c9f7c8dff59"
+ },
+ "spec": {
+  "allowed_weekdays": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "blackout_dates": [],
+  "closure_type": "full",
+  "content_key": "d38038fd495414129508",
+  "demand_build_id": "forecast-2027",
+  "directed_edges": [
+   "26842525_26355153_0"
+  ],
+  "dst_policy": "exclude_transition_dates",
+  "duration_basis": "required_work_time",
+  "interday_policy": "independent_daily_reset_v1",
+  "kind": "closure_search",
+  "max_consecutive_start_days": 5,
+  "min_consecutive_start_days": 5,
+  "objective_profile": "displaced_vehicles_and_detour_v1",
+  "permitted_daily_band": {
+   "earliest_start": "00:00",
+   "latest_end": "24:00"
+  },
+  "permitted_date_end": "2027-09-30",
+  "permitted_date_start": "2027-09-01",
+  "policy_status": "user_supplied_unverified",
+  "required_work_minutes": 2400,
+  "resolution_minutes": 15,
+  "same_daily_window": true,
+  "schema_version": 1,
+  "search_id": "subhour-cold-ledger-profile-2027-09-effect-canary-v2-fdc134ec4e",
+  "source": "forecast",
+  "timezone": "Europe/Stockholm",
+  "work_allocation_policy": "exact_equal_daily_v1",
+  "work_to_closure_assumption": "one_to_one"
+ },
+ "spec_content_key": "d38038fd495414129508",
+ "verdicts": [
+  {
+   "edge_id": "26355153_26842525_0",
+   "effect_eligible": false,
+   "measurement_status": "unmeasured_opposite_of_sensor",
+   "reason_codes": [
+    "no_catalog_route_support",
+    "no_observed_archive_crossings"
+   ],
+   "structural_rank": 1,
+   "structurally_survivable": true,
+   "summary": {
+    "archives": 30,
+    "archives_with_crossings": 0,
+    "catalog_routes": {
+     "weekday": 0,
+     "weekend": 0
+    },
+    "crossings": {
+     "q10": 0,
+     "q50": 0,
+     "q90": 0
+    },
+    "daily_units": 1950,
+    "daily_units_with_crossings": 0
+   }
+  },
+  {
+   "edge_id": "26842525_26355153_0",
+   "effect_eligible": true,
+   "measurement_status": "measured",
+   "reason_codes": [
+    "eligible"
+   ],
+   "structural_rank": 2,
+   "structurally_survivable": true,
+   "summary": {
+    "archives": 30,
+    "archives_with_crossings": 30,
+    "catalog_routes": {
+     "weekday": 100,
+     "weekend": 91
+    },
+    "crossings": {
+     "q10": 315143,
+     "q50": 315143,
+     "q90": 315143
+    },
+    "daily_units": 1950,
+    "daily_units_with_crossings": 1950
+   }
+  },
+  {
+   "edge_id": "26355153_96523321_0",
+   "effect_eligible": true,
+   "measurement_status": "measured",
+   "reason_codes": [
+    "eligible"
+   ],
+   "structural_rank": 3,
+   "structurally_survivable": true,
+   "summary": {
+    "archives": 30,
+    "archives_with_crossings": 30,
+    "catalog_routes": {
+     "weekday": 58,
+     "weekend": 56
+    },
+    "crossings": {
+     "q10": 264671,
+     "q50": 264671,
+     "q90": 264671
+    },
+    "daily_units": 1950,
+    "daily_units_with_crossings": 1950
+   }
+  },
+  {
+   "edge_id": "96523321_26355153_0",
+   "effect_eligible": true,
+   "measurement_status": "unmeasured_opposite_of_sensor",
+   "reason_codes": [
+    "eligible"
+   ],
+   "structural_rank": 4,
+   "structurally_survivable": true,
+   "summary": {
+    "archives": 30,
+    "archives_with_crossings": 30,
+    "catalog_routes": {
+     "weekday": 52,
+     "weekend": 51
+    },
+    "crossings": {
+     "q10": 172225,
+     "q50": 234922,
+     "q90": 254212
+    },
+    "daily_units": 1950,
+    "daily_units_with_crossings": 1950
+   }
+  },
+  {
+   "edge_id": "8710974792_1759741980_0",
+   "effect_eligible": false,
+   "measurement_status": "not_in_sensor_registry",
+   "reason_codes": [
+    "no_catalog_route_support",
+    "no_observed_archive_crossings"
+   ],
+   "structural_rank": 5,
+   "structurally_survivable": true,
+   "summary": {
+    "archives": 30,
+    "archives_with_crossings": 0,
+    "catalog_routes": {
+     "weekday": 0,
+     "weekend": 0
+    },
+    "crossings": {
+     "q10": 0,
+     "q50": 0,
+     "q90": 0
+    },
+    "daily_units": 1950,
+    "daily_units_with_crossings": 0
+   }
+  },
+  {
+   "edge_id": "9037093028_1305379743_0",
+   "effect_eligible": true,
+   "measurement_status": "not_in_sensor_registry",
+   "reason_codes": [
+    "eligible"
+   ],
+   "structural_rank": 6,
+   "structurally_survivable": true,
+   "summary": {
+    "archives": 30,
+    "archives_with_crossings": 30,
+    "catalog_routes": {
+     "weekday": 1,
+     "weekend": 1
+    },
+    "crossings": {
+     "q10": 40473,
+     "q50": 42528,
+     "q90": 42887
+    },
+    "daily_units": 1950,
+    "daily_units_with_crossings": 1950
+   }
+  }
+ ]
+}

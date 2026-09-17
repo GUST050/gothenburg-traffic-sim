@@ -194,20 +194,19 @@ class WindowCostIndex:
         }
 
 
-def write_index(path: Path, index: WindowCostIndex) -> None:
-    """Publish atomically and never replace: all bytes or no file.
+def publish_new_file(path: Path, payload: bytes, *, label: str) -> None:
+    """Publish ``payload`` atomically and never replace: all bytes or none.
 
-    The payload is written and fsynced under a temporary name in the same
-    directory, then hard-linked to the final name, which fails if anything
-    already exists there. A crash or an I/O error leaves no partial index
-    and never touches a previous one.
+    The bytes are written and fsynced under a temporary name in the same
+    directory, hard-linked to the final name (which fails if anything is
+    already there) and the directory entry is fsynced. An error or an
+    interruption leaves no file under the final name, and a previous file
+    is never touched.
     """
     path = Path(path)
     if path.exists():
-        raise FileExistsError(f"refusing to overwrite window cost index: {path}")
+        raise FileExistsError(f"refusing to overwrite {label}: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = (json.dumps(index.to_dict(), indent=2, sort_keys=True)
-               + "\n").encode("utf-8")
     descriptor, temporary = tempfile.mkstemp(
         prefix=f".{path.name}.", suffix=".partial", dir=path.parent)
     try:
@@ -216,8 +215,22 @@ def write_index(path: Path, index: WindowCostIndex) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.link(temporary, path)
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
     finally:
         os.unlink(temporary)
+
+
+def write_index(path: Path, index: WindowCostIndex) -> None:
+    """Publish the index atomically; see :func:`publish_new_file`."""
+    publish_new_file(
+        path,
+        (json.dumps(index.to_dict(), indent=2, sort_keys=True)
+         + "\n").encode("utf-8"),
+        label="window cost index")
 
 
 def load_index(
