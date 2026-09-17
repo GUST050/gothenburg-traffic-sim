@@ -2157,6 +2157,133 @@ Kända baslinjefel är oförändrade: sigilltestet och
 försvagades, och varken steg 6 eller ett fullständigt WCI-bygge har
 startats.
 
+**Den oberoende dagkostnadscachen: säker, resumebar och mätt — 2026-09-17.**
+
+*Slutgranskning av `7a94696`: godkänd efter en rättning.* Publiceringen är
+atomär för både index och evidens (temporärfil i samma katalog, flush och
+fsync, hård länk utan överskrivning, fsync av katalogposten, ingen partiell
+fil kvar). `_verify_before_publication` körs före varje publicering och
+hashar om profilbindningen, den frysta specen, producentens källmanifest,
+det kvalificerade manifestet, byggarens egna källor, kostnadskällorna samt
+varje läst arkivvariant och `demand_meta`. Katalogpoolerna hashas inte där,
+eftersom byggaren aldrig läser dem; de kontrolleras i stället av
+registreringen och av övervakarens preflight och slutkontroll. Registreringen
+och preflighten uppfyllde sina punkter: policy, 1 690/1 950/5 850, 30 build
+keys, vald kant, census, manifest, arkiv, varianter och kataloger, samt 195
+träffar, 1 755 missar och tre kompletta build keys, där varje träff verifieras
+mot sin identitet och en stale post räknas som miss.
+
+**En verklig lucka rättades** med RED/GREEN: ett oväntat fel inne i
+övervakaren, till exempel om processlistningen fallerar, kastade vidare och
+lämnade barnet igång med status `running`. Nu fångas varje sådant fel, hela
+processgruppen stoppas, och stoppbeviset publiceras med orsaken
+`runner_error: …`. Tre tester låser fast att statusen aldrig blir kvar i
+`running`.
+
+*Den oberoende orakelvägen (kartlagd).* Canary v4:s cache skrevs av
+produktionens `ArchiveDisruptionProvider.disruption` med en `DailyCostCache`.
+Identiteten omfattar specens policyfält, arkivets sökväg, `demand_meta`-hash,
+epok, längd och q10/q50/q90-hashar, nätets sökväg och hash, de fem
+kostnadskällorna samt dagenhetens eget schema. Varje dagenhet beräknas helt
+oberoende: stängningsfönster och sedan `closure_disruption` per variant,
+direkt ur arkivets XML.
+
+| Per build key | Antal |
+|---|---:|
+| Leverantörer som konstrueras | 1 |
+| Arkivfiler som hashas | 4 |
+| Kostnadsberäkningar | 65 |
+| Ruttparsningar | 195 |
+| Unika filer som parsas | 3 |
+
+Samma variant läses alltså 65 gånger per build key. Det som kan delas inom en
+build key utan att röra WCI är arkivets hashar och nätmodellen; leverantörens
+minne är nycklat på schema-ID och ger ingen återanvändning mellan enheter.
+Inga indexposter används, och tre tester låser fast detta.
+
+*Resumebar byggare* (`tools/build_daily_cost_cache.py`). Kontraktet står i
+`ARCHITECTURE.md` under "Independent daily-cost cache batches": en build key
+är en batch, batchens identitet binder registrering, policy, kant, spec,
+arkiv, kataloger, kostnadskällor och byggarens egna bytes, markören publiceras
+atomärt och utan överskrivning först efter att varje lagrad post lästs om och
+jämförts, och en build key är komplett först när markören verifierar. Ett
+avbrott lämnar därför ingen markör, räknas som miss och räknas om, medan de
+enheter som redan finns återanvänds i omräkningen. En `flock` per build key
+hindrar två processer från att publicera samma batch, och verktyget vägrar
+skriva till produktionens cache utan ett uttryckligt argument.
+
+*Tester (24 st).* De använder små verkliga arkiv och kataloger och den
+riktiga leverantören.
+- En komplett batch prissätter och verifierar varje enhet.
+- Andra körningen återanvänder alla enheter med noll kostnadsberäkningar.
+- Avbrott, både krasch och Ctrl-C, publicerar ingen markör.
+- Resume räknar om den ofullständiga build key:n och räknar bara de saknade
+  enheterna.
+- Korrupt eller saknad post ogiltigförklarar hela batchen.
+- Drift i arkiv, katalog, kostnadskälla, byggare, policy, kant eller
+  registrering ger miss, och drift i en build key påverkar inte en annan.
+- Två publicerare kan inte dela en build key.
+- Resultatet är identiskt med en färsk oberoende direktberäkning.
+- Ingen indexpost används, och ingen process startas under prissättningen.
+- En mutation som tog bort digestkontrollen fångades.
+
+*Mätning av en saknad build key*
+(`validation/wci_daily_cache_canary_20260917-v2.json`, content key
+`53286080…`, status **PASS**). Nyckeln valdes deterministiskt: medianen av de
+27 saknade efter routebytes, alltså `d42db159b3ee565f` med 163,2 MB rutter.
+
+| Mått | Värde |
+|---|---:|
+| Dagenheter | 65 av 65 |
+| Byggtid | 175,9 s |
+| Per enhet, median | 2,758 s |
+| Per enhet, min–max | 2,361–3,637 s |
+| Standardavvikelse | 0,18 s |
+| Toppminne (RSS / fotavtryck) | 587,6 / 475,7 MB |
+| Swaptillväxt | 0 |
+| Färsk oberoende kontroll | 65 av 65 identiska, 172,0 s |
+| Andra körningen | 65 cacheträffar, 0 kostnadsberäkningar, 0,09 s |
+| Diskutrymme | 358,9 kB för batchen, 5,5 kB per enhet |
+
+Inga barnprocesser levde kvar, ingen SUMO-process startades, inget
+demandarkiv skapades, arkivens och katalogernas bytes var oförändrade och
+canary v4:s cache rördes inte. Den första körningen
+(`…-v1.json`) blev FAIL på en felaktig egen mätning: `ps`-processen som
+listade barnen räknade sig själv. Kontrollen är rättad, och båda posterna
+finns kvar.
+
+*Beslutsunderlag*
+(`validation/wci_month_cache_decision_20260917-v1.json`, content key
+`6c44a2ba…`): **`DO_NOT_START_MONTH_CACHE_BUILD`** i denna omgång.
+
+- **Verifierad täckning:** 195 av 1 950 dagenheter, tre kompletta build keys,
+  alla från canary v4:s orakelrot. Profilens egen cache innehåller ingen av
+  dem, eftersom den skrevs för nollkanten.
+- **Den nya batchen redovisas separat**, i en diagnostisk cache-root, och
+  räknas inte som produktionstäckning.
+- **Serial uppskattning:** tre mätta takter (2,54, 2,76 och 5,13 s per
+  enhet).
+  - 27 saknade build keys: 4 456–8 997 s, median 4 840 s.
+  - 26 nycklar efter den verifierade batchen: 4 291–8 664 s, median 4 660 s.
+  - Spridningen är evidensen; ett ensamt bästa värde multipliceras inte till
+    ett löfte.
+- **Resurser:** toppminne under 600 MB, ingen swaptillväxt, och hela
+  månadens cache uppskattas till cirka 10,8 MB.
+- **Budget:** per build key 176 s förväntat och 528 s hårt, hela månaden
+  4 660 s förväntat och 17 328 s hårt, minne 4 GiB och swaptillväxt 1 GiB.
+- **Ingen parallellism föreslås** innan en serial batch är mätt och
+  verifierad, vilket den nu är för en nyckel.
+
+*Kvar innan ett övervakat fullständigt WCI-bygge:*
+1. en komplett, verifierad dagkostnadscache för kanten;
+2. en månadsledgerprofil bunden till fallet, som är baslinjen indexet ska
+   slå;
+3. därefter det övervakade bygget under budgeten i beslutsunderlaget för
+   WCI.
+
+Steg 6 är fortfarande inte startat, och de två kända baslinjefelen är
+oförändrade.
+
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 
 **Filer:** `build_sumo_demand.py`, `monthly_demand.py:_resolve_new_release`,

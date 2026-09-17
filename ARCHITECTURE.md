@@ -3431,6 +3431,38 @@ provider identity and the ledger all agree, the index and build evidence
 are published and self-consistent, and a final full drift check is clean. A
 child that disappears, or a group member that survives, is a failure.
 
+### Independent daily-cost cache batches (2026-09-17)
+
+The daily-cost cache is the index's oracle, so it is built by the per-file
+provider path (`ArchiveDisruptionProvider.disruption`, which parses the
+archive's route files itself) and never from a WindowCostIndex record.
+`tools/build_daily_cost_cache.py` builds it one build key at a time.
+
+**A batch is one build key.** Its identity binds the registration content
+key, the policy version, the chosen directed edge, the spec content key,
+the archive with its `demand_meta` and q10/q50/q90 hashes, both catalog
+keys with their route and metadata hashes, the five costing sources and the
+builder's own bytes. Every one of them is re-proved from content before the
+batch is computed and again whenever it is reused.
+
+**Publication.** Unit records are content-addressed and written atomically
+by the cache itself. The batch marker is published only after every stored
+record has been reloaded through a fresh cache and compared with what was
+computed, and it is published atomically and no-clobber, like the index.
+
+**Completion and resume.** A build key counts as complete only when its
+marker, its identity and every unit digest verify. An interrupted batch
+therefore leaves no marker, counts as a miss and is recomputed; the unit
+records that already exist are reused inside that recompute, because the
+same identity yields the same bytes. A corrupt or missing unit invalidates
+its whole batch, and drift local to one build key never invalidates
+another.
+
+**One publisher.** An exclusive `flock` per build key keeps two processes
+from publishing the same batch. There is no global cache and no trust in a
+path, a size or an mtime; every reuse is content-bound. The tool refuses to
+write to the production cache root unless that is asked for explicitly.
+
 ## Build order
 1. **B — observability module** (junction solves, bounds, alarms).
 2. **C — PFE-lite LP** (replaces routeSampler as primary; keeps its I/O).

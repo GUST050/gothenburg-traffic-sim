@@ -1,0 +1,278 @@
+{
+  "case": {
+    "chosen_edge": "26842525_26355153_0",
+    "policy": "closure_effect_eligibility_v1",
+    "population": {
+      "build_keys": 30,
+      "daily_units": 1950,
+      "parents": 1690,
+      "units_per_build_key": [
+        65
+      ],
+      "variant_records": 5850
+    },
+    "spec_content_key": "d38038fd495414129508"
+  },
+  "claim_boundary": "a decision record; it computes no cost, starts no build and proposes no parallelism",
+  "content_key": "6c44a2ba22955a14e982242ab212968bfffb8f36300ebe7a9fc326586a6bb9a4",
+  "decision": "DO_NOT_START_MONTH_CACHE_BUILD",
+  "diagnostic_batch": {
+    "batch_content_key": "46e8b66c699ddcc01b6a7143b1652ebdd7289db9359417e0c8d0613e76e9808f",
+    "build_key": "d42db159b3ee565f",
+    "cache_root": "runs/step5_code_approved_20260915b/diagnostic-daily-cost-cache-20260917-v3",
+    "checks": {
+      "all_units_built": true,
+      "archive_and_catalog_bytes_unchanged": true,
+      "existing_canary_caches_untouched": true,
+      "fresh_check_identical": true,
+      "no_child_processes_left": true,
+      "no_demand_archive_created": true,
+      "no_sumo_process": true,
+      "second_run_computes_nothing": true,
+      "second_run_reuses_every_unit": true
+    },
+    "daily_units": 65,
+    "fresh_independent_check": {
+      "identical": true,
+      "mismatches": [],
+      "units_checked": 65,
+      "wall_s": 172.018987334
+    },
+    "per_unit_s": {
+      "max": 3.636749,
+      "mean": 2.7063261333384614,
+      "median": 2.7576097919999967,
+      "min": 2.3610834999999994,
+      "stdev": 0.180034773569922
+    },
+    "reuse_pass": {
+      "cache_hits": 65,
+      "cost_computations": 0,
+      "verify_problems": [],
+      "wall_s": 0.09271795799998017
+    },
+    "selection_rule": "the median of the missing build keys by route bytes, then by build key",
+    "separate_from_production_coverage": true,
+    "wall_s": 175.94818295899998
+  },
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_month_cache_decision_v1.py",
+    "sha256": "f7d0f67d42783f4339acee1ae734bab8184f0f61c8439318094db68dce2c817b"
+  },
+  "future_command": {
+    "not_proposed": "parallelism, and any write to the production cache root, which the tool refuses without --allow-production-cache",
+    "one_build_key": [
+      "python3",
+      "tools/build_daily_cost_cache.py",
+      "--registration",
+      "validation/wci_month_case_registration_20260917-v2.json",
+      "--profile",
+      "runs/step5_code_approved_20260915b/profile/profile.json",
+      "--cache-root",
+      "<fresh cache root>",
+      "--build-key",
+      "<build key>",
+      "--status",
+      "<status dir>/build.json"
+    ],
+    "serial_month": "the same command with one --build-key per missing key, in one process, one key at a time; a resume repeats it and reuses every verified batch"
+  },
+  "git": {
+    "head": "7a94696d298d00667b748638cb0b3be91cfb31ff",
+    "tracked_changes": [
+      " M ARCHITECTURE.md",
+      " M tests/test_guarded_wci_build.py",
+      " M tools/guarded_wci_build.py",
+      " M web/data/od_matrix.csv",
+      " M web/data/od_matrix.json",
+      " M web/data/validation.json"
+    ]
+  },
+  "inputs": {
+    "daily_cache_canary": {
+      "content_key": "5328608056575eeb5d64ab46ff3333a34fca04cc9c06e97bf9a4842911ea0fd3",
+      "path": "validation/wci_daily_cache_canary_20260917-v2.json",
+      "sha256": "50aaf61a9d620942496ab5578cb73a097843dd3f2476ad8056ab9f94ec645162"
+    },
+    "preflight": {
+      "content_key": "121d8c68257eeae0ea4cd6be4c864c3ae6caac790556621a571cae46e29560dd",
+      "path": "validation/wci_month_cache_preflight_20260917-v2.json",
+      "sha256": "5981412abf5a53f6c2a9ad67288f8ae72687d363b0cf8c20421a3eb8f5ff2f88"
+    },
+    "registration": {
+      "content_key": "88cb38dd73307f00e9561f0a6830f2bbaf906b1c829bad4cf2d2126fa8729de2",
+      "path": "validation/wci_month_case_registration_20260917-v2.json",
+      "sha256": "ee82146b83cf8e3fb64a2da1516bf2c8c2ff66f7664573b9eb92318533097031"
+    },
+    "wci_full_build_decision": {
+      "content_key": "26669f69ba29adbf341c3c25b2d731f1c1a6b51aaf22a5e5098e52ed84d47ce5",
+      "path": "validation/wci_full_build_decision_20260917-v2.json",
+      "sha256": "35408bc4e8114620a5daf51ace0f291ca862cd298b02199960c2e099b2353194"
+    }
+  },
+  "oracle_path": {
+    "identity_inputs": [
+      "schema, interday policy, closure type, directed edges, source, timezone and DST policy of the search spec",
+      "the archive: resolved path, demand_meta SHA-256, epoch, duration and the q10/q50/q90 SHA-256",
+      "the network: resolved path and SHA-256",
+      "the five costing sources (run_scenario.py, disruption.py, deterministic_disruption.py, closure_ranking.py, metadata.py)",
+      "the daily unit's own schedule, as its canonical dictionary"
+    ],
+    "independence": "every daily unit is computed on its own: closure windows, then run_scenario.closure_disruption per variant, straight from the archive's route XML. No WindowCostIndex record is read, so the result stays an independent oracle for that index",
+    "per_build_key_counts": {
+      "archive_files_hashed": 4,
+      "cost_computations": 65,
+      "providers_constructed": 1,
+      "resolver_calls": "one per daily unit, once per run when grouping",
+      "route_parses": 195,
+      "same_variant_reread": "yes: each of the three variants is parsed once per daily unit, 65 times per build key"
+    },
+    "pinned_by_tests": [
+      "tests/test_daily_cost_cache.py::TestTheOraclePath::test_each_unit_reparses_every_variant",
+      "tests/test_daily_cost_cache.py::TestTheOraclePath::test_the_provider_is_built_once_per_build_key",
+      "tests/test_daily_cost_cache.py::TestOneCompleteBatch::test_no_window_cost_index_is_read"
+    ],
+    "producer": "tools/build_daily_cost_cache.py calls the production ArchiveDisruptionProvider.disruption with a DailyCostCache; the same call wrote canary v4's oracle cache from validation/benchmarks/wci_effect_canary_v3.py",
+    "shared_within_a_build_key": [
+      "the ArchiveInputs hashes, computed once when the provider opens the archive",
+      "the NetworkCostModel, built once per run",
+      "nothing else: the provider's memo is keyed by schedule id, so two daily units never share a computation"
+    ],
+    "verification_before_publication": [
+      "every stored record is reloaded through a fresh DailyCostCache and compared with what was computed",
+      "the batch marker is published atomically and no-clobber only after that comparison",
+      "a build key counts as complete only when its marker, its identity and every unit digest verify again"
+    ]
+  },
+  "output_sha256": "e3fc621acd1613d7f8df305d3d1bd5a5dd85dec0a00364d44c71f7603c96ac8d",
+  "production_sources": {
+    "tools/build_daily_cost_cache.py": "72e14fa098f6f39416c8f250ee87b2230e1536433a3930fc59d4c0632f926392",
+    "tools/freeze_wci_month_case.py": "0d5b32c316020b9cb8ea650e708b12c471fbd332034c6b4edb70bea7dfc86359",
+    "tools/guarded_wci_build.py": "c1aa2c24a35449ac4c7416605488ea798dc069ce893cabcb1a6841bceedab32e",
+    "traffic_sim/simulation/deterministic_disruption.py": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472",
+    "traffic_sim/simulation/disruption.py": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9"
+  },
+  "recommended_budget": {
+    "memory_hard_bytes": 4294967296,
+    "per_build_key_wall_s": {
+      "expected": 175.94818295899998,
+      "hard": 528
+    },
+    "serial_month_wall_s": {
+      "expected": 4660.360548479995,
+      "hard": 17328
+    },
+    "stop_conditions": [
+      "any batch whose stored units do not match what was computed",
+      "registration, archive, catalog, costing or builder drift",
+      "a SUMO process or a new demand archive",
+      "memory or swap past the limits above",
+      "a build key that takes more than its hard wall time"
+    ],
+    "swap_growth_hard_bytes": 1073741824
+  },
+  "release_evidence": false,
+  "resources": {
+    "disk": {
+      "basis": "the measured diagnostic batch, scaled by daily units",
+      "measured_batch": {
+        "bytes": 358891,
+        "bytes_per_daily_unit": 5521.4,
+        "files": 66
+      },
+      "month_estimate_bytes": 10766730.0
+    },
+    "measured_batch_peak": {
+      "lifetime_max_phys_footprint_bytes": 475693992,
+      "max_rss_bytes": 587595776
+    },
+    "swap_growth_observed_bytes": 0
+  },
+  "restart_semantics": [
+    "a build key is a batch: nothing is reusable until its marker is published",
+    "an interrupted batch leaves content-addressed unit records and no marker, so the build key is a miss and is recomputed; the units that already exist are reused inside that recompute",
+    "the marker binds the registration content key, the policy, the chosen edge, the spec, the archive and its four file hashes, both catalogs and the costing and builder sources; any change makes the batch a miss",
+    "one flock per build key, so two processes cannot publish the same batch",
+    "no global cache and no trust in a path, a size or an mtime"
+  ],
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_month_cache_decision_v1",
+  "serial_estimates": {
+    "after_this_verified_batch": {
+      "build_keys": 26,
+      "daily_units": 1690,
+      "seconds": {
+        "high": 8664.218754386,
+        "low": 4291.336314052666,
+        "median": 4660.360548479995
+      }
+    },
+    "all_missing_build_keys": {
+      "build_keys": 27,
+      "daily_units": 1755,
+      "seconds": {
+        "high": 8997.457937247002,
+        "low": 4456.387710747,
+        "median": 4839.605184959994
+      }
+    },
+    "caveats": [
+      "three rates, measured on different archives and machine performance states; the spread is the evidence, not the best value",
+      "no parallelism is proposed or measured",
+      "a month ledger run does more than the oracle, so this is a lower bound for that run"
+    ],
+    "rate_sources": [
+      {
+        "per_unit_s": 2.7576097919999967,
+        "source": "this batch"
+      },
+      {
+        "per_unit_s": 5.1267566594,
+        "source": "validation/wci_effect_canary_20260917-v3.json"
+      },
+      {
+        "per_unit_s": 2.5392522568358973,
+        "source": "validation/wci_effect_canary_20260917-v4.json"
+      }
+    ],
+    "rates_per_unit_s": {
+      "high": 5.1267566594,
+      "low": 2.5392522568358973,
+      "median": 2.7576097919999967
+    }
+  },
+  "still_missing_before_a_guarded_full_wci_build": [
+    "a complete, verified daily-cost cache for the chosen edge",
+    "a month ledger profile bound to that case, which is the baseline the index must beat",
+    "then the guarded build under the budget in wci_full_build_decision_20260917-v2.json"
+  ],
+  "verified_coverage": {
+    "build_keys_complete": 3,
+    "build_keys_empty": 27,
+    "cached": 195,
+    "daily_units": 1950,
+    "missing": 1755,
+    "note": "the hits are canary v4's oracle root; the month profile's own cache holds none of this edge",
+    "source_of_the_hits": {
+      "canary_v1": 0,
+      "canary_v2": 0,
+      "canary_v3": 0,
+      "canary_v4": 195,
+      "profile": 0
+    }
+  },
+  "wci_decision": {
+    "content_key": "26669f69ba29adbf341c3c25b2d731f1c1a6b51aaf22a5e5098e52ed84d47ce5",
+    "decision": "DO_NOT_START_FULL_BUILD"
+  }
+}

@@ -666,3 +666,44 @@ class TestPeakMemory:
         assert peak["bytes"] == 7 * guard.GIB
         assert peak["at_elapsed_s"] >= 0
         assert outcome["status"]["memory"]["checked_bytes"] == 0
+
+
+class TestTheRunnerSurvivesItsOwnFaults:
+    """An error inside the runner must never leave a child running."""
+
+    class BrokenSampler(FakeSampler):
+        def memory(self, _pgid):
+            raise RuntimeError("proc listing exploded")
+
+    def test_an_unexpected_runner_error_stops_the_child(self, tmp_path):
+        adapter = FakeAdapter(polls=5)
+        supervisor = build(tmp_path, sampler=self.BrokenSampler(),
+                           adapter=adapter, telemetry_record=telemetry())
+        outcome = supervisor.run(env={})
+        assert outcome["state"] in ("stopped", "failed")
+        assert "runner_error" in outcome["reason"]
+        assert "proc listing exploded" in outcome["reason"]
+        assert signal.SIGTERM in adapter.signals
+        assert adapter.reaped is True
+
+    @pytest.mark.parametrize("make", [
+        lambda tmp_path: build(tmp_path, telemetry_record=telemetry()),
+        lambda tmp_path: build(tmp_path, adapter=FakeAdapter(returncode=2),
+                               telemetry_record=telemetry()),
+        lambda tmp_path: build(tmp_path, sampler=FakeSampler(sumo=1),
+                               telemetry_record=telemetry()),
+    ], ids=["passed", "child-exit", "preflight"])
+    def test_the_status_never_stays_running(self, tmp_path, make):
+        supervisor = make(tmp_path)
+        supervisor.run(env={})
+        status = json.loads((tmp_path / "status.json").read_text())
+        assert status["state"] in ("passed", "failed", "stopped")
+
+    def test_a_runner_error_still_leaves_a_terminal_status(self, tmp_path):
+        supervisor = build(tmp_path, sampler=self.BrokenSampler(),
+                           adapter=FakeAdapter(polls=5),
+                           telemetry_record=telemetry())
+        supervisor.run(env={})
+        status = json.loads((tmp_path / "status.json").read_text())
+        assert status["state"] == "stopped"
+        assert status["stop"]["reason"].startswith("runner_error")

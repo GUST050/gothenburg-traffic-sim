@@ -1,0 +1,361 @@
+{
+  "after": {
+    "bytes": {
+      "calibrated.rou.xml": "187e9f9640f2dfcf45eb45f636f13115df499fea06f75a6f55a5be7e6f5ca6eb",
+      "calibrated_v1.rou.xml": "20bdcde95676cc322849d329c58edcb8ce4b3a73fd618a464f3057a3379299be",
+      "calibrated_v2.rou.xml": "53fe459f53683d27e1582a337107f0455cd869235e5b26dd6abbd5a7a5ddcd8c",
+      "catalog-meta:weekday": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+      "catalog-meta:weekend": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3",
+      "catalog:weekday": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+      "catalog:weekend": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+      "demand_meta.json": "e8cf61acf568c594d6a3fbc2b841809a16ccc0464648d7089d05e47505ee1b02"
+    },
+    "canary_caches": "bf6c7421e7c74abdba100e608c085cb8240180eccc614a65825452bbd2154472",
+    "children": [
+      43382
+    ],
+    "sumo": 0
+  },
+  "batch": {
+    "content_key": "3c8dd1b31560884565acf796f68342d2dcb2abe072826d1af050a587135983e4",
+    "daily_units": 65,
+    "peak": {
+      "lifetime_max_phys_footprint_bytes": 471434008,
+      "max_rss_bytes": 598310912
+    },
+    "provider_identity_digest": "b92524caa6f0453a0d45400f8cbf852950d6df92442991a3024546142d9490cc",
+    "timing": {
+      "sys_s": 5.627758999999999,
+      "user_s": 173.045754,
+      "wall_s": 179.03867216700002
+    }
+  },
+  "before": {
+    "bytes": {
+      "calibrated.rou.xml": "187e9f9640f2dfcf45eb45f636f13115df499fea06f75a6f55a5be7e6f5ca6eb",
+      "calibrated_v1.rou.xml": "20bdcde95676cc322849d329c58edcb8ce4b3a73fd618a464f3057a3379299be",
+      "calibrated_v2.rou.xml": "53fe459f53683d27e1582a337107f0455cd869235e5b26dd6abbd5a7a5ddcd8c",
+      "catalog-meta:weekday": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+      "catalog-meta:weekend": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3",
+      "catalog:weekday": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+      "catalog:weekend": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+      "demand_meta.json": "e8cf61acf568c594d6a3fbc2b841809a16ccc0464648d7089d05e47505ee1b02"
+    },
+    "canary_caches": "bf6c7421e7c74abdba100e608c085cb8240180eccc614a65825452bbd2154472",
+    "children": [
+      42545
+    ],
+    "sumo": 0
+  },
+  "build": {
+    "per_unit_s": [
+      3.6288658750000002,
+      2.3846926249999996,
+      2.4067033749999993,
+      2.3893569580000005,
+      2.4913859170000006,
+      2.454514291999999,
+      2.487286707999999,
+      2.504531958000001,
+      2.447288167,
+      2.519556625,
+      2.7174974170000006,
+      2.5940855829999983,
+      2.5741840000000025,
+      2.5899490830000005,
+      2.6644474590000016,
+      2.6115292909999965,
+      2.618828042000004,
+      2.677119832999999,
+      2.6518381249999976,
+      2.6680896669999967,
+      2.666463125,
+      2.8503701670000012,
+      2.7127033330000003,
+      2.727931792000007,
+      2.7235105829999924,
+      2.7552169580000054,
+      2.7017575419999957,
+      2.720528791999996,
+      2.7300041250000078,
+      2.7561384999999916,
+      2.7775555000000054,
+      2.819820041,
+      2.804590250000004,
+      2.8224304169999925,
+      2.8270936669999998,
+      2.8213335410000013,
+      2.8158573340000004,
+      2.8405535410000056,
+      2.9297781249999986,
+      2.880560958999993,
+      2.848484333000002,
+      2.840824917000006,
+      2.812066999999999,
+      2.8373541659999972,
+      2.8542354589999945,
+      2.865039958000011,
+      2.893822666999995,
+      2.8612913750000075,
+      2.8241472499999816,
+      2.859521749999999,
+      2.864674291,
+      2.932631334000007,
+      2.862964625000018,
+      2.8990920409999887,
+      2.8263653749999946,
+      2.825225500000016,
+      2.870435125,
+      2.8848260839999966,
+      2.8583210829999928,
+      2.8361674580000056,
+      2.872109916999989,
+      2.8227861249999933,
+      2.777892500000007,
+      2.8189656670000147,
+      2.8578466660000004
+    ],
+    "status": {
+      "cache_hits": 0,
+      "cache_misses": 0,
+      "cache_root": "runs/step5_code_approved_20260915b/diagnostic-daily-cost-cache-20260917-v2",
+      "chosen_edge": "26842525_26355153_0",
+      "completed_build_keys": [
+        "d42db159b3ee565f"
+      ],
+      "current_build_key": "d42db159b3ee565f",
+      "daily_units_done": 65,
+      "daily_units_expected": 65,
+      "failed_build_keys": [],
+      "identity": null,
+      "last_heartbeat_s": 179.12,
+      "output_content_keys": {
+        "d42db159b3ee565f": "3c8dd1b31560884565acf796f68342d2dcb2abe072826d1af050a587135983e4"
+      },
+      "peak": {
+        "lifetime_max_phys_footprint_bytes": 471434008,
+        "max_rss_bytes": 598310912
+      },
+      "phase": "published",
+      "policy": "closure_effect_eligibility_v1",
+      "recompute_reasons": {},
+      "registration_content_key": "88cb38dd73307f00e9561f0a6830f2bbaf906b1c829bad4cf2d2126fa8729de2",
+      "requested_build_keys": [
+        "d42db159b3ee565f"
+      ],
+      "reused_build_keys": [],
+      "schema": "daily_cost_cache_status_v1",
+      "sequence": 68,
+      "state": "done",
+      "stop_reason": null,
+      "swap": {
+        "before_bytes": 4860674048,
+        "growth_bytes": 0,
+        "now_bytes": 4860674048
+      },
+      "sys_s": 8.018146,
+      "user_s": 176.076002,
+      "wall_s": 179.12
+    },
+    "wall_s": 179.111456917
+  },
+  "build_key_choice": {
+    "chosen": "d42db159b3ee565f",
+    "missing_build_keys": 27,
+    "order": [
+      "187fca60022dedc5",
+      "06cc309e4779897c",
+      "dae23c801891223c",
+      "e9b489b9b469e9b6",
+      "eb5d47e234425a98",
+      "cff4da5d9bb7efb7",
+      "6e3416af316f91cc",
+      "084cedb913d5197c",
+      "16f1d6176c7a9133",
+      "d482aa0afa27e9ce",
+      "7e395749f1712cb4",
+      "3f5d86eed8fe5c17",
+      "5803fd9aa62080cb",
+      "d42db159b3ee565f",
+      "340168e305f8381e",
+      "cc8eb82bc98de729",
+      "dce1407ed7d893a6",
+      "4008e6387839d7a3",
+      "5fcc585e03915396",
+      "90a93715895966dc",
+      "0a6c5266d76b5b39",
+      "657fa0b9f3268e78",
+      "eb0bd33739d5e926",
+      "2d4f272bb3dfc5d2",
+      "8dcbe1518a5b0898",
+      "e72299dc2abeabcd",
+      "f3d1a9ac4d14bd7a"
+    ],
+    "route_bytes": 163224307,
+    "route_bytes_span": {
+      "high": 180456557,
+      "low": 145931176
+    },
+    "rule": "the median of the missing build keys by route bytes, then by build key"
+  },
+  "cache_root": "runs/step5_code_approved_20260915b/diagnostic-daily-cost-cache-20260917-v2",
+  "checks": {
+    "all_units_built": true,
+    "archive_and_catalog_bytes_unchanged": true,
+    "existing_canary_caches_untouched": true,
+    "fresh_check_identical": true,
+    "no_child_processes_left": false,
+    "no_demand_archive_created": true,
+    "no_sumo_process": true,
+    "second_run_computes_nothing": true,
+    "second_run_reuses_every_unit": true
+  },
+  "claim_boundary": "one build key of the independent daily-cost cache, serial and diagnostic; no month build",
+  "content_key": "ab67b36eb3331a2822864d63dda31295462adbc7a3d41a73e0d8ac5d72849742",
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_daily_cache_canary_v1.py",
+    "sha256": "cc59b5e14dae7b2a9ee966021abe4f5d9e15f5e603535a80135b40e5d5d2d883"
+  },
+  "fresh_independent_check": {
+    "identical": true,
+    "mismatches": [],
+    "units_checked": 65,
+    "wall_s": 171.76954770799998
+  },
+  "git": {
+    "head": "7a94696d298d00667b748638cb0b3be91cfb31ff",
+    "tracked_changes": [
+      " M tests/test_guarded_wci_build.py",
+      " M tools/guarded_wci_build.py",
+      " M web/data/od_matrix.csv",
+      " M web/data/od_matrix.json",
+      " M web/data/validation.json"
+    ]
+  },
+  "memory": {
+    "samples": [
+      {
+        "cpu_s": 179.245032,
+        "label": "built",
+        "lifetime_max_phys_footprint_bytes": 471434008,
+        "major_faults": 133,
+        "max_rss_bytes": 598310912,
+        "minor_faults": 2798265,
+        "pageins": 133,
+        "phys_footprint_bytes": 218907584,
+        "resident_bytes": 364232704,
+        "sys_s": 8.02171,
+        "user_s": 176.076283,
+        "wall_s": 179.721441583
+      },
+      {
+        "cpu_s": 352.313888,
+        "label": "fresh_checked",
+        "lifetime_max_phys_footprint_bytes": 471434008,
+        "major_faults": 133,
+        "max_rss_bytes": 601128960,
+        "minor_faults": 4280279,
+        "pageins": 133,
+        "phys_footprint_bytes": 207143872,
+        "resident_bytes": 380911616,
+        "sys_s": 12.165619,
+        "user_s": 345.001226,
+        "wall_s": 352.852097875
+      },
+      {
+        "cpu_s": 352.398404,
+        "label": "reused",
+        "lifetime_max_phys_footprint_bytes": 471434008,
+        "major_faults": 133,
+        "max_rss_bytes": 601128960,
+        "minor_faults": 4281223,
+        "pageins": 133,
+        "phys_footprint_bytes": 205571008,
+        "resident_bytes": 379338752,
+        "sys_s": 12.186956,
+        "user_s": 345.064408,
+        "wall_s": 352.94489904200003
+      }
+    ]
+  },
+  "output_sha256": "069b9e31219a9fca0561abf2d5da2f083f98471ec0bf1b259d080940af308841",
+  "preflight": {
+    "content_key": "121d8c68257eeae0ea4cd6be4c864c3ae6caac790556621a571cae46e29560dd",
+    "path": "validation/wci_month_cache_preflight_20260917-v2.json"
+  },
+  "production_sources": {
+    "run_scenario.py": "d0948b4a29d07b4f4fbe125600b7dcf25a7446bdc7337514c39edb30a679ceaf",
+    "tools/build_daily_cost_cache.py": "72e14fa098f6f39416c8f250ee87b2230e1536433a3930fc59d4c0632f926392",
+    "tools/freeze_wci_month_case.py": "0d5b32c316020b9cb8ea650e708b12c471fbd332034c6b4edb70bea7dfc86359",
+    "traffic_sim/simulation/deterministic_disruption.py": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472",
+    "traffic_sim/simulation/disruption.py": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9",
+    "traffic_sim/simulation/independent_daily.py": "6ae4eba74fb0df6ec3068cf757164d43e0595fed102001457bab3d7c3446f689",
+    "traffic_sim/simulation/monthly_demand.py": "0879d1fdd41e95643c3626fdda51b81e08edaa9be4ef957a33a517cda6890778"
+  },
+  "registration": {
+    "chosen_edge": "26842525_26355153_0",
+    "content_key": "88cb38dd73307f00e9561f0a6830f2bbaf906b1c829bad4cf2d2126fa8729de2",
+    "path": "validation/wci_month_case_registration_20260917-v2.json"
+  },
+  "release_evidence": false,
+  "remaining_estimate": {
+    "caveats": [
+      "three rates, measured on different archives and machine performance states; the spread is the evidence, not the best value",
+      "no parallelism is proposed or measured",
+      "a month ledger run does more than the oracle, so this is a lower bound for that run"
+    ],
+    "kind": "modelled from three measured per-unit rates",
+    "per_unit_s": {
+      "high": 5.1267566594,
+      "low": 2.5392522568358973,
+      "median": 2.8158573340000004
+    },
+    "rates": [
+      {
+        "per_unit_s": 2.8158573340000004,
+        "source": "this batch"
+      },
+      {
+        "per_unit_s": 5.1267566594,
+        "source": "validation/wci_effect_canary_20260917-v3.json"
+      },
+      {
+        "per_unit_s": 2.5392522568358973,
+        "source": "validation/wci_effect_canary_20260917-v4.json"
+      }
+    ],
+    "remaining_build_keys": 26,
+    "remaining_daily_units": 1690,
+    "serial_estimate_s": {
+      "high": 8664.218754386,
+      "low": 4291.336314052666,
+      "median": 4758.798894460001
+    },
+    "this_batch_per_unit_s": {
+      "max": 3.6288658750000002,
+      "mean": 2.754969876276923,
+      "median": 2.8158573340000004,
+      "min": 2.3846926249999996,
+      "stdev": 0.18076763972153598
+    }
+  },
+  "reuse_pass": {
+    "cache_hits": 65,
+    "cost_computations": 0,
+    "verify_problems": [],
+    "wall_s": 0.09269833299998709
+  },
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_daily_cache_canary_v1",
+  "status": "FAIL"
+}

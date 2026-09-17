@@ -7,26 +7,25 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `MONTH CASE FROZEN AND GUARDED RUNNER IN PLACE; THE EXPENSIVE BUILD IS STILL BLOCKED ON ITS OWN LEDGER AND CACHE.` Work is in `/private/tmp/gs-step3-departure-bounds`, branch `claude/exciting-rubin-1e6k5m`, local commits above pushed `8b453da`; nothing pushed.
-- Final review of `f5608a7..d7983b8`: rejected, then repaired with RED/GREEN (11 failures, then 43 green).
-  1. Evidence publication used `write_text`; index and evidence now share one atomic, no-clobber publication with a directory fsync.
-  2. Nothing re-proved the inputs between the raw phase and publication; the raw measurement now carries `archive_bindings` and `costing_sources`, and `_verify_before_publication` runs before the index and before the evidence.
-
-  Everything else held: streaming is the production path, retain is a test oracle, one index build, one validation per key, one parse per variant, order independent of descriptor order.
-- Month case: `validation/wci_month_case_registration_20260917-v1.json` (`568b4d99…`).
-  - `tools/freeze_wci_month_case.py` re-derives every candidate verdict from the census inventory instead of trusting its rows, then takes the first eligible candidate in the unchanged structural order: `26842525_26355153_0`.
-  - It binds the policy, the six candidates and their digest, every verdict, the qualified manifest, 30 archive content keys with q10/q50/q90 and `demand_meta` hashes, both catalog keys and hashes, the census (`ef462d4d…`, inventory `458713e4…`), the source bytes and the 1,690/1,950/5,850 population.
-  - `verify_registration` re-proves all of it; the guarded runner calls it in preflight.
-- Guarded runner: `tools/guarded_wci_build.py` plus the telemetry child `tools/wci_guarded_child.py`; the contract is in `ARCHITECTURE.md`.
-  - 55 tests with an injected clock, sampler and process adapter cover every limit and stop reason; real child processes cover SIGTERM, SIGKILL, grandchildren and reaping.
-  - The bounded guarded canary passed: 20.9 s total, raw 18.6 s, peak 919.7 MB, 232,845 affected vehicles, one index build, one validation, three parses, clean drift, no SUMO.
-- Cache preflight: `validation/wci_month_cache_preflight_20260917-v1.json` (`cff64138…`).
-  - 195 of 1,950 daily units are cached (3 build keys complete, 27 empty); the hits come from canary v4's oracle root, and the profile's own cache gives none because it was written for the zero edge.
-  - The missing 1,755 units are modelled at 4,456-8,997 s of oracle time, which is a lower bound on a ledger run.
-  - The runner refuses the existing profile: it binds spec `383c9130…`, not the registered `d38038fd…`.
-- Checks: the focused suites pass except the two known baseline failures (seal closure; validation-report passage). Pylint returns 0 and `git diff --check` is clean. Every new content key and source binding was recomputed from disk.
-- Next action: decide on a month ledger and daily-cost cache for `26842525_26355153_0`; only then can the guarded build run under the production budget. Step 6 remains unstarted.
-- Environment and boundaries: use `/usr/bin/python3` (3.9.6). Preserve unrelated modified `web/data/od_matrix.csv`, `web/data/od_matrix.json`, `web/data/validation.json` and unrelated untracked files. No full WCI build, month ledger, demand build, warming, SUMO run, catalog mutation or production activation was performed.
+- Focus and status: `THE INDEPENDENT ORACLE CACHE IS RESUMABLE AND MEASURED FOR ONE BUILD KEY; THE MONTH CACHE BUILD AND THE FULL WCI BUILD ARE BOTH STILL DECIDED AGAINST.` Work is in `/private/tmp/gs-step3-departure-bounds`, branch `claude/exciting-rubin-1e6k5m`, local commits above pushed `8b453da`; nothing pushed.
+- Final review of `d7983b8..7a94696`: approved after one repair.
+  - Atomic publication, the pre-publication drift check, the registration and the cache preflight all held.
+  - Repaired with RED/GREEN: an unexpected error inside the guarded runner propagated and left the child running with the status at `running`. It now stops the group, publishes `runner_error: …` and always ends in a terminal state.
+  - Noted, not a defect: `_verify_before_publication` does not hash the catalog pools, because the builder never reads them; the registration and the runner cover them.
+- The oracle path: canary v4's cache was written by the production `ArchiveDisruptionProvider.disruption` with a `DailyCostCache`. Per build key that is one provider, four hashed archive files, 65 independent cost computations and 195 route parses of the same three files. Nothing from a WindowCostIndex is read, and three tests pin that.
+- `tools/build_daily_cost_cache.py`: one build key per batch, resumable, content-bound.
+  - The batch identity binds registration, policy, edge, spec, archive with its four hashes, both catalogs, the costing sources and the builder's own bytes.
+  - The marker is published atomically and no-clobber only after every stored record has been reloaded and compared; a build key is complete only when the marker verifies, so an interrupted batch is a miss and is recomputed while its existing units are reused.
+  - One `flock` per build key; the production cache root is refused without `--allow-production-cache`.
+  - 24 tests, including a mutation check that caught a removed digest comparison.
+- Measured build key `d42db159b3ee565f` (the median of the 27 missing by route bytes): 65/65 units in 175.9 s, 2.758 s per unit (median; 2.361-3.637, sd 0.18), peak 587.6 MB RSS and 475.7 MB footprint, no swap growth, 358.9 kB on disk. The fresh independent recomputation was identical for all 65, and a second run gave 65 cache hits with zero computations in 0.09 s. No child processes survived, no SUMO, no demand archive, archive and catalog bytes unchanged, canary v4's cache untouched.
+- Decision `validation/wci_month_cache_decision_20260917-v1.json` (`6c44a2ba…`): `DO_NOT_START_MONTH_CACHE_BUILD`.
+  - Verified coverage is 195 of 1,950 daily units and three complete build keys; the new batch is reported separately in its diagnostic root.
+  - Serial estimate from three measured rates: 27 keys 4,456-8,997 s (median 4,840 s), 26 keys after this batch 4,291-8,664 s (median 4,660 s); about 10.8 MB of disk for the month.
+  - Budget: 176 s expected and 528 s hard per build key, 4,660 s expected and 17,328 s hard for the month, 4 GiB memory, 1 GiB swap growth. No parallelism is proposed.
+- Checks: the focused suites pass except the two known baseline failures (seal closure; validation-report passage). Pylint returns 0, `git diff --check` is clean, and every new content key and source binding was recomputed from disk.
+- Next action: decide whether to run the serial cache build for the remaining keys. Then a month ledger profile for the case, and only then the guarded full build. Step 6 remains unstarted.
+- Environment and boundaries: use `/usr/bin/python3` (3.9.6). Preserve unrelated modified `web/data/od_matrix.csv`, `web/data/od_matrix.json`, `web/data/validation.json` and unrelated untracked files. No full WCI build, month ledger, month cache build, demand build, warming, SUMO run, catalog mutation or production activation was performed.
 <!-- CURRENT_HANDOFF_END -->
 
 <!-- CURRENT_HANDOFF_HISTORY_START -->

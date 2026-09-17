@@ -25,7 +25,11 @@ from tools import guarded_wci_build as guard
 
 EDGES = frozenset({"A", "X", "Y", "Z"})
 ROOT = Path(__file__).resolve().parents[1]
-PUBLISHED = ROOT / "validation/wci_month_case_registration_20260917-v1.json"
+#: The newest published registration; an older one binds older sources and
+#: is superseded rather than re-proved.
+PUBLISHED = max(
+    ROOT.glob("validation/wci_month_case_registration_*.json"),
+    key=lambda path: path.name, default=ROOT / "no-registration.json")
 
 
 def _census(tmp_path, *, rows_edges, manifest_path):

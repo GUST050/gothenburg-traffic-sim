@@ -615,29 +615,36 @@ class Supervisor:
         self.write_status(state="running", pid=self.process.pid, pgid=pgid)
         reason = None
         returncode = None
-        while True:
-            if self.interrupted:
-                reason = "interrupted"
-                break
-            returncode = self.adapter.poll(self.process)
-            try:
-                sample = self.sample(pgid)
-            except TelemetryUnavailable as error:
-                reason = f"telemetry_unavailable: {error}"
-                break
-            self._record(sample)
-            if returncode is not None:
-                break
-            reason = running_violation(self._telemetry, sample, self.limits,
-                                       self.expect)
-            if reason:
-                break
-            self.clock.sleep(self.limits.poll_s)
-        if reason is not None:
-            record = self.stop(pgid, reason)
-            self.write_status(state="stopped", stop=record)
-            return self._outcome("stopped", reason, stop=record)
-        return self._finish(pgid, returncode)
+        try:
+            while True:
+                if self.interrupted:
+                    reason = "interrupted"
+                    break
+                returncode = self.adapter.poll(self.process)
+                try:
+                    sample = self.sample(pgid)
+                except TelemetryUnavailable as error:
+                    reason = f"telemetry_unavailable: {error}"
+                    break
+                self._record(sample)
+                if returncode is not None:
+                    break
+                reason = running_violation(self._telemetry, sample,
+                                           self.limits, self.expect)
+                if reason:
+                    break
+                self.clock.sleep(self.limits.poll_s)
+            if reason is None:
+                return self._finish(pgid, returncode)
+        except KeyboardInterrupt:
+            # The runner's own failures must never leave the build running:
+            # stop the group, keep the reason, and publish it.
+            reason = "interrupted"
+        except BaseException as error:  # noqa: BLE001 - re-raised as a stop
+            reason = f"runner_error: {type(error).__name__}: {error}"
+        record = self.stop(pgid, reason)
+        self.write_status(state="stopped", stop=record)
+        return self._outcome("stopped", reason, stop=record)
 
     def _finish(self, pgid: int, returncode: int) -> Dict[str, Any]:
         # Grandchildren must not outlive the build.
