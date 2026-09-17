@@ -97,6 +97,19 @@ def _sysctl(name: str) -> str:
                           text=True, check=True).stdout.strip()
 
 
+def _optional_sysctl(name: str):
+    """Read one sysctl without making diagnostic telemetry a hard gate."""
+    try:
+        return _sysctl(name), None
+    except (OSError, subprocess.SubprocessError) as error:
+        return None, f"{name}: {type(error).__name__}: {error}"
+
+
+def _vm_stat() -> str:
+    return subprocess.run(["vm_stat"], capture_output=True, text=True,
+                          check=True).stdout
+
+
 def _megabytes(text: str, label: str) -> float:
     match = re.search(label + r"\s*=\s*([0-9.]+)M", text)
     if match is None:
@@ -106,10 +119,19 @@ def _megabytes(text: str, label: str) -> float:
 
 def system_memory() -> Dict[str, Any]:
     """System-wide swap and compressor state. NOT a per-process quantity."""
-    swap = _sysctl("vm.swapusage")
-    page_size = int(_sysctl("hw.pagesize"))
-    vm_stat = subprocess.run(["vm_stat"], capture_output=True, text=True,
-                             check=True).stdout
+    errors = []
+    swap, error = _optional_sysctl("vm.swapusage")
+    if error:
+        errors.append(error)
+    page_size_text, error = _optional_sysctl("hw.pagesize")
+    if error:
+        errors.append(error)
+    page_size = int(page_size_text) if page_size_text is not None else None
+    try:
+        vm_stat = _vm_stat()
+    except (OSError, subprocess.SubprocessError) as error:
+        errors.append(f"vm_stat: {type(error).__name__}: {error}")
+        vm_stat = ""
     pages = {}
     for key, label in (("compressor_occupied", "Pages occupied by compressor"),
                        ("compressor_stored", "Pages stored in compressor"),
@@ -120,12 +142,18 @@ def system_memory() -> Dict[str, Any]:
         pages[key] = int(match.group(1)) if match else None
 
     def as_bytes(key: str):
-        return pages[key] * page_size if pages[key] is not None else None
+        if pages[key] is None or page_size is None:
+            return None
+        return pages[key] * page_size
 
     return {
         "scope": "system-wide",
-        "swap_used_mb": _megabytes(swap, "used"),
-        "swap_total_mb": _megabytes(swap, "total"),
+        "telemetry_complete": not errors,
+        "telemetry_errors": errors,
+        "swap_used_mb": (_megabytes(swap, "used")
+                         if swap is not None else None),
+        "swap_total_mb": (_megabytes(swap, "total")
+                          if swap is not None else None),
         "page_size_bytes": page_size,
         "compressor_occupied_bytes": as_bytes("compressor_occupied"),
         "compressor_stored_bytes": as_bytes("compressor_stored"),
@@ -195,13 +223,17 @@ def driver_binding(driver: Path) -> Dict[str, Any]:
 
 
 def runtime_manifest() -> Dict[str, Any]:
+    memory, memory_error = _optional_sysctl("hw.memsize")
+    ncpu, ncpu_error = _optional_sysctl("hw.ncpu")
     return {
         "python_executable": sys.executable,
         "python_version": platform.python_version(),
         "platform": platform.platform(),
         "machine": platform.machine(),
-        "hw_memsize_bytes": int(_sysctl("hw.memsize")),
-        "hw_ncpu": int(_sysctl("hw.ncpu")),
+        "hw_memsize_bytes": int(memory) if memory is not None else None,
+        "hw_ncpu": int(ncpu) if ncpu is not None else os.cpu_count(),
+        "telemetry_errors": [error for error in
+                             (memory_error, ncpu_error) if error],
     }
 
 

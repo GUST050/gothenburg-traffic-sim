@@ -213,3 +213,26 @@ def test_an_unknown_mode_is_rejected(world):
     driver = _driver()
     with pytest.raises(ValueError, match="unknown mode"):
         _compute(driver, "partial", world)
+
+
+def test_unavailable_system_telemetry_is_reported_not_raised(monkeypatch):
+    """A sandboxed sysctl must not suppress the scientific result."""
+    common = _driver().common
+
+    def unavailable(name):
+        raise OSError(f"blocked: {name}")
+
+    monkeypatch.setattr(common, "_sysctl", unavailable)
+    monkeypatch.setattr(common, "_vm_stat",
+                        lambda: (_ for _ in ()).throw(OSError("blocked")))
+
+    memory = common.system_memory()
+    runtime = common.runtime_manifest()
+
+    assert memory["telemetry_complete"] is False
+    assert memory["swap_used_mb"] is None
+    assert memory["compressor_occupied_bytes"] is None
+    assert memory["telemetry_errors"]
+    assert runtime["hw_memsize_bytes"] is None
+    assert runtime["hw_ncpu"] == common.os.cpu_count()
+    assert runtime["telemetry_errors"]

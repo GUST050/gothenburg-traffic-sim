@@ -1497,6 +1497,56 @@ tid ett helt bygge med nuvarande kod tar, och ingen sådan siffra anges här.
 Både ett helt bygge och produktionsändringen till stream kräver ett
 uttryckligt beslut.
 
+**Avslutande orsaksmodell och canary på den reparerade koden — 2026-09-17.**
+Två nya diagnostiker stänger den avgränsade WCI-utredningen utan att köra ett
+fullständigt WCI-bygge, SUMO eller demand. Båda är
+`release_evidence: false` och lämnar produktionskoden oförändrad.
+
+`validation/archive_index_resolution_model_20260917-v2.json` (content key
+`c9246979…`, output-hash `a6f7bb95…`) upprepade indexmätningen i tre färska
+processer med den slutliga diagnostikhjälpen bunden till evidensen. Ett
+indexbygge tog 15,647–15,966 s (median 15,826 s), läste 30 JSON-filer och
+571 247 660 byte. De sex upplösningsfunktionerna är AST-identiska med koden
+`b5e1564` som körde det misslyckade bygget.
+
+Den historiska vägen modelleras till 30 860 s indexbyggen plus 6 222 s
+validering, totalt 37 083 s. Det är **18,6 % mer** än den observerade
+väggtiden 31 273 s. Modellen är därför inget exakt bokslut och den negativa
+residualen tillskrivs ingen fas. Indexdelen ensam motsvarar 98,7 % av den
+observerade väggtiden och användar-CPU låg nära väggtid i originalkörningen.
+Tillsammans med stackprovet och koden visar detta robust att den upprepade
+`_archives_for_build_key`-körningen var huvudorsaken, men inte exakt hur varje
+sekund fördelades. `f889071` tar bort den kostnaden genom ett indexbygge per
+operation och en validering per unik build key.
+
+`validation/wci_current_code_canary_20260916-v1.json` (content key
+`c36c0540…`, output-hash `3ca2abdc…`) kör den oförändrade
+`_raw_index_records` på 1, 2 och 3 verkliga build keys i separata processer:
+
+| Build keys | Dagenheter | Variantposter | Väggtid | Indexbyggen | Fulla valideringar |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 65 | 195 | 25,233 s | 1 | 1 |
+| 2 | 130 | 390 | 31,549 s | 1 | 2 |
+| 3 | 195 | 585 | 38,323 s | 1 | 3 |
+
+Alla tre körningar är fältidentiska med det bundna oraklet och byteidentiska
+med motsvarande retain-körningar för indexposter, orakelposter och
+provideridentiteter. Den linjära 1–3-key-modellen ger 215,244 s för
+`_bound_inputs + _raw_index_records` vid 30 keys. Det är **inte** en uppmätt
+fullmånadstid: slutlig orakeljämförelse, indexskrivning/-laddning och indexed
+ledger ingår inte, och 30-key-vägen behåller fortfarande modellerat cirka
+19 GB. Dessutom korsar noll verkliga fordon den valda kanten, så canaryn
+bevisar inte kostnad eller exakthet för en trafikerad stängning.
+
+**Beslut efter canaryn:** hastighetsdefekten i arkivupplösningen är reparerad
+och direkt verifierad i liten skala. Streaming är fortfarande en möjlig
+minnesförbättring, inte en visad hastighetsförbättring, och införs inte här.
+Ett nytt fullskaligt WCI-bygge mot samma spec skulle producera ett exakt men
+beslutsmässigt meningslöst nollresultat. Nästa nödvändiga steg är därför att
+ompröva den riktade stängningskanten eller katalogtäckningen, kvalificera ett
+fall med verkliga korsningar och först därefter köra en liten icke-noll-canary.
+WCI förblir opt-in och **inte adopterat**.
+
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 
 **Filer:** `build_sumo_demand.py`, `monthly_demand.py:_resolve_new_release`,
