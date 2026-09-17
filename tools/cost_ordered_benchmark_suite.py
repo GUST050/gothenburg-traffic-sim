@@ -60,9 +60,12 @@ def select_suite_cases(
     diversity are then maximised without consulting a cost, health result,
     winner, timeout or prior benchmark outcome.
     """
+    # `eligible` already applies the recorded case-selection policy (for
+    # closure_effect_eligibility_v1: structural AND effect-eligible). Older
+    # selections without the field were purely structural.
     eligible = [
         dict(item) for item in selection["evaluated"]
-        if item.get("structurally_eligible")
+        if item.get("eligible", item.get("structurally_eligible"))
     ]
     eligible.sort(key=lambda item: (
         -int(item["candidate_count"]),

@@ -55,7 +55,7 @@ from traffic_sim.simulation.deterministic_disruption import (  # noqa: E402
 )
 from traffic_sim.simulation import cost_ordered_execution as coe  # noqa: E402
 from traffic_sim.simulation import cost_ordered_search as cos  # noqa: E402
-from traffic_sim.simulation import effect_eligibility  # noqa: E402
+import tools.closure_effect_eligibility as closure_effect  # noqa: E402
 from traffic_sim.simulation.metadata import network_edge_ids  # noqa: E402
 from traffic_sim.simulation.monthly_search import (  # noqa: E402
     MonthlySearchPolicy,
@@ -110,6 +110,8 @@ SEMANTIC_SOURCES = (
     "screen_monthly_closures.py",
     "suggest_closure_time.py",
     "tools/__init__.py",
+    # Decides which discovered cases automatic selection may use.
+    "tools/closure_effect_eligibility.py",
     "tools/cost_ordered_benchmark.py",
     # The bounded Phase 3 runner imports this before either arm starts so RSS
     # and reap evidence cannot be published without a trusted process-tree
@@ -141,8 +143,6 @@ SEMANTIC_SOURCES = (
     "traffic_sim/simulation/cost_ordered_search.py",
     "traffic_sim/simulation/deterministic_disruption.py",
     "traffic_sim/simulation/disruption.py",
-    # Decides which roads automatic discovery may build a case on.
-    "traffic_sim/simulation/effect_eligibility.py",
     "traffic_sim/simulation/envelope.py",
     "traffic_sim/simulation/execution.py",
     "traffic_sim/simulation/finalist_decision.py",
@@ -488,9 +488,9 @@ SURVIVABILITY_SCREEN = (
 #: the frozen 2026-09 profile closed an unmeasured carriageway 11 m from sensor
 #: 133 that no catalog route and no vehicle uses, so every candidate cost zero.
 EFFECT_SELECTION_RULE = (
-    "a discovered case is selectable only when it is structurally eligible "
-    "AND its directed edges pass the pre-canary stage of "
-    "effect_eligibility_v2 over the exact archives its resolver bound")
+    "closure_effect_eligibility_v1: after structural eligibility, keep only "
+    "cases whose directed edges are effect-eligible over the exact archives "
+    "their resolver bound; the existing order is then applied unchanged")
 
 
 def archive_calendar(runs_root: Path) -> dict[str, dict[str, Any]]:
@@ -663,53 +663,23 @@ def effect_screen_cases(
     runs_root: Path,
     data_root: Path = ROOT,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
-    """Pre-canary effect verdicts for automatically selected cases.
+    """``closure_effect_eligibility_v1`` verdicts for automatic selection.
 
-    ``cases`` pairs each spec with the archives its resolver bound (build key
-    -> record with ``archive`` and, when known, ``routes`` hashes and
-    ``archive_content_key``). Every archive variant and catalog pool is read
-    once for all cases together; each case is then judged over its own build
-    keys. Only automatic selection calls this; user closures never do.
+    ``cases`` pairs each spec with the archives its resolver bound. Every
+    archive variant and catalog pool is parsed once for all cases together.
+    Only automatic selection calls this; user closures never do.
     """
-    refs: dict[str, effect_eligibility.ArchiveRef] = {}
-    edges: set[str] = set()
-    for spec, archives in cases:
-        edges.update(spec.directed_edges)
-        for key, record in (archives or {}).items():
-            hashes = {variant: item["sha256"]
-                      for variant, item in (record.get("routes") or {}).items()
-                      if item.get("sha256")}
-            ref = effect_eligibility.ArchiveRef(
-                build_key=str(key), archive=Path(record["archive"]),
-                content_key=record.get("archive_content_key"),
-                route_sha256=hashes or None)
-            if refs.setdefault(ref.build_key, ref) != ref:
-                raise ValueError(f"build key {key} resolved to two archives")
     network_edges, catalog_root = _effect_sources(data_root)
-    inventory = effect_eligibility.build_inventory(
-        list(refs.values()), edges, catalog_root=catalog_root)
-    verdicts: dict[str, dict[str, Any]] = {}
-    for spec, archives in cases:
-        units = _daily_units_by_build_key(spec, runs_root)
-        per_edge = [effect_eligibility.assess(
-            edge, inventory, network_edges=network_edges, daily_units=units,
-            build_keys=list(archives or {})) for edge in spec.directed_edges]
-        verdicts[spec.content_key] = {
-            "pre_canary_eligible": all(item.pre_canary_eligible
-                                       for item in per_edge),
-            "reasons": sorted({reason for item in per_edge
-                               for reason in item.reasons}),
-            "edges": [item.to_dict() for item in per_edge],
-        }
-    record = inventory.to_dict()
-    summary = {
-        "contract": effect_eligibility.CONTRACT_VERSION,
-        "archives": len(refs),
-        "files_read": len(record["file_reads"]),
-        "digest": hashlib.sha256(json.dumps(
-            record, sort_keys=True, default=str).encode("utf-8")).hexdigest(),
+    verdicts, inventory = closure_effect.screen_cases(
+        cases, network_edges=network_edges, catalog_root=catalog_root,
+        daily_units_for=lambda spec: _daily_units_by_build_key(
+            spec, runs_root))
+    return verdicts, {
+        "policy": closure_effect.POLICY,
+        "inventory_content_key": inventory.content_key,
+        "archives": len(inventory.archives),
+        "files_parsed": len(inventory.parses),
     }
-    return verdicts, summary
 
 
 def discovered_specs(runs_root: Path) -> tuple[ClosureSearchSpec, ...]:
@@ -1014,7 +984,8 @@ def _structural_profile(spec: ClosureSearchSpec) -> dict[str, Any]:
 
 def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
                 *, from_archives: bool = False,
-                data_root: Path = ROOT) -> dict[str, Any]:
+                data_root: Path = ROOT,
+                policy: str = closure_effect.POLICY) -> dict[str, Any]:
     """Pick the case with the most structurally eligible candidates.
 
     Deliberately blind to outcomes: it never runs a search, never prices a
@@ -1022,6 +993,9 @@ def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
     signal is how many candidates the case can discriminate between, which is a
     property of the calendar and the archives on disk.
     """
+    if policy not in closure_effect.POLICIES:
+        raise ValueError(f"unknown case_selection_policy {policy!r}")
+    gated = from_archives and policy == closure_effect.POLICY
     archives = _archive_index(runs_root)
     covered_dates = {
         str(record.get("epoch_sim", ""))[:10]
@@ -1055,7 +1029,7 @@ def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
         evaluated.append(profile)
     verdicts: dict[str, dict[str, Any]] = {}
     effect_inventory = None
-    if from_archives:
+    if gated:
         verdicts, effect_inventory = effect_screen_cases(
             [(specs_by_key[item["search_content_key"]],
               item["resolved_archives"])
@@ -1064,11 +1038,11 @@ def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
     for item in evaluated:
         verdict = verdicts.get(item["search_content_key"])
         item["effect"] = verdict
-        item["effect_eligible_pre_canary"] = (
-            bool(verdict and verdict["pre_canary_eligible"])
-            if from_archives else None)
+        item["effect_eligible"] = (
+            bool(verdict and verdict["effect_eligible"]) if gated else None)
         item["eligible"] = item["structurally_eligible"] and (
-            not from_archives or item["effect_eligible_pre_canary"])
+            not gated or item["effect_eligible"])
+    # Filter on eligibility first; the existing order below is unchanged.
     eligible = [item for item in evaluated if item["eligible"]]
     # Most candidates first, then the smallest unit count, then the search ID:
     # a total order that never consults a result.
@@ -1085,7 +1059,8 @@ def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
         "case_source": ("discovered_from_archive_metadata" if from_archives
                         else "fixed_v1_candidate_specs"),
         "evaluated_case_count": len(evaluated),
-        "effect_rule": EFFECT_SELECTION_RULE if from_archives else None,
+        "case_selection_policy": policy,
+        "effect_rule": EFFECT_SELECTION_RULE if gated else None,
         "effect_inventory": effect_inventory,
     }
 
@@ -1117,14 +1092,15 @@ def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT,
             "evaluated_case_count": selection["evaluated_case_count"],
             "minimum_structural_candidates": MINIMUM_STRUCTURAL_CANDIDATES,
             "archives_available": selection["archives_available"],
+            "case_selection_policy": selection["case_selection_policy"],
             "effect_rule": selection["effect_rule"],
             "effect_inventory": selection["effect_inventory"],
             "evaluated": [
                 {**{key: item[key] for key in (
                     "search_id", "candidate_count", "unique_daily_unit_count",
-                    "structurally_eligible", "effect_eligible_pre_canary",
-                    "eligible")},
-                 "effect_reasons": (item["effect"] or {}).get("reasons")}
+                    "structurally_eligible", "effect_eligible", "eligible")},
+                 "effect_reason_codes": (
+                     item["effect"] or {}).get("reason_codes")}
                 for item in selection["evaluated"]
             ],
         },

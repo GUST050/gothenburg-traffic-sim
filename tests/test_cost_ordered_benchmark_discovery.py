@@ -47,7 +47,8 @@ def _synthetic_archives_are_product_resolvable(monkeypatch):
     # effect-eligibility stage is exercised in tests/test_effect_eligibility.py
     # on real (small) route files; here every structural case passes it.
     def every_case_has_effect(cases, **_kwargs):
-        return ({spec.content_key: {"pre_canary_eligible": True, "reasons": [],
+        return ({spec.content_key: {"effect_eligible": True,
+                                    "reason_codes": ["eligible"],
                                     "edges": []}
                  for spec, _archives in cases}, None)
 

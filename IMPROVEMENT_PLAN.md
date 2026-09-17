@@ -1582,115 +1582,151 @@ stängningen lämnar nätet användbart. Benchmark- och profilurvalet saknade en
 separat kontroll av trafikpåverkan. Närhet till en sensor bevisar inget
 ruttstöd, vilket `traffic_sim/demand/route_support.py` redan konstaterar.
 Därför kunde automatiken välja en omätt motriktning som ingen rutt använder.
+Detta reparerar det automatiska benchmarkurvalet. Användarens vägval och
+`ClosureRouteResolver` var inte felaktiga.
 
-*Reparation, två nivåer (ersätter `ed73102`:s utformning).* Den första
-reparationen (`ed73102`) lade effektkontrollen direkt i `discovered_specs`
-och räknade om arkiven per väg. Den är ersatt. Evidensen
-`effect_eligibility_census_20260917-v1`, `wci_effect_canary_20260917-v1` och
-`closure_edge_lineage_census_20260917-v2` binder källkod från `ed73102` och
-kan reproduceras där.
+*Reparation: en versionerad urvalspolicy (ersätter `ed73102` och `36a61de`).*
+`ed73102` lade effektkontrollen direkt i `discovered_specs`. `36a61de` flyttade
+den till urvalet, men som en oversionerad modul under
+`traffic_sim/simulation/`, och sviten valde fortfarande på
+`structurally_eligible`. Båda är ersatta. Evidensen från de två commitsen
+(`effect_eligibility_census_20260917-v1/-v2`, `wci_effect_canary_spec_20260917-v1`,
+`wci_effect_canary_20260917-v1/-v2`, `closure_edge_lineage_census_20260917-v2`)
+binder källkod från respektive commit och kan reproduceras där.
 
 * **`structurally_survivable`** gäller för `surviving_roads` och den
   generella `discovered_specs`, som båda är oförändrade från `10518ae`.
   Upptäckten får innehålla kanter utan nuvarande katalogtrafik.
-* **`effect_eligible`** kräver verifierad trafikpåverkan och tillämpas bara
-  när systemet automatiskt väljer WCI-, benchmark- eller prestandafall:
-  `tools/cost_ordered_benchmark.select_case` (även via benchmark-sviten), det
-  automatiska urvalet i `tools/subhour_cost_ordered_benchmark` och den nya
-  canary-specen. Användarvalda stängningar berörs aldrig; en riktad kant utan
-  trafik ger fortfarande ett giltigt nollresultat.
+* **`effect_eligible`** gäller bara automatiskt valda benchmarkfall. De tre
+  väljare som använder `discovered_specs` anropar samma funktion efter den
+  strukturella upptäckten:
+  - `tools/cost_ordered_benchmark.select_case`;
+  - `tools/cost_ordered_benchmark_suite.select_suite_cases`, som nu filtrerar
+    på `eligible` i stället för `structurally_eligible`;
+  - `tools/subhour_cost_ordered_benchmark._metadata_inventory`/`select_cases`.
 
-*Definition (`effect_eligibility_v2`, `traffic_sim/simulation/effect_eligibility.py`),
-fastställd före körning.*
+  Användarvalda stängningar berörs aldrig; en riktad kant utan trafik ger
+  fortfarande ett giltigt nollresultat.
+* **Versionering.** Policyn heter `closure_effect_eligibility_v1`. En
+  registrering utan `case_selection_policy` tolkas som
+  `structural_survivability_v1`, och en okänd policy avvisas. Verifierarna
+  räknar om urvalet med den policy som artefakten själv namnger, så gamla
+  frysta registreringar reproduceras exakt: legacy-inventeringen har inga nya
+  nycklar och ingen effektskanning. Nya registreringar skriver
+  `case_selection_policy`, `effect_rule` och `effect_inventory`.
+* **Placering.** `tools/closure_effect_eligibility.py` ligger utanför
+  `demand_source_paths` (39 sökvägar, ingen under `tools/` eller
+  `traffic_sim/simulation/`), så inget demandarkiv ogiltigförklaras. Modulen
+  ingår i benchmarkens `SEMANTIC_SOURCES`.
 
-* **Före canary:**
-  1. kanten finns i nätet;
-  2. varje arkiv har alla tre varianterna, med den SHA-256 som
-     arkivvalideringen bundit, och varje fordon har en inbäddad rutt;
-  3. varje arkiv binder sina katalogpooler i metadata, varje poolfil finns och
-     matchar sin deklarerade SHA-256, och ett poolnamn pekar aldrig på två
-     kataloger;
-  4. varje pool som arkiven binder har minst en rutt över kanten, med
-     poolnamnet taget ur metadata;
-  5. q10, q50 och q90 har vardera minst ett passerande fordon;
-  6. minst en dagenhet hör till ett arkiv med passerande trafik.
-* **Canary:** fler än 0 berörda fordon, minst en berörd dagenhet och minst en
-  kostnad över noll.
+*Definition (`closure_effect_eligibility_v1`), fastställd före körning.*
+Inventeringen tar kandidat-ID:n och gör ett pass per relevant katalogpool och
+ett pass per kvalificerad arkivvariant. Den använder produktionens
+`traffic_sim.simulation.disruption.parse_route_vehicles`, utan någon egen
+XML-parser, och bygger en gemensam räknetabell
+`kant → variant → build key → fordon` plus katalogrutter per pool. Variantens
+hash tas från arkivvalideringen och bevakas med en stat-kontroll.
+Orsakskoderna är exakt dessa, i denna ordning:
 
-Saknade indata avvisas fail-closed och räknas aldrig som noll. Varje
-avvisning får en maskinläsbar kod (`kod` eller `kod:detalj`). Inventeringen
-läser varje variantfil och varje katalogpool exakt en gång, hashar och räknar
-i samma pass, och fryser `kant → variant → build key → fordon`. Alla
-kandidater bedöms sedan mot samma mappning. `select_case` registrerar
-`effect_rule`, en inventeringsdigest och avvisningsorsaker per fall.
+| Kod | Betydelse |
+|---|---|
+| `missing_network_edge` | kanten finns inte i nätet |
+| `missing_required_pool` | en pool som arkiven kräver är obunden, saknas, har fel hash eller har ett konfliktande namn |
+| `no_catalog_route_support` | en bunden pool har ingen rutt över kanten (detalj: poolnamn) |
+| `missing_required_variant` | en variant saknas för en krävd build key; räknas aldrig som noll |
+| `no_observed_archive_crossings` | q10, q50 eller q90 har inget passerande fordon, eller ingen dagenhet har trafik |
+| `incomplete_archive_coverage` | en krävd build key saknar kvalificerat arkiv |
+| `eligible` | inga av ovanstående |
 
-*Tester.* Nivå- och integrationstesterna föll först, eftersom den generella
-upptäckten fortfarande var effektfiltrerad och urvalet saknade den nya nivån.
-Nu går de igenom. Predikatet testas med små syntetiska rutter: alla
-fail-closed-fall, poolnamn ur metadata och att varje fil läses en gång för
-godtyckligt många kanter. Integrationstestet i `select_case` visar att
-nollkanten erbjuds av upptäckten men aldrig väljs, och att arkiven läses en
-gång för alla fall. Subhour-kopplingen testas separat. Upptäcktstesterna
-använder åter sina egna metadataarkiv, med en dokumenterad stub för
-effektsteget. Användarsemantiken är oförändrad: en riktad nollkant bevaras
-och ger kostnaden noll, och tvåvägsstängning skapas bara när båda riktningarna
-listas.
+Urvalet filtrerar först på `effect_eligible` och tillämpar sedan den befintliga
+stabila ordningen (strukturell rang respektive `selection_sha256`). Det väljer
+aldrig kanten med mest trafik.
 
-*Diagnostik.* `validation/effect_eligibility_census_20260917-v2.json`
-(content key `63019b12…`, output-hash `d29d7fe2…`, 181,8 s) läste 92 filer en
-gång vardera: 30 arkiv × 3 varianter plus 2 katalogpooler. Varje variant
-verifierades mot validatorns hash. Arkivens content keys, poolbindningar
-(weekday/weekend) och kataloghashar är bundna, och inget arkiv har
-indatafel.
+*Tester (`tests/test_closure_effect_eligibility.py`, 29 st, plus
+upptäcktstesterna).* RED kördes i en separat worktree på `36a61de` med de nya
+testerna och den nya modulen. 10 fall föll av rätt skäl:
+- sviten valde den tomma riktningen `26355153_26842525_0`;
+- `select_case` och `select_cases` saknade policyargument;
+- `case_selection_policy` saknades;
+- `pre_canary_eligible` var den gamla nyckeln.
 
-| Kant | from → to | Närmaste sensor | Mätstatus | Strukturellt | Katalog wd/we | Fordon q10/q50/q90 | Arkiv / dagenheter med trafik | Effekt före canary | Orsakskoder |
-|---|---|---|---|---|---:|---:|---:|---|---|
-| `26355153_26842525_0` | 26355153 → 26842525 | 133 | omätt motriktning | ja | 0 / 0 | 0 / 0 / 0 | 0 / 0 | nej | `no_catalog_route:weekday`, `no_catalog_route:weekend`, `no_crossing_vehicle:q10/q50/q90`, `no_daily_unit_with_crossing_traffic` |
-| `26842525_26355153_0` | 26842525 → 26355153 | 133 | mätt | ja | 100 / 91 | 315 143 ×3 | 30 / 1 950 | ja | – |
-| `26355153_96523321_0` | 26355153 → 96523321 | 134 | mätt | ja | 58 / 56 | 264 671 ×3 | 30 / 1 950 | ja | – |
-| `96523321_26355153_0` | 96523321 → 26355153 | 134 | omätt motriktning | ja | 52 / 51 | 172 225 / 234 922 / 254 212 | 30 / 1 950 | ja | – |
-| `8710974792_1759741980_0` | 8710974792 → 1759741980 | 2276 (91,1 m) | ej i registret | ja | 0 / 0 | 0 / 0 / 0 | 0 / 0 | nej | samma sex koder som den första raden |
-| `9037093028_1305379743_0` | 9037093028 → 1305379743 | 1076 (87,6 m) | ej i registret | ja | 1 / 1 | 40 473 / 42 528 / 42 887 | 30 / 1 950 | ja | – |
+Drifttesterna föll när `verify_inventory` muterades så att den inte rehashar.
+GREEN: alla 49 går igenom. Testerna bevisar följande:
+- de frysta sub-hour-registreringarna (`validation/subhour_bounded_sumo_registration_*.json`)
+  tolkas som legacy, och legacy reproducerar den frysta urvalsdigesten
+  inklusive nollkanten;
+- den nya policyn utesluter Läraregatans tomma riktning med en enda skanning;
+- ordningen bland godkända kandidater är deterministisk;
+- katalog- eller arkivdrift och manipulerad inventering gör evidensen
+  ogiltig;
+- varje fil parsas exakt en gång, och namngivna rutter räknas som
+  produktionsparsern räknar dem;
+- explicita användarspecar är opåverkade.
 
-*Canary-spec.* Regeln tar den första kandidaten i strukturell ordning som
-klarar steget före canary, alltså `26842525_26355153_0` (strukturell rang 2),
-utan någon regel om motsatt kant. Den nya specen
-`validation/wci_effect_canary_spec_20260917-v1.json` (content key `4e87e205…`,
-spec-nyckel `d38038fd…`, `search_id`
-`subhour-cold-ledger-profile-2027-09-effect-canary-v1-fdc134ec4e`) är den
-frysta profilspecen med bara kant och `search_id` bytta. Den binder
-källspecens hash och content key, profilen, urvalsregeln och censusen. Den
-frysta specen är orörd.
+*Inventering.* `validation/closure_effect_inventory_20260917-v1.json`
+(content key `57328bb0…`, output-hash `d41fbb38…`, inventering `4f3342f2…`,
+kandidatlista `c348c2b6…`, 205,0 s) parsade 92 filer en gång vardera:
+30 arkiv × 3 varianter plus katalogpoolerna weekday (`8548c819…`) och weekend
+(`77e237f0…`). Manifestet är `subhour_qualified_demand_manifest_20260915b`.
+`verify_inventory` är tom vid omkontroll.
 
-*Canary med verklig kostnad.* `validation/wci_effect_canary_20260917-v2.json`
-(content key `938b8681…`, output-hash `84c37da8…`, status **PASS**).
+| Kant | Närmaste sensor | Mätstatus | Katalog wd/we | Fordon q10/q50/q90 | Arkiv / dagenheter med trafik | Orsakskoder |
+|---|---|---|---:|---:|---:|---|
+| `26355153_26842525_0` | 133 | omätt motriktning | 0 / 0 | 0 / 0 / 0 | 0 / 0 | `no_catalog_route_support`, `no_observed_archive_crossings` |
+| `26842525_26355153_0` | 133 | mätt | 100 / 91 | 315 143 ×3 | 30 / 1 950 | `eligible` |
+| `26355153_96523321_0` | 134 | mätt | 58 / 56 | 264 671 ×3 | 30 / 1 950 | `eligible` |
+| `96523321_26355153_0` | 134 | omätt motriktning | 52 / 51 | 172 225 / 234 922 / 254 212 | 30 / 1 950 | `eligible` |
+| `8710974792_1759741980_0` | 2276 (91,1 m) | ej i registret | 0 / 0 | 0 / 0 / 0 | 0 / 0 | `no_catalog_route_support`, `no_observed_archive_crossings` |
+| `9037093028_1305379743_0` | 1076 (87,6 m) | ej i registret | 1 / 1 | 40 473 / 42 528 / 42 887 | 30 / 1 950 | `eligible` |
 
-* **Orakel:** oberoende per-fil-väg, 195 dagenheter på 972,7 s.
-* **Produktionsväg:** oförändrade `_raw_index_records`.
+*Canary-spec.* Den första godkända kandidaten i strukturell ordning är
+`26842525_26355153_0`. Den nya append-only-specen
+`validation/wci_effect_canary_spec_20260917-v2.json` har content key
+`e73a2a9a…`, spec-nyckel `d38038fd…` och `search_id`
+`subhour-cold-ledger-profile-2027-09-effect-canary-v2-fdc134ec4e`. Den binder:
+- den valda riktade kanten och policyversionen;
+- kandidatlistans digest och arkivmanifestets content key;
+- katalogpoolernas identiteter;
+- inventeringsevidensens content key;
+- källspecens hash, som är oförändrad och identisk med `10518ae`.
+
+Den frysta septemberspecen är orörd.
+
+*Canary med verklig kostnad.* `validation/wci_effect_canary_20260917-v3.json`
+(content key `32154c81…`, output-hash `26a94aba…`, status **PASS**). Innan
+körningen startar vägrar drivern spec som har drivit, inventering som inte
+längre stämmer, inaktuella produktionskällor och en kant som inte är
+policyns förstaval. Oraklet (en oberoende per-fil-väg) räknade 195
+dagenheter på 999,7 s.
 
 | Build keys | Dagenheter | Berörda fordon | Berörda dagenheter | Kostnad > 0 | `_raw_index_records` | Indexbyggen | Valideringar |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 65 | 232 845 | 65 | 65 | 39,17 s | 1 | 1 |
-| 2 | 130 | 514 533 | 130 | 130 | 63,31 s | 1 | 2 |
-| 3 | 195 | 866 217 | 195 | 195 | 86,61 s | 1 | 3 |
+| 1 | 65 | 232 845 | 65 | 65 | 39,71 s | 1 | 1 |
+| 2 | 130 | 514 533 | 130 | 130 | 62,80 s | 1 | 2 |
+| 3 | 195 | 866 217 | 195 | 195 | 86,44 s | 1 | 3 |
 
-Oraklet är komplett och fältidentiskt. Kostnaden per enhet (`candidate_id`,
-`cost`, `daily_unit_ids`, `per_variant`) och provideridentiteterna är exakt
-lika. 1- och 2-nyckelskörningarna ingår byte-identiskt i 3-nyckelskörningen.
-Ingen SUMO-process startades och inget demandarkiv skapades.
-`effect_eligible` blev sant utan kvarvarande skäl. Kostnaderna per enhet är
-identiska med den ersatta v1-canaryn. En hel kandidat spänner över fem build
-keys, så kostnaden jämförs per dagenhet med produktionens kandidatreduktion.
-Tiderna är inget underlag för en projektion av ett helt bygge.
+Kontrollerna gav följande:
+- oraklet, kostnaden per enhet och provideridentiteterna är exakt lika;
+- 1- och 2-nyckelskörningarna ingår identiskt i 3-nyckelskörningen;
+- ingen SUMO-process startades och inget demandarkiv skapades;
+- `canary_confirmed` är sant.
 
-*Kvar:* den frysta profilspecen är oförändrad och ger fortfarande bara
-nollkostnader. Före ett fullständigt WCI-bygge ska ett månadsfall frysas med
-det automatiska urvalet (eller canary-specen användas uttryckligen), och ett
-sådant bygge kräver ett eget beslut. Två testfel fanns redan före denna
-ändring och uppträder likadant på en ren `10518ae`: sigilltestet
-(`demand/day_library.py` och `traffic_sim/ops/io_phases.py` saknas i sigillet)
-och det tidsberoende gate-S-fallet `performance-miss`. Steg 6 är inte
-startat.
+Alla hashbindningar räknades om från disk: content keys, driver och hjälpare,
+produktionskällor, kontraktsfiler, output-hashar, spec-nyckel,
+inventeringsdrift och kedjan canary → spec → inventering. Tiderna är inget
+underlag för en projektion av ett helt bygge.
+
+*Kvar:*
+- Den frysta profilspecen är oförändrad och ger fortfarande bara
+  nollkostnader.
+- WCI är inte antaget. Ett fullständigt bygge kräver ett eget beslut.
+- `ARCHITECTURE.md` beskriver ännu inte urvalspolicyn.
+- Två testfel fanns redan före denna ändring och uppträder likadant på en ren
+  `10518ae`:
+  - sigilltestet: `demand/day_library.py` och `traffic_sim/ops/io_phases.py`
+    saknas i sigillet;
+  - det tidsberoende gate-S-fallet `performance-miss`.
+- Steg 6 är inte startat.
 
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 

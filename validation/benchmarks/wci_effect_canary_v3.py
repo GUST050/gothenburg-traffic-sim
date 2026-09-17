@@ -1,21 +1,22 @@
-"""Bounded NONZERO WindowCostIndex canary on an append-only canary spec.
+"""Bounded NONZERO WindowCostIndex canary on a policy-selected canary spec.
 
-The case comes from ``validation/wci_effect_canary_spec_*`` written by
-``effect_eligibility_census_v2``: the frozen profile spec with only its
-directed edge replaced by the first structural road that passed the
-pre-canary stage of ``effect_eligibility_v2``. The frozen spec is never
-edited. This driver:
+The case comes from ``validation/wci_effect_canary_spec_*`` (schema
+``wci_effect_canary_spec_v2``) written by ``closure_effect_census_v1``: the
+frozen profile spec with only its directed edge replaced by the first
+structural road that ``closure_effect_eligibility_v1`` found eligible. The
+frozen spec is never edited. This driver:
 
-1. verifies the canary spec (content key, spec content key, provenance and
-   the census it names, whose production sources must still match);
+1. verifies the canary spec (content keys, policy, source spec) and the
+   inventory evidence it names: that evidence must still verify, i.e. no
+   catalog pool or archive variant it read may have drifted;
 2. computes an independent oracle for 1-3 build keys through the production
    per-file path (``ArchiveDisruptionProvider`` with a fresh
    ``DailyCostCache``), in its own process;
 3. runs the unmodified production ``_raw_index_records`` for 1, 2 and 3 of
    those build keys, each in a fresh process, with only the unit population
    filtered at ``daily_unit_records``;
-4. completes ``effect_eligibility_v2`` with the canary stage over a single
-   read of the canary archives.
+4. records the canary confirmation: affected vehicles, an affected daily
+   unit and a cost above zero.
 
 A candidate spans five build keys, so no whole candidate fits in 1-3 keys;
 costs are compared per daily unit with the production candidate reduction.
@@ -47,15 +48,15 @@ from wci_current_code_canary_v1 import (  # noqa: E402
     _verified,
 )
 
-SCHEMA = "wci_effect_canary_v2"
+SCHEMA = "wci_effect_canary_v3"
 KEY_COUNTS = (1, 2, 3)
 PRODUCTION_SOURCES = (
     "tools/build_window_cost_index.py",
+    "tools/closure_effect_eligibility.py",
     "tools/cost_ordered_benchmark.py",
     "traffic_sim/core/contracts.py",
     "traffic_sim/simulation/deterministic_disruption.py",
     "traffic_sim/simulation/disruption.py",
-    "traffic_sim/simulation/effect_eligibility.py",
     "traffic_sim/simulation/independent_daily.py",
     "traffic_sim/simulation/monthly_demand.py",
     "traffic_sim/simulation/window_cost_index.py",
@@ -68,28 +69,37 @@ COST_FIELDS = ("added_vehicle_hours", "added_metres_total",
 
 def load_canary_spec(path: Path):
     """The canary spec, refused unless every binding still holds."""
+    from tools import closure_effect_eligibility as cee
     from traffic_sim.core.contracts import ClosureSearchSpec
 
     record = _verified(path)
+    if record.get("schema") != "wci_effect_canary_spec_v2":
+        raise SystemExit("unexpected canary spec schema")
+    if cee.policy_of(record) != cee.POLICY:
+        raise SystemExit("canary spec was not selected by the effect policy")
     spec = ClosureSearchSpec.from_dict(record["spec"])
     if spec.content_key != record["spec_content_key"]:
         raise SystemExit("canary spec content key drifted")
-    provenance = record["provenance"]
-    source = provenance["source_spec"]
+    source = record["source_spec"]
     if common.file_sha256(ROOT / source["path"]) != source["sha256"]:
         raise SystemExit("the source spec changed after the canary spec")
-    census = _verified(Path(provenance["effect_census"]["path"]))
-    if census["content_key"] != provenance["effect_census"]["content_key"]:
-        raise SystemExit("canary spec names a different census")
-    stale = [name for name, sha in census["production_sources"].items()
+    evidence = _verified(Path(record["inventory_evidence"]["path"]))
+    if (evidence["content_key"] != record["inventory_evidence"]["content_key"]
+            or evidence["inventory_content_key"]
+            != record["inventory_content_key"]):
+        raise SystemExit("canary spec names different inventory evidence")
+    stale = [name for name, sha in evidence["production_sources"].items()
              if common.file_sha256(ROOT / name) != sha]
     if stale:
-        raise SystemExit(f"effect census binds stale sources: {stale}")
-    chosen = provenance["chosen"]
-    if not (chosen["structurally_survivable"]
-            and chosen["pre_canary_eligible"]
-            and tuple(spec.directed_edges) == (chosen["edge_id"],)):
-        raise SystemExit("canary spec does not name a pre-canary edge")
+        raise SystemExit(f"inventory evidence binds stale sources: {stale}")
+    drift = cee.verify_inventory(evidence["inventory"])
+    if drift:
+        raise SystemExit(f"inventory evidence is no longer valid: {drift}")
+    chosen = record["chosen_verdict"]
+    if not (chosen["effect_eligible"] and chosen["structurally_survivable"]
+            and tuple(spec.directed_edges) == (record["chosen_edge"],)
+            and evidence["eligible_in_order"][:1] == [record["chosen_edge"]]):
+        raise SystemExit("canary spec does not name the policy's choice")
     return spec, record
 
 
@@ -331,32 +341,22 @@ def _checks(runs: Dict[int, Dict[str, Any]],
     return checks
 
 
-def _final_assessment(spec, bound, oracle, run):
-    """Complete effect_eligibility_v2 over one read of the canary archives."""
-    from tools import cost_ordered_benchmark as bench
-    from traffic_sim.simulation import effect_eligibility as effect
-
-    variant_by_file = {name: variant
-                       for variant, name in effect.VARIANT_FILENAMES.items()}
-    refs = [effect.ArchiveRef(
-        build_key=key, archive=Path(item["archive"]),
-        content_key=item["archive_content_key"],
-        route_sha256={variant_by_file[out["name"]]: out["sha256"]
-                      for out in item["outputs"]
-                      if out["name"] in variant_by_file})
-        for key, item in sorted(oracle["archives"].items())]
-    network_edges, catalog_root = bench._effect_sources(ROOT)
-    (edge,) = spec.directed_edges
-    inventory = effect.build_inventory(refs, [edge],
-                                       catalog_root=catalog_root)
-    units = bench._daily_units_by_build_key(spec, bound["runs_root"])
-    verdict = effect.assess(
-        edge, inventory, network_edges=network_edges, daily_units=units,
-        canary=effect.CanaryResult(
-            affected_vehicles_total=run["affected_vehicles_total"],
-            affected_daily_units=run["affected_daily_units"],
-            positive_costs=run["positive_costs"]))
-    return verdict.to_dict(), common.digest(inventory.to_dict())
+def _effect_assessment(spec_record, run):
+    """The policy verdict plus the bounded canary's confirmation."""
+    confirmation = {
+        "affected_vehicles_total_positive": run["affected_vehicles_total"] > 0,
+        "affected_daily_unit_present": run["affected_daily_units"] > 0,
+        "positive_cost_present": run["positive_costs"] > 0,
+    }
+    return {
+        "policy": spec_record["case_selection_policy"],
+        "edge_id": spec_record["chosen_edge"],
+        "effect_eligible": bool(
+            spec_record["chosen_verdict"]["effect_eligible"]),
+        "reason_codes": spec_record["chosen_verdict"]["reason_codes"],
+        "canary_confirmation": confirmation,
+        "canary_confirmed": all(confirmation.values()),
+    }
 
 
 def main() -> int:
@@ -412,10 +412,10 @@ def main() -> int:
         "no_sumo_process_started": sumo_after <= sumo_before,
         "no_demand_archive_created": runs_after == runs_before,
     }
-    assessment, inventory_digest = _final_assessment(
-        spec, bound, oracle, runs[3])
+    assessment = _effect_assessment(spec_record, runs[3])
     passed = (all(all(group.values()) for group in checks.values())
-              and assessment["effect_eligible"])
+              and assessment["effect_eligible"]
+              and assessment["canary_confirmed"])
     record = {
         "schema": SCHEMA,
         "release_evidence": False,
@@ -432,6 +432,9 @@ def main() -> int:
                     "sha256": common.file_sha256(args.profile)},
         "canary_spec": {"path": str(args.canary_spec),
                         "content_key": spec_record["content_key"],
+                        "policy": spec_record["case_selection_policy"],
+                        "inventory_evidence": spec_record[
+                            "inventory_evidence"],
                         "spec_content_key": spec.content_key,
                         "search_id": spec.search_id,
                         "directed_edges": list(spec.directed_edges)},
@@ -449,7 +452,6 @@ def main() -> int:
         "runs": [runs[count] for count in KEY_COUNTS],
         "contract_checks": checks,
         "effect_assessment": assessment,
-        "effect_inventory_digest": inventory_digest,
         "sumo_processes": {"before": sumo_before, "after": sumo_after},
         "runs_root_listing": {"before": runs_before, "after": runs_after},
     }
@@ -469,8 +471,7 @@ def main() -> int:
         "status": record["status"],
         "canary_spec": record["canary_spec"],
         "checks": checks,
-        "effect_assessment": {k: assessment[k] for k in (
-            "pre_canary_eligible", "effect_eligible", "reasons")},
+        "effect_assessment": assessment,
         "runs": [{"keys": count, "units": runs[count]["daily_units"],
                   "affected": runs[count]["affected_vehicles_total"],
                   "affected_units": runs[count]["affected_daily_units"],

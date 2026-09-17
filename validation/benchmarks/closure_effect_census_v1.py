@@ -1,20 +1,21 @@
-"""Effect eligibility of the six structural benchmark roads on the real month.
+"""closure_effect_eligibility_v1 on the six structural roads of the real month.
 
-One streaming inventory (``effect_eligibility.build_inventory``) reads each of
-the 30 qualified archives' three variant files and each bound catalog pool
-exactly once, verifies every variant against the SHA-256 the production
-archive validator bound, and freezes
-``edge -> variant -> build_key -> crossing vehicles``. The six roads the
-unchanged survivability rule ranks first are then judged against that one
-mapping with ``effect_eligibility.assess`` (pre-canary stage).
-
-The first road, in structural order, that passes the pre-canary stage becomes
-an append-only canary spec: the frozen profile spec with only its directed
-edge and search id replaced, with full provenance. If no road passes, no spec
-is written and no other edge is substituted.
+1. Resolve the 30 qualified archives through the production validator, which
+   binds each variant's SHA-256 and the archive content key.
+2. Build ONE inventory (``tools.closure_effect_eligibility.build_inventory``):
+   each catalog pool and each archive variant is parsed once with the
+   production route parser, for all six candidates together.
+3. Judge each candidate against that frozen table; publish the inventory
+   evidence (append-only).
+4. Only then, if a candidate is eligible, write a NEW append-only canary spec:
+   the frozen profile spec with only its directed edge and search id
+   replaced, bound to the policy, the candidate-list digest, the qualified
+   archive manifest, the catalog pool identities and the inventory evidence.
+   Eligible candidates keep the unchanged structural order; the first wins.
+   If none is eligible, no spec is written and no edge is substituted.
 
 Starts no SUMO, builds no demand or catalog, computes no cost, changes no
-existing spec, and writes only its own append-only evidence and spec files.
+existing spec, and writes only its own append-only files.
 """
 from __future__ import annotations
 
@@ -36,15 +37,16 @@ for entry in (str(ROOT), str(HERE)):
 import wci_diag_common as common  # noqa: E402
 from wci_closure_edge_census_v1 import _network_contract  # noqa: E402
 
-SCHEMA = "effect_eligibility_census_v2"
-SPEC_SCHEMA = "wci_effect_canary_spec_v1"
+SCHEMA = "closure_effect_inventory_evidence_v1"
+SPEC_SCHEMA = "wci_effect_canary_spec_v2"
 PROFILE_SPEC = "validation/subhour_monthly_search_profile_spec_v1.json"
 PRODUCTION_SOURCES = (
-    "traffic_sim/simulation/effect_eligibility.py",
+    "tools/closure_effect_eligibility.py",
     "tools/cost_ordered_benchmark.py",
     "tools/build_window_cost_index.py",
     "traffic_sim/core/contracts.py",
     "traffic_sim/simulation/deterministic_disruption.py",
+    "traffic_sim/simulation/disruption.py",
     "traffic_sim/simulation/independent_daily.py",
     "traffic_sim/simulation/metadata.py",
     "traffic_sim/simulation/monthly_demand.py",
@@ -53,10 +55,8 @@ CONTRACT_FILES = (
     "sumo/net.net.xml", "data_in/sensors.json", "web/data/network.geojson",
     "validation/closure_survivability_screen_v2.json", PROFILE_SPEC,
 )
-SELECTION_RULE = (
-    "the first of the six structurally surviving roads (unchanged "
-    "survivability order) that passes the pre-canary stage of "
-    "effect_eligibility_v2 over all 30 qualified archives")
+ORDER_RULE = ("eligible candidates first, then the unchanged structural "
+              "survivability order (dist_sensor_m, edge_id); the first wins")
 
 
 def _midpoint(coordinates: List[List[float]]):
@@ -72,23 +72,8 @@ def _haversine_m(a, b) -> float:
     return 2 * 6371008.8 * math.asin(math.sqrt(h))
 
 
-def _registry_roles(edge: str, sensors) -> List[Dict[str, Any]]:
-    roles = []
-    for sensor in sensors:
-        opposite = sensor.get("opposite_direction") or {}
-        if edge in sensor["approved_edge_ids"]:
-            roles.append({"sensor_id": sensor["sensor_id"],
-                          "role": "measured_edge"})
-        if opposite.get("edge_id") == edge:
-            roles.append({"sensor_id": sensor["sensor_id"],
-                          "role": "opposite_direction",
-                          "measurement_status":
-                              opposite.get("measurement_status")})
-    return roles
-
-
 def _sensor_context(edges: List[str]) -> Dict[str, Any]:
-    """Measurement status and nearest sensor, registry first."""
+    """Registry role, measurement status and nearest sensor per edge."""
     sensors = json.loads((ROOT / "data_in/sensors.json").read_text(
         encoding="utf-8"))["sensors"]
     geo = json.loads((ROOT / "web/data/network.geojson").read_text(
@@ -101,7 +86,14 @@ def _sensor_context(edges: List[str]) -> Dict[str, Any]:
                 for edge in sensor["approved_edge_ids"]]
     result = {}
     for edge in edges:
-        roles = _registry_roles(edge, sensors)
+        roles = []
+        for sensor in sensors:
+            if edge in sensor["approved_edge_ids"]:
+                roles.append({"sensor_id": sensor["sensor_id"],
+                              "role": "measured_edge"})
+            if (sensor.get("opposite_direction") or {}).get("edge_id") == edge:
+                roles.append({"sensor_id": sensor["sensor_id"],
+                              "role": "opposite_direction"})
         distance, nearest = min(
             ((_haversine_m(midpoints[edge], midpoints[other]), sensor_id)
              for sensor_id, other in measured
@@ -126,10 +118,9 @@ def _sensor_context(edges: List[str]) -> Dict[str, Any]:
     return result
 
 
-def _qualified_archives(builder, bound, spec):
-    """ArchiveRefs exactly as the production validator bound them."""
+def _qualified_archives(builder, bound, spec) -> Dict[str, Dict[str, Any]]:
+    """Resolver records exactly as the production validator bound them."""
     from traffic_sim.core.closure_calendar import iter_closure_schedules
-    from traffic_sim.simulation import effect_eligibility as effect
 
     resolver = builder.MonthlyDemandResolverRunner(
         spec, runs_root=bound["runs_root"], build_missing=False,
@@ -142,9 +133,7 @@ def _qualified_archives(builder, bound, spec):
             needed = resolver._required(build())
             required.setdefault(needed.build_key, needed)
     index = builder._archives_for_build_key(bound["runs_root"])
-    variant_by_file = {name: variant
-                       for variant, name in effect.VARIANT_FILENAMES.items()}
-    refs = []
+    resolved = {}
     for key, needed in sorted(required.items()):
         matches = builder.find_demand_archives(
             bound["runs_root"], needed,
@@ -152,19 +141,15 @@ def _qualified_archives(builder, bound, spec):
             _archive_index=index)
         if not matches:
             raise SystemExit(f"no qualified archive for build key {key}")
-        match = matches[0]
-        refs.append(effect.ArchiveRef(
-            build_key=key, archive=Path(match["archive"]).resolve(),
-            content_key=match["archive_content_key"],
-            route_sha256={variant_by_file[item["name"]]: item["sha256"]
-                          for item in match["outputs"]
-                          if item["name"] in variant_by_file}))
-    return refs
+        resolved[key] = {
+            "archive": str(Path(matches[0]["archive"]).resolve()),
+            "archive_content_key": matches[0]["archive_content_key"],
+            "outputs": matches[0]["outputs"]}
+    return resolved
 
 
-def _candidate_row(road, rank, verdict, contract, sensors):
+def _row(road, rank, verdict, contract, sensors):
     edge = str(road["edge_id"])
-    summary = verdict.summary
     return {
         "edge_id": edge,
         "structural_rank": rank,
@@ -173,26 +158,28 @@ def _candidate_row(road, rank, verdict, contract, sensors):
         **sensors[edge],
         "structurally_survivable": bool(road.get("survives_topology")),
         "screen_dist_sensor_m": road.get("dist_sensor_m"),
-        "catalog_routes": summary["catalog_routes"],
-        "vehicles": summary["vehicles"],
-        "archives": summary["archives"],
-        "archives_with_traffic": summary["archives_with_traffic"],
-        "daily_units": summary["daily_units"],
-        "daily_units_with_traffic": summary["daily_units_with_traffic"],
-        "pre_canary_eligible": verdict.pre_canary_eligible,
+        **verdict.summary,
         "effect_eligible": verdict.effect_eligible,
-        "reason_codes": list(verdict.reasons),
-        "rejection_reason_codes": [code for code in verdict.reasons
-                                   if code != "canary_not_run"],
+        "reason_codes": list(verdict.reason_codes),
+        "reasons": [dict(item) for item in verdict.reasons],
     }
 
 
-def _canary_spec_record(spec, chosen, census_path, census_key, profile):
+def _pool_identities(inventory) -> Dict[str, Dict[str, Any]]:
+    pools: Dict[str, Dict[str, Any]] = {}
+    for key, entry in sorted(inventory.catalogs.items()):
+        for pool in entry["pools"]:
+            pools[pool] = {"catalog_key": key, "sha256": entry.get("sha256"),
+                           "declared_sha256": entry["declared_sha256"]}
+    return pools
+
+
+def _spec_record(spec, chosen, context):
     from traffic_sim.core.contracts import ClosureSearchSpec
 
     token = hashlib.sha256(chosen["edge_id"].encode("utf-8")).hexdigest()[:10]
     derived = dataclasses.replace(
-        spec, search_id=f"{spec.search_id}-effect-canary-v1-{token}",
+        spec, search_id=f"{spec.search_id}-effect-canary-v2-{token}",
         directed_edges=(chosen["edge_id"],))
     if ClosureSearchSpec.from_dict(derived.to_dict()) != derived:
         raise SystemExit("derived canary spec does not round-trip")
@@ -202,25 +189,29 @@ def _canary_spec_record(spec, chosen, census_path, census_key, profile):
         "release_evidence": False,
         "purpose": ("bounded nonzero WindowCostIndex canary; an automatically "
                     "selected performance case, not a user closure"),
+        "case_selection_policy": context["policy"],
         "spec": derived.to_dict(),
         "spec_content_key": derived.content_key,
-        "provenance": {
-            "source_spec": {
-                "path": PROFILE_SPEC,
-                "sha256": common.file_sha256(ROOT / PROFILE_SPEC),
-                "search_id": spec.search_id,
-                "content_key": spec.content_key,
-                "directed_edges": list(spec.directed_edges),
-            },
-            "source_spec_left_unchanged": True,
-            "derivation": ("identical to the source spec except "
-                           "directed_edges and search_id"),
-            "profile": profile,
-            "selection_rule": SELECTION_RULE,
-            "effect_census": {"path": str(census_path),
-                              "content_key": census_key},
-            "chosen": chosen,
+        "chosen_edge": chosen["edge_id"],
+        "chosen_verdict": chosen,
+        "candidate_list_digest": context["candidate_list_digest"],
+        "order_rule": ORDER_RULE,
+        "qualified_demand_manifest": context["qualified_ref"],
+        "catalog_pools": context["catalog_pools"],
+        "inventory_evidence": {"path": context["evidence_path"],
+                               "content_key": context["evidence_key"]},
+        "inventory_content_key": context["inventory_content_key"],
+        "source_spec": {
+            "path": PROFILE_SPEC,
+            "sha256": common.file_sha256(ROOT / PROFILE_SPEC),
+            "search_id": spec.search_id,
+            "content_key": spec.content_key,
+            "directed_edges": list(spec.directed_edges),
+            "left_unchanged": True,
         },
+        "derivation": ("identical to the source spec except directed_edges "
+                       "and search_id"),
+        "profile": context["profile"],
     }
 
 
@@ -235,91 +226,105 @@ def main() -> int:
             raise SystemExit(f"append-only output already exists: {path}")
 
     from tools import build_window_cost_index as builder
+    from tools import closure_effect_eligibility as cee
     from tools import cost_ordered_benchmark as bench
-    from traffic_sim.simulation import effect_eligibility as effect
 
     sampler = common.Sampler()
     bound = builder._bound_inputs(args.profile)
     spec = bound["spec"]
-    refs = _qualified_archives(builder, bound, spec)
-    if sorted(ref.build_key for ref in refs) != sorted(
-            bound["qualified_manifest"]["archives"]):
+    resolved = _qualified_archives(builder, bound, spec)
+    if sorted(resolved) != sorted(bound["qualified_manifest"]["archives"]):
         raise SystemExit("resolved archives are not the qualified set")
-    sampler.sample("resolved")
-
     roads = bench.surviving_roads()
-    edges = [str(road["edge_id"]) for road in roads]
+    candidates = [str(road["edge_id"]) for road in roads]
     network_edges, catalog_root = bench._effect_sources(ROOT)
-    inventory = effect.build_inventory(refs, edges, catalog_root=catalog_root)
-    reads = inventory.file_reads
-    if set(reads.values()) != {1} or len(reads) != 3 * len(refs) + len(
-            inventory.catalogs):
-        raise SystemExit(f"inventory did not read each file once: {reads}")
+    inventory = cee.build_inventory(candidates, cee.archive_refs(resolved),
+                                    catalog_root=catalog_root)
     sampler.sample("inventory")
+    inventory_record = inventory.to_dict()
+    if set(inventory.parses.values()) != {1} or len(inventory.parses) != (
+            3 * len(resolved) + len(inventory.catalogs)):
+        raise SystemExit(f"a file was not parsed exactly once: "
+                         f"{inventory.parses}")
+    if cee.verify_inventory(inventory_record):
+        raise SystemExit("fresh inventory does not verify")
     units = bench._daily_units_by_build_key(spec, bound["runs_root"])
-    contract = _network_contract(edges)
-    sensors = _sensor_context(edges)
-    rows = [
-        _candidate_row(road, rank, effect.assess(
-            str(road["edge_id"]), inventory, network_edges=network_edges,
-            daily_units=units), contract, sensors)
-        for rank, road in enumerate(roads, start=1)]
-    chosen = next((row for row in rows if row["pre_canary_eligible"]), None)
+    verdicts = {edge: cee.assess(edge, inventory, network_edges=network_edges,
+                                 required_build_keys=list(resolved),
+                                 daily_units=units)
+                for edge in candidates}
+    contract = _network_contract(candidates)
+    sensors = _sensor_context(candidates)
+    rows = [_row(road, rank, verdicts[str(road["edge_id"])], contract,
+                 sensors) for rank, road in enumerate(roads, start=1)]
+    chosen_rows = cee.eligible_in_order(
+        rows, lambda row: row, order_key=lambda row: row["structural_rank"])
+    chosen = chosen_rows[0] if chosen_rows else None
     sampler.sample("end")
 
     profile = {"path": str(args.profile),
                "sha256": common.file_sha256(args.profile)}
-    inventory_record = inventory.to_dict()
     record = {
         "schema": SCHEMA,
         "release_evidence": False,
+        "case_selection_policy": cee.POLICY,
         "driver": common.driver_binding(Path(__file__)),
-        "census_helper": {
-            "path": "validation/benchmarks/wci_closure_edge_census_v1.py",
-            "sha256": common.file_sha256(
-                HERE / "wci_closure_edge_census_v1.py")},
+        "helpers": common.source_bindings((
+            "validation/benchmarks/wci_closure_edge_census_v1.py",)),
         "production_sources": common.source_bindings(PRODUCTION_SOURCES),
         "contract_files": common.source_bindings(CONTRACT_FILES),
         "git": common.git_state(),
         "runtime": common.runtime_manifest(),
         "profile": profile,
         "qualified_demand_manifest": bound["qualified_ref"],
-        "contract": effect.CONTRACT_VERSION,
-        "structural_rule": ("tools.cost_ordered_benchmark.surviving_roads, "
-                            "unchanged"),
-        "selection_rule": SELECTION_RULE,
+        "candidates": candidates,
+        "candidate_list_digest": common.digest(candidates),
+        "candidate_source": ("tools.cost_ordered_benchmark.surviving_roads, "
+                             "unchanged"),
         "daily_units_by_build_key": dict(sorted(units.items())),
-        "candidates": rows,
+        "inventory": inventory_record,
+        "inventory_content_key": inventory.content_key,
+        "catalog_pools": _pool_identities(inventory),
+        "rows": rows,
+        "order_rule": ORDER_RULE,
+        "eligible_in_order": [row["edge_id"] for row in chosen_rows],
         "selected_edge": chosen["edge_id"] if chosen else None,
         "outcome": ("canary spec written" if chosen else
                     "no structural candidate is effect-eligible; a new "
                     "benchmark case is needed"),
-        "canary_spec_path": str(args.canary_spec_out) if chosen else None,
-        "inventory": inventory_record,
-        "inventory_digest": common.digest(inventory_record),
         "memory": {"samples": sampler.samples},
     }
     record["output_sha256"] = common.digest({
-        "candidates": rows, "selected_edge": record["selected_edge"],
-        "inventory_digest": record["inventory_digest"],
-        "daily_units_by_build_key": record["daily_units_by_build_key"],
+        "candidates": candidates, "rows": rows,
+        "inventory_content_key": inventory.content_key,
+        "eligible_in_order": record["eligible_in_order"],
     })
     published = common.publish(args.out, record)
     spec_record = None
     if chosen:
-        spec_record = common.publish(args.canary_spec_out, _canary_spec_record(
-            spec, chosen, args.out, published["content_key"], profile))
+        spec_record = common.publish(args.canary_spec_out, _spec_record(
+            spec, chosen, {
+                "policy": cee.POLICY,
+                "candidate_list_digest": record["candidate_list_digest"],
+                "qualified_ref": bound["qualified_ref"],
+                "catalog_pools": record["catalog_pools"],
+                "evidence_path": str(args.out),
+                "evidence_key": published["content_key"],
+                "inventory_content_key": inventory.content_key,
+                "profile": profile,
+            }))
     print(json.dumps({
-        "candidates": [{k: row[k] for k in (
+        "rows": [{k: row[k] for k in (
             "edge_id", "from_node", "to_node", "nearest_sensor",
             "measurement_status", "structurally_survivable",
-            "catalog_routes", "vehicles", "archives_with_traffic",
-            "daily_units_with_traffic", "pre_canary_eligible",
-            "effect_eligible", "rejection_reason_codes")} for row in rows],
-        "selected_edge": record["selected_edge"],
-        "files_read": len(reads),
+            "catalog_routes", "crossings", "archives_with_crossings",
+            "daily_units_with_crossings", "effect_eligible",
+            "reason_codes")} for row in rows],
+        "eligible_in_order": record["eligible_in_order"],
+        "files_parsed": len(inventory.parses),
         "wall_s": round(sampler.samples[-1]["wall_s"], 1),
         "content_key": published["content_key"],
+        "inventory_content_key": inventory.content_key,
         "output_sha256": record["output_sha256"],
         "canary_spec": (None if spec_record is None else {
             "search_id": spec_record["spec"]["search_id"],

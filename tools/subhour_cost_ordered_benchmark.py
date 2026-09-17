@@ -27,6 +27,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import tools.cost_ordered_benchmark as base  # noqa: E402
+import tools.closure_effect_eligibility as closure_effect  # noqa: E402
 from traffic_sim.core.fingerprint import sha256_file  # noqa: E402
 from traffic_sim.simulation.monthly_demand import (  # noqa: E402
     validate_qualified_demand_manifest_shape,
@@ -183,8 +184,16 @@ def outcome_free_tuple(item: Mapping[str, Any]) -> tuple[str, str, str, str, str
     )
 
 
-def _metadata_inventory(runs_root: Path, qualified_manifest: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
-    """Build the complete eligible inventory without opening outcome files."""
+def _metadata_inventory(runs_root: Path,
+                        qualified_manifest: Mapping[str, Any] | None = None,
+                        policy: str = closure_effect.POLICY,
+                        ) -> list[dict[str, Any]]:
+    """Build the complete eligible inventory without opening outcome files.
+
+    ``structural_survivability_v1`` reproduces the historical inventory
+    exactly; ``closure_effect_eligibility_v1`` additionally keeps only cases
+    with a verified traffic effect in the archives they resolve to.
+    """
     # These helpers read demand_meta/routes and the topology survivability
     # screen only.  They do not import or glob validation/*outcome* records.
     items: list[dict[str, Any]] = []
@@ -212,22 +221,23 @@ def _metadata_inventory(runs_root: Path, qualified_manifest: Mapping[str, Any] |
         item["selection_tuple"] = list(outcome_free_tuple(item))
         item["selection_sha256"] = _key(outcome_free_tuple(item))
         items.append(item)
-        cases.append((spec, _effect_archives(spec, Path(runs_root),
-                                             qualified_manifest)))
-    # Discovery is structural; this automatic selection also needs a real
-    # traffic effect in the archives each case resolves to (effect
-    # eligibility, pre-canary stage). Every archive is read once for all cases.
-    verdicts, _summary = base.effect_screen_cases(
-        [(spec, archives) for spec, archives in cases if archives is not None],
-        runs_root=Path(runs_root))
-    kept = []
-    for item in items:
-        verdict = verdicts.get(item["search_content_key"])
-        if verdict is None or not verdict["pre_canary_eligible"]:
-            continue
-        item["effect_eligible_pre_canary"] = True
-        kept.append(item)
-    return sorted(kept, key=lambda item: item["selection_sha256"])
+        if policy == closure_effect.POLICY:
+            cases.append((spec, _effect_archives(spec, Path(runs_root),
+                                                 qualified_manifest)))
+    if policy == closure_effect.POLICY:
+        # Discovery is structural; this automatic selection also needs a real
+        # traffic effect. Every archive is parsed once for all cases, and the
+        # frozen SHA order below is applied to the eligible cases unchanged.
+        verdicts, _summary = base.effect_screen_cases(
+            [(spec, archives) for spec, archives in cases
+             if archives is not None],
+            runs_root=Path(runs_root))
+        items = closure_effect.eligible_in_order(
+            items, lambda item: verdicts.get(item["search_content_key"]) or {},
+            order_key=lambda item: item["selection_sha256"])
+        for item in items:
+            item["case_selection_policy"] = policy
+    return sorted(items, key=lambda item: item["selection_sha256"])
 
 
 def _effect_archives(spec: Any, runs_root: Path,
@@ -370,13 +380,16 @@ def _metadata_archives_for_spec(spec: Any, runs_root: Path,
 
 
 def select_cases(runs_root: Path = base.DEFAULT_RUNS_ROOT,
-                 qualified_manifest: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                 qualified_manifest: Mapping[str, Any] | None = None,
+                 policy: str = closure_effect.POLICY) -> dict[str, Any]:
     """Select eight cases with four edges and two demand periods."""
     if qualified_manifest is not None:
         validate_qualified_demand_manifest_shape(qualified_manifest)
         if qualified_manifest.get("status") != "PASS":
             raise ValueError("Phase 3 requires a passing qualified-demand manifest")
-    eligible = _metadata_inventory(Path(runs_root), qualified_manifest)
+    if policy not in closure_effect.POLICIES:
+        raise ValueError(f"unknown case_selection_policy {policy!r}")
+    eligible = _metadata_inventory(Path(runs_root), qualified_manifest, policy)
     edges = sorted({str(item["spec"]["directed_edges"][0])
                     for item in eligible})
     periods = sorted({str(item["demand_period"]) for item in eligible})
@@ -426,7 +439,21 @@ def select_cases(runs_root: Path = base.DEFAULT_RUNS_ROOT,
         "distinct_edges": sorted({item["spec"]["directed_edges"][0]
                                    for item in chosen}),
         "distinct_periods": sorted({item["demand_period"] for item in chosen}),
+        "case_selection_policy": policy,
     }
+
+
+def _recompute_selection(record: Mapping[str, Any], runs_root: Path,
+                         qualified_manifest: Mapping[str, Any] | None
+                         ) -> dict[str, Any]:
+    """Replay the policy a registration was frozen under.
+
+    Registrations without ``case_selection_policy`` predate effect
+    eligibility and are replayed with the structural policy, so their
+    historical selection and eligible-list digest stay reproducible.
+    """
+    return select_cases(runs_root, qualified_manifest,
+                        closure_effect.policy_of(record.get("selection")))
 
 
 def _source_digests() -> dict[str, str]:
@@ -504,6 +531,7 @@ def build_registration(
         },
         "selection": {
             "rule": selection["rule"],
+            "case_selection_policy": selection["case_selection_policy"],
             "eligible_list_digest": selection["eligible_list_digest"],
             "eligible_count": len(selection["eligible"]),
             "selected_ids": selected_ids,
@@ -611,7 +639,8 @@ def verify_registration(record: Mapping[str, Any], *, root: Path = ROOT,
             or qualified_manifest.get("content_key") != qualified_ref.get("content_key")
             or qualified_manifest.get("evidence_id") != qualified_ref.get("evidence_id")):
         raise ValueError("qualified-demand manifest binding drift")
-    recomputed_selection = select_cases(runs_root, qualified_manifest)
+    recomputed_selection = _recompute_selection(record, runs_root,
+                                                qualified_manifest)
     if selected_ids != [str(item) for item in recomputed_selection["selected_ids"]]:
         raise ValueError("registration selected IDs do not follow the frozen rule")
     if selection.get("eligible_list_digest") != recomputed_selection["eligible_list_digest"]:
@@ -663,7 +692,7 @@ def verify_registration(record: Mapping[str, Any], *, root: Path = ROOT,
         raise ValueError("registration reuses a historical v1-v5 root")
     if runs_root != Path(record.get("runs_root", runs_root)).resolve():
         raise ValueError("registration runs root is not canonical")
-    recomputed = select_cases(runs_root, qualified_manifest)
+    recomputed = _recompute_selection(record, runs_root, qualified_manifest)
     if recomputed["eligible_list_digest"] != selection.get("eligible_list_digest"):
         raise ValueError("eligible metadata inventory drift")
     if [str(item) for item in selection["selected_ids"]] != [
