@@ -1838,6 +1838,7 @@ def _cost_source_for(spec, runner, args=None, *, daily_cost_cache=None,
 
     daily_runner = getattr(runner, "daily_runner", None)
     units_for = getattr(runner, "daily_units_for", None)
+    scope_owner = None
     if daily_runner is None or units_for is None:
         raise ValueError(
             "cost-ordered execution requires the independent daily runner; "
@@ -1857,7 +1858,10 @@ def _cost_source_for(spec, runner, args=None, *, daily_cost_cache=None,
             resolver = getattr(
                 inner, "deterministic_disruption_provider", None)
             if resolver is not None:
+                scope_owner = inner
                 break
+    else:
+        scope_owner = daily_runner
     if resolver is None:
         raise ValueError(
             "cost-ordered execution needs a demand resolver that can produce a "
@@ -1873,14 +1877,30 @@ def _cost_source_for(spec, runner, args=None, *, daily_cost_cache=None,
                 "a cost source needs a daily cost cache location")
         daily_cost_cache = args.daily_cost_cache
     cache = DailyCostCache(Path(daily_cost_cache))
+    # Which units may share one provider: the resolver's PUBLIC archive_for,
+    # so the grouping is the archive itself rather than a guess. Without it
+    # the cost source falls back to one provider per daily unit, which is
+    # what made a month run hold 1,950 of them.
+    archive_for = getattr(scope_owner, "archive_for", None)
+    if not callable(archive_for):
+        raise ValueError(
+            "cost-ordered execution needs a resolver that can name each "
+            "daily unit's archive; without it every unit would open its own "
+            "provider and re-read the same route files")
+
+    def provider_scope_key_for(unit_schedule) -> str:
+        return str(Path(archive_for(unit_schedule)).resolve())
+
     return IndependentDailyCostSource(
         spec,
         daily_units_for=units_for,
         provider_for=lambda unit_schedule: resolver(
-            unit_schedule, cache=cache, network=network),
+            unit_schedule, cache=cache, network=network,
+            reuse_parsed_routes=True),
         cache=cache,
         window_cost_index=window_cost_index,
         objective_method=objective_method,
+        provider_scope_key_for=provider_scope_key_for,
     )
 
 

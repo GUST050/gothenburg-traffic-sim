@@ -1,0 +1,201 @@
+{
+  "adoption_eligible": false,
+  "claim_boundary": "a decision over bounded canaries of the real build_cost_ledger. It rebuilds no profile and authorises nothing: a rebuild needs the user's separate explicit approval",
+  "content_key": "4464c5224f556ea05dfa5b6335c6f4ca617533dccf1817d728869c23a9b20a2d",
+  "decision": "READY_FOR_USER_APPROVED_PROFILE_REBUILD",
+  "diagnostic_only": true,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_two_phase_decision_v1.py",
+    "sha256": "06ee12d2894936418f3b3117132f9181d910908a7f91a6a20cf8f4db7038ad99"
+  },
+  "forecast": {
+    "basis": "the two-phase canary's measured per-unit wall over the 1, 2 and 3 build-key runs",
+    "conservative_upper_wall_s": 8407.7818678125,
+    "expected_peak_footprint_bytes": 1525942025.0,
+    "expected_wall_s": 5398.9241437499995,
+    "machine_state_caveat": "the same key measured 2.758 s per unit on 2026-09-17 and about 5.4 s on the baseline arm today, so machine state alone moves this by a factor of two. The conservative bound carries 1.5x on top of the slowest measured key",
+    "month_daily_units": 1950,
+    "per_unit_s": {
+      "high": 2.874455339423077,
+      "low": 2.645170921794872,
+      "median": 2.768679048076923
+    },
+    "published_profile_peak_rss_bytes": 6520061952,
+    "published_profile_wall_s": 7320.348
+  },
+  "gate": {
+    "checks": {
+      "every_arm_priced_every_unit_once": true,
+      "every_arm_produced_the_same_ledger": true,
+      "every_arm_produced_the_same_parent_costs": true,
+      "every_candidate_arm_beat_every_baseline_arm": true,
+      "memory_does_not_grow_linearly_with_finished_keys": true,
+      "no_arm_grew_swap": true,
+      "no_earlier_provider_was_reachable": true,
+      "no_evidence_gate_weakened": true,
+      "no_run_hit_its_memory_guard": true,
+      "no_sumo_or_demand_process": true,
+      "the_baseline_parsed_once_per_unit_and_variant": true,
+      "the_candidate_built_one_provider_per_build_key": true,
+      "the_candidate_parsed_three_times_per_build_key": true,
+      "the_three_key_peak_is_under_2_gib": true
+    },
+    "cpu_s": {
+      "A": [
+        356.68086,
+        353.749554
+      ],
+      "B": [
+        200.327986,
+        201.07934899999998
+      ]
+    },
+    "extrapolated_month_footprint_bytes": 1525942025.0,
+    "one_key_memory_note": "for ONE build key the candidate peaks HIGHER: it holds one provider carrying three parsed variants for the whole key, where the baseline holds 65 small ones. The gain is in the scaling, because that single provider dies at every key boundary while the baseline's 65 accumulate",
+    "one_key_peak_footprint_bytes": {
+      "A": [
+        656098360,
+        623953024
+      ],
+      "B": [
+        1023411568,
+        1035715904
+      ]
+    },
+    "parses": {
+      "A": [
+        195,
+        195
+      ],
+      "B": [
+        3,
+        3
+      ]
+    },
+    "providers": {
+      "A": [
+        65,
+        65
+      ],
+      "B": [
+        1,
+        1
+      ]
+    },
+    "retention": {
+      "instrument": "tracemalloc current, not RSS or footprint",
+      "python_heap_bytes_at_end": 669598,
+      "python_heap_bytes_left_by_each_finished_key": 205107.0,
+      "python_heap_held_at_each_key_start_bytes": [
+        129877,
+        348339,
+        540091
+      ],
+      "python_heap_transient_peak_per_key_bytes": [
+        493822355,
+        553367010,
+        615213796
+      ],
+      "reading": "a finished build key leaves about 0.2 MB behind, against a transient peak of about 615 MB inside the key. The physical footprint appears to rise about 286 MB per key, but that is the allocator's high-water mark: the heap returns to near zero at every key boundary, and no provider is reachable",
+      "traced_run_is_slower_and_larger": "tracemalloc roughly doubles the wall time and inflates the footprint, so the 2 GiB check uses the untraced runs"
+    },
+    "scaling_peak_footprint_bytes": [
+      948536568,
+      1250756072,
+      1520404136
+    ],
+    "scaling_slope_per_build_key": 285933784.0,
+    "separation_s": 152.602393458,
+    "speedup": 1.769544008644183,
+    "wall_s": {
+      "A": [
+        356.93171154099997,
+        353.813958083
+      ],
+      "B": [
+        200.443136333,
+        201.211564625
+      ]
+    }
+  },
+  "git": {
+    "head": "aa0ab8be31ec99eea5912319711697e1182c885d",
+    "tracked_changes": [
+      " M run_monthly_closure_search.py",
+      " M traffic_sim/simulation/cost_ordered_execution.py",
+      " M traffic_sim/simulation/monthly_demand.py"
+    ]
+  },
+  "inputs": {
+    "arms": [
+      {
+        "content_key": "4f01c73d2625271b1eb36f91d85f4bead94e8116b22cde60daa6cb1134c1efa2",
+        "label": "base-pos1",
+        "path": "validation/wci_two_phase_canary_20260918-abba1.json"
+      },
+      {
+        "content_key": "05c61f94673d57a627f81c5a82786e0265a893e6b5a14bf1b7004e793e6a3e93",
+        "label": "cand-pos2",
+        "path": "validation/wci_two_phase_canary_20260918-abba2.json"
+      },
+      {
+        "content_key": "81c43cc0ef5fe80b5737c6bfd99d49dd179a14eb62b3868ff80e911fe336417f",
+        "label": "cand-pos3",
+        "path": "validation/wci_two_phase_canary_20260918-abba3.json"
+      },
+      {
+        "content_key": "9acb023afe42474f71b582b61979ce198e641e1020d39201e996de4b291026bb",
+        "label": "base-pos4",
+        "path": "validation/wci_two_phase_canary_20260918-abba4.json"
+      }
+    ],
+    "retention": {
+      "content_key": "ea8e5b02c155e34c03edb04ce12b6811177256509de0e338a99f8ccea2835eb5",
+      "path": "validation/wci_two_phase_canary_20260918-retention.json"
+    },
+    "scaling": [
+      {
+        "content_key": "5832ba67d8a2db1618af3d3dddfce9b55d01dde549fe21bc613d0cb70bec8bd6",
+        "keys": 1,
+        "path": "validation/wci_two_phase_canary_20260918-scale1.json"
+      },
+      {
+        "content_key": "589168e72f6fbfc6cb0d9c25a876155ed68f265d0b749e466ecc80d0cd97af41",
+        "keys": 2,
+        "path": "validation/wci_two_phase_canary_20260918-scale2.json"
+      },
+      {
+        "content_key": "2ed5d5fc21ca1b7fd6e1fb7986e03edf00943950680aa73e66588de8b89b277e",
+        "keys": 3,
+        "path": "validation/wci_two_phase_canary_20260918-scale3.json"
+      }
+    ]
+  },
+  "production_chain_rebuild_required": true,
+  "recommended_budget": {
+    "memory_hard_bytes": 4294967296,
+    "supervisor_must_stop_when": [
+      "peak footprint passes the memory limit above",
+      "swap grows past 1 GiB",
+      "the wall passes the hard limit",
+      "any SUMO process or new demand archive appears",
+      "a daily unit's cost disagrees with a stored one",
+      "more than one cost provider is alive at once"
+    ],
+    "swap_growth_hard_bytes": 1073741824,
+    "wall_hard_s": 11210
+  },
+  "release_evidence": false,
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_two_phase_decision_v1"
+}

@@ -1,0 +1,605 @@
+{
+  "adoption_eligible": false,
+  "claim_boundary": "one process, one worker, no parallelism. It measures the real build_cost_ledger over a bounded set of build keys and nothing else; it builds no profile and adopts nothing",
+  "code_identity": {
+    "arm_sources": {
+      "run_monthly_closure_search.py": "01a20ef3622ae1c24a4f1815c2948ade4c3a02bd7ef8a221157bafd8c33bfbf7",
+      "run_scenario.py": "42752227c238be0bbb61d8d55c32359c976c5d91f8c9cdf5607f87146f21ea8b",
+      "traffic_sim/simulation/cost_ordered_execution.py": "b8017e2d3b2bac2db24ead95e6cd39a01afc2fd8716578c6f049727f16cfe70e",
+      "traffic_sim/simulation/deterministic_disruption.py": "059d4568c24d6ffc83e01d597c25fac88656fe94df215192f9b9682f09956050",
+      "traffic_sim/simulation/disruption.py": "c7ac9270456ffb1e1b6fafc5c5c7436eb76b0f2bdb30035bc901d0b590b1992a",
+      "traffic_sim/simulation/monthly_demand.py": "6082b959fbe6240fc7000fa69ca2782986494e0f8efacbb98ba2c2d3ad431563"
+    },
+    "costing_sources": {
+      "run_scenario.py": "42752227c238be0bbb61d8d55c32359c976c5d91f8c9cdf5607f87146f21ea8b",
+      "traffic_sim/simulation/closure_ranking.py": "c0ba6eecd3c4ba07727f164372b46957f91f815358e1f8b703d927c20e0fda9d",
+      "traffic_sim/simulation/deterministic_disruption.py": "059d4568c24d6ffc83e01d597c25fac88656fe94df215192f9b9682f09956050",
+      "traffic_sim/simulation/disruption.py": "c7ac9270456ffb1e1b6fafc5c5c7436eb76b0f2bdb30035bc901d0b590b1992a",
+      "traffic_sim/simulation/metadata.py": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4"
+    }
+  },
+  "content_key": "ea8e5b02c155e34c03edb04ce12b6811177256509de0e338a99f8ccea2835eb5",
+  "design": {
+    "deviation": "every parent of the frozen month spans exactly five build keys, so the canary supplies one parent per chosen key instead; the source, provider factory, cache and ledger are the production ones",
+    "entry_point": "traffic_sim.simulation.cost_ordered_execution.build_cost_ledger",
+    "key_choice_rule": "small, median and large by route bytes over the 30 registered archives",
+    "keys": {
+      "large": "c796667235591888",
+      "median": "b7e7cef8b702abae",
+      "small": "9c7ad9c97b6bdbc6"
+    },
+    "order": [
+      "9c7ad9c97b6bdbc6",
+      "b7e7cef8b702abae",
+      "c796667235591888"
+    ],
+    "raw_inputs_verified": {
+      "9c7ad9c97b6bdbc6": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72",
+        "files": {
+          "calibrated.rou.xml": "3137ef8ca6e3e8dc0305577e5feab9d6fdf0ec5d601a764c02c67777db4e70cd",
+          "calibrated_v1.rou.xml": "44413462fceb856dcba5d9f8a5fc45cd0d54568509236c8eb72a85b06501bfda",
+          "calibrated_v2.rou.xml": "7caf6a8c373bcbfd21ffa4a75513776ad8e042a7c7f4aae8ae2a0b19142fafa0",
+          "demand_meta.json": "5136153beae3bffece06c8f4e47ca272e0d00b9758bf9f981cbba6784b377a58"
+        }
+      },
+      "b7e7cef8b702abae": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33",
+        "files": {
+          "calibrated.rou.xml": "25753bc5c2db9880d7a1e24a29d6248ed2c896d15c7c99481e68308696d95b0d",
+          "calibrated_v1.rou.xml": "a832cf124fefc8d89784bce5eef9c6119a5627490eda4ea470074da80415de51",
+          "calibrated_v2.rou.xml": "61400b3120cb403d61702e8cd57160837028654017d13dc623bff0c217c37f88",
+          "demand_meta.json": "57ad042825fc8b99cd631dff101ea8a53e8a8c23ce78949c8ed82093cb3f8d8f"
+        }
+      },
+      "c796667235591888": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06",
+        "files": {
+          "calibrated.rou.xml": "c041ea54d0c00d503b3cbbcc855fcecb349b413bebb43d6cf2d0a812fe1d2e08",
+          "calibrated_v1.rou.xml": "257be9fb379333b1ad094edc7a29c5aec8175ea641dbce663187e9dccbe0f553",
+          "calibrated_v2.rou.xml": "48e45142f127996f08aea9e47bfeb4266d6dd7c1a336408fe027bb123f7f8aee",
+          "demand_meta.json": "fac578d254731afa6aadc321da71a1eb8108e9b5dd4ccda56874a195d06df635"
+        }
+      }
+    },
+    "sequential": true,
+    "workers": 1,
+    "workload_source": {
+      "registration": "/private/tmp/gs-step3-departure-bounds/validation/wci_month_case_registration_20260917-v2.json",
+      "role": "documented source of the workload choice only; not reported valid under this code's source identity",
+      "sha256": "ee82146b83cf8e3fb64a2da1516bf2c8c2ff66f7664573b9eb92318533097031"
+    }
+  },
+  "diagnostic_only": true,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_two_phase_canary_v1.py",
+    "sha256": "e79d1986965834ff97095939a96e7cc971e253e20412fdf5395ce4f0eb4c3d35"
+  },
+  "git": {
+    "head": "aa0ab8be31ec99eea5912319711697e1182c885d",
+    "tracked_changes": [
+      " M run_monthly_closure_search.py",
+      " M traffic_sim/simulation/cost_ordered_execution.py",
+      " M traffic_sim/simulation/monthly_demand.py"
+    ]
+  },
+  "label": "two-phase-retention",
+  "memory": {
+    "footprint_at_each_provider_open": [
+      1303594448,
+      1722795928,
+      1765804072
+    ],
+    "peak_footprint_bytes": 2126432584,
+    "peak_rss_bytes": 2685943808,
+    "python_heap_bytes_at_end": 669598,
+    "python_heap_note": "tracemalloc's CURRENT figure is what answers the retention question: the lifetime physical footprint is a high-water mark that never falls, so it cannot distinguish a finished key still being held from pages the allocator simply has not returned",
+    "python_heap_peak_bytes": 729533513,
+    "swap": {
+      "after_bytes": 4625793024,
+      "before_bytes": 4625793024,
+      "growth_bytes": 0
+    }
+  },
+  "outputs": {
+    "digest_of_parent_costs": "d182111d6d433d94c41fe712a48c5f43a4b90fc3c037cfc64d6b8cf230960912",
+    "frozen_unit_digest": "379fe5b12736c64ccacf593d18e0ea2b667b2314db5945db0f6082eac1be59f5",
+    "ledger": {
+      "cache_hits": 0,
+      "cache_misses": 195,
+      "candidate_count": 3,
+      "computed_daily_units": 195,
+      "content_key": "ed533d20b203e1971ea7cc5c88206d936bcc04c2277c9cbf0cdcba94804681a8",
+      "costs": [
+        {
+          "cache_hits": 0,
+          "candidate_id": "canary-parent-9c7ad9c97b6bdbc6",
+          "cost": {
+            "added_metres_total": 16344856.2,
+            "added_vehicle_hours": 333.2669,
+            "vehicles_affected": 77615,
+            "vehicles_no_detour": 0
+          },
+          "daily_unit_ids": [
+            "daily-unit-0082344c93eb8e887898dd88",
+            "daily-unit-c779df85a964c24d7b6bf3e5",
+            "daily-unit-da61edd691ffa3d680a42866",
+            "daily-unit-83b9f3e02e0eeb5fddbec945",
+            "daily-unit-4a7fe9fbb4447f03d2723de1",
+            "daily-unit-f61f258df6e11a08549cea8f",
+            "daily-unit-cb53db1ef250cd8847b7973a",
+            "daily-unit-86889576903eca564a8930cf",
+            "daily-unit-bc4317182823549a8ab381d9",
+            "daily-unit-7a861b6f88892182549ad554",
+            "daily-unit-b2849deb0cde78c371536abc",
+            "daily-unit-f3a72019086993c1101ef1e4",
+            "daily-unit-97fcfe42dcf46b4da626ff65",
+            "daily-unit-12722ee7592197d914c20534",
+            "daily-unit-c936169c8258b50f521ba28c",
+            "daily-unit-0990c4aa4f3a672bfb303c0b",
+            "daily-unit-9aa47e2a51744306d12f8f6f",
+            "daily-unit-249ec86390166dc97e157813",
+            "daily-unit-d559766b118f8af8217d50f5",
+            "daily-unit-a11aad8d4de87b8239151c42",
+            "daily-unit-d5fc51813664eb562f5b3d66",
+            "daily-unit-c31fa7d3e0fe31ec927f595b",
+            "daily-unit-0232d2011bdbd4c3fec78c2c",
+            "daily-unit-1c387c612df89680f2005c55",
+            "daily-unit-63ecdda85a148e68ee9ea8aa",
+            "daily-unit-41322e699a776767a3c0a947",
+            "daily-unit-9c942da3358c22710b28893d",
+            "daily-unit-d768ef181b65ebcb06fd15d0",
+            "daily-unit-0b47be3357a3adb1d138dc6f",
+            "daily-unit-854cf9eebe04353395a367b6",
+            "daily-unit-fbcdd08438a515daeb5a6638",
+            "daily-unit-b90229947f1e0577d1582401",
+            "daily-unit-2e03859e50cd867868a4a383",
+            "daily-unit-a7b44ea90d79829ce638d574",
+            "daily-unit-f724f996f7d717b529d5d5ad",
+            "daily-unit-8083b51def993ebf885c4e34",
+            "daily-unit-d2b431b17fc386e0ebb69e34",
+            "daily-unit-d0d429f65bb3b79ba536d200",
+            "daily-unit-a8ad436748192cb11566039a",
+            "daily-unit-e8ecddd055da1cc446043ebf",
+            "daily-unit-5ce570a3bc9354d5d3f833d8",
+            "daily-unit-81089101e25a7d4778ede9e5",
+            "daily-unit-1f77e8a43a22a3a7c5cada19",
+            "daily-unit-c6c09cd81691d0c657899f60",
+            "daily-unit-cfa4e941765529e586ddf4d5",
+            "daily-unit-2f2f03d190d343ec5b3be122",
+            "daily-unit-48d57998affd12d0ef6eb230",
+            "daily-unit-42e08238b556ac32e58aaacd",
+            "daily-unit-791341725c1d441b8d3e363e",
+            "daily-unit-3b1511c31262e9228d748fb9",
+            "daily-unit-1f3b6bdd4652d800d3e9aace",
+            "daily-unit-b1f0ef7b52cb6d2000a9cba2",
+            "daily-unit-d3c99893f2d43953f474b29c",
+            "daily-unit-384a06f9f30a8ba1a943b026",
+            "daily-unit-6668d7a7546cdf7df1c9f25d",
+            "daily-unit-2e38677aba762bf584b788de",
+            "daily-unit-6e66f08317e5a9bca13f1a9b",
+            "daily-unit-c0746f53c54f8eaabafc2405",
+            "daily-unit-9d2c9ece1f7fc136ba24a87f",
+            "daily-unit-3fa99b9d7238907e78530ae6",
+            "daily-unit-539333becf634a6b749bcf9d",
+            "daily-unit-b4d1fa58be5878945c4d9f79",
+            "daily-unit-87897152d5720e0fe4d439bc",
+            "daily-unit-a3de8f36dc90d555aa6a9b53",
+            "daily-unit-27b94a33a2f20da3e651dc19"
+          ],
+          "per_variant": [
+            {
+              "added_metres_total": 9104596.2,
+              "added_vehicle_hours": 188.8792,
+              "basis": "sum of independent daily calibrated-route closure costs",
+              "demand_variant": "q10",
+              "destination_relocation_metres_max": 0.0,
+              "destination_relocation_metres_total": 0.0,
+              "reduction": "sum across independent daily reset units",
+              "vehicles_affected": 77615,
+              "vehicles_considered": 3238690,
+              "vehicles_denied_departure": 0,
+              "vehicles_destination_relocated": 0,
+              "vehicles_no_detour": 0,
+              "vehicles_severed_destination": 0
+            },
+            {
+              "added_metres_total": 15499237.5,
+              "added_vehicle_hours": 317.4907,
+              "basis": "sum of independent daily calibrated-route closure costs",
+              "demand_variant": "q50",
+              "destination_relocation_metres_max": 0.0,
+              "destination_relocation_metres_total": 0.0,
+              "reduction": "sum across independent daily reset units",
+              "vehicles_affected": 77615,
+              "vehicles_considered": 3321825,
+              "vehicles_denied_departure": 0,
+              "vehicles_destination_relocated": 0,
+              "vehicles_no_detour": 0,
+              "vehicles_severed_destination": 0
+            },
+            {
+              "added_metres_total": 16344856.2,
+              "added_vehicle_hours": 333.2669,
+              "basis": "sum of independent daily calibrated-route closure costs",
+              "demand_variant": "q90",
+              "destination_relocation_metres_max": 0.0,
+              "destination_relocation_metres_total": 0.0,
+              "reduction": "sum across independent daily reset units",
+              "vehicles_affected": 77615,
+              "vehicles_considered": 3211975,
+              "vehicles_denied_departure": 0,
+              "vehicles_destination_relocated": 0,
+              "vehicles_no_detour": 0,
+              "vehicles_severed_destination": 0
+            }
+          ]
+        },
+        {
+          "cache_hits": 0,
+          "candidate_id": "canary-parent-b7e7cef8b702abae",
+          "cost": {
+            "added_metres_total": 17115996.2,
+            "added_vehicle_hours": 354.932,
+            "vehicles_affected": 93896,
+            "vehicles_no_detour": 0
+          },
+          "daily_unit_ids": [
+            "daily-unit-f2c0423b1b36a5d02e4e9bdc",
+            "daily-unit-679bc28916f99eb81cb185e1",
+            "daily-unit-4e8b1e54f7cb338c3f11b497",
+            "daily-unit-54b83de9aa8ba532695c82dd",
+            "daily-unit-482554cabb8dcde4b788ce77",
+            "daily-unit-c1b508fa4d88ab20bc0efefc",
+            "daily-unit-a486d6a976306646a7824f2c",
+            "daily-unit-471f7bd948aa83bec6b9a266",
+            "daily-unit-fac182ed9c1851ff868c4e7d",
+            "daily-unit-d9186335f029670a3f932cb7",
+            "daily-unit-7cbf468253f3bee48d9b7072",
+            "daily-unit-eca5fe756a5ab49c36e4c342",
+            "daily-unit-f3afebbffb9125b30dd1c4ce",
+            "daily-unit-18d6c187dcc22b75b692cdf8",
+            "daily-unit-d553c5849ed52c97991172ac",
+            "daily-unit-a40ff0fefbd6ed8174f4c1c3",
+            "daily-unit-19529cb5551210a8a1c86ccc",
+            "daily-unit-a127e5f8f138273935959fc5",
+            "daily-unit-9045da7eef23c53adf8e142a",
+            "daily-unit-fb581e76ca06ac0363e1287a",
+            "daily-unit-0a3dcc9e7444ce38de814684",
+            "daily-unit-d51182282ac185c12cbd4aec",
+            "daily-unit-8a7bb3c93f0d7d0e137a83bf",
+            "daily-unit-6964e46d338516ab55d276fc",
+            "daily-unit-f0026a780dfba6c3518e6be7",
+            "daily-unit-3237881d21d7ec6914b6f2e4",
+            "daily-unit-909e259b14a22ba82a15bee0",
+            "daily-unit-b9144478b496b320ccf83cb6",
+            "daily-unit-bdade095f06876ef5cdc08ff",
+            "daily-unit-353e29d823398be75eb5c05d",
+            "daily-unit-b4539d292b6168ad42d33f55",
+            "daily-unit-353bc8955c1bc7138f0019d5",
+            "daily-unit-fb37277bc8173acf7969c661",
+            "daily-unit-d90705610e574d3bc847e3af",
+            "daily-unit-15f7fdc6aa39f291c4b4d805",
+            "daily-unit-943e5ef381611059987f41e7",
+            "daily-unit-ed8bb203c0bf6328bfcbdf3a",
+            "daily-unit-1045734f0ac21b381513383b",
+            "daily-unit-e150589fd71a9aac5731efa5",
+            "daily-unit-f8b2e7ad087f7ce78a783a59",
+            "daily-unit-0f3c5480296dbbf8212162bb",
+            "daily-unit-d9612642da742929429aa013",
+            "daily-unit-55dcb38e39d61849580acc9d",
+            "daily-unit-ff76cc46eb29cea08afcddcb",
+            "daily-unit-932a41ded634c8bf79196c21",
+            "daily-unit-a0c4be83d2f31d716411779b",
+            "daily-unit-a64a6b8a203ff5466fc136d3",
+            "daily-unit-e209bb2ac0c10026dab05e98",
+            "daily-unit-5b47dde3939cb2e2d12a714f",
+            "daily-unit-050d14256b4c1e46e739e6bd",
+            "daily-unit-2e93a9c7916fa76fc884db1f",
+            "daily-unit-0dbc7e1c4c1135a7cea67b9a",
+            "daily-unit-60d8ea83126a66b1ae3fae95",
+            "daily-unit-642711376408d38cbc87de2f",
+            "daily-unit-bc2f82df7948c47caae295ea",
+            "daily-unit-ebc465d939cf245402f30276",
+            "daily-unit-73eb895c8889596de21dc7aa",
+            "daily-unit-4fdc9427b33f6d2d2892ad4b",
+            "daily-unit-d6b639a312bb802e08f1f35f",
+            "daily-unit-1e421a55baa6e47ec9f1e3c1",
+            "daily-unit-850045395212386efde21a81",
+            "daily-unit-11f9f4e27cad1ce3efa41843",
+            "daily-unit-e49aae0b5f02e622745cc436",
+            "daily-unit-c758069d36d696dce4f2bbd6",
+            "daily-unit-cf19650c7e174aec0e1ed239"
+          ],
+          "per_variant": [
+            {
+              "added_metres_total": 9783646.8,
+              "added_vehicle_hours": 205.3452,
+              "basis": "sum of independent daily calibrated-route closure costs",
+              "demand_variant": "q10",
+              "destination_relocation_metres_max": 0.0,
+              "destination_relocation_metres_total": 0.0,
+              "reduction": "sum across independent daily reset units",
+              "vehicles_affected": 93896,
+              "vehicles_considered": 3657290,
+              "vehicles_denied_departure": 0,
+              "vehicles_destination_relocated": 0,
+              "vehicles_no_detour": 0,
+              "vehicles_severed_destination": 0
+            },
+            {
+              "added_metres_total": 13191583.4,
+              "added_vehicle_hours": 272.6644,
+              "basis": "sum of independent daily calibrated-route closure costs",
+              "demand_variant": "q50",
+              "destination_relocation_metres_max": 0.0,
+              "destination_relocation_metres_total": 0.0,
+              "reduction": "sum across independent daily reset units",
+              "vehicles_affected": 93896,
+              "vehicles_considered": 3720080,
+              "vehicles_denied_departure": 0,
+              "vehicles_destination_relocated": 0,
+              "vehicles_no_detour": 0,
+              "vehicles_severed_destination": 0
+            },
+            {
+              "added_metres_total": 17115996.2,
+              "added_vehicle_hours": 354.932,
+              "basis": "sum of independent daily calibrated-route closure costs",
+              "demand_variant": "q90",
+              "destination_relocation_metres_max": 0.0,
+              "destination_relocation_metres_total": 0.0,
+              "reduction": "sum across independent daily reset units",
+              "vehicles_affected": 93896,
+              "vehicles_considered": 3590080,
+              "vehicles_denied_departure": 0,
+              "vehicles_destination_relocated": 0,
+              "vehicles_no_detour": 0,
+              "vehicles_severed_destination": 0
+            }
+          ]
+        },
+        {
+          "cache_hits": 0,
+          "candidate_id": "canary-parent-c796667235591888",
+          "cost": {
+            "added_metres_total": 22367867.9,
+            "added_vehicle_hours": 453.0422,
+            "vehicles_affected": 117228,
+            "vehicles_no_detour": 0
+          },
+          "daily_unit_ids": [
+            "daily-unit-ea35620f6877338aad3523cd",
+            "daily-unit-bb0123f3294deef5f01ebbbe",
+            "daily-unit-3dd968933af231355aa1a73f",
+            "daily-unit-8db1e21d09f672b1229ffc1b",
+            "daily-unit-b4cabd27c149d7a4674b783a",
+            "daily-unit-6fc5fe0b87a1fa33aa5f6d74",
+            "daily-unit-33ff1dead21f7594452e14cb",
+            "daily-unit-c45ffffc70cbfd7974e8f3d5",
+            "daily-unit-083f0c33cda76fd1a953de72",
+            "daily-unit-4eb011c57abcc1106ee84319",
+            "daily-unit-96f884dd916bd2a8b07472d3",
+            "daily-unit-1627e167f1a73e83ad99a126",
+            "daily-unit-c4753ec04eaf643fd1bb674d",
+            "daily-unit-55e511630332be9b7b75357d",
+            "daily-unit-6c90b0c8546c3db2058d901f",
+            "daily-unit-3f40cb23484b71705c456e69",
+            "daily-unit-064706784c44551560647257",
+            "daily-unit-db412e7078056fa04eb42a0e",
+            "daily-unit-6e44f132a5f7f8455d5a7c9b",
+            "daily-unit-c80e5d1adcda6fa696518466",
+            "daily-unit-dcc3b11eab3b908edae28946",
+            "daily-unit-afed30684b8d8f7c204dc00f",
+            "daily-unit-056a5e3b8ed6d47d91130d23",
+            "daily-unit-4d2a234a79da9145bd94014e",
+            "daily-unit-eadebb45840293d111a5c08f",
+            "daily-unit-28319bfab196862e89dbc888",
+            "daily-unit-5ba7f4666f864d715247192f",
+            "daily-unit-5dfeb88d4534e67b0041edc7",
+            "daily-unit-52de265e25f49714d244fab1",
+            "daily-unit-ba35d322035866a61a7534fb",
+            "daily-unit-6fa325f69190985ded20c467",
+            "daily-unit-2eb57c24ef712d8ee2a4bf6a",
+            "daily-unit-a87da71ba1c5d8cf6caf3ed3",
+            "daily-unit-0735b2a08f246d15ac1799a5",
+            "daily-unit-994307faf4032a6cfa367ef0",
+            "daily-unit-ee611f5b99cf65156ad3d02f",
+            "daily-unit-6a9ff0436d713828971f13e7",
+            "daily-unit-df06f2a9476b40000fc581d9",
+            "daily-unit-1e3ad2ce840a4fde81c627af",
+            "daily-unit-84f746df297ed7be1fa316db",
+            "daily-unit-c0e0144dcebbef6d3159173c",
+            "daily-unit-71d441e153d16c9b40d0160a",
+            "daily-unit-aeea0ec0e200293c67acdc91",
+            "daily-unit-9fa1a1c41bf4897904a56890",
+            "daily-unit-8fab9215d77f9f3dae03fce7",
+            "daily-unit-4d54af732c9055f6e66bc032",
+            "daily-unit-d239b749b8fc9c7995456b8e",
+            "daily-unit-162c8e206d3fbccc9f67a3c8",
+            "daily-unit-b61892352015b102536db460",
+            "daily-unit-99c35aba889793fd9bfee100",
+            "daily-unit-359abe200c6bead4b9689188",
+            "daily-unit-f254b0d50fb1f5b84b508382",
+            "daily-unit-da089b3662b4a8563c768b06",
+            "daily-unit-867f524893a1e1196a5dc7e4",
+            "daily-unit-d3785b7bf2310a0cb7f8e825",
+            "daily-unit-3fedcf3d98477ebc7597e292",
+            "daily-unit-a2599f5a2d4a35070f23c568",
+            "daily-unit-e9647fc99db321da030b6145",
+            "daily-unit-ab9a0663a96e5aa5a7b44306",
+            "daily-unit-b1c1a81e6e07c4480c5c655a",
+            "daily-unit-b42af1391d3f87207c7745e2",
+            "daily-unit-65c87162fbcd131a060cba4d",
+            "daily-unit-8b659331c7ccf7ea0bea4176",
+            "daily-unit-10aa98ac2d846959c50212e0",
+            "daily-unit-9c9989daaa639ffba6900f1b"
+          ],
+          "per_variant": [
+            {
+              "added_metres_total": 15758638.2,
+              "added_vehicle_hours": 328.3881,
+              "basis": "sum of independent daily calibrated-route closure costs",
+              "demand_variant": "q10",
+              "destination_relocation_metres_max": 0.0,
+              "destination_relocation_metres_total": 0.0,
+              "reduction": "sum across independent daily reset units",
+              "vehicles_affected": 117228,
+              "vehicles_considered": 4037150,
+              "vehicles_denied_departure": 0,
+              "vehicles_destination_relocated": 0,
+              "vehicles_no_detour": 0,
+              "vehicles_severed_destination": 0
+            },
+            {
+              "added_metres_total": 15704618.5,
+              "added_vehicle_hours": 317.494,
+              "basis": "sum of independent daily calibrated-route closure costs",
+              "demand_variant": "q50",
+              "destination_relocation_metres_max": 0.0,
+              "destination_relocation_metres_total": 0.0,
+              "reduction": "sum across independent daily reset units",
+              "vehicles_affected": 117228,
+              "vehicles_considered": 4058990,
+              "vehicles_denied_departure": 0,
+              "vehicles_destination_relocated": 0,
+              "vehicles_no_detour": 0,
+              "vehicles_severed_destination": 0
+            },
+            {
+              "added_metres_total": 22367867.9,
+              "added_vehicle_hours": 453.0422,
+              "basis": "sum of independent daily calibrated-route closure costs",
+              "demand_variant": "q90",
+              "destination_relocation_metres_max": 0.0,
+              "destination_relocation_metres_total": 0.0,
+              "reduction": "sum across independent daily reset units",
+              "vehicles_affected": 117228,
+              "vehicles_considered": 4048915,
+              "vehicles_denied_departure": 0,
+              "vehicles_destination_relocated": 0,
+              "vehicles_no_detour": 0,
+              "vehicles_severed_destination": 0
+            }
+          ]
+        }
+      ],
+      "disk_cache_hits": 0,
+      "disk_cache_misses": 195,
+      "disruption_schema": "deterministic_closure_disruption_v4",
+      "kind": "cost_ordered_cost_ledger",
+      "memory_cache_hits": 0,
+      "memory_cache_misses": 195,
+      "provider_identity": {
+        "closure_type": "full",
+        "cost_reduction_objective": "closure_cost_v1",
+        "costing_sources": {
+          "run_scenario.py": "42752227c238be0bbb61d8d55c32359c976c5d91f8c9cdf5607f87146f21ea8b",
+          "traffic_sim/simulation/closure_ranking.py": "c0ba6eecd3c4ba07727f164372b46957f91f815358e1f8b703d927c20e0fda9d",
+          "traffic_sim/simulation/deterministic_disruption.py": "059d4568c24d6ffc83e01d597c25fac88656fe94df215192f9b9682f09956050",
+          "traffic_sim/simulation/disruption.py": "c7ac9270456ffb1e1b6fafc5c5c7436eb76b0f2bdb30035bc901d0b590b1992a",
+          "traffic_sim/simulation/metadata.py": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4"
+        },
+        "directed_edges": [
+          "26842525_26355153_0"
+        ],
+        "dst_policy": "exclude_transition_dates",
+        "interday_policy": "independent_daily_reset_v1",
+        "network": {
+          "metadata": {
+            "path": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/sumo/network_metadata.json",
+            "sha256": null
+          },
+          "path": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/sumo/net.net.xml",
+          "sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+        },
+        "schema": "deterministic_closure_disruption_v4",
+        "source": "forecast",
+        "timezone": "Europe/Stockholm"
+      },
+      "release_evidence": false,
+      "schema": "cost_ordered_execution_v1",
+      "search_content_key": "d38038fd495414129508",
+      "version": 1
+    },
+    "parent_cost_digests": {
+      "canary-parent-9c7ad9c97b6bdbc6": "d32802b99cabef44561428ff31c2b9c691b2ded07d1c63bcaf284d5295d66234",
+      "canary-parent-b7e7cef8b702abae": "73636ba59d7076eae65aa7f8dab294863c3633cd480fe34ea97d25d43f37a4a9",
+      "canary-parent-c796667235591888": "da444408a42630b04cbd15fce0bb907fbca3a783ba481639c962d48b80ddb4dc"
+    }
+  },
+  "per_build_key": {
+    "9c7ad9c97b6bdbc6": {
+      "daily_units": 65,
+      "footprint_after_last_unit_bytes": 1722795928,
+      "peak_footprint_bytes": 1722795928,
+      "python_heap_bytes_before_first_unit": 129877,
+      "python_heap_bytes_before_last_unit": 493813442,
+      "python_heap_peak_bytes": 493822355,
+      "route_bytes": 145760833,
+      "units_measured": 65
+    },
+    "b7e7cef8b702abae": {
+      "daily_units": 65,
+      "footprint_after_last_unit_bytes": 1765804072,
+      "peak_footprint_bytes": 1765804072,
+      "python_heap_bytes_before_first_unit": 348339,
+      "python_heap_bytes_before_last_unit": 553367010,
+      "python_heap_peak_bytes": 553367010,
+      "route_bytes": 163254555,
+      "units_measured": 65
+    },
+    "c796667235591888": {
+      "daily_units": 65,
+      "footprint_after_last_unit_bytes": 2126432584,
+      "peak_footprint_bytes": 2126432584,
+      "python_heap_bytes_before_first_unit": 540091,
+      "python_heap_bytes_before_last_unit": 615213796,
+      "python_heap_peak_bytes": 615213796,
+      "route_bytes": 181568252,
+      "units_measured": 65
+    }
+  },
+  "production_chain_rebuild_required": true,
+  "provider_lifetime": {
+    "alive_after_the_run": 0,
+    "alive_when_each_provider_opened": [
+      0,
+      0,
+      0
+    ],
+    "evidence_note": "reachability, not RSS: each entry counts providers whose weakref is still alive at that moment, after gc.collect()",
+    "live_provider_count": 0
+  },
+  "release_evidence": false,
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_two_phase_canary_v1",
+  "stopped": null,
+  "surviving_children": [],
+  "totals": {
+    "cost_computations": 195,
+    "cpu_s": 1277.141769,
+    "daily_units_requested": 195,
+    "distinct_cost_computations": 195,
+    "providers_created": 3,
+    "wall_s": 1277.394436292,
+    "xml_bytes_read": 490583640,
+    "xml_parses": 9,
+    "xml_parses_by_file": {
+      "calibrated.rou.xml": 3,
+      "calibrated_v1.rou.xml": 3,
+      "calibrated_v2.rou.xml": 3
+    }
+  },
+  "two_phase_available": true
+}

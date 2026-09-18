@@ -39,6 +39,7 @@ activated, no global-best claim opens, and the UI exposes nothing new.
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import time
@@ -143,17 +144,29 @@ class IndependentDailyCostSource:
         cache: Any = None,
         window_cost_index: Any = None,
         objective_method: str = LEGACY_WORST_COST_OBJECTIVE,
+        provider_scope_key_for: Callable[[ClosureSchedule], str] | None = None,
     ) -> None:
         self.spec = spec
         self._daily_units_for = daily_units_for
         self._provider_for = provider_for
         self._cache = cache
         self._window_cost_index = window_cost_index
+        # A provider is per ARCHIVE, not per daily unit: `cache_identity`
+        # never depended on which unit opened it. `provider_scope_key_for`
+        # is what lets phase one group the month's units by the archive
+        # they share, so one provider can serve all of them and the three
+        # route files are read once instead of once per unit.
+        self._provider_scope_key_for = provider_scope_key_for
         if objective_method not in CLOSURE_COST_OBJECTIVES:
             raise ValueError(
                 f"unsupported closure-cost objective {objective_method!r}")
         self.objective_method = objective_method
+        # Only ever holds the ONE provider of the scope being priced. It
+        # used to be keyed by daily unit and never emptied, which is how a
+        # month run came to hold 1,950 live providers.
         self._providers: dict[str, Any] = {}
+        self._prepared = False
+        self._parent_seen_units: set[Any] = set()
         self._identity: dict[str, Any] | None = None
         if window_cost_index is not None:
             bound = getattr(window_cost_index, "bound_identity", {})
@@ -196,6 +209,155 @@ class IndependentDailyCostSource:
             provider = self._provider_for(unit_schedule)
             self._providers[key] = provider
         return provider
+
+    @property
+    def is_prepared(self) -> bool:
+        """True once phase one has priced every distinct daily unit."""
+        return self._prepared
+
+    def live_provider_count(self) -> int:
+        """How many providers this source is holding right now."""
+        return len(self._providers)
+
+    def frozen_unit_records(self) -> Mapping[Any, Mapping[str, Any]]:
+        """The frozen per-unit results phase two aggregates from."""
+        if not self._prepared:
+            raise RuntimeError(
+                "the cost source has no frozen daily units: prepare_units "
+                "has not completed")
+        return {unit_id: dict(value)
+                for unit_id, value in self._profile_daily_records.items()}
+
+    def _check_variants(self, records: Sequence[Mapping[str, Any]]) -> None:
+        variants = tuple(str(item.get("demand_variant", ""))
+                         for item in records)
+        if variants != ("q10", "q50", "q90"):
+            raise ValueError(
+                "deterministic cost provider must return one actual "
+                "q10/q50/q90 record per daily unit")
+
+    def _observe_disk_cache(self, provider: Any,
+                            unit_schedule: ClosureSchedule) -> None:
+        """Count the disk layer at its real seam, once per distinct unit.
+
+        Diagnostic only: `disk_cache_hits`/`disk_cache_misses` never enter
+        the ledger's deciding content. The memory counters do, so they are
+        kept in the parent loop where they have always been measured.
+        """
+        if self._cache is None:
+            return
+        cache_identity = getattr(provider, "cache_identity", None)
+        cache_key = getattr(self._cache, "key", None)
+        path_for = getattr(self._cache, "path_for", None)
+        if not (callable(cache_identity) and callable(cache_key)
+                and callable(path_for)):
+            return
+        if Path(path_for(cache_key(cache_identity(unit_schedule)))).is_file():
+            self.disk_cache_hits += 1
+        else:
+            self.disk_cache_misses += 1
+
+    def _sample_timings(self, provider: Any) -> None:
+        snapshot = getattr(provider, "timing_snapshot", None)
+        if not callable(snapshot):
+            return
+        for phase, elapsed in snapshot().items():
+            if phase not in self._timings:
+                continue
+            # Providers expose cumulative values, so keep a per-provider
+            # watermark rather than adding the running total each time.
+            previous = getattr(provider, "_profile_timing_seen", {})
+            self._timings[phase] += max(
+                0.0, float(elapsed) - float(previous.get(phase, 0.0)))
+            previous[phase] = float(elapsed)
+            setattr(provider, "_profile_timing_seen", previous)
+
+    def prepare_units(self, parents: Sequence[ClosureSchedule]) -> None:
+        """Phase one: price every distinct daily unit, one archive at a time.
+
+        The month's parents overlap heavily — 1,690 five-day parents over
+        1,950 distinct daily units — and every parent spans five archives.
+        Pricing lazily inside the parent loop therefore opened a provider
+        per unit and kept it, so no provider ever served a second unit and
+        each archive was parsed 65 times over.
+
+        Here the units are grouped by `provider_scope_key_for`, which the
+        production path binds to the archive's canonical path. Each scope
+        gets ONE provider, its three route files are read once, all of its
+        units are priced, and the provider is dropped before the next scope
+        opens. What survives is a small immutable record per unit.
+
+        Nothing is committed until every scope has finished: a failure
+        leaves the source unprepared rather than half-priced.
+        """
+        if self._prepared:
+            return
+        if self._window_cost_index is not None:
+            # The index answers every unit; phase one has nothing to price,
+            # and the binding check stays where it was, in the parent loop.
+            self._prepared = True
+            return
+        if self._provider_scope_key_for is None:
+            # A caller that cannot say which units share an archive keeps
+            # the lazy path. Production always says.
+            return
+        by_scope: dict[str, list[tuple[Any, ClosureSchedule]]] = {}
+        declared: dict[Any, tuple[str, str]] = {}
+        for parent in parents:
+            for unit_id, unit_schedule in self._daily_units_for(parent):
+                scope = str(self._provider_scope_key_for(unit_schedule))
+                seen_as = (_digest(unit_schedule.to_dict()), scope)
+                previous = declared.get(unit_id)
+                if previous is None:
+                    declared[unit_id] = seen_as
+                    by_scope.setdefault(scope, []).append(
+                        (unit_id, unit_schedule))
+                elif previous != seen_as:
+                    raise ValueError(
+                        f"daily unit {unit_id!r} appears with two different "
+                        "schedules or provider scopes; refusing to price it")
+        frozen: dict[Any, dict[str, Any]] = {}
+        try:
+            for scope in sorted(by_scope):
+                self._prepare_scope(scope, by_scope[scope], frozen)
+        except BaseException:
+            self._providers.clear()
+            gc.collect()
+            raise
+        self._profile_daily_records = frozen
+        self._profile_unit_ids = set(frozen)
+        self._profile_variant_records = sum(
+            len(value["records"]) for value in frozen.values())
+        self._prepared = True
+
+    def _prepare_scope(self, scope: str,
+                       units: Sequence[tuple[Any, ClosureSchedule]],
+                       frozen: dict[Any, dict[str, Any]]) -> None:
+        """Price one archive's units with one provider, then let it go."""
+        self._providers[scope] = self._provider_for(units[0][1])
+        try:
+            for unit_id, unit_schedule in units:
+                provider = self._providers[scope]
+                self._observe_disk_cache(provider, unit_schedule)
+                records = provider.disruption(unit_schedule)
+                self._check_variants(records)
+                frozen[unit_id] = {
+                    "schedule_id": unit_schedule.schedule_id,
+                    "scope": scope,
+                    "records": tuple(dict(item) for item in records),
+                }
+                self._sample_timings(provider)
+                if self._identity is None:
+                    identity = dict(provider.identity())
+                    identity.pop("demand", None)
+                    identity["cost_reduction_objective"] = (
+                        self.objective_method)
+                    self._identity = identity
+        finally:
+            # Drop the provider — and with it the parsed route files —
+            # before the next archive is opened.
+            self._providers.pop(scope, None)
+            gc.collect()
 
     def identity(self) -> Mapping[str, Any]:
         if self._identity is None:
@@ -242,6 +404,32 @@ class IndependentDailyCostSource:
                 records = self._window_cost_index.lookup(
                     unit_id, unit_schedule.schedule_id)
                 self.index_lookups += 1
+            elif self._prepared:
+                # Phase two. The record was priced once in phase one; this
+                # loop only looks it up. The MEMORY counters keep exactly
+                # their old meaning, because they always described the
+                # PARENT loop's reuse of a unit, not who computed it: the
+                # first parent to reach a unit is a miss, every later one a
+                # hit. They are deciding content and reach the ledger. The
+                # disk counters are diagnostic and were taken in phase one.
+                frozen = self._profile_daily_records.get(unit_id)
+                if frozen is None:
+                    raise ValueError(
+                        f"daily unit {unit_id!r} was never prepared; the "
+                        "parent loop may not price anything itself")
+                if frozen["schedule_id"] != unit_schedule.schedule_id:
+                    raise ValueError(
+                        f"daily unit {unit_id!r} changed schedule after it "
+                        "was priced; refusing to aggregate it")
+                records = frozen["records"]
+                memory_hit = unit_id in self._parent_seen_units
+                if memory_hit:
+                    self.memory_cache_hits += 1
+                else:
+                    self._parent_seen_units.add(unit_id)
+                    self.memory_cache_misses += 1
+                if memory_hit:
+                    hits += 1
             else:
                 provider = self._provider(unit_schedule)
                 # Observe the two cache layers at their actual seams without
@@ -251,65 +439,36 @@ class IndependentDailyCostSource:
                 # is consulted only after that memory miss.
                 memory_hit = unit_schedule.schedule_id in getattr(
                     provider, "_memory", {})
-                disk_hit = None
-                if not memory_hit and self._cache is not None:
-                    cache_identity = getattr(provider, "cache_identity", None)
-                    cache_key = getattr(self._cache, "key", None)
-                    path_for = getattr(self._cache, "path_for", None)
-                    if callable(cache_identity) and callable(cache_key) \
-                            and callable(path_for):
-                        disk_hit = Path(path_for(cache_key(
-                            cache_identity(unit_schedule)))).is_file()
+                if not memory_hit:
+                    self._observe_disk_cache(provider, unit_schedule)
                 records = provider.disruption(unit_schedule)
                 if memory_hit:
                     self.memory_cache_hits += 1
+                    hits += 1
                 else:
                     self.memory_cache_misses += 1
-                if disk_hit is True:
-                    self.disk_cache_hits += 1
-                elif disk_hit is False:
-                    self.disk_cache_misses += 1
-            variants = tuple(str(item.get("demand_variant", ""))
-                             for item in records)
-            if variants != ("q10", "q50", "q90"):
-                raise ValueError(
-                    "deterministic cost provider must return one actual "
-                    "q10/q50/q90 record per daily unit")
-            if unit_id not in self._profile_unit_ids:
-                self._profile_unit_ids.add(unit_id)
-                self._profile_variant_records += len(records)
-                self._profile_daily_records[unit_id] = {
-                    "schedule_id": unit_schedule.schedule_id,
-                    "records": tuple(dict(item) for item in records),
-                }
-            provider = (None if self._window_cost_index is not None
-                        else provider)
-            snapshot = getattr(provider, "timing_snapshot", None)
-            if callable(snapshot):
-                for phase, elapsed in snapshot().items():
-                    if phase in self._timings:
-                        # Providers expose cumulative values.  The snapshot is
-                        # sampled below after each unit, so retain a separate
-                        # per-provider watermark to avoid double counting.
-                        previous = getattr(provider, "_profile_timing_seen", {})
-                        delta = max(0.0, float(elapsed) -
-                                    float(previous.get(phase, 0.0)))
-                        self._timings[phase] += delta
-                        previous[phase] = float(elapsed)
-                        setattr(provider, "_profile_timing_seen", previous)
-            if self._window_cost_index is None:
-                if memory_hit:
-                    hits += 1
+                self._check_variants(records)
+                if unit_id not in self._profile_unit_ids:
+                    self._profile_unit_ids.add(unit_id)
+                    self._profile_variant_records += len(records)
+                    self._profile_daily_records[unit_id] = {
+                        "schedule_id": unit_schedule.schedule_id,
+                        "records": tuple(dict(item) for item in records),
+                    }
+                self._sample_timings(provider)
+                if self._identity is None:
+                    # Every unit's provider shares the network, the spec and
+                    # the costing sources; only the archive differs, and each
+                    # unit's archive is bound through its own cache key.
+                    identity = dict(provider.identity())
+                    identity.pop("demand", None)
+                    identity["cost_reduction_objective"] = (
+                        self.objective_method)
+                    self._identity = identity
+            if self._window_cost_index is not None:
+                self._check_variants(records)
             daily_records.append(records)
             unit_ids.append(unit_id)
-            if self._identity is None:
-                # Every unit's provider shares the network, the spec and the
-                # costing sources; only the archive differs, and the archive of
-                # each unit is already bound through the unit's own cache key.
-                identity = dict(provider.identity())
-                identity.pop("demand", None)
-                identity["cost_reduction_objective"] = self.objective_method
-                self._identity = identity
         # Per-provider deltas above already update the aggregate memory
         # counter.  Do not add the local compatibility tally a second time.
         self.cache_hits = self.memory_cache_hits
@@ -476,6 +635,17 @@ def build_cost_ledger(
     measuring = io_phases.current_collector() is not None
     if measuring:
         io_phases.count("cost_parent_candidates", len(parents))
+    # Phase one, before any parent is aggregated: price each distinct daily
+    # unit once, grouped by the archive it reads, so one provider serves a
+    # whole archive and is released before the next opens. A source that
+    # cannot group its units keeps the old lazy path and simply returns.
+    prepare = getattr(source, "prepare_units", None)
+    if callable(prepare):
+        if measuring:
+            with io_phases.phase("cost_prepare_units"):
+                prepare(parents)
+        else:
+            prepare(parents)
     costs: list[ParentCost] = []
     total = len(parents)
     for index, parent in enumerate(parents):

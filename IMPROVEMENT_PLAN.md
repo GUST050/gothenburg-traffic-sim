@@ -2436,6 +2436,73 @@ faktor två på egen hand.
 registrering giltiga under nuvarande costing-källor, vilket är enda vägen
 till att adoptera cachebyggarens 41,9 %. Den ger **ingen** snabbare ledger.
 
+**Ledgern byggs nu i två faser — profilombyggnad godkänd av grinden —
+2026-09-18.**
+
+*Rotorsakerna var två, och en ren LRU hade bara löst den ena.*
+`IndependentDailyCostSource` bad om en provider per **dagenhet** och
+rensade aldrig: 1 950 levande providers, och tre XML-parsningar per enhet
+eftersom ingen provider någonsin betjänade en andra.
+
+*Fas ett* prisar varje distinkt dagenhet exakt en gång, grupperad per
+`provider_scope_key_for` — i produktion bunden till arkivets kanoniska
+sökväg via resolverns **publika** `archive_for`. Varje scope får **en**
+provider med `reuse_parsed_routes=True`, läser q10/q50/q90 en gång, prisar
+alla sina enheter och släpps i ett `finally` innan nästa scope öppnas.
+Ingenting committas förrän varje scope är klart: ett fel lämnar källan
+oförberedd, inte halvprissatt.
+
+*Fas två* är `parent_cost`, som nu bara slår upp och kör oförändrad
+`parent_closure_cost`/`sum_daily_disruption`.
+
+*Telemetrin behöll sin innebörd.* Minnesräknarna är **beslutsinnehåll** och
+beskrev alltid föräldraloopens återanvändning, inte vem som räknade — de
+ligger kvar i föräldraloopen. Disk- och fasräknarna är **diagnostik**;
+disklagret observeras nu i fas ett, fortfarande exakt en gång per unik
+enhet. En unit ID som dyker upp med två olika scheman eller två olika
+scope avvisar körningen.
+
+*A/B/B/A på en medianstor byggnyckel, verkliga `build_cost_ledger`:*
+
+| | A (aa0ab8b) | B (kandidat) |
+|---|---|---|
+| wall | 356,9 / 353,8 s | **200,4 / 201,2 s** |
+| CPU | 356,7 / 353,7 s | 200,3 / 201,1 s |
+| XML-parsningar | 195 | **3** |
+| läst rutt-XML | 10,61 GB | **0,16 GB** |
+| providers | 65 | **1** |
+| providers kvar | 65 | **0** |
+| kostnadsberäkningar | 65 | 65 |
+
+Separation 152,6 s, kvot 1,77. Alla fyra armar gav samma
+parent-cost-digest `c9cdb54b…` och samma ledger-content-key `1c529fce…`.
+
+*Minnet måste dömas på heapen, inte på fotavtrycket.* Över 1/2/3 nycklar
+stiger toppfotavtrycket 948 → 1 251 → 1 520 MB, ~286 MB per nyckel. Det
+**är inte kvarhållning**: livstidsfotavtrycket är ett high-water-märke som
+aldrig sjunker. `tracemalloc` visar vad som faktiskt hålls vid varje
+nyckels start — 0,1 / 0,3 / 0,5 MB, alltså **0,2 MB kvar per färdig
+nyckel** mot en transient topp på ~615 MB inuti nyckeln, och 0,7 MB kvar
+när körningen slutar. De frysta posterna är genuint små: hela ledgern är
+6 kB.
+
+*För EN nyckel använder kandidaten mer minne, inte mindre* — 1 023 mot
+656 MB — eftersom en provider bär tre parsade varianter hela nyckeln medan
+baslinjen bär 65 små. Vinsten ligger i skalningen.
+
+*Beslut* (`validation/wci_two_phase_decision_20260918-v1.json`): alla 14
+grindpunkter sanna, **`READY_FOR_USER_APPROVED_PROFILE_REBUILD`**.
+
+*Ny prognos för fullprofilen* från den nya ledger-canaryn (2,65–2,87 s per
+enhet, median 2,77): förväntat **5 399 s (1,50 h)**, konservativ övre
+gräns 8 394 s, toppminne ~1,5 GB. Rekommenderad budget: hård wall 11 192 s,
+minne **4 GiB** (ned från 10 GiB), swaptillväxt 1 GiB. Den publicerade
+profilen tog 7 320 s vid 6,52 GB. Maskinens tillstånd flyttar tiden en
+faktor två på egen hand.
+
+Profilombyggnaden får fortfarande inte startas utan ett nytt uttryckligt
+godkännande.
+
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 
 **Filer:** `build_sumo_demand.py`, `monthly_demand.py:_resolve_new_release`,

@@ -3483,15 +3483,65 @@ that follows: **a caller may turn retention on only if one provider serves
 many units of the same archive.** Pinned by `TestRetentionIsOptIn` and
 `TestParsedRouteLifetime`.
 
+**The cost ledger is two phases (2026-09-18).** `build_cost_ledger` now
+calls `IndependentDailyCostSource.prepare_units(parents)` before it
+aggregates anything.
+
+*Phase one* prices every DISTINCT daily unit exactly once, grouped by
+`provider_scope_key_for` — bound in production to the archive's canonical
+path through the resolver's public `archive_for`. Each scope gets ONE
+provider with `reuse_parsed_routes=True`, reads q10/q50/q90 once, prices
+all of its units, and is dropped in a `finally` before the next scope
+opens. What survives is a small immutable record per unit id. Nothing is
+committed until every scope has finished, so a failure leaves the source
+unprepared rather than half-priced, and `frozen_unit_records()` refuses to
+answer.
+
+*Phase two* is `parent_cost`, which now only looks a unit up and runs the
+unchanged `parent_closure_cost`/`sum_daily_disruption` aggregation.
+
+**The counters keep their old meanings, and which are which is now
+stated.** `memory_cache_hits`/`memory_cache_misses` are DECIDING content —
+they reach the ledger — and they always described the PARENT loop's reuse
+of a unit, not who computed it, so they stay in the parent loop: the first
+parent to reach a unit is a miss, every later one a hit. `disk_cache_*` and
+the phase timings are DIAGNOSTIC; the disk layer is now observed in phase
+one, still exactly once per distinct unit. A unit id that appears with two
+different schedules or two different scopes rejects the run.
+
+**Measured, A/B/B/A on one median build key, real `build_cost_ledger`:**
+
+| | before | after |
+|---|---:|---:|
+| wall | 356.9 / 353.8 s | 200.4 / 201.2 s |
+| XML parses | 195 | 3 |
+| route XML read | 10.61 GB | 0.16 GB |
+| providers built | 65 | 1 |
+| providers alive afterwards | 65 | 0 |
+| cost computations | 65 | 65 |
+
+All four arms produced the same parent-cost digest and the same ledger
+content key.
+
+**Memory must be judged by the heap, not the footprint.** Over 1, 2 and 3
+build keys the physical footprint peak rises 948 → 1,251 → 1,520 MB, about
+286 MB per key, which looks like retention and is not: the lifetime
+physical footprint is a high-water mark that never falls. `tracemalloc`
+says what is actually HELD at the start of each key — 0.1, 0.3, 0.5 MB,
+about **0.2 MB left behind per finished key** against a transient ~615 MB
+inside it, with the heap at 0.7 MB when the run ends and no provider
+reachable. The frozen records are genuinely small: a whole ledger is 6 kB.
+
 **What still retains, and why a profile rebuild is not yet recommended.**
-Even with retention off, `IndependentDailyCostSource._providers` keeps one
-provider per daily unit for the whole run. Each is small — measured about
-4.0 MB per unit — but the growth is linear: 590 MB, 814 MB and 1,105 MB of
-peak footprint for one, two and three build keys, extrapolating to roughly
-8 GB for the month. That is the same pre-existing behaviour that put the
-2026-09-15 profile at a 6.52 GB peak, so it is not a regression; it is the
-reason a rebuild needs a ~10 GiB budget rather than the 4 GiB a bounded
-canary suggests.
+SUPERSEDED 2026-09-18 by the two phases above, and kept because the number
+it quotes is still the shape of the OLD path. It read: the source kept one
+provider per daily unit for the whole run, each about 4.0 MB, so peak
+footprint rose 590 / 814 / 1,105 MB over one, two and three keys and
+extrapolated to roughly 8 GB for the month — the same behaviour behind the
+2026-09-15 profile's 6.52 GB peak, and the reason a rebuild then needed a
+~10 GiB budget. With phase one in place a finished key leaves 0.2 MB, the
+extrapolated month footprint is about 1.5 GB, and the recommended budget is
+4 GiB.
 
 **Publication.** Unit records are content-addressed and written atomically
 by the cache itself. The batch marker is published only after every stored

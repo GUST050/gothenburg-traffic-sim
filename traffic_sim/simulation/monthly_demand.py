@@ -1498,6 +1498,7 @@ class MonthlyDemandResolverRunner:
         cache: Any = None,
         network: Any = None,
         unit_identity: Mapping[str, Any] | None = None,
+        reuse_parsed_routes: bool = False,
     ):
         """A process-free cost provider for one schedule's archive.
 
@@ -1521,6 +1522,7 @@ class MonthlyDemandResolverRunner:
             cache=cache,
             unit_identity=unit_identity,
             inputs=inputs,
+            reuse_parsed_routes=reuse_parsed_routes,
         )
 
     def run_candidate(
