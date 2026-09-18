@@ -551,3 +551,284 @@ class TestTheOraclePath:
         monkeypatch.setattr(dd.ArchiveDisruptionProvider, "__init__", spy)
         _run(world, keys=(KEY_A, KEY_B))
         assert len(built) == 2 == len(set(built))
+
+
+KEY_C = "key-c"
+
+
+@pytest.fixture
+def three_keys(tmp_path, monkeypatch):
+    """Three build keys, one archive each, so retention is visible."""
+    catalog_root = tmp_path / "catalog"
+    pools = {"weekday": _pool(catalog_root, "pool-wd", [f"A {CLOSED} B"]),
+             "weekend": _pool(catalog_root, "pool-we", [f"A {CLOSED} B"])}
+    keys = (KEY_A, KEY_B, KEY_C)
+    archives = {key: _write_archive(tmp_path / "runs", date, 1)
+                for key, date in zip(keys, DATES)}
+    spec = _spec(end=DATES[-1])
+    registration = {
+        "content_key": "r" * 64,
+        "case_selection_policy": cee.POLICY,
+        "chosen_edge": CLOSED,
+        "spec": spec.to_dict(),
+        "spec_content_key": spec.content_key,
+        "archives": {
+            key: {"archive": str(path),
+                  "archive_content_key": f"content-{key}",
+                  "demand_meta_sha256": _sha(path / "demand_meta.json"),
+                  "variants": {
+                      variant: _sha(path / dd.VARIANT_FILENAMES[variant])
+                      for variant in ("q10", "q50", "q90")}}
+            for key, path in archives.items()},
+        "catalogs": {
+            pool: {"catalog_key": key,
+                   "path": str(catalog_root / key / "catalog.rou.xml"),
+                   "routes_sha256": routes, "metadata_sha256": metadata}
+            for pool, (key, routes, metadata) in pools.items()},
+    }
+    network = _Network()
+    by_date = dict(zip(DATES, keys))
+
+    def units_of(spec_arg, _runs_root, _manifest):
+        grouped = {}
+        for parent in builder.iter_closure_schedules(spec_arg):
+            for unit_id, identity, build in builder.daily_unit_records(
+                    spec_arg, parent):
+                schedule = build()
+                key = by_date[schedule.first_work_date]
+                if any(str(unit_id) == str(item[0])
+                       for item in grouped.get(key, ())):
+                    continue
+                grouped.setdefault(key, []).append(
+                    (str(unit_id), identity, schedule))
+        return grouped
+
+    monkeypatch.setattr(builder, "units_of", units_of)
+    monkeypatch.setattr(builder, "NetworkCostModel", lambda: network)
+    return SimpleNamespace(registration=registration, archives=archives,
+                           spec=spec, cache=tmp_path / "cache",
+                           network=network, keys=keys,
+                           status_path=tmp_path / "status.json",
+                           units=units_of(spec, None, None))
+
+
+class TestParsedRouteLifetime:
+    """Parsed vehicles belong to one build key and die with it.
+
+    RSS is deliberately not the evidence here: CPython can hold freed pages
+    for a long time, so a flat RSS would prove nothing and a rising one
+    would accuse the wrong thing. The proof is reachability — who refers to
+    the parsed tuple while it lives, and whether its owner survives.
+    """
+
+    @staticmethod
+    def _probe(monkeypatch):
+        import gc
+        import sys
+        import weakref
+
+        state = {"providers": [], "parsed": [], "global_owner": [],
+                 "real_parses": []}
+        production_init = dd.ArchiveDisruptionProvider.__init__
+        production_vehicles = dd.ArchiveDisruptionProvider._vehicles
+        from traffic_sim.simulation import disruption as disruption_module
+
+        production_parse = disruption_module.parse_route_vehicles
+
+        def parse_spy(path, **kwargs):
+            state["real_parses"].append(str(path))
+            return production_parse(path, **kwargs)
+
+        monkeypatch.setattr(disruption_module, "parse_route_vehicles",
+                            parse_spy)
+
+        def init_spy(self, spec, **kwargs):
+            production_init(self, spec, **kwargs)
+            state["providers"].append(
+                (str(kwargs["archive"]), weakref.ref(self)))
+
+        def vehicles_spy(self, variant):
+            parsed = production_vehicles(self, variant)
+            # Who can reach this tuple right now? The owning provider's own
+            # dict must be among them, and no module namespace may be.
+            referrers = gc.get_referrers(parsed)
+            owned = any(item is self._parsed_routes for item in referrers)
+            module_dicts = {id(getattr(module, "__dict__", None))
+                            for module in list(sys.modules.values())}
+            in_module = any(id(item) in module_dicts for item in referrers)
+            record = {
+                "archive": str(self.inputs.archive),
+                "variant": variant,
+                "id": id(parsed),
+                "owned_by_its_provider": owned,
+                "reachable_from_a_module": in_module,
+            }
+            # `_vehicles` is asked once per variant per daily unit and
+            # answers from the provider's own dict after the first, so key
+            # this by the file it describes rather than by the call. Do NOT
+            # key it by id(): CPython reuses the address of a freed tuple,
+            # which is itself a sign the previous key was released.
+            if not any(item["archive"] == record["archive"]
+                       and item["variant"] == record["variant"]
+                       for item in state["parsed"]):
+                state["parsed"].append(record)
+            if in_module:
+                state["global_owner"].append(variant)
+            return parsed
+
+        monkeypatch.setattr(dd.ArchiveDisruptionProvider, "__init__",
+                            init_spy)
+        monkeypatch.setattr(dd.ArchiveDisruptionProvider, "_vehicles",
+                            vehicles_spy)
+        return state
+
+    def test_each_key_owns_its_parses_and_releases_them(self, three_keys,
+                                                        monkeypatch):
+        import gc
+
+        state = self._probe(monkeypatch)
+        alive_after = {}
+        for index, key in enumerate(three_keys.keys):
+            builder.run(three_keys.registration, build_keys=[key],
+                        cache_root=three_keys.cache, runs_root=Path("unused"),
+                        qualified_manifest={}, network=three_keys.network,
+                        status=builder.Status(
+                            three_keys.status_path, requested=[key],
+                            cache_root=three_keys.cache,
+                            registration=three_keys.registration))
+            gc.collect()
+            alive_after[key] = [archive for archive, ref
+                                in state["providers"] if ref() is not None]
+            assert alive_after[key] == [], (
+                "a finished build key must not leave its provider, and "
+                f"therefore its parsed routes, alive: {alive_after[key]}")
+            assert len(state["parsed"]) == 3 * (index + 1), (
+                "each build key parses its own three variants")
+            assert len(state["real_parses"]) == 3 * (index + 1), (
+                "three real XML parses per build key, never per unit")
+
+        assert len(three_keys.keys) == 3
+        assert state["global_owner"] == [], (
+            "parsed routes must never be reachable from a module namespace")
+        assert all(item["owned_by_its_provider"]
+                   for item in state["parsed"]), (
+            "the owning provider must be the one holding them")
+        assert not any(item["reachable_from_a_module"]
+                       for item in state["parsed"])
+
+        archives = [item["archive"] for item in state["parsed"]]
+        assert len(set(archives)) == 3, "one archive per build key"
+        for archive in set(archives):
+            assert archives.count(archive) == 3, (
+                "three variants, parsed once each, for that key alone")
+        assert len(state["real_parses"]) == 9 == len(set(
+            state["real_parses"])), (
+            "nine real parses in total: three files for each of three keys, "
+            "each read exactly once")
+
+    def test_a_finished_key_is_released_before_the_next_one_opens(
+            self, three_keys, monkeypatch):
+        """The three keys are built in one call, as a month build would."""
+        import gc
+
+        state = self._probe(monkeypatch)
+        live_when_opening = []
+        production_init = dd.ArchiveDisruptionProvider.__init__
+
+        def counting_init(self, spec, **kwargs):
+            gc.collect()
+            live_when_opening.append(
+                sum(1 for _archive, ref in state["providers"]
+                    if ref() is not None))
+            production_init(self, spec, **kwargs)
+
+        monkeypatch.setattr(dd.ArchiveDisruptionProvider, "__init__",
+                            counting_init)
+        builder.run(three_keys.registration,
+                    build_keys=list(three_keys.keys),
+                    cache_root=three_keys.cache, runs_root=Path("unused"),
+                    qualified_manifest={}, network=three_keys.network,
+                    status=builder.Status(
+                        three_keys.status_path,
+                        requested=list(three_keys.keys),
+                        cache_root=three_keys.cache,
+                        registration=three_keys.registration))
+        assert live_when_opening == [0, 0, 0], (
+            "no earlier build key's provider is still alive when the next "
+            f"one opens: {live_when_opening}")
+        gc.collect()
+        assert [archive for archive, ref in state["providers"]
+                if ref() is not None] == []
+
+
+class TestRetentionIsOptIn:
+    """Only a provider that serves many units may keep its parsed routes.
+
+    The month ledger asks `IndependentDailyCostSource` for a provider per
+    DAILY UNIT and never evicts one, so a provider that retains three
+    parsed route files turns a 1,950-unit run into 1,950 copies of them.
+    Retention therefore belongs to the caller that can amortise it — the
+    batch builder, which gives one provider all 65 units of a build key —
+    and must be off for everyone else.
+    """
+
+    @staticmethod
+    def _parse_spy(monkeypatch):
+        from traffic_sim.simulation import disruption
+
+        parses = []
+        production = disruption.parse_route_vehicles
+
+        def spy(path, **kwargs):
+            parses.append(Path(path).name)
+            return production(path, **kwargs)
+
+        monkeypatch.setattr(disruption, "parse_route_vehicles", spy)
+        return parses
+
+    def test_a_plain_provider_retains_nothing(self, world, monkeypatch):
+        """The shape the ledger builds: one provider, then discarded."""
+        parses = self._parse_spy(monkeypatch)
+        provider = dd.ArchiveDisruptionProvider(
+            world.spec, archive=world.archives[KEY_A],
+            network=world.network, cache=None)
+        schedules = [schedule for _unit, _identity, schedule
+                     in world.units[KEY_A]][:2]
+        assert len(schedules) == 2
+        for schedule in schedules:
+            provider.disruption(schedule)
+        assert provider._parsed_routes == {}, (
+            "a provider that is not told to reuse must hold no route file "
+            "after the call that read it")
+        assert len(parses) == 6, (
+            "without reuse the archive is read once per variant per unit, "
+            "exactly as it was before parse reuse existed")
+
+    def test_a_provider_told_to_reuse_keeps_them_for_its_own_lifetime(
+            self, world, monkeypatch):
+        parses = self._parse_spy(monkeypatch)
+        provider = dd.ArchiveDisruptionProvider(
+            world.spec, archive=world.archives[KEY_A],
+            network=world.network, cache=None, reuse_parsed_routes=True)
+        schedules = [schedule for _unit, _identity, schedule
+                     in world.units[KEY_A]][:2]
+        for schedule in schedules:
+            provider.disruption(schedule)
+        assert sorted(provider._parsed_routes) == ["q10", "q50", "q90"]
+        assert len(parses) == 3, "three files, read once each"
+
+    def test_the_batch_builder_is_the_one_that_opts_in(self, world,
+                                                       monkeypatch):
+        """The builder amortises three parses over a whole build key."""
+        seen = []
+        production = dd.ArchiveDisruptionProvider.__init__
+
+        def spy(self, spec, **kwargs):
+            seen.append(bool(kwargs.get("reuse_parsed_routes")))
+            production(self, spec, **kwargs)
+
+        monkeypatch.setattr(dd.ArchiveDisruptionProvider, "__init__", spy)
+        _run(world)
+        assert seen == [True], (
+            "the batch builder gives one provider every unit of the key, so "
+            "it is the caller allowed to keep the parsed routes")

@@ -1,0 +1,213 @@
+{
+  "adoption_eligible": false,
+  "candidate_as_committed": {
+    "reading": "every run stopped at unit 5 of 65 in the first build key with the footprint over 3 GiB. The ledger asks for a provider per daily unit and never evicts one, so the candidate's retained route files grew about 635 MB per unit. 15 parses for 5 units also shows the ledger got no parse reduction at all: the 41.9% the cache builder gained never applied here",
+    "runs": [
+      {
+        "keys_requested": 1,
+        "peak_footprint_bytes": 3228126016,
+        "stopped": {
+          "build_key": "9c7ad9c97b6bdbc6",
+          "footprint_bytes": 3228126016,
+          "limit_bytes": 3221225472,
+          "reason": "footprint limit reached; the canary stops rather than drive the machine into swap",
+          "units_done": 5,
+          "units_expected": 65
+        },
+        "units_done": 5
+      },
+      {
+        "keys_requested": 2,
+        "peak_footprint_bytes": 3435711560,
+        "stopped": {
+          "build_key": "9c7ad9c97b6bdbc6",
+          "footprint_bytes": 3435662408,
+          "limit_bytes": 3221225472,
+          "reason": "footprint limit reached; the canary stops rather than drive the machine into swap",
+          "units_done": 5,
+          "units_expected": 65
+        },
+        "units_done": 5
+      },
+      {
+        "keys_requested": 3,
+        "peak_footprint_bytes": 3591015496,
+        "stopped": {
+          "build_key": "9c7ad9c97b6bdbc6",
+          "footprint_bytes": 3590933576,
+          "limit_bytes": 3221225472,
+          "reason": "footprint limit reached; the canary stops rather than drive the machine into swap",
+          "units_done": 5,
+          "units_expected": 65
+        },
+        "units_done": 5
+      }
+    ],
+    "verdict": "PROFILE_REBUILD_BLOCKED_MEMORY_RETENTION"
+  },
+  "claim_boundary": "a decision record over bounded canaries. It rebuilds no profile, starts no month cache build and authorises nothing; a profile rebuild needs the user's separate explicit approval",
+  "content_key": "63cb243d7c957883f931c5b1a6c0577928d525ce5c582b1d641060245b33c4f5",
+  "decision": "PROFILE_REBUILD_BLOCKED_MEMORY_RETENTION",
+  "diagnostic_only": true,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_profile_rebuild_decision_v1.py",
+    "sha256": "aa3445f1b6d6f292e41be789adbc1f320bdea661bf79cba49439f9b973e0e596"
+  },
+  "forecast": {
+    "basis": "the repaired canary's measured per-unit wall on this machine, over six build-key runs",
+    "conservative_upper_wall_s": 16057.339921845001,
+    "expected_peak_footprint_bytes": 8044115776.0,
+    "expected_wall_s": 9645.525425625003,
+    "machine_state_caveat": "the same key measured 2.758 s per unit on 2026-09-17 and about 5.44 s today, so machine state moves this by a factor of two on its own. The conservative bound carries 1.5x on top of the slowest measured key for that reason",
+    "month_daily_units": 1950,
+    "per_unit_s": {
+      "high": 5.489688862169231,
+      "low": 4.851120541676923,
+      "median": 4.946423295192309
+    },
+    "published_profile_wall_s": 7320.348
+  },
+  "gate": {
+    "checks": {
+      "1_each_variant_parsed_once_per_build_key": false,
+      "2_every_output_exact": true,
+      "3_finished_key_releases_its_parsed_data": true,
+      "4_memory_plateaus_at_the_largest_active_key": false,
+      "5_peak_footprint_under_4_gib": true,
+      "6_swap_growth_at_most_1_gib": true,
+      "7_no_sumo_or_demand_process": true,
+      "8_no_production_gate_weakened": true
+    },
+    "memory_scaling_bytes": {
+      "extrapolated_month_footprint": 8044115776.0,
+      "per_key_peak_footprint": [
+        590414904,
+        813827296,
+        1104463240
+      ],
+      "published_profile_peak_rss": 6520061952,
+      "reading": "after the repair the parsed routes are gone, but the ledger still keeps one provider per daily unit for the life of the run, so memory still rises roughly linearly \u2014 about 4.0 MB per unit instead of about 635 MB. Extrapolated to the month that is close to the 6.52 GB the 2026-09-15 profile actually peaked at: the same pre-existing behaviour, and above this gate's 4 GiB line",
+      "slope_per_build_key": 257024168.0,
+      "slope_per_daily_unit": 3954217.969230769
+    },
+    "parses_per_build_key_in_the_ledger_path": [
+      195
+    ]
+  },
+  "git": {
+    "head": "61b8a9497134377057c5bc825ea35f8071b39ed0",
+    "tracked_changes": [
+      " M tests/test_daily_cost_cache.py",
+      " M tools/build_daily_cost_cache.py",
+      " M traffic_sim/simulation/deterministic_disruption.py"
+    ]
+  },
+  "inputs": {
+    "candidate_runs": [
+      {
+        "content_key": "d27f4f361c33f601081dc4815744939115584262071227f4966ff5cea29727e9",
+        "path": "validation/wci_profile_memory_canary_20260918-cand1.json"
+      },
+      {
+        "content_key": "4559a09720ad4bc3205f73d01b39b567ce4050dd0185c7135bfc94430d8b1374",
+        "path": "validation/wci_profile_memory_canary_20260918-cand2.json"
+      },
+      {
+        "content_key": "d5f572e7e52d61df3fe9b5b25a51b5ac42f30090be7d2e2797d9d24697ba0677",
+        "path": "validation/wci_profile_memory_canary_20260918-cand3.json"
+      }
+    ],
+    "repaired_runs": [
+      {
+        "content_key": "96c05e20a6c7180eec5dd66aa9ed4ec68fb61fbbc9fcd512e10970fc88779da4",
+        "path": "validation/wci_profile_memory_canary_20260918-rep1.json"
+      },
+      {
+        "content_key": "3d2a7e076af00a37d345c13a408010d57daa65a230f42ea319a33fed363695e5",
+        "path": "validation/wci_profile_memory_canary_20260918-rep2.json"
+      },
+      {
+        "content_key": "7a715c8dbac996950b34a095ffdf243a66abe8441e97c0a494cc49280dee5b26",
+        "path": "validation/wci_profile_memory_canary_20260918-rep3.json"
+      }
+    ],
+    "timer_probe": {
+      "content_key": "0d7804306e9f03fbf9136aee63ead94eab61607a7996004fc497e7b69211e9d2",
+      "path": "validation/wci_timer_scope_20260918-v1.json"
+    }
+  },
+  "recommended_budget": {
+    "memory_hard_bytes": 10737418240,
+    "note": "10 GiB, not the gate's 4 GiB: the ledger's own retention put the published profile at 6.52 GB and the canary extrapolates to about 8 GB. A 4 GiB budget would stop a rebuild that has already succeeded once",
+    "supervisor_must_stop_when": [
+      "peak footprint passes the memory limit above",
+      "swap grows past 1 GiB",
+      "the wall passes the hard limit",
+      "any SUMO process or new demand archive appears",
+      "a daily unit's cost disagrees with a stored one"
+    ],
+    "swap_growth_hard_bytes": 1073741824,
+    "wall_hard_s": 21410
+  },
+  "release_evidence": false,
+  "repaired": {
+    "change": "ArchiveDisruptionProvider gained reuse_parsed_routes, off by default; only tools/build_daily_cost_cache.py, which gives one provider all 65 units of a build key, turns it on. Every other caller is back to the previous behaviour",
+    "runs": [
+      {
+        "keys": 1,
+        "peak_footprint_bytes": 590414904,
+        "providers_held": 65,
+        "swap_growth_bytes": 0,
+        "units_done": 65,
+        "wall_s": 315.46540808400005,
+        "xml_parses": 195
+      },
+      {
+        "keys": 2,
+        "peak_footprint_bytes": 813827296,
+        "providers_held": 130,
+        "swap_growth_bytes": 0,
+        "units_done": 130,
+        "wall_s": 676.38621,
+        "xml_parses": 390
+      },
+      {
+        "keys": 3,
+        "peak_footprint_bytes": 1104463240,
+        "providers_held": 195,
+        "swap_growth_bytes": 0,
+        "units_done": 195,
+        "wall_s": 997.2990029160001,
+        "xml_parses": 585
+      }
+    ]
+  },
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_profile_rebuild_decision_v1",
+  "what_a_rebuild_would_and_would_not_buy": {
+    "would": "a profile, census and registration valid under the current costing sources, which is the only route to adopting the cache builder's measured 41.9%",
+    "would_not": "any speedup of the ledger itself: after the repair it parses exactly as it did before, 195 times per build key"
+  },
+  "what_still_blocks_a_rebuild": [
+    "the ledger retains one provider per daily unit for the whole run; that is what the gate's plateau condition fails on, and it is pre-existing behaviour, not something the candidate introduced",
+    "the extrapolated month footprint is about 8 GB, above the gate's 4 GiB line"
+  ],
+  "why_the_earlier_numbers_disagreed": {
+    "canary_20260917_build_wall_s": 175.875014,
+    "conclusion": "the two timers differ by about 2.7 s \u2014 the A/B arm adds the network model and the archive open and drops the reload check. Re-running the canary's own scope today gave about 348 s against its published 176 s, so the gap is the machine's speed, not the measurement",
+    "parse_ab_20260918_baseline_arm_wall_s": 343.363064041,
+    "same_scope_measured_again_s": 347.775159792,
+    "scope_difference_s": 2.656749875999992,
+    "timer_that_matters_for_a_rebuild": "tools/profile_monthly_cost_ledger.py's own record['wall_time_s'] \u2014 the end-to-end ledger wall. Its phases.* are EXCLUSIVE provider timers and do not sum to it"
+  }
+}

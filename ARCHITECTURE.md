@@ -3453,21 +3453,45 @@ verified after the network changed: the builder reported the build key
 complete while every reader missed it — a cache that says "done" and serves
 nothing. Pinned by `TestTheBatchIsBoundToTheNetwork`.
 
-**Each route file is parsed once per build key.** The oracle prices 65
-daily units against one immutable archive, so `ArchiveDisruptionProvider`
-reads q10, q50 and q90 once each and holds the parsed vehicles as immutable
-tuples for its own lifetime. That is not a global cache and never a
-substitute for a computation: all 65 schedules are still priced in full,
-each through the same `_affected_od_counts` and report path the per-file
-form uses (`closure_disruption_over_parsed_route`, which differs from
-`closure_disruption` only in being handed the vehicles instead of reading
-them). It was 195 parses per build key; it is 3. Measured A/B/B/A on one
-real build key: 343.4/341.8 s against 199.8/198.1 s, 10.61 GB of route XML
-read against 0.16 GB, byte-identical results, at the cost of peak RSS
-rising from ~527 MB to ~913 MB because three parsed variants are resident
-at once. Because nothing re-reads those bytes during the batch, the full
-content-drift check runs again immediately before publication, so a file
-edited mid-batch rejects the batch.
+**Each route file is parsed once per build key — for the batch builder,
+and only for it.** The builder gives ONE `ArchiveDisruptionProvider` all 65
+daily units of a key, so it constructs that provider with
+`reuse_parsed_routes=True`: q10, q50 and q90 are read once each and held as
+immutable tuples for the provider's lifetime. That is not a global cache
+and never a substitute for a computation — all 65 schedules are still
+priced in full, each through the same `_affected_od_counts` and report path
+the per-file form uses (`closure_disruption_over_parsed_route`, which
+differs from `closure_disruption` only in being handed the vehicles instead
+of reading them). It was 195 parses per build key; it is 3. Measured
+A/B/B/A on one real build key: 343.4/341.8 s against 199.8/198.1 s,
+10.61 GB of route XML read against 0.16 GB, byte-identical results, at the
+cost of peak RSS rising from ~527 MB to ~913 MB. Because nothing re-reads
+those bytes during the batch, the full content-drift check runs again
+immediately before publication, so a file edited mid-batch rejects it.
+
+**`reuse_parsed_routes` is off by default, and that default is
+load-bearing** (measured 2026-09-18). Retaining three parsed variants costs
+about 635 MB, so WHO may retain them is a contract, not a detail. The month
+ledger asks `IndependentDailyCostSource` for a provider per DAILY UNIT and
+never evicts one, so a provider that retained its routes would multiply
+635 MB by the month's 1,950 units. Measured through the real ledger
+objects, it reached 3.2 GB after five units and grew linearly; a bounded
+canary had to abort at unit 5 of 65 of the first build key. The ledger also
+gains nothing from reuse — one provider per unit still parses three files
+per unit — so the 41.9% the builder measured never applied there. The rule
+that follows: **a caller may turn retention on only if one provider serves
+many units of the same archive.** Pinned by `TestRetentionIsOptIn` and
+`TestParsedRouteLifetime`.
+
+**What still retains, and why a profile rebuild is not yet recommended.**
+Even with retention off, `IndependentDailyCostSource._providers` keeps one
+provider per daily unit for the whole run. Each is small — measured about
+4.0 MB per unit — but the growth is linear: 590 MB, 814 MB and 1,105 MB of
+peak footprint for one, two and three build keys, extrapolating to roughly
+8 GB for the month. That is the same pre-existing behaviour that put the
+2026-09-15 profile at a 6.52 GB peak, so it is not a regression; it is the
+reason a rebuild needs a ~10 GiB budget rather than the 4 GiB a bounded
+canary suggests.
 
 **Publication.** Unit records are content-addressed and written atomically
 by the cache itself. The batch marker is published only after every stored

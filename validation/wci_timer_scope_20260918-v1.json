@@ -1,0 +1,94 @@
+{
+  "adoption_eligible": false,
+  "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6",
+  "build_key": "d42db159b3ee565f",
+  "claim_boundary": "one build key, one process, one machine; it separates timer scope from machine speed and changes nothing to make the numbers agree",
+  "content_key": "0d7804306e9f03fbf9136aee63ead94eab61607a7996004fc497e7b69211e9d2",
+  "daily_units": 65,
+  "diagnostic_only": true,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_timer_scope_probe_v1.py",
+    "sha256": "32f45867a0543cc107bd63d77606af8b52175dc7691b6377f2d8bc2ba72aac4a"
+  },
+  "git": {
+    "head": "61b8a9497134377057c5bc825ea35f8071b39ed0",
+    "tracked_changes": [
+      " M run_scenario.py",
+      " M tests/test_daily_cost_cache.py",
+      " M tools/build_daily_cost_cache.py",
+      " M traffic_sim/simulation/deterministic_disruption.py",
+      " M traffic_sim/simulation/disruption.py"
+    ]
+  },
+  "marks_s": {
+    "bound_inputs_s": 0.2433679169999996,
+    "first_unit_s": 4.458223749999998,
+    "identity_and_content_drift_s": 0.15209629100000033,
+    "network_cost_model_s": 2.0045934589999996,
+    "price_all_units_s": 347.755131709,
+    "provider_open_s": 0.6721845000000002,
+    "reload_verification_s": 0.020028082999999697,
+    "units_of_s": 0.5433572909999995,
+    "verify_registration_s": 5.087716333
+  },
+  "max_assumed_congestion_delay_s": 3600.0,
+  "mismatches": [],
+  "per_unit_s": {
+    "first": 4.458223749999998,
+    "rest_high": 5.705103957999995,
+    "rest_low": 4.744353332999999,
+    "rest_mean": 5.364011216093752,
+    "rest_median": 5.4625021250000145
+  },
+  "published_figures_for_comparison": {
+    "canary_20260917_v2_build_wall_s": 175.875014,
+    "note": "both were produced by the same b627887 costing code on the same build key and archive",
+    "parse_ab_20260918_v1_baseline_arm_wall_s": [
+      343.363064041,
+      341.816591959
+    ]
+  },
+  "reconstructed_scopes_s": {
+    "ab_arm_timer": 350.431909668,
+    "canary_build_batch_timer": 347.775159792,
+    "scope_difference": 2.656749875999992,
+    "what_the_ab_arm_timer_adds": [
+      "NetworkCostModel construction",
+      "opening the archive (ArchiveInputs)"
+    ],
+    "what_the_ab_arm_timer_drops": [
+      "the reload verification"
+    ],
+    "what_the_canary_timer_covers": [
+      "every daily unit priced through provider.disruption, including the one-off import of run_scenario on the first",
+      "the reload of every stored record through a fresh cache"
+    ],
+    "what_the_canary_timer_excludes": [
+      "verify_registration",
+      "_bound_inputs",
+      "units_of",
+      "identity_of and content_drift",
+      "NetworkCostModel construction",
+      "opening the archive (ArchiveInputs)"
+    ]
+  },
+  "release_evidence": false,
+  "resources": {
+    "lifetime_max_phys_footprint_bytes": 478167952,
+    "max_rss_bytes": 593412096,
+    "sys_s": 13.172128,
+    "user_s": 345.526686
+  },
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_timer_scope_probe_v1"
+}

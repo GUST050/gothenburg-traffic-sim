@@ -254,8 +254,13 @@ def _compute_batch(spec, identity: BatchIdentity, units, cache_root: Path,
                    network, on_unit=None) -> Dict[str, Any]:
     """Price every unit of one build key through the per-file oracle."""
     cache = DailyCostCache(Path(cache_root))
+    # One provider prices every unit of this build key, so this is the
+    # caller that can amortise holding the three parsed route files. Anyone
+    # who builds a provider per daily unit must leave this off: see
+    # ArchiveDisruptionProvider._vehicles.
     provider = ArchiveDisruptionProvider(
-        spec, archive=Path(identity.archive), network=network, cache=cache)
+        spec, archive=Path(identity.archive), network=network, cache=cache,
+        reuse_parsed_routes=True)
     computed = {}
     for unit_id, _unit_identity, schedule in units:
         records = provider.disruption(schedule)

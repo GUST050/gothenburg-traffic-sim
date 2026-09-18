@@ -2319,8 +2319,14 @@ fail-closed-riktningen: en byte-bindning kan inte skilja en
 beteendebevarande ändring från en beteendeändrande, och att gissa i den
 tillåtande riktningen är precis vad den finns för att förhindra. Att bygga
 om profilen är hela månadsledgern: 7 320,3 s, 6,52 GB toppminne, varav
-`xml_parse` var 4 368,7 s — **59,7 %**. Det är alltså samma kostnad som
-den här ändringen angriper.
+`xml_parse` var 4 368,7 s — **59,7 %**.
+
+> **RÄTTAT 2026-09-18.** Meningen som stod här — att detta är "samma
+> kostnad som den här ändringen angriper" — var fel, och mätningen i nästa
+> avsnitt visar varför. Ledgern bygger en provider per *dagenhet* och
+> parsar därför tre filer per enhet oavsett kandidaten: noll reduktion.
+> Vinsten på 41,9 % gäller cachebyggaren, som ger *en* provider alla 65
+> enheter. Profilombyggnaden blir inte snabbare av den här ändringen.
 
 *Hur den mättes ändå, utan att röra en enda grind.* Eftersom ingen frusen
 kedja kan beskriva två kodversioner samtidigt frystes arbetslasten i stället
@@ -2361,6 +2367,74 @@ enskilt bästa värde: 2 493–5 035 s, median 2 709 s, mot baslinjens
 3. och först därefter det övervakade fullständiga WCI-bygget.
 
 Ingenting av detta får startas utan uttryckligt godkännande.
+
+**Minnes- och skalningscanary genom ledgerns egen kostnadsväg —
+profilombyggnad blockerad — 2026-09-18.**
+
+*Varför 175,9 s och ~342 s båda var rätt.* Timer-proben
+(`validation/wci_timer_scope_20260918-v1.json`) körde en byggnyckel en gång
+och delade upp varje delmoment. Canaryns `build_batch`-timer täcker
+prissättningen av alla 65 enheter plus omläsningen av de lagrade posterna;
+A/B-armens timer lägger till `NetworkCostModel` (2,00 s) och arkivöppningen
+(0,67 s) och utelämnar omläsningen (0,02 s). **Scopeskillnaden är 2,7 s.**
+Samma kod och samma nyckel gav idag 347,8 s i canaryns eget scope mot
+publicerade 175,9 s: resten är maskinens tillstånd, ~1,98×. Den timer som
+gäller för en profilombyggnad är profilverktygets egen
+`record["wall_time_s"]`; `phases.*` är exklusiva provider-timers som inte
+summerar till den.
+
+*Vad canaryn mätte.* Den verkliga `IndependentDailyCostSource`, den verkliga
+provider-fabriken och den verkliga `DailyCostCache`, en worker, sekventiellt,
+med hård fotavtrycksspärr. En avvikelse redovisas: varje parent i den frysta
+månaden spänner över exakt fem byggnycklar, så ingen delmängd av verkliga
+parents är avgränsad till 1–3 nycklar; enhetsuppräkningen avgränsades i
+stället.
+
+*Kandidaten som den commitades i `61b8a94` — blockerad.* Alla tre
+körningarna stannade vid **enhet 5 av 65** i första nyckeln med fotavtryck
+över 3 GiB. Tillväxten var linjär, ~635 MB per enhet. Och 15 parsningar för
+5 enheter visar att ledgern fick **noll** parsreduktion.
+
+*Rotorsaken.* `IndependentDailyCostSource._providers` behåller en provider
+per dagenhet för hela körningen och rensar aldrig. Kandidaten gav varje
+sådan provider tre parsade varianter.
+
+*Reparationen.* `reuse_parsed_routes` är nu ett kontrakt: avstängt som
+standard, påslaget endast av `tools/build_daily_cost_cache.py`, som ger en
+provider alla 65 enheter. Alla andra anropare är tillbaka på det tidigare
+beteendet. En anropare får slå på det bara om *en* provider betjänar många
+enheter ur samma arkiv.
+
+| Reparerad | 1 nyckel | 2 nycklar | 3 nycklar |
+|---|---:|---:|---:|
+| enheter | 65 | 130 | 195 |
+| wall | 315,5 s | 676,4 s | 997,3 s |
+| parsningar | 195 | 390 | 585 |
+| toppfotavtryck | 590 MB | 814 MB | 1 105 MB |
+| providers hållna | 65 | 130 | 195 |
+| swaptillväxt | 0 | 0 | 0 |
+
+*Korrekthet:* noll avvikelser på varje delad dagenhet, i alla sex
+körningarna — kandidatens parse-återanvändning och den reparerade
+per-anrop-vägen ger identiska kostnadsresultat.
+
+*Beslut* (`validation/wci_profile_rebuild_decision_20260918-v1.json`):
+**`PROFILE_REBUILD_BLOCKED_MEMORY_RETENTION`**. Grindpunkt 1 faller, för
+ledgern parsar 195 gånger per nyckel även reparerad. Grindpunkt 4 faller,
+för minnet planar inte ut: ~257 MB per nyckel, ~4,0 MB per enhet, vilket
+extrapolerar till ~8 GB för månaden. Det är samma befintliga beteende som
+gav profilens uppmätta 6,52 GB — ingen regression, men över grindens
+4 GiB-linje.
+
+*Prognos för fullprofilen* från canaryns uppmätta takt (4,85–5,49 s per
+enhet, median 4,95): förväntat **9 646 s (2,68 h)**, konservativ övre gräns
+**16 057 s**. Toppminne ~8 GB. Rekommenderad budget: hård wall 21 400 s,
+minne 10 GiB, swaptillväxt 1 GiB. Maskinens tillstånd flyttar detta en
+faktor två på egen hand.
+
+*Vad en ombyggnad ger och inte ger:* den ger en profil, census och
+registrering giltiga under nuvarande costing-källor, vilket är enda vägen
+till att adoptera cachebyggarens 41,9 %. Den ger **ingen** snabbare ledger.
 
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 

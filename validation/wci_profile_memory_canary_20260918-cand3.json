@@ -1,0 +1,170 @@
+{
+  "adoption_eligible": false,
+  "claim_boundary": "one process, one worker, no parallelism; it measures how the month ledger's own costing objects retain memory as build keys accumulate, and nothing else. It builds no profile, starts no month cache build and adopts nothing",
+  "code_identity": {
+    "arm_sources": {
+      "run_scenario.py": "42752227c238be0bbb61d8d55c32359c976c5d91f8c9cdf5607f87146f21ea8b",
+      "tools/build_daily_cost_cache.py": "39fe47df05926b72f6d02a6ea5df4ee5cfe1f12737fa2417094b69d13d796875",
+      "traffic_sim/simulation/cost_ordered_execution.py": "9b2610024f07492377e78241170d4cb299917b5beeae655d24c11a89ce061498",
+      "traffic_sim/simulation/deterministic_disruption.py": "36ff6a1fb3ce569a75922363d7213c4159393a36e2e61ef649a89801ff847ce2",
+      "traffic_sim/simulation/disruption.py": "c7ac9270456ffb1e1b6fafc5c5c7436eb76b0f2bdb30035bc901d0b590b1992a"
+    },
+    "costing_sources": {
+      "run_scenario.py": "42752227c238be0bbb61d8d55c32359c976c5d91f8c9cdf5607f87146f21ea8b",
+      "traffic_sim/simulation/closure_ranking.py": "c0ba6eecd3c4ba07727f164372b46957f91f815358e1f8b703d927c20e0fda9d",
+      "traffic_sim/simulation/deterministic_disruption.py": "36ff6a1fb3ce569a75922363d7213c4159393a36e2e61ef649a89801ff847ce2",
+      "traffic_sim/simulation/disruption.py": "c7ac9270456ffb1e1b6fafc5c5c7436eb76b0f2bdb30035bc901d0b590b1992a",
+      "traffic_sim/simulation/metadata.py": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4"
+    }
+  },
+  "content_key": "d5f572e7e52d61df3fe9b5b25a51b5ac42f30090be7d2e2797d9d24697ba0677",
+  "design": {
+    "deviation": "every parent of the frozen month spans exactly five build keys, so no subset of real parents is bounded to 1, 2 or 3 keys. The daily-unit enumeration is bounded instead; the provider factory, the cost source and its retention are the production ones",
+    "key_choice_rule": "small, median and large by route bytes over the 30 registered archives",
+    "keys": {
+      "large": "c796667235591888",
+      "median": "b7e7cef8b702abae",
+      "small": "9c7ad9c97b6bdbc6"
+    },
+    "order": [
+      "9c7ad9c97b6bdbc6",
+      "b7e7cef8b702abae",
+      "c796667235591888"
+    ],
+    "raw_inputs_verified": {
+      "9c7ad9c97b6bdbc6": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72",
+        "files": {
+          "calibrated.rou.xml": "3137ef8ca6e3e8dc0305577e5feab9d6fdf0ec5d601a764c02c67777db4e70cd",
+          "calibrated_v1.rou.xml": "44413462fceb856dcba5d9f8a5fc45cd0d54568509236c8eb72a85b06501bfda",
+          "calibrated_v2.rou.xml": "7caf6a8c373bcbfd21ffa4a75513776ad8e042a7c7f4aae8ae2a0b19142fafa0",
+          "demand_meta.json": "5136153beae3bffece06c8f4e47ca272e0d00b9758bf9f981cbba6784b377a58"
+        }
+      },
+      "b7e7cef8b702abae": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33",
+        "files": {
+          "calibrated.rou.xml": "25753bc5c2db9880d7a1e24a29d6248ed2c896d15c7c99481e68308696d95b0d",
+          "calibrated_v1.rou.xml": "a832cf124fefc8d89784bce5eef9c6119a5627490eda4ea470074da80415de51",
+          "calibrated_v2.rou.xml": "61400b3120cb403d61702e8cd57160837028654017d13dc623bff0c217c37f88",
+          "demand_meta.json": "57ad042825fc8b99cd631dff101ea8a53e8a8c23ce78949c8ed82093cb3f8d8f"
+        }
+      },
+      "c796667235591888": {
+        "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06",
+        "files": {
+          "calibrated.rou.xml": "c041ea54d0c00d503b3cbbcc855fcecb349b413bebb43d6cf2d0a812fe1d2e08",
+          "calibrated_v1.rou.xml": "257be9fb379333b1ad094edc7a29c5aec8175ea641dbce663187e9dccbe0f553",
+          "calibrated_v2.rou.xml": "48e45142f127996f08aea9e47bfeb4266d6dd7c1a336408fe027bb123f7f8aee",
+          "demand_meta.json": "fac578d254731afa6aadc321da71a1eb8108e9b5dd4ccda56874a195d06df635"
+        }
+      }
+    },
+    "real_objects": [
+      "traffic_sim.simulation.cost_ordered_execution.IndependentDailyCostSource",
+      "MonthlyDemandResolverRunner.deterministic_disruption_provider",
+      "traffic_sim.simulation.deterministic_disruption.DailyCostCache",
+      "NetworkCostModel"
+    ],
+    "sequential": true,
+    "workers": 1,
+    "workload_source": {
+      "registration": "/private/tmp/gs-step3-departure-bounds/validation/wci_month_case_registration_20260917-v2.json",
+      "role": "documented source of the workload choice only; not reported valid under this code's source identity",
+      "sha256": "ee82146b83cf8e3fb64a2da1516bf2c8c2ff66f7664573b9eb92318533097031"
+    }
+  },
+  "diagnostic_only": true,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_profile_memory_canary_v1.py",
+    "sha256": "319b133711f64bb2d7ca34947e3d8011c8072339b13419d32b8b225f00ae6f80"
+  },
+  "git": {
+    "head": "61b8a9497134377057c5bc825ea35f8071b39ed0",
+    "tracked_changes": [
+      " M tests/test_daily_cost_cache.py"
+    ]
+  },
+  "label": "candidate-61b8a94",
+  "memory": {
+    "evidence_note": "RSS is reported but is never the proof on its own: CPython can hold freed pages. The reachability evidence is providers_held and providers_alive_after_gc, which count the live owners of the parsed routes",
+    "peak_footprint_bytes": 3591015496,
+    "peak_rss_bytes": 3802808320,
+    "swap": {
+      "after_bytes": 4642570240,
+      "before_bytes": 4642570240,
+      "growth_bytes": 0
+    }
+  },
+  "outputs": {
+    "digest_of_digests": "0e399bda8aa7eeaf08da5bd79024e1fd07a2dea941771eb8c9d9a84350dc20f7",
+    "unit_digests": {
+      "daily-unit-0082344c93eb8e887898dd88": "edc84660dd623b4811aa05010c8432251a462a903fc28211ed2bedeba42a33f8",
+      "daily-unit-4a7fe9fbb4447f03d2723de1": "fcc0de002603ec6a643590d48559c5cddab3e1ed9f6ecadbd1dcb1bdd0411868",
+      "daily-unit-83b9f3e02e0eeb5fddbec945": "e283ed1a5a586b162a7c87baa702d7ed68664f7f7a437512691842833e4b34de",
+      "daily-unit-c779df85a964c24d7b6bf3e5": "885c3ab08c2aa08a48ffb8b7006acb09a8c55053bd749b300b3609dad6e7a898",
+      "daily-unit-da61edd691ffa3d680a42866": "756611d01e7e87f35945614d7801ba450869db4b293f66f6c370b9b1212d26fe"
+    }
+  },
+  "per_build_key": {
+    "9c7ad9c97b6bdbc6": {
+      "cost_computations": 5,
+      "cpu_s": 11.610304999999997,
+      "footprint_bytes": [
+        1343129064,
+        1904969600,
+        2463697176,
+        3039955656,
+        3590933576
+      ],
+      "peak_footprint_bytes": 3590933576,
+      "peak_rss_bytes": 3802677248,
+      "providers_alive_after_gc": 5,
+      "providers_held": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "providers_held_at_end": 5,
+      "route_bytes": 145760833,
+      "units_done": 5,
+      "wall_s": 11.617542125000003,
+      "xml_parses": 15
+    }
+  },
+  "production_chain_rebuild_required": true,
+  "release_evidence": false,
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_profile_memory_canary_v1",
+  "stopped": {
+    "build_key": "9c7ad9c97b6bdbc6",
+    "footprint_bytes": 3590933576,
+    "limit_bytes": 3221225472,
+    "reason": "footprint limit reached; the canary stops rather than drive the machine into swap",
+    "units_done": 5,
+    "units_expected": 65
+  },
+  "surviving_children": [],
+  "totals": {
+    "cost_computations": 5,
+    "distinct_cost_computations": 5,
+    "providers_created": 5,
+    "providers_held_at_end": 5,
+    "units_priced": 5,
+    "wall_s": 11.77462825,
+    "xml_bytes_read": 728804165,
+    "xml_parses": 15
+  }
+}
