@@ -2284,6 +2284,84 @@ finns kvar.
 Steg 6 är fortfarande inte startat, och de två kända baslinjefelen är
 oförändrade.
 
+**Oraklet parsar nu varje ruttfil en gång per build key — mätt, exakt, men
+ännu inte adopterbart — 2026-09-18.**
+
+Den mätta baslinjen parsade om q10, q50 och q90 för *varje* dagenhet: 195
+parsningar och 10,61 GB läst rutt-XML för att prisa 65 scheman mot ett
+arkiv som är oföränderligt hela batchen igenom.
+
+*Vad som ändrades.* `ArchiveDisruptionProvider._vehicles` läser varje
+variant en gång och håller fordonen som immutabla tuples under providerns
+egen livstid. `closure_disruption_over_parsed_route` kör exakt samma
+`_affected_od_counts` och samma rapportväg som `closure_disruption` och
+skiljer sig bara genom att få fordonen i stället för att läsa dem. Ingen
+global cache, ingen `mtime`- eller `stat`-auktoritet, ingen
+`ParsedWindowCostIndex`, ingen indexpost och ingen återanvändning av ett
+tidigare schemas svar: alla 65 enheter prisas fortfarande i sin helhet.
+Eftersom inget läser om de byten under batchen körs den fulla
+content-driftkontrollen om direkt före publiceringen.
+
+*Ett verkligt fel som rättades på vägen.* Batchidentiteten band inte
+nätverket, trots att nätverket prisar varje enhet och går in i
+cache-nyckeln via provider-identiteten. En batch byggd mot ett nät
+verifierade därför fortfarande efter att nätet bytts: byggaren rapporterade
+build key:n som komplett medan varje läsare missade den.
+
+*Blockeringen, och rundans viktigaste fynd.* En ändring i en costing-källa
+invaliderar hela den frysta kedjan. Månadsledgerprofilen binder ett
+producentkällmanifest på 11 filer, censusen binder nio produktionskällor
+och registreringen binder tretton plus censusen — och `run_scenario.py`,
+`disruption.py` och `deterministic_disruption.py` finns i alla tre.
+`tools/build_daily_cost_cache.py` vägrar därför att ens starta, eftersom
+dess `main` läser profilen genom `_bound_inputs`. Det är den avsedda
+fail-closed-riktningen: en byte-bindning kan inte skilja en
+beteendebevarande ändring från en beteendeändrande, och att gissa i den
+tillåtande riktningen är precis vad den finns för att förhindra. Att bygga
+om profilen är hela månadsledgern: 7 320,3 s, 6,52 GB toppminne, varav
+`xml_parse` var 4 368,7 s — **59,7 %**. Det är alltså samma kostnad som
+den här ändringen angriper.
+
+*Hur den mättes ändå, utan att röra en enda grind.* Eftersom ingen frusen
+kedja kan beskriva två kodversioner samtidigt frystes arbetslasten i stället
+i ett eget kontrakt, `validation/benchmarks/wci_daily_cache_workload_v1.py`:
+build key, arkivets fyra filer, nätet, båda katalogpoolerna, specens
+kanoniska bytes, vald riktad kant och de exakt 65 kanoniska schemana med en
+ordningsdigest — allt innehållsverifierat. Registreringen lästes enbart som
+dokumenterad källa till *vilken* arbetslast som valdes, och rapporteras inte
+som giltig under kandidatens källidentitet. Detta är en separat
+benchmarkväg, inte en modifierad produktionskedja.
+
+*Resultat* (`validation/wci_daily_cache_parse_ab_20260918-v1.json`,
+`6d924429…`, med `diagnostic_only: true`, `adoption_eligible: false`,
+`production_chain_rebuild_required: true`), A/B/B/A i fyra processer och
+fyra färska cache-rooter:
+
+| | A (baslinje) | B (kandidat) |
+|---|---|---|
+| wall | 343,4 / 341,8 s | 199,8 / 198,1 s |
+| XML-parsningar | 195 | 3 |
+| läst rutt-XML | 10,61 GB | 0,16 GB |
+| topp-RSS | 529,1 / 525,2 MB | 914,3 / 911,7 MB |
+| resultatdigest | `05782d8a…` | `05782d8a…` |
+
+Separationen är 142,0 s och kvoten 1,722; varje B-arm slog varje A-arm.
+Minnet ökar 73 %, eftersom tre parsade varianter är residenta samtidigt —
+det är kandidatens verkliga pris, inom 4 GiB-budgeten men värt att veta.
+
+*Omräknat intervall* för de 26 återstående nycklarna, från de tre tidigare
+**uppmätta** takterna dividerade med den uppmätta kvoten, aldrig från ett
+enskilt bästa värde: 2 493–5 035 s, median 2 709 s, mot baslinjens
+4 293–8 670 s, median 4 664 s.
+
+*Kvar innan kandidaten får användas i produktion:*
+1. bygg om profilen (~7 320 s, 6,5 GB), sedan censusen, sedan
+   registreringen — i den ordningen, var och en verifierad;
+2. först därefter en serial månadscachebyggnad;
+3. och först därefter det övervakade fullständiga WCI-bygget.
+
+Ingenting av detta får startas utan uttryckligt godkännande.
+
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 
 **Filer:** `build_sumo_demand.py`, `monthly_demand.py:_resolve_new_release`,

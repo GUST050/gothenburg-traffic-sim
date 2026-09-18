@@ -506,6 +506,7 @@ class ArchiveDisruptionProvider:
             dict(unit_identity) if unit_identity is not None else None)
         self._sources = costing_source_identity()
         self._memory: dict[str, tuple[Mapping[str, Any], ...]] = {}
+        self._parsed_routes: dict[str, tuple[Any, ...]] = {}
         self._timings: dict[str, float] = {
             "xml_parse": 0.0,
             "route_vehicle_grouping": 0.0,
@@ -563,6 +564,33 @@ class ArchiveDisruptionProvider:
 
     # -- computation ------------------------------------------------------
 
+    def _vehicles(self, variant: str) -> tuple[Any, ...]:
+        """This archive's parsed vehicles for one variant, read exactly once.
+
+        The archive is immutable for this provider's lifetime, and every
+        caller re-proves that before asking for a cost: `disruption` runs
+        `_verify_current_inputs` ahead of any lookup, and the batch builder
+        re-hashes the same files before it publishes. Re-parsing 50 MB of
+        identical XML for each of a month's daily windows therefore buys no
+        safety, only time.
+
+        The result is a tuple of tuples that nothing here mutates, kept only
+        for as long as this provider lives — never a global cache, and never
+        a substitute for a computation: each schedule is still priced in
+        full from these vehicles.
+        """
+        from traffic_sim.simulation.disruption import (  # noqa: PLC0415
+            parse_route_vehicles,
+        )
+
+        parsed = self._parsed_routes.get(variant)
+        if parsed is None:
+            parsed = tuple(parse_route_vehicles(
+                self.inputs.variant_paths[variant],
+                timing=self._record_timing))
+            self._parsed_routes[variant] = parsed
+        return parsed
+
     def _compute(
         self, schedule: ClosureSchedule
     ) -> tuple[Mapping[str, Any], ...]:
@@ -583,8 +611,9 @@ class ArchiveDisruptionProvider:
                     self.network, "destination_access", None)
                 if destination_access is not None:
                     call_kwargs["destination_access"] = destination_access
-                report = rs.closure_disruption(
+                report = rs.closure_disruption_over_parsed_route(
                     self.inputs.variant_paths[variant],
+                    self._vehicles(variant),
                     closed,
                     closures,
                     self.network.edge_time,
@@ -597,8 +626,9 @@ class ArchiveDisruptionProvider:
                 # hook. Real production calls use the timed path above.
                 if "timing" not in str(error):
                     raise
-                report = rs.closure_disruption(
+                report = rs.closure_disruption_over_parsed_route(
                     self.inputs.variant_paths[variant],
+                    self._vehicles(variant),
                     closed,
                     closures,
                     self.network.edge_time,

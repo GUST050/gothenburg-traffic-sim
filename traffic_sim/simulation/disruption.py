@@ -1312,6 +1312,39 @@ def build_parsed_window_cost_index(
         timing=timing, max_assumed_delay_s=max_assumed_delay_s)
 
 
+def _exact_disruption(
+    route_path: Path | None,
+    parsed_vehicles: Sequence[ParsedVehicle] | None,
+    closed_edges: set[str],
+    closures: Sequence[Mapping],
+    edge_time: Costs,
+    edge_length: Costs,
+    *,
+    adjacency: Adjacency,
+    destination_access: DestinationAccessResolver | None,
+    timing: Callable[[str, float], None] | None,
+    max_assumed_delay_s: float,
+) -> dict:
+    """The one exact algorithm, over a file or over vehicles already read."""
+    resolver = ClosureRouteResolver(
+        adjacency, edge_time, edge_length, frozenset(closed_edges),
+        destination_access=destination_access,
+        max_assumed_delay_s=max_assumed_delay_s)
+    considered, affected, denied, severed, od_counts = _affected_od_counts(
+        route_path, closed_edges, closures, edge_time, edge_length,
+        timing=timing, resolver=resolver, parsed_vehicles=parsed_vehicles,
+    )
+    routing_at = time.perf_counter()
+    report = _report(
+        considered=considered, affected=affected, denied=denied,
+        severed=severed, od_counts=od_counts, pricer=resolver,
+        assumed_delay_s=resolver.max_assumed_delay_s, timing=timing,
+    )
+    if timing is not None:
+        timing("shortest_path_detour", time.perf_counter() - routing_at)
+    return report
+
+
 def closure_disruption(
     route_path: Path,
     closed_edges: set[str],
@@ -1328,23 +1361,47 @@ def closure_disruption(
     route_path = Path(route_path)
     if not closed_edges or not route_path.exists():
         return None
-    resolver = ClosureRouteResolver(
-        adjacency, edge_time, edge_length, frozenset(closed_edges),
-        destination_access=destination_access,
+    return _exact_disruption(
+        route_path, None, closed_edges, closures, edge_time, edge_length,
+        adjacency=adjacency, destination_access=destination_access,
+        timing=timing, max_assumed_delay_s=max_assumed_delay_s)
+
+
+def closure_disruption_over_parsed_route(
+    route_path: Path,
+    parsed_vehicles: Sequence[ParsedVehicle],
+    closed_edges: set[str],
+    closures: Sequence[Mapping],
+    edge_time: Costs,
+    edge_length: Costs,
+    *,
+    adjacency: Adjacency,
+    destination_access: DestinationAccessResolver | None = None,
+    timing: Callable[[str, float], None] | None = None,
+    max_assumed_delay_s: float = MAX_ASSUMED_CONGESTION_DELAY_S,
+) -> dict | None:
+    """:func:`closure_disruption` over vehicles already read from that file.
+
+    Identical arithmetic over an identical population: the same
+    ``_affected_od_counts`` and the same ``_report``, applied to the tuple
+    ``parse_route_vehicles`` produced from ``route_path``. It removes
+    repeated XML parsing when one immutable archive is priced under many
+    closure windows, and removes nothing else — no window index is built and
+    no previously computed cost answer is consulted, so the result remains an
+    independent oracle for the WindowCostIndex.
+
+    ``route_path`` is NOT read again. It names the file the vehicles came
+    from, which keeps the existence guard and leaves the call legible about
+    which variant was priced.
+    """
+    route_path = Path(route_path)
+    if not closed_edges or not route_path.exists():
+        return None
+    return _exact_disruption(
+        route_path, tuple(parsed_vehicles), closed_edges, closures,
+        edge_time, edge_length, adjacency=adjacency,
+        destination_access=destination_access, timing=timing,
         max_assumed_delay_s=max_assumed_delay_s)
-    considered, affected, denied, severed, od_counts = _affected_od_counts(
-        route_path, closed_edges, closures, edge_time, edge_length,
-        timing=timing, resolver=resolver,
-    )
-    routing_at = time.perf_counter()
-    report = _report(
-        considered=considered, affected=affected, denied=denied,
-        severed=severed, od_counts=od_counts, pricer=resolver,
-        assumed_delay_s=resolver.max_assumed_delay_s, timing=timing,
-    )
-    if timing is not None:
-        timing("shortest_path_detour", time.perf_counter() - routing_at)
-    return report
 
 
 def closure_disruption_from_parsed_vehicles(

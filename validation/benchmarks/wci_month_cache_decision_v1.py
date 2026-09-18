@@ -60,6 +60,9 @@ ORACLE_PATH = {
         "the ArchiveInputs hashes, computed once when the provider opens the "
         "archive",
         "the NetworkCostModel, built once per run",
+        "the three parsed route files, read once each and held as immutable "
+        "tuples for the provider's lifetime; they are an INPUT to every "
+        "computation, never a substitute for one",
         "nothing else: the provider's memo is keyed by schedule id, so two "
         "daily units never share a computation",
     ],
@@ -68,9 +71,11 @@ ORACLE_PATH = {
         "archive_files_hashed": 4,
         "resolver_calls": "one per daily unit, once per run when grouping",
         "cost_computations": 65,
-        "route_parses": 195,
-        "same_variant_reread": ("yes: each of the three variants is parsed "
-                                "once per daily unit, 65 times per build key"),
+        "route_parses": 3,
+        "same_variant_reread": ("no: each variant is parsed once per build "
+                                "key and its vehicles are reused for all 65 "
+                                "daily units; it was 195 before "
+                                "wci_daily_cache_parse_ab_v1"),
     },
     "verification_before_publication": [
         "every stored record is reloaded through a fresh DailyCostCache and "
@@ -82,7 +87,11 @@ ORACLE_PATH = {
     ],
     "pinned_by_tests": [
         "tests/test_daily_cost_cache.py::TestTheOraclePath::"
-        "test_each_unit_reparses_every_variant",
+        "test_each_variant_is_parsed_once_per_build_key",
+        "tests/test_daily_cost_cache.py::TestTheOraclePath::"
+        "test_every_daily_unit_is_still_computed_separately",
+        "tests/test_daily_cost_cache.py::TestTheOraclePath::"
+        "test_every_unit_equals_the_old_per_file_path",
         "tests/test_daily_cost_cache.py::TestTheOraclePath::"
         "test_the_provider_is_built_once_per_build_key",
         "tests/test_daily_cost_cache.py::TestOneCompleteBatch::"
@@ -96,8 +105,9 @@ RESTART_SEMANTICS = [
     "marker, so the build key is a miss and is recomputed; the units that "
     "already exist are reused inside that recompute",
     "the marker binds the registration content key, the policy, the chosen "
-    "edge, the spec, the archive and its four file hashes, both catalogs and "
-    "the costing and builder sources; any change makes the batch a miss",
+    "edge, the spec, the archive and its four file hashes, both catalogs, the "
+    "network, and the costing and builder sources; any change makes the batch "
+    "a miss",
     "one flock per build key, so two processes cannot publish the same batch",
     "no global cache and no trust in a path, a size or an mtime",
 ]

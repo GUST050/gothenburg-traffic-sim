@@ -454,6 +454,32 @@ def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
         max_assumed_delay_s=max_assumed_delay_s)
 
 
+def closure_disruption_over_parsed_route(
+        route_path: Path, parsed_vehicles, closed_edges: set[str],
+        closures: list, edge_time: dict, edge_len: dict,
+        adj: dict | None = None, timing=None, destination_access=None,
+        max_assumed_delay_s: float = (
+            disruption_analysis.MAX_ASSUMED_CONGESTION_DELAY_S),
+) -> dict | None:
+    """:func:`closure_disruption` over vehicles already read from that file.
+
+    Same algorithm, same population, same report: only the XML parse is
+    skipped, for a caller that prices one immutable archive under many
+    windows and has already read it. No index and no earlier cost answer is
+    consulted, so the result stays an independent oracle.
+    """
+    if not closed_edges or not Path(route_path).exists():
+        return None
+    if adj is None:
+        adj = build_edge_graph(set())
+    if destination_access is None:
+        destination_access = destination_access_resolver(adj)
+    return disruption_analysis.closure_disruption_over_parsed_route(
+        route_path, parsed_vehicles, closed_edges, closures, edge_time,
+        edge_len, adjacency=adj, destination_access=destination_access,
+        timing=timing, max_assumed_delay_s=max_assumed_delay_s)
+
+
 def reference_closure_disruption(
         route_path: Path, closed_edges: set[str], closures: list,
         edge_time: dict, edge_len: dict,

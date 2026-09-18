@@ -1,0 +1,1571 @@
+{
+  "adoption_eligible": false,
+  "arms": [
+    {
+      "arm": "A",
+      "arm_identity": {
+        "arm_sources": {
+          "run_scenario.py": "d0948b4a29d07b4f4fbe125600b7dcf25a7446bdc7337514c39edb30a679ceaf",
+          "tools/build_daily_cost_cache.py": "72e14fa098f6f39416c8f250ee87b2230e1536433a3930fc59d4c0632f926392",
+          "traffic_sim/simulation/deterministic_disruption.py": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472",
+          "traffic_sim/simulation/disruption.py": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9"
+        },
+        "costing_sources": {
+          "run_scenario.py": "d0948b4a29d07b4f4fbe125600b7dcf25a7446bdc7337514c39edb30a679ceaf",
+          "traffic_sim/simulation/closure_ranking.py": "c0ba6eecd3c4ba07727f164372b46957f91f815358e1f8b703d927c20e0fda9d",
+          "traffic_sim/simulation/deterministic_disruption.py": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472",
+          "traffic_sim/simulation/disruption.py": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9",
+          "traffic_sim/simulation/metadata.py": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4"
+        },
+        "git": {
+          "head": "b627887f2084b68c4ad89f69d7bc218d6b33a4d4",
+          "tracked_changes": [
+            " M tests/test_daily_cost_cache.py",
+            " M tests/test_deterministic_disruption.py",
+            " M tests/test_monthly_sumo.py",
+            " M validation/benchmarks/wci_month_cache_decision_v1.py",
+            " M web/data/od_matrix.csv",
+            " M web/data/od_matrix.json",
+            " M web/data/validation.json"
+          ]
+        }
+      },
+      "cache_root": "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/parse-ab/cache-1",
+      "content_key": "63195d5d03f4a269b2428e4534c7c4bb53c7c10458c66b239b1e351c4e305079",
+      "daily_units": 65,
+      "diagnostic_only": true,
+      "label": "base",
+      "memory": {
+        "lifetime_max_phys_footprint_bytes": 423445320,
+        "max_rss_bytes": 529072128
+      },
+      "mismatches": [],
+      "outputs": {
+        "cache_key_digest": "b5ae97328e2926c1dac1306ebf0721d11f1c6f80e15307217816c176cb6fb4c4",
+        "provider_identity_digest": "f01a006b0cdf523198afc4d9e5af32d63b6a4fbd6eadb40584667178c06dc282",
+        "provider_identity_without_costing_sources_digest": "ea225e0bb21190ba8287e2ec375ab63918ebca6adf998ea844ab6f38db39fbf9",
+        "result_digest": "05782d8a341782d07ae845206856f39fbbc90492fcd3345acd53221f71ae827c",
+        "units": {
+          "daily-unit-02c27a6a1e5c2038212860c3": {
+            "cache_key": "11eeac9a52a773a05a825a5101091ff0b648abc19d571798d8480f8e47bf165c",
+            "digest": "401fba71d135ca75b01afd8b1da394b9d545abbda972f6c040d88eb534b2c684"
+          },
+          "daily-unit-0a23b83a3de6fcc1c470bb2f": {
+            "cache_key": "be47a6ac421c29c4d520c4de1dfedb0ba38d21525810f5a44d2976541276c381",
+            "digest": "49c98b682b0f883b5072a691fe951388b9f86e1fa0f8a09522f0cf633192c0db"
+          },
+          "daily-unit-0a7ebd6c1a1bf32e2560a72d": {
+            "cache_key": "da07c7a7af1e8a6922f9902794cb60b62fa56a1b816de5c6c1db1027deae8d34",
+            "digest": "bbddb1bbf950cab2c7952c9b388f26b84b0f2903b85f8b1237f35bab6c8dd345"
+          },
+          "daily-unit-10dab1cd118f9ca79f0e6c4f": {
+            "cache_key": "b7fb4cf189aa494eb131319138d409ebeec683b2d61c944893e2099302bfae16",
+            "digest": "d3ffb23188d452ceaf8a0a28cd3644b014e76103fbe124bfee1d7199cb351e35"
+          },
+          "daily-unit-1868c7646a5aa2f67d20d39c": {
+            "cache_key": "0dc6f3fad441a22f83f8cf2a3e2da1e8a6d3c371bddc6d9c8d7ca20c1a77af76",
+            "digest": "f47c2d694ed33b8e2915cea564dcc03e4d14da14d8f1905faaf96e7040152c56"
+          },
+          "daily-unit-18eebf24033724b225558040": {
+            "cache_key": "1aa6be16ba9aca394573ca55ae70ad645f16d72d429667db3d073187f7caf25e",
+            "digest": "3b2240da0d2418d812e8110d8fd24f2019d85b19bc26b77a61231e54a5aa1270"
+          },
+          "daily-unit-1a287a5d00dcf8bf1d4a13d9": {
+            "cache_key": "7e29f992e329feab1b80780d38468ba273bb31b6562d339b5a7b4620e81bab41",
+            "digest": "24bbd0eeadea5ca4a14e47b71ee5dbc2153128755f675c25d03df88ba5d5c3d3"
+          },
+          "daily-unit-21961b8081be17cb452a9a75": {
+            "cache_key": "d902c5d68d92dae823cf635f46375f8b66e6d788e254d920a8ef286000ea551d",
+            "digest": "59f81ddc62296dd24b6d7a1e43a0fb6082ad2ad85397219ec0fd2bfec2b88cb3"
+          },
+          "daily-unit-26cbb7d2105efa4b7af30852": {
+            "cache_key": "5b6eefb476dc1aec8d8cd3d5e8ddcc57243bc9b9256a8348e2499df10f5042f1",
+            "digest": "cb7a04f26c34be9d9210de0c20379149fd3fb45788a0e56b3290135fdca4fe4a"
+          },
+          "daily-unit-2aab1b0ec53981ad323272e5": {
+            "cache_key": "9e02c9879866bd9d0328fe74ef7048feded779427e33eb799003f524f1d25344",
+            "digest": "815b7d1627d2de2eb4d9bdd1f32e1365d69a91dd22efe2e942d719bf11b394b4"
+          },
+          "daily-unit-2ed445fa259a1d6ad06ac93a": {
+            "cache_key": "6e86ca3a19893adfe697dea54a1d32c6972b19df751745927e8a2807fe564026",
+            "digest": "4917fa11e002d6e4d2c4a829eaa172479f29c413dc56572dd554d49a547d1ea0"
+          },
+          "daily-unit-2efcf2118582cfed669feac7": {
+            "cache_key": "66ee097106fa42e512ccdfd511eadb9f7d3bad334576cceeeb5157e035ecdce3",
+            "digest": "a019e6c8f7437d15bf2e7d432ba6a3a1f46c0adb97c184961d3e21ceaf6520af"
+          },
+          "daily-unit-2f87b9d86df26368b6b08ab7": {
+            "cache_key": "5a85c7536d750f43b675b4ddb4397c4aa3d1012970237660570c6a45a6c39b35",
+            "digest": "e68b57017733f43a7e5ffaf183bdffd994ec504a2b47044e5efd95b748734707"
+          },
+          "daily-unit-2f9b67601e755186a7a98446": {
+            "cache_key": "8974848f01d413d5dbce3694dd3ef76adbbc7d5a608c713347bcaaf96988eaaf",
+            "digest": "09e468a9a91d3635619e0ba8eb9ed18cbdf8f2f035b22ef2c8b94dd583f9a0f4"
+          },
+          "daily-unit-305ac69071b0e9e0ee5bd7b6": {
+            "cache_key": "c99022e8d6765860d6407904d4b37fb65ab9d64cc1a5702576dd565e8984d05a",
+            "digest": "19fb0e610bf84dfdee6f7dd3a214e0bef8838137049cb9c330cce1b2bb549423"
+          },
+          "daily-unit-30f676c5eaefedfec93ea73b": {
+            "cache_key": "6ba73ab89f449dacd070e54316fb580fd9fea0202ad32050a62ea16b3e6c5d10",
+            "digest": "808a38ab3b09a036822af50209966032d8d6c8574c52d156182fe31c03ae555c"
+          },
+          "daily-unit-32efb36591d843d815d90dc6": {
+            "cache_key": "102692a9fb3e31b768c3648fd94fae331f912357b1e56b4e4ff1773dd1898e69",
+            "digest": "5c5c848235fac933e1b74797198d9a919d4a755af60e3e510e58e773f23ed7ac"
+          },
+          "daily-unit-3bcdc9e1b18b406baa2c4025": {
+            "cache_key": "b5eef0ffcb92824bf2d3bfe8368629d728d6d03072f4153f2f52479d8a2d5fd3",
+            "digest": "7b58ff264650e6e1e5e23bc46cfef0be760da16c3f8f5cf610d882a76ef77aa4"
+          },
+          "daily-unit-3ea5320a1a1818b041409210": {
+            "cache_key": "ab13e3d05e4d75cc708e218a9c4e315f8112d9a320c61da8de7fa18b73836119",
+            "digest": "9844db03e387ca6175a3b46bffec19d62a5fce34e94e0fc9219c90d91243e73c"
+          },
+          "daily-unit-46162b4904af53b5d2215bf8": {
+            "cache_key": "d64599931f6328358d5c819c773340d5b7d93669bb2c5a94c77c5c685ba912c2",
+            "digest": "770d288753c73bd2393ee9a904a76a08fce6c64fc3fa919dbd389a41bfdd6ede"
+          },
+          "daily-unit-4913c3751b04d543b83ec07d": {
+            "cache_key": "fb0be760a9f4f41a1ee29613bba1e91c7fdd7be50b07ee5ffcf8ac7494e06e85",
+            "digest": "a82aac0fa33c114d94594a2bd99783f4874c916ecf3ba7f20d0c73c711571688"
+          },
+          "daily-unit-4e951e4583462d173f7f57f5": {
+            "cache_key": "28f7e8b17e03722afcfd7f468cbd415515de1276a554be31cd5d7c3c5ecd8215",
+            "digest": "e7724c9ceb9a731262c00955bbdbd0c735c1c98672cd2a8fc80b408a012103fe"
+          },
+          "daily-unit-4ec40f5a3e8056be9af2147d": {
+            "cache_key": "8e29fb0d664ef6f3095448a0e8a41c1d235d8dc24dd4fdb3e136f23614f173b8",
+            "digest": "be557233cf7491ec0e198b1955c629a9a1f8d516fa841aefbaa5ed9d771fea06"
+          },
+          "daily-unit-517a18b39123478620cc60ae": {
+            "cache_key": "5ba3f63cbe6f3c47d1418e1c58c0965b171b10cd5215d110d792268b6f2dfdfe",
+            "digest": "2df5cb7923ed7e7d2cba1d595ed580f98cf2d1d3122516ed3b529baa99c86fd4"
+          },
+          "daily-unit-539dff3b4162782aa0bdfab8": {
+            "cache_key": "e3fdaa9c2666666522045fa074741d6b5f7d776a1efe052f4bc26d96aaa6f7aa",
+            "digest": "153ec182d47a53ff1ada13d32173b1a1d5f365956ff79adce3e18fa6ed18c066"
+          },
+          "daily-unit-55b092650d4acc72fb87b876": {
+            "cache_key": "8c6aad1189917b3d9b7548f90025569a1448a762dd5b2829465d696368538324",
+            "digest": "76d6b71615207c62599f1a4bff80dac45bc0a3a9e73cc293f26fc97585d2d1cd"
+          },
+          "daily-unit-58300053514e4089d7793deb": {
+            "cache_key": "099d63feefe98d5c8739c01753c12a0967c6c5a59840506560aa7198dd653974",
+            "digest": "a841fa43498aa8b38164f2df1d92b6ee07b156cc21bf39ec0b34acdaf90ac642"
+          },
+          "daily-unit-583ec4eb192e71ecfe44f2df": {
+            "cache_key": "6ee784d8a5d14551e9d37fa60361f2b8f78c6b18c40b9d96a2f83146c4ac527f",
+            "digest": "3d786e33277f91089dbf0fac2c5825cdbd243954d8f7076ced21630c73a0dea0"
+          },
+          "daily-unit-5eeb3cde2ac31a3258ab5b94": {
+            "cache_key": "de95b8ccc18eb6c83a3fd862882864761c69951b3d64e2b060139ef26a715dfe",
+            "digest": "dd95e9a4ea660260f2f0a4a72bcc5e8252e0e17c70faf9e8eeec80774f9728cc"
+          },
+          "daily-unit-67adfb8a7ddba49b5deb2f18": {
+            "cache_key": "04cef5809a26eb3058e940e5e2fc5348bd80475b5a2d3293e8d726b4e53e3de2",
+            "digest": "a0e460734f9abdef27e90743c19459c966064b56e76bf179a1a32ab3d70fcd6d"
+          },
+          "daily-unit-69c34674b7f132574e67fc59": {
+            "cache_key": "127b239e55a90eb4a61f4989f76ce7fe887e37bb68ab9d020a1ae751dd2c4af7",
+            "digest": "f26d04fa3e7d9950e019d5f430a7ac95c9ea250e577d17b53f5754da10e266d4"
+          },
+          "daily-unit-6be33a8f7221392f5cce43eb": {
+            "cache_key": "a6717979a80f131c9111a0404bcaf024c4e8965b607423c008b1de7c0b890b13",
+            "digest": "6e6c5019661abc0157be517374ff9041b113b7131dd6e18a641b24a9b16dc05b"
+          },
+          "daily-unit-73b8bfba7c55c171b2214b14": {
+            "cache_key": "d05395079c2e6285a21dc8222302ab4ccaccfc520984daade0c7870c771a7c47",
+            "digest": "72d9d15026e5073cf39f39764fcd9be160b153b2e32de556c46de7093d2e96bd"
+          },
+          "daily-unit-7570588e0af2982a2c61022c": {
+            "cache_key": "93a5543a6438909a5a05520e6afcc05e998ec8bfa516ffbdfa6ebbb5e8c64ee2",
+            "digest": "a3455c102eded37ed64b608e38d290a0fe608c0761fbacf3173f7657bd424622"
+          },
+          "daily-unit-75e355619bc4799bd51750e4": {
+            "cache_key": "f125c443ecf59656b74d9b4a9e490923bf012f870f3aba140ce4eb9d3bee3e34",
+            "digest": "c24005c1bb4fcfd6d73e4fff5013d1f6d9874134abfc08213665d3211f492187"
+          },
+          "daily-unit-7afed313d6a8b1887e49fc72": {
+            "cache_key": "0deef15486d5f7ee43b0e5f6d5f0857eb267eb5ac382a0552e536dd8f3d0a40a",
+            "digest": "6c6d1104fcc694c910169cfa17bf8b253bc3e2eb0162f837e21e4d90618be006"
+          },
+          "daily-unit-828603aa1031c6448c133047": {
+            "cache_key": "822677a5659285b0ddc917956e598f70ee067b09bfb309c7013358a4a1ac2243",
+            "digest": "aefaebf8ce27a4b79dd0e4854160f99805f9e93cef09a7ec7ea698e2f496ee33"
+          },
+          "daily-unit-82f781a44e392d09f81ac8b2": {
+            "cache_key": "b13272aa190073a2f9183d3ed9d60f686ada179dce2a8b5705e34368e3cdaa24",
+            "digest": "d0fe087219a8cf73a405acdf512da75400d83100562c6696106c3dba65748ee2"
+          },
+          "daily-unit-846abf4f3429ecd0e9fb02f5": {
+            "cache_key": "c393826df1f6acfc2a598b9478aabac4ab15af64a9bba28a0867eac91162d9dc",
+            "digest": "4272d3de9057052b9d0a813e798c7ab9311a5ccab3a64da02bba31c791bc3585"
+          },
+          "daily-unit-88003d0016d087349756744f": {
+            "cache_key": "7a44529c662cb67f0ce909f33033d78d828e023c6b2bc9237818d4c94f5d1d65",
+            "digest": "64452cbde88c04cb0e88ba0611fad9dff14d75b50f14ff8c8030709b0670da5e"
+          },
+          "daily-unit-8ed03c408d163ad36a409a45": {
+            "cache_key": "10a3012fdcd4c56a47971a90e323fdb9628b74844ee8df00f82fc4bbdb07a005",
+            "digest": "7f1286d1841e1ac72f2bfe9035f8050de256fcca0157d2e09c2da37ce7428b60"
+          },
+          "daily-unit-91ff0e82cb64d0ceba5d83bb": {
+            "cache_key": "976bc9ad29d211ec73b2520fb292764ae9d174e40d1d7a961973698add8a55aa",
+            "digest": "dd10b4f25da75a7ca70419afe8998a87cbf35b6b87f5488aa3a455de5ca61d15"
+          },
+          "daily-unit-9bee340a5ef525379f609e3a": {
+            "cache_key": "2f937128b66da3d99a2d30cc5dd94c024a418949774e79e1ec28488467c9e974",
+            "digest": "707b9de3f56fe417e964eb7772dfa7b3177db76e51cc017b79ab96f2e64a8e54"
+          },
+          "daily-unit-a165f8a710cc9e42f065f8f4": {
+            "cache_key": "dd9c9310c84e567bceebe2c5083fea33a40e5121b5d0961b6b64352dc3fcb46e",
+            "digest": "289bd63790b45448005b4281a3687464c0c13f62c3ffcbfec22eddcf3d093262"
+          },
+          "daily-unit-a43c28bacd9c6094f71afbfd": {
+            "cache_key": "69da047c5c963dbe0245c8af7351efdf4e89de9c6cb7e79374887b348492ed8e",
+            "digest": "2264d538c53df5f3af51bdcdd8d60bdba0ce2ffc32340ff7c834bfcb25d7739e"
+          },
+          "daily-unit-aafd9768d832ce47d20fe2e5": {
+            "cache_key": "04308d0a2889c98b3d964260060af06124265b03c10dbbfc7db6fa89dbbb2fdc",
+            "digest": "29668be84023aeda595988464cc8cbfa6b7fafc606b2c2c11e84c008a142dc0d"
+          },
+          "daily-unit-abe20bac9743676830dd2bde": {
+            "cache_key": "ef53b0c5b6e59328f535cf5194ecf40d245049bdba0532a17e34bedad7e35c6c",
+            "digest": "e9b9672d72a2569934489ed2bf60ad371485ea208c7b9524f7e8b6e324be185f"
+          },
+          "daily-unit-b3dc9e75d73466f7860c8031": {
+            "cache_key": "ab9e06c8fd0e82c4a9ea0ec55e64154f5ef0fe1a88719241ca2917f2b15d82ad",
+            "digest": "b01f94b79cbf14043fe336d5ca0a41a2a9ad0893ab550bae67813ca37dbb82a7"
+          },
+          "daily-unit-bb25e8304338e02d27f5c468": {
+            "cache_key": "b80cf83e854f690cd044b77d3c901ecc4edf7f24624bcb2980b876cc8f8e688a",
+            "digest": "4466878e84f56250c60a5a31844f7dea626573da5a3b43bd5621dd84e88e9732"
+          },
+          "daily-unit-bd8c6dc6fc86162cf765b227": {
+            "cache_key": "4ccfe4da63a0aa32dd704bab1a1c13ea81ee07a46058e4db966bf81b7305799f",
+            "digest": "9337d5205730176ccfe92d0ff32321ae97b21683764f8f73191cc9569f9802b4"
+          },
+          "daily-unit-bfb1cc83095af8a0edf102c0": {
+            "cache_key": "c0d0942ae5f35983d90bcb9beaeddf7136a78e898a430d9ce0e6d2c6bfecd2e7",
+            "digest": "5694caa8e1fec13d8fabb531cb5f813f3eb0f8ab5106384d628fcf0dad2dfa79"
+          },
+          "daily-unit-c00222c6bfa7520184737605": {
+            "cache_key": "8555d3067a20bcdea45a4b485dc8593fa17c299fae5cfa11fd1e6176c6a2e67d",
+            "digest": "8f0f328afae452fea054e40b4e5b80d8f7e653e61702ee520673c7f5c20e3785"
+          },
+          "daily-unit-c0840e5d3b8d894992797553": {
+            "cache_key": "d48b83d0986d70c6c583870480c2d6d96a08487b66c1d932289836ec5b8280ff",
+            "digest": "4215bf002b620ceb0206335a316feb740af9bd83af4760c05de016025cd429ee"
+          },
+          "daily-unit-c298e2bde6c3f1dc2595f6e9": {
+            "cache_key": "f751f2cef200febc347b87d4ad77eda79a050473de6eacc8201a445a60ef4301",
+            "digest": "1bd25a075bfcc1e8eab10a7744c7f330baf74051ef1c19e7ceabf282fabfea48"
+          },
+          "daily-unit-c73adcb08b6632d04e90479a": {
+            "cache_key": "e24e5ee549654fd79d9d4ec2f2aeba30f206f97112f5ea3fa62e8a3027ba2fd2",
+            "digest": "5cd5438ee2fc16a550dcf2627991aca696e66be47ae97cdfc863c82d0cb28081"
+          },
+          "daily-unit-ddc6f36289d6a64323a653f6": {
+            "cache_key": "70a507a355e0c40890f33731af3165dc42f2b24c33898f698dc8b6313835b1e2",
+            "digest": "643a8fff9a10025f6f6b2a3cda63bb285883cf9594fff5fc7c78fa95cdcb8676"
+          },
+          "daily-unit-e0763906e1a029d37bd30a62": {
+            "cache_key": "57178f803d347400ba0332cd2e44730ee35874058f9f54038daf2dc3fe1a36b9",
+            "digest": "b3a46ef4e4632d9886d616130cb010ea4139f0deb9354a8043073432e940c589"
+          },
+          "daily-unit-eafe48b38c8724dbcc334c00": {
+            "cache_key": "ca26ecce47d812aba9d355fd95a91baca5a29532d52bf0a2096c3b36b1d0c50c",
+            "digest": "5f839352de73c6b1b5a874a71ee6d33aaabba86ae1c5f070ccab6aae1bd26901"
+          },
+          "daily-unit-ee3bf213d003b0884b540a14": {
+            "cache_key": "23d7450e385bb8cc39e5b2c6ed583a5b6a18cb6a867cdc78b9ae401f94c9ee23",
+            "digest": "41527f63ce654c86e40547a57ab27e5387fb4c5fffae29c11e21cff82473d0c8"
+          },
+          "daily-unit-f2774224d272519e6e8e44d8": {
+            "cache_key": "9c87b57f937614c112dcf5c53b385586eda7e744188c6e0dfdbde7cd87b366a0",
+            "digest": "4fc57f915ce6edde1e73ed9623d8ec8dba5028011613f5bc98e433f71229a597"
+          },
+          "daily-unit-f3ad7cf185f8636fda092cd0": {
+            "cache_key": "a4d6a3b90d8a465094fdaafff23190eeab3839304d1adc75e320fd735cb98c8e",
+            "digest": "79071afadad72344ec68c34b153bcc66496b72e8d12411be8a6c0a93d1cd3520"
+          },
+          "daily-unit-f404f83ece9bc85ca00beaa9": {
+            "cache_key": "8613076c0eac56c074ee9d9b9c8e317e40701c14b83720d56b93fd5ba9594720",
+            "digest": "d935327d46cee60a395f8790295ed619b0bf2ea7d78f050515ad39ad79772c9f"
+          },
+          "daily-unit-f8b41de6000341a8c8b5cea3": {
+            "cache_key": "de026d04b5708087800dc501a2a2665124712ee7b13769f0f4c4e4f1d2255036",
+            "digest": "44c9dd871172459d281d130416b6a200fae075e1f429641deac7b3b40c04b551"
+          },
+          "daily-unit-fbba0afe512bc466c0983712": {
+            "cache_key": "4190205cfc79f6a195784448747c5f12cc232251f085fc4fe9965d8f0cf1453a",
+            "digest": "d4ec61cc5e792cd7831436089daf92f11033ec537ecf716e26ba6acd24d94ad4"
+          },
+          "daily-unit-fe8032561cefbb097d28830a": {
+            "cache_key": "3d5c45d839833ac24dfffacc6016d44ad0b9435a7ea5555a27983100992a2d96",
+            "digest": "318dba33a662480459391ca810191e7c19a16498bb4deeeac75c5bfdd0ebb395"
+          }
+        }
+      },
+      "position": 1,
+      "release_evidence": false,
+      "runtime": {
+        "hw_memsize_bytes": 25769803776,
+        "hw_ncpu": 10,
+        "machine": "arm64",
+        "platform": "macOS-15.6.1-arm64-arm-64bit",
+        "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "python_version": "3.9.6",
+        "telemetry_errors": []
+      },
+      "schema": "wci_daily_cache_parse_ab_v1_arm",
+      "surviving_children": [],
+      "swap": {
+        "after_bytes": 4718067712,
+        "before_bytes": 4734844928,
+        "growth_bytes": -16777216
+      },
+      "timing": {
+        "sys_s": 8.843395,
+        "user_s": 334.140652,
+        "wall_s": 343.363064041
+      },
+      "work": {
+        "cost_computations": 65,
+        "distinct_cost_computations": 65,
+        "xml_bytes_read": 10609579955,
+        "xml_parses": 195,
+        "xml_parses_by_file": {
+          "calibrated.rou.xml": 65,
+          "calibrated_v1.rou.xml": 65,
+          "calibrated_v2.rou.xml": 65
+        }
+      },
+      "workload": {
+        "build_key": "d42db159b3ee565f",
+        "content_key": "a0073bb16554d1c8476f26a03544dfb9ea9b15ce240a4c881431fec94678c634",
+        "daily_units": 65,
+        "path": "/private/tmp/gs-step3-departure-bounds/validation/wci_daily_cache_ab_workload_20260918-v2.json",
+        "schedule_order_digest": "e6619034989ac76c1fb54801873d6a1ce13a3cdcbd6b556e0ec7b3b4abec38cb",
+        "sha256": "8af1d505d4859244b323c8f0ab6ba30dc268847ded0e2d6346a4f2f00af9403d"
+      }
+    },
+    {
+      "arm": "B",
+      "arm_identity": {
+        "arm_sources": {
+          "run_scenario.py": "42752227c238be0bbb61d8d55c32359c976c5d91f8c9cdf5607f87146f21ea8b",
+          "tools/build_daily_cost_cache.py": "39fe47df05926b72f6d02a6ea5df4ee5cfe1f12737fa2417094b69d13d796875",
+          "traffic_sim/simulation/deterministic_disruption.py": "36ff6a1fb3ce569a75922363d7213c4159393a36e2e61ef649a89801ff847ce2",
+          "traffic_sim/simulation/disruption.py": "c7ac9270456ffb1e1b6fafc5c5c7436eb76b0f2bdb30035bc901d0b590b1992a"
+        },
+        "costing_sources": {
+          "run_scenario.py": "42752227c238be0bbb61d8d55c32359c976c5d91f8c9cdf5607f87146f21ea8b",
+          "traffic_sim/simulation/closure_ranking.py": "c0ba6eecd3c4ba07727f164372b46957f91f815358e1f8b703d927c20e0fda9d",
+          "traffic_sim/simulation/deterministic_disruption.py": "36ff6a1fb3ce569a75922363d7213c4159393a36e2e61ef649a89801ff847ce2",
+          "traffic_sim/simulation/disruption.py": "c7ac9270456ffb1e1b6fafc5c5c7436eb76b0f2bdb30035bc901d0b590b1992a",
+          "traffic_sim/simulation/metadata.py": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4"
+        },
+        "git": {
+          "head": "b627887f2084b68c4ad89f69d7bc218d6b33a4d4",
+          "tracked_changes": [
+            " M run_scenario.py",
+            " M tests/test_daily_cost_cache.py",
+            " M tests/test_deterministic_disruption.py",
+            " M tests/test_monthly_sumo.py",
+            " M tools/build_daily_cost_cache.py",
+            " M traffic_sim/simulation/deterministic_disruption.py",
+            " M traffic_sim/simulation/disruption.py",
+            " M validation/benchmarks/wci_month_cache_decision_v1.py",
+            " M web/data/od_matrix.csv",
+            " M web/data/od_matrix.json",
+            " M web/data/validation.json"
+          ]
+        }
+      },
+      "cache_root": "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/parse-ab/cache-2",
+      "content_key": "0c855700411f6a07e9ff8b86401d6a12758ae7ed41ecb2b80f626482c789068f",
+      "daily_units": 65,
+      "diagnostic_only": true,
+      "label": "cand",
+      "memory": {
+        "lifetime_max_phys_footprint_bytes": 828113952,
+        "max_rss_bytes": 914276352
+      },
+      "mismatches": [],
+      "outputs": {
+        "cache_key_digest": "be09b8a9d9516cdb2d126935ca92b1c51170148dc33b299c0869dfd51963d73a",
+        "provider_identity_digest": "5e0632b298e434b949fbc37c3ea8f111a440473b744c8c2d9c1dd94d8e7bea29",
+        "provider_identity_without_costing_sources_digest": "ea225e0bb21190ba8287e2ec375ab63918ebca6adf998ea844ab6f38db39fbf9",
+        "result_digest": "05782d8a341782d07ae845206856f39fbbc90492fcd3345acd53221f71ae827c",
+        "units": {
+          "daily-unit-02c27a6a1e5c2038212860c3": {
+            "cache_key": "40ff18074e3eab51898ebfdfc0e0d2b9e09f413541470bced114f508aace2d93",
+            "digest": "401fba71d135ca75b01afd8b1da394b9d545abbda972f6c040d88eb534b2c684"
+          },
+          "daily-unit-0a23b83a3de6fcc1c470bb2f": {
+            "cache_key": "92b98a2c9c1a1022992e7baaa1570a05c5baf96725d9c6fd59c6cf28b135563b",
+            "digest": "49c98b682b0f883b5072a691fe951388b9f86e1fa0f8a09522f0cf633192c0db"
+          },
+          "daily-unit-0a7ebd6c1a1bf32e2560a72d": {
+            "cache_key": "c0c53cad83d78447e6991609f65eb4a12d696c71bcc77fad3ccfb7a4fd45e3e2",
+            "digest": "bbddb1bbf950cab2c7952c9b388f26b84b0f2903b85f8b1237f35bab6c8dd345"
+          },
+          "daily-unit-10dab1cd118f9ca79f0e6c4f": {
+            "cache_key": "eee57fff65115451ea85f7166f497993f0a61925936d2216bd8ad1041ef59a6b",
+            "digest": "d3ffb23188d452ceaf8a0a28cd3644b014e76103fbe124bfee1d7199cb351e35"
+          },
+          "daily-unit-1868c7646a5aa2f67d20d39c": {
+            "cache_key": "03edfc7c8760c05d8c0efe8174ebe9fd4b440d279ea7dd7555c3298d6b5d649f",
+            "digest": "f47c2d694ed33b8e2915cea564dcc03e4d14da14d8f1905faaf96e7040152c56"
+          },
+          "daily-unit-18eebf24033724b225558040": {
+            "cache_key": "2d6890611572c10496b30fbb1b2e5ad0bce559aa2964c4294849983a8e3b168b",
+            "digest": "3b2240da0d2418d812e8110d8fd24f2019d85b19bc26b77a61231e54a5aa1270"
+          },
+          "daily-unit-1a287a5d00dcf8bf1d4a13d9": {
+            "cache_key": "ce3000f2863d2fb66a11afdb6f7e882d23ea7195006cfe77078303a891569976",
+            "digest": "24bbd0eeadea5ca4a14e47b71ee5dbc2153128755f675c25d03df88ba5d5c3d3"
+          },
+          "daily-unit-21961b8081be17cb452a9a75": {
+            "cache_key": "3992daa81f3311d299763c9611925231294f5e2cd9643cf5d3cf1ff8be2affc8",
+            "digest": "59f81ddc62296dd24b6d7a1e43a0fb6082ad2ad85397219ec0fd2bfec2b88cb3"
+          },
+          "daily-unit-26cbb7d2105efa4b7af30852": {
+            "cache_key": "d33b0b922d8e389b515c6272c10d078b2e037ad1063ba78539971653f237cd3d",
+            "digest": "cb7a04f26c34be9d9210de0c20379149fd3fb45788a0e56b3290135fdca4fe4a"
+          },
+          "daily-unit-2aab1b0ec53981ad323272e5": {
+            "cache_key": "ae03143ba906e566bbbb5ed1900a9ef280f01b7a5fee548bda436e04aba25e9b",
+            "digest": "815b7d1627d2de2eb4d9bdd1f32e1365d69a91dd22efe2e942d719bf11b394b4"
+          },
+          "daily-unit-2ed445fa259a1d6ad06ac93a": {
+            "cache_key": "e9afa5789590b0f40da923e992b5bbd725dfb23a59e1720d6eb3d8b5f5bb72fd",
+            "digest": "4917fa11e002d6e4d2c4a829eaa172479f29c413dc56572dd554d49a547d1ea0"
+          },
+          "daily-unit-2efcf2118582cfed669feac7": {
+            "cache_key": "65a3676b5e8e5e1cf6f866723c0bc0fa06af257ae74de235d5b89882aab13a14",
+            "digest": "a019e6c8f7437d15bf2e7d432ba6a3a1f46c0adb97c184961d3e21ceaf6520af"
+          },
+          "daily-unit-2f87b9d86df26368b6b08ab7": {
+            "cache_key": "7556c685e0f466a4b19efc9d5a6e8981afefeae2bfccb3ae5a9ae470952e3fe0",
+            "digest": "e68b57017733f43a7e5ffaf183bdffd994ec504a2b47044e5efd95b748734707"
+          },
+          "daily-unit-2f9b67601e755186a7a98446": {
+            "cache_key": "10e2a1a97c3937b08e6eea6a0377f5e6ecb97e78ef2f9b66fe4c7b199e65c327",
+            "digest": "09e468a9a91d3635619e0ba8eb9ed18cbdf8f2f035b22ef2c8b94dd583f9a0f4"
+          },
+          "daily-unit-305ac69071b0e9e0ee5bd7b6": {
+            "cache_key": "256ddf15f9b5f5c95b8761294af779b149d5e89c9531e0e937d0eae9b46ff658",
+            "digest": "19fb0e610bf84dfdee6f7dd3a214e0bef8838137049cb9c330cce1b2bb549423"
+          },
+          "daily-unit-30f676c5eaefedfec93ea73b": {
+            "cache_key": "3b5f8c982af75acf39ae2796e1e224db534ef9ed4acf61ac61c11f87da879069",
+            "digest": "808a38ab3b09a036822af50209966032d8d6c8574c52d156182fe31c03ae555c"
+          },
+          "daily-unit-32efb36591d843d815d90dc6": {
+            "cache_key": "a8319fa1cd87645dc79ce801f296dfbe310665ef6c1ef6e61f884b12226e3594",
+            "digest": "5c5c848235fac933e1b74797198d9a919d4a755af60e3e510e58e773f23ed7ac"
+          },
+          "daily-unit-3bcdc9e1b18b406baa2c4025": {
+            "cache_key": "135f5fb18bf599a7b1c6d5cb45ea32547f9d6863a5e81608c7fa9f5541c01e01",
+            "digest": "7b58ff264650e6e1e5e23bc46cfef0be760da16c3f8f5cf610d882a76ef77aa4"
+          },
+          "daily-unit-3ea5320a1a1818b041409210": {
+            "cache_key": "efe66701befef1595e390f54f02963a1cc926fd8ff0e52b25eb24c4e68842e29",
+            "digest": "9844db03e387ca6175a3b46bffec19d62a5fce34e94e0fc9219c90d91243e73c"
+          },
+          "daily-unit-46162b4904af53b5d2215bf8": {
+            "cache_key": "8d9ade000f35086572e6685822bdcf3af8e4f49a9b6d015bbf209713b9a04130",
+            "digest": "770d288753c73bd2393ee9a904a76a08fce6c64fc3fa919dbd389a41bfdd6ede"
+          },
+          "daily-unit-4913c3751b04d543b83ec07d": {
+            "cache_key": "9b0b42584dd1052697fde69747538a4d36bf32d9252290a81c292f99e920ce16",
+            "digest": "a82aac0fa33c114d94594a2bd99783f4874c916ecf3ba7f20d0c73c711571688"
+          },
+          "daily-unit-4e951e4583462d173f7f57f5": {
+            "cache_key": "123125dbbb92783412f13db90f7f401b9ae41fad284193ca45ee2bc2bc217b09",
+            "digest": "e7724c9ceb9a731262c00955bbdbd0c735c1c98672cd2a8fc80b408a012103fe"
+          },
+          "daily-unit-4ec40f5a3e8056be9af2147d": {
+            "cache_key": "dc23c511399cef778fe653cb4cfbe667d7ac43012b9f3dede76fcc0287edffb1",
+            "digest": "be557233cf7491ec0e198b1955c629a9a1f8d516fa841aefbaa5ed9d771fea06"
+          },
+          "daily-unit-517a18b39123478620cc60ae": {
+            "cache_key": "5ad4f11e8396b69849fa45ac5d45d1849e78251bc79e8dd8e1608a8cf26cbe81",
+            "digest": "2df5cb7923ed7e7d2cba1d595ed580f98cf2d1d3122516ed3b529baa99c86fd4"
+          },
+          "daily-unit-539dff3b4162782aa0bdfab8": {
+            "cache_key": "9c4724a110998f43ca8722ed86de97c4e7623fff0f0877cd960243f67aa3e005",
+            "digest": "153ec182d47a53ff1ada13d32173b1a1d5f365956ff79adce3e18fa6ed18c066"
+          },
+          "daily-unit-55b092650d4acc72fb87b876": {
+            "cache_key": "bcc78a27b13ebe6c72c0b9f3c0fcb5af7884810225ebfa0e6c8750679b12c5a6",
+            "digest": "76d6b71615207c62599f1a4bff80dac45bc0a3a9e73cc293f26fc97585d2d1cd"
+          },
+          "daily-unit-58300053514e4089d7793deb": {
+            "cache_key": "f49eb7139b3fc79c1ae9615026c8b2fb27ec250d049731bf9e5eaac6be65d4d3",
+            "digest": "a841fa43498aa8b38164f2df1d92b6ee07b156cc21bf39ec0b34acdaf90ac642"
+          },
+          "daily-unit-583ec4eb192e71ecfe44f2df": {
+            "cache_key": "82d04d22dbcfea7ae221daa1ef5afb2613aad9f247f43598088a55666d62bdbf",
+            "digest": "3d786e33277f91089dbf0fac2c5825cdbd243954d8f7076ced21630c73a0dea0"
+          },
+          "daily-unit-5eeb3cde2ac31a3258ab5b94": {
+            "cache_key": "b6cb7b991894a7ba1f2d04dded3c432cc25c2f97cf9d55d25714b41ae2ebdadd",
+            "digest": "dd95e9a4ea660260f2f0a4a72bcc5e8252e0e17c70faf9e8eeec80774f9728cc"
+          },
+          "daily-unit-67adfb8a7ddba49b5deb2f18": {
+            "cache_key": "972c38d10f6d5e33b1e90c7fd9fc8bac676250f25a454fd9930721bf38dce737",
+            "digest": "a0e460734f9abdef27e90743c19459c966064b56e76bf179a1a32ab3d70fcd6d"
+          },
+          "daily-unit-69c34674b7f132574e67fc59": {
+            "cache_key": "8b39881e22359559d856d5db879803363955aef8ae81a5060e837a39c62aaf84",
+            "digest": "f26d04fa3e7d9950e019d5f430a7ac95c9ea250e577d17b53f5754da10e266d4"
+          },
+          "daily-unit-6be33a8f7221392f5cce43eb": {
+            "cache_key": "36fe7ae9b9bf6bdd0ad2f6117705adfd068b3c02cf67f6c53928ad2c287f0eaf",
+            "digest": "6e6c5019661abc0157be517374ff9041b113b7131dd6e18a641b24a9b16dc05b"
+          },
+          "daily-unit-73b8bfba7c55c171b2214b14": {
+            "cache_key": "33386b918da46c020d63364688e6bbe9af0a73e60ba74fdc28eec51d9c3b9c30",
+            "digest": "72d9d15026e5073cf39f39764fcd9be160b153b2e32de556c46de7093d2e96bd"
+          },
+          "daily-unit-7570588e0af2982a2c61022c": {
+            "cache_key": "9f4db0728857b27e7f2cee72f201700504514aa128ca92b55212b23cd8e3c551",
+            "digest": "a3455c102eded37ed64b608e38d290a0fe608c0761fbacf3173f7657bd424622"
+          },
+          "daily-unit-75e355619bc4799bd51750e4": {
+            "cache_key": "853aba8429f1fd0fa13b47fca2454ec85b77b6dac7526e23fefede49b9813937",
+            "digest": "c24005c1bb4fcfd6d73e4fff5013d1f6d9874134abfc08213665d3211f492187"
+          },
+          "daily-unit-7afed313d6a8b1887e49fc72": {
+            "cache_key": "f02443aca86785eb27389df2bc29bf5060f01de160e15ed189592c404dae523c",
+            "digest": "6c6d1104fcc694c910169cfa17bf8b253bc3e2eb0162f837e21e4d90618be006"
+          },
+          "daily-unit-828603aa1031c6448c133047": {
+            "cache_key": "63405b1680e1cb84e8179892e78c4b3b6394071e6f4ef036d15825c607ccf96a",
+            "digest": "aefaebf8ce27a4b79dd0e4854160f99805f9e93cef09a7ec7ea698e2f496ee33"
+          },
+          "daily-unit-82f781a44e392d09f81ac8b2": {
+            "cache_key": "fe9ad364ae400004d5a91664aa7ce1abec28df3bd2cbbf6e5152ea10cdaf65f4",
+            "digest": "d0fe087219a8cf73a405acdf512da75400d83100562c6696106c3dba65748ee2"
+          },
+          "daily-unit-846abf4f3429ecd0e9fb02f5": {
+            "cache_key": "5acaa343014d7ed833e72716528c4ec978a05302edddfa10928b44b420fa0493",
+            "digest": "4272d3de9057052b9d0a813e798c7ab9311a5ccab3a64da02bba31c791bc3585"
+          },
+          "daily-unit-88003d0016d087349756744f": {
+            "cache_key": "1d937975a914ee68d98b0d52661d8959be9aad1e84d0deb45734726552e8c3e6",
+            "digest": "64452cbde88c04cb0e88ba0611fad9dff14d75b50f14ff8c8030709b0670da5e"
+          },
+          "daily-unit-8ed03c408d163ad36a409a45": {
+            "cache_key": "512a3e2c3a4e477cc3976c5c2d8ce03f6821de997895df730d765449b381f95d",
+            "digest": "7f1286d1841e1ac72f2bfe9035f8050de256fcca0157d2e09c2da37ce7428b60"
+          },
+          "daily-unit-91ff0e82cb64d0ceba5d83bb": {
+            "cache_key": "a9c86d4b6f5c800366148910a9df91a306a913892b602286fdeffe6b6a8deaee",
+            "digest": "dd10b4f25da75a7ca70419afe8998a87cbf35b6b87f5488aa3a455de5ca61d15"
+          },
+          "daily-unit-9bee340a5ef525379f609e3a": {
+            "cache_key": "ab00f7e68e2fd7a71d9bc1f79e742e98c4778878c37f6cc1cbf1fd2c9a132bb5",
+            "digest": "707b9de3f56fe417e964eb7772dfa7b3177db76e51cc017b79ab96f2e64a8e54"
+          },
+          "daily-unit-a165f8a710cc9e42f065f8f4": {
+            "cache_key": "adb3cb37b200f75f0117e72b2b40f4b6639dcc1fe88f19a12915798f211642a1",
+            "digest": "289bd63790b45448005b4281a3687464c0c13f62c3ffcbfec22eddcf3d093262"
+          },
+          "daily-unit-a43c28bacd9c6094f71afbfd": {
+            "cache_key": "28baf0106553a395d66cc6a7089bfbdfc63d6af2942dbbdffe7d0d9d2087ad76",
+            "digest": "2264d538c53df5f3af51bdcdd8d60bdba0ce2ffc32340ff7c834bfcb25d7739e"
+          },
+          "daily-unit-aafd9768d832ce47d20fe2e5": {
+            "cache_key": "31e5feb7371a93fec9a12d237c33210ad14c87ebffab2c02e7721ac5eaa7444a",
+            "digest": "29668be84023aeda595988464cc8cbfa6b7fafc606b2c2c11e84c008a142dc0d"
+          },
+          "daily-unit-abe20bac9743676830dd2bde": {
+            "cache_key": "669cc3163a52c2280efef2efb75d73ef34c73788e54d54bab5bd837bfe8d293d",
+            "digest": "e9b9672d72a2569934489ed2bf60ad371485ea208c7b9524f7e8b6e324be185f"
+          },
+          "daily-unit-b3dc9e75d73466f7860c8031": {
+            "cache_key": "be2756085985a59b1eef0d49f35179d0096a1521d1fb6230ce770eeab6171408",
+            "digest": "b01f94b79cbf14043fe336d5ca0a41a2a9ad0893ab550bae67813ca37dbb82a7"
+          },
+          "daily-unit-bb25e8304338e02d27f5c468": {
+            "cache_key": "abbb0991a0046d46353b1a3e121dfe963de63fa6bbb4ed366a38a5bdc602d721",
+            "digest": "4466878e84f56250c60a5a31844f7dea626573da5a3b43bd5621dd84e88e9732"
+          },
+          "daily-unit-bd8c6dc6fc86162cf765b227": {
+            "cache_key": "7bd17914f014205834d0d697de6af906e613478025453c777506f2756a883700",
+            "digest": "9337d5205730176ccfe92d0ff32321ae97b21683764f8f73191cc9569f9802b4"
+          },
+          "daily-unit-bfb1cc83095af8a0edf102c0": {
+            "cache_key": "d4ffe8292aee5057c5289d2e782cd1192815eeb5a8b9079c76b5b3ca7a1bcbb6",
+            "digest": "5694caa8e1fec13d8fabb531cb5f813f3eb0f8ab5106384d628fcf0dad2dfa79"
+          },
+          "daily-unit-c00222c6bfa7520184737605": {
+            "cache_key": "f3613bf399a9d7f63590e6d672bc2cc59e9fae5681c91200d4c55accb18226e9",
+            "digest": "8f0f328afae452fea054e40b4e5b80d8f7e653e61702ee520673c7f5c20e3785"
+          },
+          "daily-unit-c0840e5d3b8d894992797553": {
+            "cache_key": "12d487cc0c9c676ce147a2146162b80868b2e3c41dce93480586297097e33af5",
+            "digest": "4215bf002b620ceb0206335a316feb740af9bd83af4760c05de016025cd429ee"
+          },
+          "daily-unit-c298e2bde6c3f1dc2595f6e9": {
+            "cache_key": "4293295958f160aef372bd41d400acb8a57d676fcfb149eed287942c040a3b05",
+            "digest": "1bd25a075bfcc1e8eab10a7744c7f330baf74051ef1c19e7ceabf282fabfea48"
+          },
+          "daily-unit-c73adcb08b6632d04e90479a": {
+            "cache_key": "d10a38a150b64930d09a67b50496f03439c9c9d5a5476b56fb4dbc2b3f8d56a8",
+            "digest": "5cd5438ee2fc16a550dcf2627991aca696e66be47ae97cdfc863c82d0cb28081"
+          },
+          "daily-unit-ddc6f36289d6a64323a653f6": {
+            "cache_key": "3dc5c533c1798e13886629973cdd8d55439d880bd5b83c941e33a1f42a39ac49",
+            "digest": "643a8fff9a10025f6f6b2a3cda63bb285883cf9594fff5fc7c78fa95cdcb8676"
+          },
+          "daily-unit-e0763906e1a029d37bd30a62": {
+            "cache_key": "2575944a415f83ac67bc89b53e1ff31a3e68c18ecf0eee5f496e960ba78ece32",
+            "digest": "b3a46ef4e4632d9886d616130cb010ea4139f0deb9354a8043073432e940c589"
+          },
+          "daily-unit-eafe48b38c8724dbcc334c00": {
+            "cache_key": "14f3a35c800d23356561b32f7a5e2f4f8006855fd7e6144572788f0deace4c32",
+            "digest": "5f839352de73c6b1b5a874a71ee6d33aaabba86ae1c5f070ccab6aae1bd26901"
+          },
+          "daily-unit-ee3bf213d003b0884b540a14": {
+            "cache_key": "fa1c61e93cb71f5806d476a7fc6066e4388ae1bd8abf1ae2e5bc81989f005258",
+            "digest": "41527f63ce654c86e40547a57ab27e5387fb4c5fffae29c11e21cff82473d0c8"
+          },
+          "daily-unit-f2774224d272519e6e8e44d8": {
+            "cache_key": "30ad56bc641aad9de035d97ffd0099ace3124e6b0e7dd6fe0c83823f4d425c65",
+            "digest": "4fc57f915ce6edde1e73ed9623d8ec8dba5028011613f5bc98e433f71229a597"
+          },
+          "daily-unit-f3ad7cf185f8636fda092cd0": {
+            "cache_key": "bbd5af0f276510a1e8f9844d92cfb7685fd04bc1bfb23cc694aa39a7fe707b37",
+            "digest": "79071afadad72344ec68c34b153bcc66496b72e8d12411be8a6c0a93d1cd3520"
+          },
+          "daily-unit-f404f83ece9bc85ca00beaa9": {
+            "cache_key": "0786b56d777a77ec8f5166d9fa659ea4805f212508f325464563a0f283da6269",
+            "digest": "d935327d46cee60a395f8790295ed619b0bf2ea7d78f050515ad39ad79772c9f"
+          },
+          "daily-unit-f8b41de6000341a8c8b5cea3": {
+            "cache_key": "4f22fd5b01923199bfc999d531f8afdc293bf6124bd412814dd31920f01d6c03",
+            "digest": "44c9dd871172459d281d130416b6a200fae075e1f429641deac7b3b40c04b551"
+          },
+          "daily-unit-fbba0afe512bc466c0983712": {
+            "cache_key": "991d80a4a8a9d9bdc6f19efee51efc104149a74dcd72bd71c6dc286b0d442868",
+            "digest": "d4ec61cc5e792cd7831436089daf92f11033ec537ecf716e26ba6acd24d94ad4"
+          },
+          "daily-unit-fe8032561cefbb097d28830a": {
+            "cache_key": "26848ddc45a8cb7ee8e54714b3283a14777f2ba06b54c0a253bb16729bca7f0c",
+            "digest": "318dba33a662480459391ca810191e7c19a16498bb4deeeac75c5bfdd0ebb395"
+          }
+        }
+      },
+      "position": 2,
+      "release_evidence": false,
+      "runtime": {
+        "hw_memsize_bytes": 25769803776,
+        "hw_ncpu": 10,
+        "machine": "arm64",
+        "platform": "macOS-15.6.1-arm64-arm-64bit",
+        "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "python_version": "3.9.6",
+        "telemetry_errors": []
+      },
+      "schema": "wci_daily_cache_parse_ab_v1_arm",
+      "surviving_children": [],
+      "swap": {
+        "after_bytes": 4718067712,
+        "before_bytes": 4718067712,
+        "growth_bytes": 0
+      },
+      "timing": {
+        "sys_s": 0.990689,
+        "user_s": 198.713835,
+        "wall_s": 199.806778917
+      },
+      "work": {
+        "cost_computations": 65,
+        "distinct_cost_computations": 65,
+        "xml_bytes_read": 163224307,
+        "xml_parses": 3,
+        "xml_parses_by_file": {
+          "calibrated.rou.xml": 1,
+          "calibrated_v1.rou.xml": 1,
+          "calibrated_v2.rou.xml": 1
+        }
+      },
+      "workload": {
+        "build_key": "d42db159b3ee565f",
+        "content_key": "a0073bb16554d1c8476f26a03544dfb9ea9b15ce240a4c881431fec94678c634",
+        "daily_units": 65,
+        "path": "/private/tmp/gs-step3-departure-bounds/validation/wci_daily_cache_ab_workload_20260918-v2.json",
+        "schedule_order_digest": "e6619034989ac76c1fb54801873d6a1ce13a3cdcbd6b556e0ec7b3b4abec38cb",
+        "sha256": "8af1d505d4859244b323c8f0ab6ba30dc268847ded0e2d6346a4f2f00af9403d"
+      }
+    },
+    {
+      "arm": "B",
+      "arm_identity": {
+        "arm_sources": {
+          "run_scenario.py": "42752227c238be0bbb61d8d55c32359c976c5d91f8c9cdf5607f87146f21ea8b",
+          "tools/build_daily_cost_cache.py": "39fe47df05926b72f6d02a6ea5df4ee5cfe1f12737fa2417094b69d13d796875",
+          "traffic_sim/simulation/deterministic_disruption.py": "36ff6a1fb3ce569a75922363d7213c4159393a36e2e61ef649a89801ff847ce2",
+          "traffic_sim/simulation/disruption.py": "c7ac9270456ffb1e1b6fafc5c5c7436eb76b0f2bdb30035bc901d0b590b1992a"
+        },
+        "costing_sources": {
+          "run_scenario.py": "42752227c238be0bbb61d8d55c32359c976c5d91f8c9cdf5607f87146f21ea8b",
+          "traffic_sim/simulation/closure_ranking.py": "c0ba6eecd3c4ba07727f164372b46957f91f815358e1f8b703d927c20e0fda9d",
+          "traffic_sim/simulation/deterministic_disruption.py": "36ff6a1fb3ce569a75922363d7213c4159393a36e2e61ef649a89801ff847ce2",
+          "traffic_sim/simulation/disruption.py": "c7ac9270456ffb1e1b6fafc5c5c7436eb76b0f2bdb30035bc901d0b590b1992a",
+          "traffic_sim/simulation/metadata.py": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4"
+        },
+        "git": {
+          "head": "b627887f2084b68c4ad89f69d7bc218d6b33a4d4",
+          "tracked_changes": [
+            " M run_scenario.py",
+            " M tests/test_daily_cost_cache.py",
+            " M tests/test_deterministic_disruption.py",
+            " M tests/test_monthly_sumo.py",
+            " M tools/build_daily_cost_cache.py",
+            " M traffic_sim/simulation/deterministic_disruption.py",
+            " M traffic_sim/simulation/disruption.py",
+            " M validation/benchmarks/wci_month_cache_decision_v1.py",
+            " M web/data/od_matrix.csv",
+            " M web/data/od_matrix.json",
+            " M web/data/validation.json"
+          ]
+        }
+      },
+      "cache_root": "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/parse-ab/cache-3",
+      "content_key": "a15e6c99a3d34d46a8dc810f14ce7ef7e3e46caa65a3cdeea4fcdd8a3c6d9a6b",
+      "daily_units": 65,
+      "diagnostic_only": true,
+      "label": "cand",
+      "memory": {
+        "lifetime_max_phys_footprint_bytes": 833406032,
+        "max_rss_bytes": 911671296
+      },
+      "mismatches": [],
+      "outputs": {
+        "cache_key_digest": "be09b8a9d9516cdb2d126935ca92b1c51170148dc33b299c0869dfd51963d73a",
+        "provider_identity_digest": "5e0632b298e434b949fbc37c3ea8f111a440473b744c8c2d9c1dd94d8e7bea29",
+        "provider_identity_without_costing_sources_digest": "ea225e0bb21190ba8287e2ec375ab63918ebca6adf998ea844ab6f38db39fbf9",
+        "result_digest": "05782d8a341782d07ae845206856f39fbbc90492fcd3345acd53221f71ae827c",
+        "units": {
+          "daily-unit-02c27a6a1e5c2038212860c3": {
+            "cache_key": "40ff18074e3eab51898ebfdfc0e0d2b9e09f413541470bced114f508aace2d93",
+            "digest": "401fba71d135ca75b01afd8b1da394b9d545abbda972f6c040d88eb534b2c684"
+          },
+          "daily-unit-0a23b83a3de6fcc1c470bb2f": {
+            "cache_key": "92b98a2c9c1a1022992e7baaa1570a05c5baf96725d9c6fd59c6cf28b135563b",
+            "digest": "49c98b682b0f883b5072a691fe951388b9f86e1fa0f8a09522f0cf633192c0db"
+          },
+          "daily-unit-0a7ebd6c1a1bf32e2560a72d": {
+            "cache_key": "c0c53cad83d78447e6991609f65eb4a12d696c71bcc77fad3ccfb7a4fd45e3e2",
+            "digest": "bbddb1bbf950cab2c7952c9b388f26b84b0f2903b85f8b1237f35bab6c8dd345"
+          },
+          "daily-unit-10dab1cd118f9ca79f0e6c4f": {
+            "cache_key": "eee57fff65115451ea85f7166f497993f0a61925936d2216bd8ad1041ef59a6b",
+            "digest": "d3ffb23188d452ceaf8a0a28cd3644b014e76103fbe124bfee1d7199cb351e35"
+          },
+          "daily-unit-1868c7646a5aa2f67d20d39c": {
+            "cache_key": "03edfc7c8760c05d8c0efe8174ebe9fd4b440d279ea7dd7555c3298d6b5d649f",
+            "digest": "f47c2d694ed33b8e2915cea564dcc03e4d14da14d8f1905faaf96e7040152c56"
+          },
+          "daily-unit-18eebf24033724b225558040": {
+            "cache_key": "2d6890611572c10496b30fbb1b2e5ad0bce559aa2964c4294849983a8e3b168b",
+            "digest": "3b2240da0d2418d812e8110d8fd24f2019d85b19bc26b77a61231e54a5aa1270"
+          },
+          "daily-unit-1a287a5d00dcf8bf1d4a13d9": {
+            "cache_key": "ce3000f2863d2fb66a11afdb6f7e882d23ea7195006cfe77078303a891569976",
+            "digest": "24bbd0eeadea5ca4a14e47b71ee5dbc2153128755f675c25d03df88ba5d5c3d3"
+          },
+          "daily-unit-21961b8081be17cb452a9a75": {
+            "cache_key": "3992daa81f3311d299763c9611925231294f5e2cd9643cf5d3cf1ff8be2affc8",
+            "digest": "59f81ddc62296dd24b6d7a1e43a0fb6082ad2ad85397219ec0fd2bfec2b88cb3"
+          },
+          "daily-unit-26cbb7d2105efa4b7af30852": {
+            "cache_key": "d33b0b922d8e389b515c6272c10d078b2e037ad1063ba78539971653f237cd3d",
+            "digest": "cb7a04f26c34be9d9210de0c20379149fd3fb45788a0e56b3290135fdca4fe4a"
+          },
+          "daily-unit-2aab1b0ec53981ad323272e5": {
+            "cache_key": "ae03143ba906e566bbbb5ed1900a9ef280f01b7a5fee548bda436e04aba25e9b",
+            "digest": "815b7d1627d2de2eb4d9bdd1f32e1365d69a91dd22efe2e942d719bf11b394b4"
+          },
+          "daily-unit-2ed445fa259a1d6ad06ac93a": {
+            "cache_key": "e9afa5789590b0f40da923e992b5bbd725dfb23a59e1720d6eb3d8b5f5bb72fd",
+            "digest": "4917fa11e002d6e4d2c4a829eaa172479f29c413dc56572dd554d49a547d1ea0"
+          },
+          "daily-unit-2efcf2118582cfed669feac7": {
+            "cache_key": "65a3676b5e8e5e1cf6f866723c0bc0fa06af257ae74de235d5b89882aab13a14",
+            "digest": "a019e6c8f7437d15bf2e7d432ba6a3a1f46c0adb97c184961d3e21ceaf6520af"
+          },
+          "daily-unit-2f87b9d86df26368b6b08ab7": {
+            "cache_key": "7556c685e0f466a4b19efc9d5a6e8981afefeae2bfccb3ae5a9ae470952e3fe0",
+            "digest": "e68b57017733f43a7e5ffaf183bdffd994ec504a2b47044e5efd95b748734707"
+          },
+          "daily-unit-2f9b67601e755186a7a98446": {
+            "cache_key": "10e2a1a97c3937b08e6eea6a0377f5e6ecb97e78ef2f9b66fe4c7b199e65c327",
+            "digest": "09e468a9a91d3635619e0ba8eb9ed18cbdf8f2f035b22ef2c8b94dd583f9a0f4"
+          },
+          "daily-unit-305ac69071b0e9e0ee5bd7b6": {
+            "cache_key": "256ddf15f9b5f5c95b8761294af779b149d5e89c9531e0e937d0eae9b46ff658",
+            "digest": "19fb0e610bf84dfdee6f7dd3a214e0bef8838137049cb9c330cce1b2bb549423"
+          },
+          "daily-unit-30f676c5eaefedfec93ea73b": {
+            "cache_key": "3b5f8c982af75acf39ae2796e1e224db534ef9ed4acf61ac61c11f87da879069",
+            "digest": "808a38ab3b09a036822af50209966032d8d6c8574c52d156182fe31c03ae555c"
+          },
+          "daily-unit-32efb36591d843d815d90dc6": {
+            "cache_key": "a8319fa1cd87645dc79ce801f296dfbe310665ef6c1ef6e61f884b12226e3594",
+            "digest": "5c5c848235fac933e1b74797198d9a919d4a755af60e3e510e58e773f23ed7ac"
+          },
+          "daily-unit-3bcdc9e1b18b406baa2c4025": {
+            "cache_key": "135f5fb18bf599a7b1c6d5cb45ea32547f9d6863a5e81608c7fa9f5541c01e01",
+            "digest": "7b58ff264650e6e1e5e23bc46cfef0be760da16c3f8f5cf610d882a76ef77aa4"
+          },
+          "daily-unit-3ea5320a1a1818b041409210": {
+            "cache_key": "efe66701befef1595e390f54f02963a1cc926fd8ff0e52b25eb24c4e68842e29",
+            "digest": "9844db03e387ca6175a3b46bffec19d62a5fce34e94e0fc9219c90d91243e73c"
+          },
+          "daily-unit-46162b4904af53b5d2215bf8": {
+            "cache_key": "8d9ade000f35086572e6685822bdcf3af8e4f49a9b6d015bbf209713b9a04130",
+            "digest": "770d288753c73bd2393ee9a904a76a08fce6c64fc3fa919dbd389a41bfdd6ede"
+          },
+          "daily-unit-4913c3751b04d543b83ec07d": {
+            "cache_key": "9b0b42584dd1052697fde69747538a4d36bf32d9252290a81c292f99e920ce16",
+            "digest": "a82aac0fa33c114d94594a2bd99783f4874c916ecf3ba7f20d0c73c711571688"
+          },
+          "daily-unit-4e951e4583462d173f7f57f5": {
+            "cache_key": "123125dbbb92783412f13db90f7f401b9ae41fad284193ca45ee2bc2bc217b09",
+            "digest": "e7724c9ceb9a731262c00955bbdbd0c735c1c98672cd2a8fc80b408a012103fe"
+          },
+          "daily-unit-4ec40f5a3e8056be9af2147d": {
+            "cache_key": "dc23c511399cef778fe653cb4cfbe667d7ac43012b9f3dede76fcc0287edffb1",
+            "digest": "be557233cf7491ec0e198b1955c629a9a1f8d516fa841aefbaa5ed9d771fea06"
+          },
+          "daily-unit-517a18b39123478620cc60ae": {
+            "cache_key": "5ad4f11e8396b69849fa45ac5d45d1849e78251bc79e8dd8e1608a8cf26cbe81",
+            "digest": "2df5cb7923ed7e7d2cba1d595ed580f98cf2d1d3122516ed3b529baa99c86fd4"
+          },
+          "daily-unit-539dff3b4162782aa0bdfab8": {
+            "cache_key": "9c4724a110998f43ca8722ed86de97c4e7623fff0f0877cd960243f67aa3e005",
+            "digest": "153ec182d47a53ff1ada13d32173b1a1d5f365956ff79adce3e18fa6ed18c066"
+          },
+          "daily-unit-55b092650d4acc72fb87b876": {
+            "cache_key": "bcc78a27b13ebe6c72c0b9f3c0fcb5af7884810225ebfa0e6c8750679b12c5a6",
+            "digest": "76d6b71615207c62599f1a4bff80dac45bc0a3a9e73cc293f26fc97585d2d1cd"
+          },
+          "daily-unit-58300053514e4089d7793deb": {
+            "cache_key": "f49eb7139b3fc79c1ae9615026c8b2fb27ec250d049731bf9e5eaac6be65d4d3",
+            "digest": "a841fa43498aa8b38164f2df1d92b6ee07b156cc21bf39ec0b34acdaf90ac642"
+          },
+          "daily-unit-583ec4eb192e71ecfe44f2df": {
+            "cache_key": "82d04d22dbcfea7ae221daa1ef5afb2613aad9f247f43598088a55666d62bdbf",
+            "digest": "3d786e33277f91089dbf0fac2c5825cdbd243954d8f7076ced21630c73a0dea0"
+          },
+          "daily-unit-5eeb3cde2ac31a3258ab5b94": {
+            "cache_key": "b6cb7b991894a7ba1f2d04dded3c432cc25c2f97cf9d55d25714b41ae2ebdadd",
+            "digest": "dd95e9a4ea660260f2f0a4a72bcc5e8252e0e17c70faf9e8eeec80774f9728cc"
+          },
+          "daily-unit-67adfb8a7ddba49b5deb2f18": {
+            "cache_key": "972c38d10f6d5e33b1e90c7fd9fc8bac676250f25a454fd9930721bf38dce737",
+            "digest": "a0e460734f9abdef27e90743c19459c966064b56e76bf179a1a32ab3d70fcd6d"
+          },
+          "daily-unit-69c34674b7f132574e67fc59": {
+            "cache_key": "8b39881e22359559d856d5db879803363955aef8ae81a5060e837a39c62aaf84",
+            "digest": "f26d04fa3e7d9950e019d5f430a7ac95c9ea250e577d17b53f5754da10e266d4"
+          },
+          "daily-unit-6be33a8f7221392f5cce43eb": {
+            "cache_key": "36fe7ae9b9bf6bdd0ad2f6117705adfd068b3c02cf67f6c53928ad2c287f0eaf",
+            "digest": "6e6c5019661abc0157be517374ff9041b113b7131dd6e18a641b24a9b16dc05b"
+          },
+          "daily-unit-73b8bfba7c55c171b2214b14": {
+            "cache_key": "33386b918da46c020d63364688e6bbe9af0a73e60ba74fdc28eec51d9c3b9c30",
+            "digest": "72d9d15026e5073cf39f39764fcd9be160b153b2e32de556c46de7093d2e96bd"
+          },
+          "daily-unit-7570588e0af2982a2c61022c": {
+            "cache_key": "9f4db0728857b27e7f2cee72f201700504514aa128ca92b55212b23cd8e3c551",
+            "digest": "a3455c102eded37ed64b608e38d290a0fe608c0761fbacf3173f7657bd424622"
+          },
+          "daily-unit-75e355619bc4799bd51750e4": {
+            "cache_key": "853aba8429f1fd0fa13b47fca2454ec85b77b6dac7526e23fefede49b9813937",
+            "digest": "c24005c1bb4fcfd6d73e4fff5013d1f6d9874134abfc08213665d3211f492187"
+          },
+          "daily-unit-7afed313d6a8b1887e49fc72": {
+            "cache_key": "f02443aca86785eb27389df2bc29bf5060f01de160e15ed189592c404dae523c",
+            "digest": "6c6d1104fcc694c910169cfa17bf8b253bc3e2eb0162f837e21e4d90618be006"
+          },
+          "daily-unit-828603aa1031c6448c133047": {
+            "cache_key": "63405b1680e1cb84e8179892e78c4b3b6394071e6f4ef036d15825c607ccf96a",
+            "digest": "aefaebf8ce27a4b79dd0e4854160f99805f9e93cef09a7ec7ea698e2f496ee33"
+          },
+          "daily-unit-82f781a44e392d09f81ac8b2": {
+            "cache_key": "fe9ad364ae400004d5a91664aa7ce1abec28df3bd2cbbf6e5152ea10cdaf65f4",
+            "digest": "d0fe087219a8cf73a405acdf512da75400d83100562c6696106c3dba65748ee2"
+          },
+          "daily-unit-846abf4f3429ecd0e9fb02f5": {
+            "cache_key": "5acaa343014d7ed833e72716528c4ec978a05302edddfa10928b44b420fa0493",
+            "digest": "4272d3de9057052b9d0a813e798c7ab9311a5ccab3a64da02bba31c791bc3585"
+          },
+          "daily-unit-88003d0016d087349756744f": {
+            "cache_key": "1d937975a914ee68d98b0d52661d8959be9aad1e84d0deb45734726552e8c3e6",
+            "digest": "64452cbde88c04cb0e88ba0611fad9dff14d75b50f14ff8c8030709b0670da5e"
+          },
+          "daily-unit-8ed03c408d163ad36a409a45": {
+            "cache_key": "512a3e2c3a4e477cc3976c5c2d8ce03f6821de997895df730d765449b381f95d",
+            "digest": "7f1286d1841e1ac72f2bfe9035f8050de256fcca0157d2e09c2da37ce7428b60"
+          },
+          "daily-unit-91ff0e82cb64d0ceba5d83bb": {
+            "cache_key": "a9c86d4b6f5c800366148910a9df91a306a913892b602286fdeffe6b6a8deaee",
+            "digest": "dd10b4f25da75a7ca70419afe8998a87cbf35b6b87f5488aa3a455de5ca61d15"
+          },
+          "daily-unit-9bee340a5ef525379f609e3a": {
+            "cache_key": "ab00f7e68e2fd7a71d9bc1f79e742e98c4778878c37f6cc1cbf1fd2c9a132bb5",
+            "digest": "707b9de3f56fe417e964eb7772dfa7b3177db76e51cc017b79ab96f2e64a8e54"
+          },
+          "daily-unit-a165f8a710cc9e42f065f8f4": {
+            "cache_key": "adb3cb37b200f75f0117e72b2b40f4b6639dcc1fe88f19a12915798f211642a1",
+            "digest": "289bd63790b45448005b4281a3687464c0c13f62c3ffcbfec22eddcf3d093262"
+          },
+          "daily-unit-a43c28bacd9c6094f71afbfd": {
+            "cache_key": "28baf0106553a395d66cc6a7089bfbdfc63d6af2942dbbdffe7d0d9d2087ad76",
+            "digest": "2264d538c53df5f3af51bdcdd8d60bdba0ce2ffc32340ff7c834bfcb25d7739e"
+          },
+          "daily-unit-aafd9768d832ce47d20fe2e5": {
+            "cache_key": "31e5feb7371a93fec9a12d237c33210ad14c87ebffab2c02e7721ac5eaa7444a",
+            "digest": "29668be84023aeda595988464cc8cbfa6b7fafc606b2c2c11e84c008a142dc0d"
+          },
+          "daily-unit-abe20bac9743676830dd2bde": {
+            "cache_key": "669cc3163a52c2280efef2efb75d73ef34c73788e54d54bab5bd837bfe8d293d",
+            "digest": "e9b9672d72a2569934489ed2bf60ad371485ea208c7b9524f7e8b6e324be185f"
+          },
+          "daily-unit-b3dc9e75d73466f7860c8031": {
+            "cache_key": "be2756085985a59b1eef0d49f35179d0096a1521d1fb6230ce770eeab6171408",
+            "digest": "b01f94b79cbf14043fe336d5ca0a41a2a9ad0893ab550bae67813ca37dbb82a7"
+          },
+          "daily-unit-bb25e8304338e02d27f5c468": {
+            "cache_key": "abbb0991a0046d46353b1a3e121dfe963de63fa6bbb4ed366a38a5bdc602d721",
+            "digest": "4466878e84f56250c60a5a31844f7dea626573da5a3b43bd5621dd84e88e9732"
+          },
+          "daily-unit-bd8c6dc6fc86162cf765b227": {
+            "cache_key": "7bd17914f014205834d0d697de6af906e613478025453c777506f2756a883700",
+            "digest": "9337d5205730176ccfe92d0ff32321ae97b21683764f8f73191cc9569f9802b4"
+          },
+          "daily-unit-bfb1cc83095af8a0edf102c0": {
+            "cache_key": "d4ffe8292aee5057c5289d2e782cd1192815eeb5a8b9079c76b5b3ca7a1bcbb6",
+            "digest": "5694caa8e1fec13d8fabb531cb5f813f3eb0f8ab5106384d628fcf0dad2dfa79"
+          },
+          "daily-unit-c00222c6bfa7520184737605": {
+            "cache_key": "f3613bf399a9d7f63590e6d672bc2cc59e9fae5681c91200d4c55accb18226e9",
+            "digest": "8f0f328afae452fea054e40b4e5b80d8f7e653e61702ee520673c7f5c20e3785"
+          },
+          "daily-unit-c0840e5d3b8d894992797553": {
+            "cache_key": "12d487cc0c9c676ce147a2146162b80868b2e3c41dce93480586297097e33af5",
+            "digest": "4215bf002b620ceb0206335a316feb740af9bd83af4760c05de016025cd429ee"
+          },
+          "daily-unit-c298e2bde6c3f1dc2595f6e9": {
+            "cache_key": "4293295958f160aef372bd41d400acb8a57d676fcfb149eed287942c040a3b05",
+            "digest": "1bd25a075bfcc1e8eab10a7744c7f330baf74051ef1c19e7ceabf282fabfea48"
+          },
+          "daily-unit-c73adcb08b6632d04e90479a": {
+            "cache_key": "d10a38a150b64930d09a67b50496f03439c9c9d5a5476b56fb4dbc2b3f8d56a8",
+            "digest": "5cd5438ee2fc16a550dcf2627991aca696e66be47ae97cdfc863c82d0cb28081"
+          },
+          "daily-unit-ddc6f36289d6a64323a653f6": {
+            "cache_key": "3dc5c533c1798e13886629973cdd8d55439d880bd5b83c941e33a1f42a39ac49",
+            "digest": "643a8fff9a10025f6f6b2a3cda63bb285883cf9594fff5fc7c78fa95cdcb8676"
+          },
+          "daily-unit-e0763906e1a029d37bd30a62": {
+            "cache_key": "2575944a415f83ac67bc89b53e1ff31a3e68c18ecf0eee5f496e960ba78ece32",
+            "digest": "b3a46ef4e4632d9886d616130cb010ea4139f0deb9354a8043073432e940c589"
+          },
+          "daily-unit-eafe48b38c8724dbcc334c00": {
+            "cache_key": "14f3a35c800d23356561b32f7a5e2f4f8006855fd7e6144572788f0deace4c32",
+            "digest": "5f839352de73c6b1b5a874a71ee6d33aaabba86ae1c5f070ccab6aae1bd26901"
+          },
+          "daily-unit-ee3bf213d003b0884b540a14": {
+            "cache_key": "fa1c61e93cb71f5806d476a7fc6066e4388ae1bd8abf1ae2e5bc81989f005258",
+            "digest": "41527f63ce654c86e40547a57ab27e5387fb4c5fffae29c11e21cff82473d0c8"
+          },
+          "daily-unit-f2774224d272519e6e8e44d8": {
+            "cache_key": "30ad56bc641aad9de035d97ffd0099ace3124e6b0e7dd6fe0c83823f4d425c65",
+            "digest": "4fc57f915ce6edde1e73ed9623d8ec8dba5028011613f5bc98e433f71229a597"
+          },
+          "daily-unit-f3ad7cf185f8636fda092cd0": {
+            "cache_key": "bbd5af0f276510a1e8f9844d92cfb7685fd04bc1bfb23cc694aa39a7fe707b37",
+            "digest": "79071afadad72344ec68c34b153bcc66496b72e8d12411be8a6c0a93d1cd3520"
+          },
+          "daily-unit-f404f83ece9bc85ca00beaa9": {
+            "cache_key": "0786b56d777a77ec8f5166d9fa659ea4805f212508f325464563a0f283da6269",
+            "digest": "d935327d46cee60a395f8790295ed619b0bf2ea7d78f050515ad39ad79772c9f"
+          },
+          "daily-unit-f8b41de6000341a8c8b5cea3": {
+            "cache_key": "4f22fd5b01923199bfc999d531f8afdc293bf6124bd412814dd31920f01d6c03",
+            "digest": "44c9dd871172459d281d130416b6a200fae075e1f429641deac7b3b40c04b551"
+          },
+          "daily-unit-fbba0afe512bc466c0983712": {
+            "cache_key": "991d80a4a8a9d9bdc6f19efee51efc104149a74dcd72bd71c6dc286b0d442868",
+            "digest": "d4ec61cc5e792cd7831436089daf92f11033ec537ecf716e26ba6acd24d94ad4"
+          },
+          "daily-unit-fe8032561cefbb097d28830a": {
+            "cache_key": "26848ddc45a8cb7ee8e54714b3283a14777f2ba06b54c0a253bb16729bca7f0c",
+            "digest": "318dba33a662480459391ca810191e7c19a16498bb4deeeac75c5bfdd0ebb395"
+          }
+        }
+      },
+      "position": 3,
+      "release_evidence": false,
+      "runtime": {
+        "hw_memsize_bytes": 25769803776,
+        "hw_ncpu": 10,
+        "machine": "arm64",
+        "platform": "macOS-15.6.1-arm64-arm-64bit",
+        "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "python_version": "3.9.6",
+        "telemetry_errors": []
+      },
+      "schema": "wci_daily_cache_parse_ab_v1_arm",
+      "surviving_children": [],
+      "swap": {
+        "after_bytes": 4709679104,
+        "before_bytes": 4718067712,
+        "growth_bytes": -8388608
+      },
+      "timing": {
+        "sys_s": 0.925373,
+        "user_s": 197.09292000000002,
+        "wall_s": 198.089893375
+      },
+      "work": {
+        "cost_computations": 65,
+        "distinct_cost_computations": 65,
+        "xml_bytes_read": 163224307,
+        "xml_parses": 3,
+        "xml_parses_by_file": {
+          "calibrated.rou.xml": 1,
+          "calibrated_v1.rou.xml": 1,
+          "calibrated_v2.rou.xml": 1
+        }
+      },
+      "workload": {
+        "build_key": "d42db159b3ee565f",
+        "content_key": "a0073bb16554d1c8476f26a03544dfb9ea9b15ce240a4c881431fec94678c634",
+        "daily_units": 65,
+        "path": "/private/tmp/gs-step3-departure-bounds/validation/wci_daily_cache_ab_workload_20260918-v2.json",
+        "schedule_order_digest": "e6619034989ac76c1fb54801873d6a1ce13a3cdcbd6b556e0ec7b3b4abec38cb",
+        "sha256": "8af1d505d4859244b323c8f0ab6ba30dc268847ded0e2d6346a4f2f00af9403d"
+      }
+    },
+    {
+      "arm": "A",
+      "arm_identity": {
+        "arm_sources": {
+          "run_scenario.py": "d0948b4a29d07b4f4fbe125600b7dcf25a7446bdc7337514c39edb30a679ceaf",
+          "tools/build_daily_cost_cache.py": "72e14fa098f6f39416c8f250ee87b2230e1536433a3930fc59d4c0632f926392",
+          "traffic_sim/simulation/deterministic_disruption.py": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472",
+          "traffic_sim/simulation/disruption.py": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9"
+        },
+        "costing_sources": {
+          "run_scenario.py": "d0948b4a29d07b4f4fbe125600b7dcf25a7446bdc7337514c39edb30a679ceaf",
+          "traffic_sim/simulation/closure_ranking.py": "c0ba6eecd3c4ba07727f164372b46957f91f815358e1f8b703d927c20e0fda9d",
+          "traffic_sim/simulation/deterministic_disruption.py": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472",
+          "traffic_sim/simulation/disruption.py": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9",
+          "traffic_sim/simulation/metadata.py": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4"
+        },
+        "git": {
+          "head": "b627887f2084b68c4ad89f69d7bc218d6b33a4d4",
+          "tracked_changes": [
+            " M tests/test_daily_cost_cache.py",
+            " M tests/test_deterministic_disruption.py",
+            " M tests/test_monthly_sumo.py",
+            " M validation/benchmarks/wci_month_cache_decision_v1.py",
+            " M web/data/od_matrix.csv",
+            " M web/data/od_matrix.json",
+            " M web/data/validation.json"
+          ]
+        }
+      },
+      "cache_root": "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/parse-ab/cache-4",
+      "content_key": "45db52014ba7134d89c376c548a8eedaa9e3c047cadc91cdab3caa1652becbc6",
+      "daily_units": 65,
+      "diagnostic_only": true,
+      "label": "base",
+      "memory": {
+        "lifetime_max_phys_footprint_bytes": 429835104,
+        "max_rss_bytes": 525189120
+      },
+      "mismatches": [],
+      "outputs": {
+        "cache_key_digest": "b5ae97328e2926c1dac1306ebf0721d11f1c6f80e15307217816c176cb6fb4c4",
+        "provider_identity_digest": "f01a006b0cdf523198afc4d9e5af32d63b6a4fbd6eadb40584667178c06dc282",
+        "provider_identity_without_costing_sources_digest": "ea225e0bb21190ba8287e2ec375ab63918ebca6adf998ea844ab6f38db39fbf9",
+        "result_digest": "05782d8a341782d07ae845206856f39fbbc90492fcd3345acd53221f71ae827c",
+        "units": {
+          "daily-unit-02c27a6a1e5c2038212860c3": {
+            "cache_key": "11eeac9a52a773a05a825a5101091ff0b648abc19d571798d8480f8e47bf165c",
+            "digest": "401fba71d135ca75b01afd8b1da394b9d545abbda972f6c040d88eb534b2c684"
+          },
+          "daily-unit-0a23b83a3de6fcc1c470bb2f": {
+            "cache_key": "be47a6ac421c29c4d520c4de1dfedb0ba38d21525810f5a44d2976541276c381",
+            "digest": "49c98b682b0f883b5072a691fe951388b9f86e1fa0f8a09522f0cf633192c0db"
+          },
+          "daily-unit-0a7ebd6c1a1bf32e2560a72d": {
+            "cache_key": "da07c7a7af1e8a6922f9902794cb60b62fa56a1b816de5c6c1db1027deae8d34",
+            "digest": "bbddb1bbf950cab2c7952c9b388f26b84b0f2903b85f8b1237f35bab6c8dd345"
+          },
+          "daily-unit-10dab1cd118f9ca79f0e6c4f": {
+            "cache_key": "b7fb4cf189aa494eb131319138d409ebeec683b2d61c944893e2099302bfae16",
+            "digest": "d3ffb23188d452ceaf8a0a28cd3644b014e76103fbe124bfee1d7199cb351e35"
+          },
+          "daily-unit-1868c7646a5aa2f67d20d39c": {
+            "cache_key": "0dc6f3fad441a22f83f8cf2a3e2da1e8a6d3c371bddc6d9c8d7ca20c1a77af76",
+            "digest": "f47c2d694ed33b8e2915cea564dcc03e4d14da14d8f1905faaf96e7040152c56"
+          },
+          "daily-unit-18eebf24033724b225558040": {
+            "cache_key": "1aa6be16ba9aca394573ca55ae70ad645f16d72d429667db3d073187f7caf25e",
+            "digest": "3b2240da0d2418d812e8110d8fd24f2019d85b19bc26b77a61231e54a5aa1270"
+          },
+          "daily-unit-1a287a5d00dcf8bf1d4a13d9": {
+            "cache_key": "7e29f992e329feab1b80780d38468ba273bb31b6562d339b5a7b4620e81bab41",
+            "digest": "24bbd0eeadea5ca4a14e47b71ee5dbc2153128755f675c25d03df88ba5d5c3d3"
+          },
+          "daily-unit-21961b8081be17cb452a9a75": {
+            "cache_key": "d902c5d68d92dae823cf635f46375f8b66e6d788e254d920a8ef286000ea551d",
+            "digest": "59f81ddc62296dd24b6d7a1e43a0fb6082ad2ad85397219ec0fd2bfec2b88cb3"
+          },
+          "daily-unit-26cbb7d2105efa4b7af30852": {
+            "cache_key": "5b6eefb476dc1aec8d8cd3d5e8ddcc57243bc9b9256a8348e2499df10f5042f1",
+            "digest": "cb7a04f26c34be9d9210de0c20379149fd3fb45788a0e56b3290135fdca4fe4a"
+          },
+          "daily-unit-2aab1b0ec53981ad323272e5": {
+            "cache_key": "9e02c9879866bd9d0328fe74ef7048feded779427e33eb799003f524f1d25344",
+            "digest": "815b7d1627d2de2eb4d9bdd1f32e1365d69a91dd22efe2e942d719bf11b394b4"
+          },
+          "daily-unit-2ed445fa259a1d6ad06ac93a": {
+            "cache_key": "6e86ca3a19893adfe697dea54a1d32c6972b19df751745927e8a2807fe564026",
+            "digest": "4917fa11e002d6e4d2c4a829eaa172479f29c413dc56572dd554d49a547d1ea0"
+          },
+          "daily-unit-2efcf2118582cfed669feac7": {
+            "cache_key": "66ee097106fa42e512ccdfd511eadb9f7d3bad334576cceeeb5157e035ecdce3",
+            "digest": "a019e6c8f7437d15bf2e7d432ba6a3a1f46c0adb97c184961d3e21ceaf6520af"
+          },
+          "daily-unit-2f87b9d86df26368b6b08ab7": {
+            "cache_key": "5a85c7536d750f43b675b4ddb4397c4aa3d1012970237660570c6a45a6c39b35",
+            "digest": "e68b57017733f43a7e5ffaf183bdffd994ec504a2b47044e5efd95b748734707"
+          },
+          "daily-unit-2f9b67601e755186a7a98446": {
+            "cache_key": "8974848f01d413d5dbce3694dd3ef76adbbc7d5a608c713347bcaaf96988eaaf",
+            "digest": "09e468a9a91d3635619e0ba8eb9ed18cbdf8f2f035b22ef2c8b94dd583f9a0f4"
+          },
+          "daily-unit-305ac69071b0e9e0ee5bd7b6": {
+            "cache_key": "c99022e8d6765860d6407904d4b37fb65ab9d64cc1a5702576dd565e8984d05a",
+            "digest": "19fb0e610bf84dfdee6f7dd3a214e0bef8838137049cb9c330cce1b2bb549423"
+          },
+          "daily-unit-30f676c5eaefedfec93ea73b": {
+            "cache_key": "6ba73ab89f449dacd070e54316fb580fd9fea0202ad32050a62ea16b3e6c5d10",
+            "digest": "808a38ab3b09a036822af50209966032d8d6c8574c52d156182fe31c03ae555c"
+          },
+          "daily-unit-32efb36591d843d815d90dc6": {
+            "cache_key": "102692a9fb3e31b768c3648fd94fae331f912357b1e56b4e4ff1773dd1898e69",
+            "digest": "5c5c848235fac933e1b74797198d9a919d4a755af60e3e510e58e773f23ed7ac"
+          },
+          "daily-unit-3bcdc9e1b18b406baa2c4025": {
+            "cache_key": "b5eef0ffcb92824bf2d3bfe8368629d728d6d03072f4153f2f52479d8a2d5fd3",
+            "digest": "7b58ff264650e6e1e5e23bc46cfef0be760da16c3f8f5cf610d882a76ef77aa4"
+          },
+          "daily-unit-3ea5320a1a1818b041409210": {
+            "cache_key": "ab13e3d05e4d75cc708e218a9c4e315f8112d9a320c61da8de7fa18b73836119",
+            "digest": "9844db03e387ca6175a3b46bffec19d62a5fce34e94e0fc9219c90d91243e73c"
+          },
+          "daily-unit-46162b4904af53b5d2215bf8": {
+            "cache_key": "d64599931f6328358d5c819c773340d5b7d93669bb2c5a94c77c5c685ba912c2",
+            "digest": "770d288753c73bd2393ee9a904a76a08fce6c64fc3fa919dbd389a41bfdd6ede"
+          },
+          "daily-unit-4913c3751b04d543b83ec07d": {
+            "cache_key": "fb0be760a9f4f41a1ee29613bba1e91c7fdd7be50b07ee5ffcf8ac7494e06e85",
+            "digest": "a82aac0fa33c114d94594a2bd99783f4874c916ecf3ba7f20d0c73c711571688"
+          },
+          "daily-unit-4e951e4583462d173f7f57f5": {
+            "cache_key": "28f7e8b17e03722afcfd7f468cbd415515de1276a554be31cd5d7c3c5ecd8215",
+            "digest": "e7724c9ceb9a731262c00955bbdbd0c735c1c98672cd2a8fc80b408a012103fe"
+          },
+          "daily-unit-4ec40f5a3e8056be9af2147d": {
+            "cache_key": "8e29fb0d664ef6f3095448a0e8a41c1d235d8dc24dd4fdb3e136f23614f173b8",
+            "digest": "be557233cf7491ec0e198b1955c629a9a1f8d516fa841aefbaa5ed9d771fea06"
+          },
+          "daily-unit-517a18b39123478620cc60ae": {
+            "cache_key": "5ba3f63cbe6f3c47d1418e1c58c0965b171b10cd5215d110d792268b6f2dfdfe",
+            "digest": "2df5cb7923ed7e7d2cba1d595ed580f98cf2d1d3122516ed3b529baa99c86fd4"
+          },
+          "daily-unit-539dff3b4162782aa0bdfab8": {
+            "cache_key": "e3fdaa9c2666666522045fa074741d6b5f7d776a1efe052f4bc26d96aaa6f7aa",
+            "digest": "153ec182d47a53ff1ada13d32173b1a1d5f365956ff79adce3e18fa6ed18c066"
+          },
+          "daily-unit-55b092650d4acc72fb87b876": {
+            "cache_key": "8c6aad1189917b3d9b7548f90025569a1448a762dd5b2829465d696368538324",
+            "digest": "76d6b71615207c62599f1a4bff80dac45bc0a3a9e73cc293f26fc97585d2d1cd"
+          },
+          "daily-unit-58300053514e4089d7793deb": {
+            "cache_key": "099d63feefe98d5c8739c01753c12a0967c6c5a59840506560aa7198dd653974",
+            "digest": "a841fa43498aa8b38164f2df1d92b6ee07b156cc21bf39ec0b34acdaf90ac642"
+          },
+          "daily-unit-583ec4eb192e71ecfe44f2df": {
+            "cache_key": "6ee784d8a5d14551e9d37fa60361f2b8f78c6b18c40b9d96a2f83146c4ac527f",
+            "digest": "3d786e33277f91089dbf0fac2c5825cdbd243954d8f7076ced21630c73a0dea0"
+          },
+          "daily-unit-5eeb3cde2ac31a3258ab5b94": {
+            "cache_key": "de95b8ccc18eb6c83a3fd862882864761c69951b3d64e2b060139ef26a715dfe",
+            "digest": "dd95e9a4ea660260f2f0a4a72bcc5e8252e0e17c70faf9e8eeec80774f9728cc"
+          },
+          "daily-unit-67adfb8a7ddba49b5deb2f18": {
+            "cache_key": "04cef5809a26eb3058e940e5e2fc5348bd80475b5a2d3293e8d726b4e53e3de2",
+            "digest": "a0e460734f9abdef27e90743c19459c966064b56e76bf179a1a32ab3d70fcd6d"
+          },
+          "daily-unit-69c34674b7f132574e67fc59": {
+            "cache_key": "127b239e55a90eb4a61f4989f76ce7fe887e37bb68ab9d020a1ae751dd2c4af7",
+            "digest": "f26d04fa3e7d9950e019d5f430a7ac95c9ea250e577d17b53f5754da10e266d4"
+          },
+          "daily-unit-6be33a8f7221392f5cce43eb": {
+            "cache_key": "a6717979a80f131c9111a0404bcaf024c4e8965b607423c008b1de7c0b890b13",
+            "digest": "6e6c5019661abc0157be517374ff9041b113b7131dd6e18a641b24a9b16dc05b"
+          },
+          "daily-unit-73b8bfba7c55c171b2214b14": {
+            "cache_key": "d05395079c2e6285a21dc8222302ab4ccaccfc520984daade0c7870c771a7c47",
+            "digest": "72d9d15026e5073cf39f39764fcd9be160b153b2e32de556c46de7093d2e96bd"
+          },
+          "daily-unit-7570588e0af2982a2c61022c": {
+            "cache_key": "93a5543a6438909a5a05520e6afcc05e998ec8bfa516ffbdfa6ebbb5e8c64ee2",
+            "digest": "a3455c102eded37ed64b608e38d290a0fe608c0761fbacf3173f7657bd424622"
+          },
+          "daily-unit-75e355619bc4799bd51750e4": {
+            "cache_key": "f125c443ecf59656b74d9b4a9e490923bf012f870f3aba140ce4eb9d3bee3e34",
+            "digest": "c24005c1bb4fcfd6d73e4fff5013d1f6d9874134abfc08213665d3211f492187"
+          },
+          "daily-unit-7afed313d6a8b1887e49fc72": {
+            "cache_key": "0deef15486d5f7ee43b0e5f6d5f0857eb267eb5ac382a0552e536dd8f3d0a40a",
+            "digest": "6c6d1104fcc694c910169cfa17bf8b253bc3e2eb0162f837e21e4d90618be006"
+          },
+          "daily-unit-828603aa1031c6448c133047": {
+            "cache_key": "822677a5659285b0ddc917956e598f70ee067b09bfb309c7013358a4a1ac2243",
+            "digest": "aefaebf8ce27a4b79dd0e4854160f99805f9e93cef09a7ec7ea698e2f496ee33"
+          },
+          "daily-unit-82f781a44e392d09f81ac8b2": {
+            "cache_key": "b13272aa190073a2f9183d3ed9d60f686ada179dce2a8b5705e34368e3cdaa24",
+            "digest": "d0fe087219a8cf73a405acdf512da75400d83100562c6696106c3dba65748ee2"
+          },
+          "daily-unit-846abf4f3429ecd0e9fb02f5": {
+            "cache_key": "c393826df1f6acfc2a598b9478aabac4ab15af64a9bba28a0867eac91162d9dc",
+            "digest": "4272d3de9057052b9d0a813e798c7ab9311a5ccab3a64da02bba31c791bc3585"
+          },
+          "daily-unit-88003d0016d087349756744f": {
+            "cache_key": "7a44529c662cb67f0ce909f33033d78d828e023c6b2bc9237818d4c94f5d1d65",
+            "digest": "64452cbde88c04cb0e88ba0611fad9dff14d75b50f14ff8c8030709b0670da5e"
+          },
+          "daily-unit-8ed03c408d163ad36a409a45": {
+            "cache_key": "10a3012fdcd4c56a47971a90e323fdb9628b74844ee8df00f82fc4bbdb07a005",
+            "digest": "7f1286d1841e1ac72f2bfe9035f8050de256fcca0157d2e09c2da37ce7428b60"
+          },
+          "daily-unit-91ff0e82cb64d0ceba5d83bb": {
+            "cache_key": "976bc9ad29d211ec73b2520fb292764ae9d174e40d1d7a961973698add8a55aa",
+            "digest": "dd10b4f25da75a7ca70419afe8998a87cbf35b6b87f5488aa3a455de5ca61d15"
+          },
+          "daily-unit-9bee340a5ef525379f609e3a": {
+            "cache_key": "2f937128b66da3d99a2d30cc5dd94c024a418949774e79e1ec28488467c9e974",
+            "digest": "707b9de3f56fe417e964eb7772dfa7b3177db76e51cc017b79ab96f2e64a8e54"
+          },
+          "daily-unit-a165f8a710cc9e42f065f8f4": {
+            "cache_key": "dd9c9310c84e567bceebe2c5083fea33a40e5121b5d0961b6b64352dc3fcb46e",
+            "digest": "289bd63790b45448005b4281a3687464c0c13f62c3ffcbfec22eddcf3d093262"
+          },
+          "daily-unit-a43c28bacd9c6094f71afbfd": {
+            "cache_key": "69da047c5c963dbe0245c8af7351efdf4e89de9c6cb7e79374887b348492ed8e",
+            "digest": "2264d538c53df5f3af51bdcdd8d60bdba0ce2ffc32340ff7c834bfcb25d7739e"
+          },
+          "daily-unit-aafd9768d832ce47d20fe2e5": {
+            "cache_key": "04308d0a2889c98b3d964260060af06124265b03c10dbbfc7db6fa89dbbb2fdc",
+            "digest": "29668be84023aeda595988464cc8cbfa6b7fafc606b2c2c11e84c008a142dc0d"
+          },
+          "daily-unit-abe20bac9743676830dd2bde": {
+            "cache_key": "ef53b0c5b6e59328f535cf5194ecf40d245049bdba0532a17e34bedad7e35c6c",
+            "digest": "e9b9672d72a2569934489ed2bf60ad371485ea208c7b9524f7e8b6e324be185f"
+          },
+          "daily-unit-b3dc9e75d73466f7860c8031": {
+            "cache_key": "ab9e06c8fd0e82c4a9ea0ec55e64154f5ef0fe1a88719241ca2917f2b15d82ad",
+            "digest": "b01f94b79cbf14043fe336d5ca0a41a2a9ad0893ab550bae67813ca37dbb82a7"
+          },
+          "daily-unit-bb25e8304338e02d27f5c468": {
+            "cache_key": "b80cf83e854f690cd044b77d3c901ecc4edf7f24624bcb2980b876cc8f8e688a",
+            "digest": "4466878e84f56250c60a5a31844f7dea626573da5a3b43bd5621dd84e88e9732"
+          },
+          "daily-unit-bd8c6dc6fc86162cf765b227": {
+            "cache_key": "4ccfe4da63a0aa32dd704bab1a1c13ea81ee07a46058e4db966bf81b7305799f",
+            "digest": "9337d5205730176ccfe92d0ff32321ae97b21683764f8f73191cc9569f9802b4"
+          },
+          "daily-unit-bfb1cc83095af8a0edf102c0": {
+            "cache_key": "c0d0942ae5f35983d90bcb9beaeddf7136a78e898a430d9ce0e6d2c6bfecd2e7",
+            "digest": "5694caa8e1fec13d8fabb531cb5f813f3eb0f8ab5106384d628fcf0dad2dfa79"
+          },
+          "daily-unit-c00222c6bfa7520184737605": {
+            "cache_key": "8555d3067a20bcdea45a4b485dc8593fa17c299fae5cfa11fd1e6176c6a2e67d",
+            "digest": "8f0f328afae452fea054e40b4e5b80d8f7e653e61702ee520673c7f5c20e3785"
+          },
+          "daily-unit-c0840e5d3b8d894992797553": {
+            "cache_key": "d48b83d0986d70c6c583870480c2d6d96a08487b66c1d932289836ec5b8280ff",
+            "digest": "4215bf002b620ceb0206335a316feb740af9bd83af4760c05de016025cd429ee"
+          },
+          "daily-unit-c298e2bde6c3f1dc2595f6e9": {
+            "cache_key": "f751f2cef200febc347b87d4ad77eda79a050473de6eacc8201a445a60ef4301",
+            "digest": "1bd25a075bfcc1e8eab10a7744c7f330baf74051ef1c19e7ceabf282fabfea48"
+          },
+          "daily-unit-c73adcb08b6632d04e90479a": {
+            "cache_key": "e24e5ee549654fd79d9d4ec2f2aeba30f206f97112f5ea3fa62e8a3027ba2fd2",
+            "digest": "5cd5438ee2fc16a550dcf2627991aca696e66be47ae97cdfc863c82d0cb28081"
+          },
+          "daily-unit-ddc6f36289d6a64323a653f6": {
+            "cache_key": "70a507a355e0c40890f33731af3165dc42f2b24c33898f698dc8b6313835b1e2",
+            "digest": "643a8fff9a10025f6f6b2a3cda63bb285883cf9594fff5fc7c78fa95cdcb8676"
+          },
+          "daily-unit-e0763906e1a029d37bd30a62": {
+            "cache_key": "57178f803d347400ba0332cd2e44730ee35874058f9f54038daf2dc3fe1a36b9",
+            "digest": "b3a46ef4e4632d9886d616130cb010ea4139f0deb9354a8043073432e940c589"
+          },
+          "daily-unit-eafe48b38c8724dbcc334c00": {
+            "cache_key": "ca26ecce47d812aba9d355fd95a91baca5a29532d52bf0a2096c3b36b1d0c50c",
+            "digest": "5f839352de73c6b1b5a874a71ee6d33aaabba86ae1c5f070ccab6aae1bd26901"
+          },
+          "daily-unit-ee3bf213d003b0884b540a14": {
+            "cache_key": "23d7450e385bb8cc39e5b2c6ed583a5b6a18cb6a867cdc78b9ae401f94c9ee23",
+            "digest": "41527f63ce654c86e40547a57ab27e5387fb4c5fffae29c11e21cff82473d0c8"
+          },
+          "daily-unit-f2774224d272519e6e8e44d8": {
+            "cache_key": "9c87b57f937614c112dcf5c53b385586eda7e744188c6e0dfdbde7cd87b366a0",
+            "digest": "4fc57f915ce6edde1e73ed9623d8ec8dba5028011613f5bc98e433f71229a597"
+          },
+          "daily-unit-f3ad7cf185f8636fda092cd0": {
+            "cache_key": "a4d6a3b90d8a465094fdaafff23190eeab3839304d1adc75e320fd735cb98c8e",
+            "digest": "79071afadad72344ec68c34b153bcc66496b72e8d12411be8a6c0a93d1cd3520"
+          },
+          "daily-unit-f404f83ece9bc85ca00beaa9": {
+            "cache_key": "8613076c0eac56c074ee9d9b9c8e317e40701c14b83720d56b93fd5ba9594720",
+            "digest": "d935327d46cee60a395f8790295ed619b0bf2ea7d78f050515ad39ad79772c9f"
+          },
+          "daily-unit-f8b41de6000341a8c8b5cea3": {
+            "cache_key": "de026d04b5708087800dc501a2a2665124712ee7b13769f0f4c4e4f1d2255036",
+            "digest": "44c9dd871172459d281d130416b6a200fae075e1f429641deac7b3b40c04b551"
+          },
+          "daily-unit-fbba0afe512bc466c0983712": {
+            "cache_key": "4190205cfc79f6a195784448747c5f12cc232251f085fc4fe9965d8f0cf1453a",
+            "digest": "d4ec61cc5e792cd7831436089daf92f11033ec537ecf716e26ba6acd24d94ad4"
+          },
+          "daily-unit-fe8032561cefbb097d28830a": {
+            "cache_key": "3d5c45d839833ac24dfffacc6016d44ad0b9435a7ea5555a27983100992a2d96",
+            "digest": "318dba33a662480459391ca810191e7c19a16498bb4deeeac75c5bfdd0ebb395"
+          }
+        }
+      },
+      "position": 4,
+      "release_evidence": false,
+      "runtime": {
+        "hw_memsize_bytes": 25769803776,
+        "hw_ncpu": 10,
+        "machine": "arm64",
+        "platform": "macOS-15.6.1-arm64-arm-64bit",
+        "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "python_version": "3.9.6",
+        "telemetry_errors": []
+      },
+      "schema": "wci_daily_cache_parse_ab_v1_arm",
+      "surviving_children": [],
+      "swap": {
+        "after_bytes": 4709679104,
+        "before_bytes": 4709679104,
+        "growth_bytes": 0
+      },
+      "timing": {
+        "sys_s": 8.504018,
+        "user_s": 333.206134,
+        "wall_s": 341.816591959
+      },
+      "work": {
+        "cost_computations": 65,
+        "distinct_cost_computations": 65,
+        "xml_bytes_read": 10609579955,
+        "xml_parses": 195,
+        "xml_parses_by_file": {
+          "calibrated.rou.xml": 65,
+          "calibrated_v1.rou.xml": 65,
+          "calibrated_v2.rou.xml": 65
+        }
+      },
+      "workload": {
+        "build_key": "d42db159b3ee565f",
+        "content_key": "a0073bb16554d1c8476f26a03544dfb9ea9b15ce240a4c881431fec94678c634",
+        "daily_units": 65,
+        "path": "/private/tmp/gs-step3-departure-bounds/validation/wci_daily_cache_ab_workload_20260918-v2.json",
+        "schedule_order_digest": "e6619034989ac76c1fb54801873d6a1ce13a3cdcbd6b556e0ec7b3b4abec38cb",
+        "sha256": "8af1d505d4859244b323c8f0ab6ba30dc268847ded0e2d6346a4f2f00af9403d"
+      }
+    }
+  ],
+  "candidate_rate_per_unit_s": {
+    "high": 3.0739504448769233,
+    "low": 3.0475368211538463,
+    "median": 3.0607436330153845,
+    "values": [
+      3.0739504448769233,
+      3.0475368211538463
+    ]
+  },
+  "claim_boundary": "one build key, four arms, one machine. It measures parse reuse against a frozen workload contract and nothing else. It does not adopt the candidate and does not report the month profile, census or registration as valid under the candidate's source identity; those bind the costing sources and must be rebuilt before any production use",
+  "content_key": "6d924429e8873ef5e15ce99834667ae8ec60af0ed25b09114e0a6c515665d0e1",
+  "design": {
+    "answers_reused_between_arms": false,
+    "build_key": "d42db159b3ee565f",
+    "order": [
+      "A",
+      "B",
+      "B",
+      "A"
+    ],
+    "production_gates_changed_or_skipped": "none",
+    "separate_fresh_cache_roots": [
+      "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/parse-ab/cache-1",
+      "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/parse-ab/cache-2",
+      "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/parse-ab/cache-3",
+      "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/parse-ab/cache-4"
+    ],
+    "separate_processes": true,
+    "why": "A/B/B/A: a machine that drifts one way through the run cannot make the candidate look good in both its arms",
+    "workload_content_key": "a0073bb16554d1c8476f26a03544dfb9ea9b15ce240a4c881431fec94678c634"
+  },
+  "diagnostic_only": true,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_daily_cache_parse_ab_v1.py",
+    "sha256": "1361bdf726126fb2a991515d62c1ee24ace7511b0628fc997e30c73cfb9e480a"
+  },
+  "git": {
+    "head": "b627887f2084b68c4ad89f69d7bc218d6b33a4d4",
+    "tracked_changes": [
+      " M run_scenario.py",
+      " M tests/test_daily_cost_cache.py",
+      " M tests/test_deterministic_disruption.py",
+      " M tests/test_monthly_sumo.py",
+      " M tools/build_daily_cost_cache.py",
+      " M traffic_sim/simulation/deterministic_disruption.py",
+      " M traffic_sim/simulation/disruption.py",
+      " M validation/benchmarks/wci_month_cache_decision_v1.py",
+      " M web/data/od_matrix.csv",
+      " M web/data/od_matrix.json",
+      " M web/data/validation.json"
+    ]
+  },
+  "output_sha256": "5179b6d28bdd834e4618d50f156f8dcfb2c3797fc7ff0b9c5bd04ffa3c06710c",
+  "production_chain_rebuild_required": true,
+  "release_evidence": false,
+  "result": {
+    "cache_key_digests": [
+      "b5ae97328e2926c1dac1306ebf0721d11f1c6f80e15307217816c176cb6fb4c4",
+      "be09b8a9d9516cdb2d126935ca92b1c51170148dc33b299c0869dfd51963d73a"
+    ],
+    "cache_keys_note": "a cache key hashes the five costing sources and the candidate edits three of them, so the arms MUST differ here; that is the cache invalidating itself as designed. The costs stored under those keys are identical, which is what every_arm_produced_the_same_results states",
+    "checks": {
+      "every_arm_priced_every_unit_separately": true,
+      "every_arm_produced_the_same_results": true,
+      "every_arm_read_the_same_workload_contract": true,
+      "every_arm_shared_one_provider_identity_apart_from_the_source_hashes": true,
+      "every_candidate_arm_beat_every_baseline_arm": true,
+      "every_stored_record_matched_what_was_computed": true,
+      "no_arm_grew_swap": true,
+      "no_arm_left_a_child_process": true,
+      "the_baseline_parsed_once_per_unit_and_variant": true,
+      "the_candidate_parsed_once_per_variant": true,
+      "the_two_arms_really_were_different_code": true
+    },
+    "cpu_s": {
+      "A": [
+        342.984047,
+        341.710152
+      ],
+      "B": [
+        199.704524,
+        198.01829300000003
+      ]
+    },
+    "peak_footprint_bytes": {
+      "A": [
+        423445320,
+        429835104
+      ],
+      "B": [
+        828113952,
+        833406032
+      ]
+    },
+    "peak_rss_bytes": {
+      "A": [
+        529072128,
+        525189120
+      ],
+      "B": [
+        914276352,
+        911671296
+      ]
+    },
+    "result_digest": [
+      "05782d8a341782d07ae845206856f39fbbc90492fcd3345acd53221f71ae827c"
+    ],
+    "separation_s": 142.009813042,
+    "speedup": 1.7220039867465262,
+    "verdict": "DIAGNOSTICALLY_ACCEPTED_PROFILE_REBUILD_REQUIRED",
+    "wall_s": {
+      "A": [
+        343.363064041,
+        341.816591959
+      ],
+      "B": [
+        199.806778917,
+        198.089893375
+      ]
+    },
+    "xml_bytes_read": {
+      "A": [
+        10609579955,
+        10609579955
+      ],
+      "B": [
+        163224307,
+        163224307
+      ]
+    },
+    "xml_parses": {
+      "A": [
+        195,
+        195
+      ],
+      "B": [
+        3,
+        3
+      ]
+    }
+  },
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_daily_cache_parse_ab_v1",
+  "what_this_does_not_authorise": [
+    "starting the month cache build",
+    "rebuilding the month ledger profile, the census or the month registration",
+    "treating any existing frozen chain as valid under the candidate's costing-source hashes"
+  ]
+}

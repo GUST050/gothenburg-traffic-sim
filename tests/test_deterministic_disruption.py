@@ -125,17 +125,25 @@ class FakeNetwork:
 
 
 def _fake_disruption(monkeypatch, table):
-    """Route `run_scenario.closure_disruption` to a table keyed by route file."""
+    """Route the provider's costing call to a table keyed by route file.
+
+    The provider prices vehicles it has already parsed, so the double sits
+    on that seam. Asserting the vehicles arrive keeps the double honest: a
+    provider that went back to re-reading the file per unit would fail here
+    rather than quietly bypass this table.
+    """
     calls: list[tuple] = []
 
-    def fake(route_path, closed, closures, edge_time, edge_len, adj=None):
+    def fake(route_path, parsed_vehicles, closed, closures, edge_time,
+             edge_len, **_kwargs):
+        assert parsed_vehicles is not None
         calls.append((Path(route_path).name, tuple(sorted(closed)),
                       tuple((c["edge_id"], c["begin_s"], c["end_s"])
                             for c in closures)))
         return dict(table[Path(route_path).name])
 
     import run_scenario as rs
-    monkeypatch.setattr(rs, "closure_disruption", fake)
+    monkeypatch.setattr(rs, "closure_disruption_over_parsed_route", fake)
     return calls
 
 

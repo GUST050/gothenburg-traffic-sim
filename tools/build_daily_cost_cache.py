@@ -126,17 +126,23 @@ class BatchIdentity:
     catalogs: Mapping[str, Any]
     costing_sources: Mapping[str, str]
     tool_sources: Mapping[str, str]
+    #: The network prices every unit and enters the cache key through the
+    #: provider identity. A batch bound without it stays "complete" after a
+    #: network change while every reader misses it, so it is bound here too.
+    network: Mapping[str, Any] = dataclasses.field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return json.loads(json.dumps(dataclasses.asdict(self), default=str))
 
 
-def identity_of(registration: Mapping[str, Any],
-                build_key: str) -> BatchIdentity:
+def identity_of(registration: Mapping[str, Any], build_key: str, *,
+                network: Any = None) -> BatchIdentity:
     from tools import freeze_wci_month_case as month
 
     archive = registration["archives"][build_key]
+    model = network if network is not None else NetworkCostModel()
     return BatchIdentity(
+        network=dict(model.identity()),
         registration_content_key=registration["content_key"],
         policy=registration["case_selection_policy"],
         chosen_edge=registration["chosen_edge"],
@@ -155,9 +161,13 @@ def identity_of(registration: Mapping[str, Any],
                       for name in TOOL_SOURCES})
 
 
-def content_drift(identity: BatchIdentity) -> List[str]:
+def content_drift(identity: BatchIdentity, *, network: Any = None
+                  ) -> List[str]:
     """Re-prove from bytes what this batch is bound to."""
     problems = []
+    model = network if network is not None else NetworkCostModel()
+    if dict(model.identity()) != dict(identity.network):
+        problems.append("network changed")
     archive = Path(identity.archive)
     for name, digest in sorted(identity.archive_files.items()):
         if sha256_file(archive / name) != digest:
@@ -204,7 +214,7 @@ def marker_path(cache_root: Path, build_key: str) -> Path:
 
 
 def verify_batch(cache_root: Path, identity: BatchIdentity,
-                 units: Sequence[Any]) -> List[str]:
+                 units: Sequence[Any], *, network: Any = None) -> List[str]:
     """Problems that make a stored batch unusable; empty means reuse it."""
     path = marker_path(cache_root, identity.build_key)
     if not path.is_file():
@@ -219,7 +229,7 @@ def verify_batch(cache_root: Path, identity: BatchIdentity,
         return ["batch marker content key does not describe it"]
     if marker.get("identity") != identity.to_dict():
         return ["batch identity changed"]
-    problems = content_drift(identity)
+    problems = content_drift(identity, network=network)
     if problems:
         return problems
     stored = {item["unit_id"]: item for item in marker["units"]}
@@ -277,19 +287,25 @@ def build_batch(registration: Mapping[str, Any], build_key: str, *,
                 cache_root: Path, units: Sequence[Any], network=None,
                 on_unit=None) -> Dict[str, Any]:
     """Compute, verify and publish one build key's batch."""
-    identity = identity_of(registration, build_key)
-    drift = content_drift(identity)
+    model = network if network is not None else NetworkCostModel()
+    identity = identity_of(registration, build_key, network=model)
+    drift = content_drift(identity, network=model)
     if drift:
         raise SystemExit(f"build key {build_key}: {drift}")
     spec = ClosureSearchSpec.from_dict(registration["spec"])
     started = time.perf_counter()
     before = _usage()
-    result = _compute_batch(spec, identity, units, cache_root,
-                            network if network is not None
-                            else NetworkCostModel(), on_unit)
+    result = _compute_batch(spec, identity, units, cache_root, model, on_unit)
     if result["mismatches"]:
         raise SystemExit(f"build key {build_key}: stored units do not match "
                          f"the computed ones: {result['mismatches']}")
+    # The route files are parsed once and the vehicles reused for every unit,
+    # so nothing re-reads those bytes during the batch. Re-prove them here:
+    # a batch whose inputs moved under it must never reach publication.
+    drift = content_drift(identity, network=model)
+    if drift:
+        raise SystemExit(f"build key {build_key}: inputs changed while it "
+                         f"was being built: {drift}")
     after = _usage()
     marker = {
         "schema": BATCH_SCHEMA,
@@ -406,15 +422,18 @@ def run(registration: Mapping[str, Any], *, build_keys: Sequence[str],
     """Build every requested build key, reusing only what verifies."""
     spec = ClosureSearchSpec.from_dict(registration["spec"])
     grouped = units_of(spec, runs_root, qualified_manifest)
+    # One network for the whole run: it is 16 MB of XML, and rebuilding it
+    # per build key would cost more than the batches it guards.
+    model = network if network is not None else NetworkCostModel()
     status.update(state="running", daily_units_expected=sum(
         len(grouped[key]) for key in build_keys))
     results: Dict[str, Any] = {}
     for build_key in build_keys:
         units = grouped[build_key]
-        identity = identity_of(registration, build_key)
+        identity = identity_of(registration, build_key, network=model)
         status.update(current_build_key=build_key, phase="verify_existing",
                       identity=identity.to_dict())
-        problems = verify_batch(cache_root, identity, units)
+        problems = verify_batch(cache_root, identity, units, network=model)
         if not problems:
             status.state["reused_build_keys"].append(build_key)
             status.update(cache_hits=status.state["cache_hits"] + len(units),
@@ -442,7 +461,7 @@ def run(registration: Mapping[str, Any], *, build_keys: Sequence[str],
 
             marker = build_batch(registration, build_key,
                                  cache_root=cache_root, units=units,
-                                 network=network, on_unit=progress)
+                                 network=model, on_unit=progress)
         status.state["completed_build_keys"].append(build_key)
         status.state["output_content_keys"][build_key] = marker["content_key"]
         status.update(phase="published")

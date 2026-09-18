@@ -3441,9 +3441,33 @@ archive's route files itself) and never from a WindowCostIndex record.
 **A batch is one build key.** Its identity binds the registration content
 key, the policy version, the chosen directed edge, the spec content key,
 the archive with its `demand_meta` and q10/q50/q90 hashes, both catalog
-keys with their route and metadata hashes, the five costing sources and the
-builder's own bytes. Every one of them is re-proved from content before the
-batch is computed and again whenever it is reused.
+keys with their route and metadata hashes, **the network**, the five
+costing sources and the builder's own bytes. Every one of them is re-proved
+from content before the batch is computed, again immediately before the
+marker is published, and again whenever the batch is reused.
+
+The network was added 2026-09-18 after a measured defect. It prices every
+unit and enters the cache key through the provider identity, but the batch
+identity did not bind it, so a batch built against one network still
+verified after the network changed: the builder reported the build key
+complete while every reader missed it — a cache that says "done" and serves
+nothing. Pinned by `TestTheBatchIsBoundToTheNetwork`.
+
+**Each route file is parsed once per build key.** The oracle prices 65
+daily units against one immutable archive, so `ArchiveDisruptionProvider`
+reads q10, q50 and q90 once each and holds the parsed vehicles as immutable
+tuples for its own lifetime. That is not a global cache and never a
+substitute for a computation: all 65 schedules are still priced in full,
+each through the same `_affected_od_counts` and report path the per-file
+form uses (`closure_disruption_over_parsed_route`, which differs from
+`closure_disruption` only in being handed the vehicles instead of reading
+them). It was 195 parses per build key; it is 3. Measured A/B/B/A on one
+real build key: 343.4/341.8 s against 199.8/198.1 s, 10.61 GB of route XML
+read against 0.16 GB, byte-identical results, at the cost of peak RSS
+rising from ~527 MB to ~913 MB because three parsed variants are resident
+at once. Because nothing re-reads those bytes during the batch, the full
+content-drift check runs again immediately before publication, so a file
+edited mid-batch rejects the batch.
 
 **Publication.** Unit records are content-addressed and written atomically
 by the cache itself. The batch marker is published only after every stored
@@ -3462,6 +3486,30 @@ another.
 from publishing the same batch. There is no global cache and no trust in a
 path, a size or an mtime; every reuse is content-bound. The tool refuses to
 write to the production cache root unless that is asked for explicitly.
+
+**Changing a costing source invalidates the whole frozen chain** (measured
+2026-09-18, and worth stating plainly because it decides what a costing
+change costs). The month ledger profile binds an 11-file producer source
+manifest; the effect census binds nine production sources; the month
+registration binds thirteen, and also binds the census. `run_scenario.py`,
+`disruption.py` and `deterministic_disruption.py` are in all three. So a
+behaviour-preserving edit to the oracle still stops `_bound_inputs` at
+"Phase 4 producer source manifest drifted", which stops the census, which
+stops the registration — and `tools/build_daily_cost_cache.py` refuses to
+start at all, because its `main` reads the profile through that check.
+This is the intended fail-closed direction: a byte binding cannot tell a
+behaviour-preserving change from a behaviour-changing one, and guessing in
+the permissive direction is what it exists to prevent. The consequence is
+that adopting any oracle change requires rebuilding profile → census →
+registration, and the profile alone is the full month ledger: 7,320.3 s and
+6.52 GB peak, of which `xml_parse` was 4,368.7 s (59.7%). A diagnostic
+comparison that must span two code versions therefore cannot use that
+chain, and uses a frozen workload contract instead
+(`validation/benchmarks/wci_daily_cache_workload_v1.py`), which pins the
+archive's four files, the network, both catalogs, the spec's canonical
+bytes and the exact 65 canonical schedules by content — a separate
+benchmark path that changes and skips no production gate, and that can
+never stand in for the rebuild.
 
 ## Build order
 1. **B — observability module** (junction solves, bounds, alarms).

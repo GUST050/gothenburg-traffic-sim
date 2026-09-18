@@ -256,8 +256,8 @@ def test_objective_aligned_runner_emits_per_variant_disruption(
     )
     monkeypatch.setattr(
         monthly_sumo.rs,
-        "closure_disruption",
-        lambda path, *args, **kwargs: {
+        "closure_disruption_over_parsed_route",
+        lambda path, vehicles, *args, **kwargs: {
             "vehicles_affected": 2,
             "vehicles_no_detour": 0,
             "added_vehicle_hours": 0.5,

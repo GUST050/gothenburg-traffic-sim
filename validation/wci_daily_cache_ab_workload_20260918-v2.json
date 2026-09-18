@@ -1,0 +1,1765 @@
+{
+  "adoption_eligible": false,
+  "archive": {
+    "archive_content_key": "fb2be2d4d29d40d0e0d2adf9b864025be503c02b6aed5cf05887bee9849c73f1",
+    "files": {
+      "calibrated.rou.xml": "187e9f9640f2dfcf45eb45f636f13115df499fea06f75a6f55a5be7e6f5ca6eb",
+      "calibrated_v1.rou.xml": "20bdcde95676cc322849d329c58edcb8ce4b3a73fd618a464f3057a3379299be",
+      "calibrated_v2.rou.xml": "53fe459f53683d27e1582a337107f0455cd869235e5b26dd6abbd5a7a5ddcd8c",
+      "demand_meta.json": "e8cf61acf568c594d6a3fbc2b841809a16ccc0464648d7089d05e47505ee1b02"
+    },
+    "path": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6",
+    "variant_filenames": {
+      "q10": "calibrated_v1.rou.xml",
+      "q50": "calibrated.rou.xml",
+      "q90": "calibrated_v2.rou.xml"
+    }
+  },
+  "build_key": "d42db159b3ee565f",
+  "catalogs": {
+    "weekday": {
+      "catalog_key": "8548c8191269d61bce2f9bbe85e7785d",
+      "metadata_sha256": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+      "path": "/private/tmp/gs-step3-departure-bounds/sumo/route_catalog/8548c8191269d61bce2f9bbe85e7785d/catalog.rou.xml",
+      "routes_sha256": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+    },
+    "weekend": {
+      "catalog_key": "77e237f04c746a4fb1fac7e790fff419",
+      "metadata_sha256": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3",
+      "path": "/private/tmp/gs-step3-departure-bounds/sumo/route_catalog/77e237f04c746a4fb1fac7e790fff419/catalog.rou.xml",
+      "routes_sha256": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4"
+    }
+  },
+  "chosen_edge": "26842525_26355153_0",
+  "claim_boundary": "a frozen description of one build key's costing work, for a diagnostic A/B only. It adopts nothing, and it makes no claim that the profile, the census or the month registration is valid under any code other than the code that froze this file",
+  "content_key": "a0073bb16554d1c8476f26a03544dfb9ea9b15ce240a4c881431fec94678c634",
+  "daily_units": 65,
+  "diagnostic_only": true,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_daily_cache_workload_v1.py",
+    "sha256": "9133ca774d21e847c71a6b24dab06b2985a0b35a96dfff0485d83ca5d26c8032"
+  },
+  "frozen_by": {
+    "head": "b627887f2084b68c4ad89f69d7bc218d6b33a4d4",
+    "tracked_changes": [
+      " M tests/test_daily_cost_cache.py",
+      " M tests/test_deterministic_disruption.py",
+      " M tests/test_monthly_sumo.py",
+      " M validation/benchmarks/wci_month_cache_decision_v1.py",
+      " M web/data/od_matrix.csv",
+      " M web/data/od_matrix.json",
+      " M web/data/validation.json"
+    ]
+  },
+  "network": {
+    "metadata": {
+      "path": "/private/tmp/gs-step3-departure-bounds/sumo/network_metadata.json",
+      "sha256": null
+    },
+    "path": "/private/tmp/gs-step3-departure-bounds/sumo/net.net.xml",
+    "sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+  },
+  "other_cost_inputs": {
+    "demand_variants": [
+      "q10",
+      "q50",
+      "q90"
+    ],
+    "max_assumed_congestion_delay_s": 3600.0
+  },
+  "production_chain_rebuild_required": true,
+  "release_evidence": false,
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schedule_order_digest": "e6619034989ac76c1fb54801873d6a1ce13a3cdcbd6b556e0ec7b3b4abec38cb",
+  "schedule_payload_digest": "f71a3f542b2cf4862aa39dae08f2ceeb6bfef78f7f144a4f2952a701a3142365",
+  "schedules": [
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "08:00",
+        "daily_start": "00:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T08:00:00",
+            "start_time": "2027-09-03T00:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-c3563c4ba1fcbca4c0ba",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-c3563c4ba1fcbca4c0ba",
+      "unit_id": "daily-unit-0a23b83a3de6fcc1c470bb2f"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "08:15",
+        "daily_start": "00:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T08:15:00",
+            "start_time": "2027-09-03T00:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-bd3bd65f6b32eac5db59",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-bd3bd65f6b32eac5db59",
+      "unit_id": "daily-unit-2f87b9d86df26368b6b08ab7"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "08:30",
+        "daily_start": "00:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T08:30:00",
+            "start_time": "2027-09-03T00:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-375d2a1f5e702cbd49e7",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-375d2a1f5e702cbd49e7",
+      "unit_id": "daily-unit-c298e2bde6c3f1dc2595f6e9"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "08:45",
+        "daily_start": "00:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T08:45:00",
+            "start_time": "2027-09-03T00:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-6a725dc2ea3b2734f720",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-6a725dc2ea3b2734f720",
+      "unit_id": "daily-unit-828603aa1031c6448c133047"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "09:00",
+        "daily_start": "01:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T09:00:00",
+            "start_time": "2027-09-03T01:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-790841937668521c8bc9",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-790841937668521c8bc9",
+      "unit_id": "daily-unit-517a18b39123478620cc60ae"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "09:15",
+        "daily_start": "01:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T09:15:00",
+            "start_time": "2027-09-03T01:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-01fed1697ecf8fc5d937",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-01fed1697ecf8fc5d937",
+      "unit_id": "daily-unit-0a7ebd6c1a1bf32e2560a72d"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "09:30",
+        "daily_start": "01:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T09:30:00",
+            "start_time": "2027-09-03T01:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-d748b651270869d6dce4",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-d748b651270869d6dce4",
+      "unit_id": "daily-unit-fbba0afe512bc466c0983712"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "09:45",
+        "daily_start": "01:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T09:45:00",
+            "start_time": "2027-09-03T01:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-fdba7321a16916c46f72",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-fdba7321a16916c46f72",
+      "unit_id": "daily-unit-73b8bfba7c55c171b2214b14"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "10:00",
+        "daily_start": "02:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T10:00:00",
+            "start_time": "2027-09-03T02:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-8a174a76066c0e2f2b2d",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-8a174a76066c0e2f2b2d",
+      "unit_id": "daily-unit-46162b4904af53b5d2215bf8"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "10:15",
+        "daily_start": "02:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T10:15:00",
+            "start_time": "2027-09-03T02:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-bf0fa2a372e51b016f18",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-bf0fa2a372e51b016f18",
+      "unit_id": "daily-unit-7570588e0af2982a2c61022c"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "10:30",
+        "daily_start": "02:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T10:30:00",
+            "start_time": "2027-09-03T02:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-c0df7698f26098e85a36",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-c0df7698f26098e85a36",
+      "unit_id": "daily-unit-9bee340a5ef525379f609e3a"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "10:45",
+        "daily_start": "02:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T10:45:00",
+            "start_time": "2027-09-03T02:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-099e4368e5fe57be8178",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-099e4368e5fe57be8178",
+      "unit_id": "daily-unit-4913c3751b04d543b83ec07d"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "11:00",
+        "daily_start": "03:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T11:00:00",
+            "start_time": "2027-09-03T03:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-18a8de4d5c06c9c12180",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-18a8de4d5c06c9c12180",
+      "unit_id": "daily-unit-1a287a5d00dcf8bf1d4a13d9"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "11:15",
+        "daily_start": "03:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T11:15:00",
+            "start_time": "2027-09-03T03:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-a26d2fcd70946e8ee0d0",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-a26d2fcd70946e8ee0d0",
+      "unit_id": "daily-unit-c73adcb08b6632d04e90479a"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "11:30",
+        "daily_start": "03:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T11:30:00",
+            "start_time": "2027-09-03T03:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-2e403bb6e980dcb5122b",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-2e403bb6e980dcb5122b",
+      "unit_id": "daily-unit-82f781a44e392d09f81ac8b2"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "11:45",
+        "daily_start": "03:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T11:45:00",
+            "start_time": "2027-09-03T03:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-f0d927428cca9372fde9",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-f0d927428cca9372fde9",
+      "unit_id": "daily-unit-3ea5320a1a1818b041409210"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "12:00",
+        "daily_start": "04:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T12:00:00",
+            "start_time": "2027-09-03T04:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-6d4a2cc6d3d7cc8adf4e",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-6d4a2cc6d3d7cc8adf4e",
+      "unit_id": "daily-unit-91ff0e82cb64d0ceba5d83bb"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "12:15",
+        "daily_start": "04:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T12:15:00",
+            "start_time": "2027-09-03T04:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-26700e421d3ecbe585b6",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-26700e421d3ecbe585b6",
+      "unit_id": "daily-unit-539dff3b4162782aa0bdfab8"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "12:30",
+        "daily_start": "04:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T12:30:00",
+            "start_time": "2027-09-03T04:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-74d7776ff3ccd30ac2dd",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-74d7776ff3ccd30ac2dd",
+      "unit_id": "daily-unit-75e355619bc4799bd51750e4"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "12:45",
+        "daily_start": "04:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T12:45:00",
+            "start_time": "2027-09-03T04:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-4b3dc5dbedd45edf2189",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-4b3dc5dbedd45edf2189",
+      "unit_id": "daily-unit-bb25e8304338e02d27f5c468"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "13:00",
+        "daily_start": "05:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T13:00:00",
+            "start_time": "2027-09-03T05:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-457b519485c53db0338e",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-457b519485c53db0338e",
+      "unit_id": "daily-unit-583ec4eb192e71ecfe44f2df"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "13:15",
+        "daily_start": "05:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T13:15:00",
+            "start_time": "2027-09-03T05:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-f0016aa48ea39db9e223",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-f0016aa48ea39db9e223",
+      "unit_id": "daily-unit-18eebf24033724b225558040"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "13:30",
+        "daily_start": "05:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T13:30:00",
+            "start_time": "2027-09-03T05:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-8049593863495e60242c",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-8049593863495e60242c",
+      "unit_id": "daily-unit-c0840e5d3b8d894992797553"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "13:45",
+        "daily_start": "05:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T13:45:00",
+            "start_time": "2027-09-03T05:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-6007dc6627fbd6c12a8a",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-6007dc6627fbd6c12a8a",
+      "unit_id": "daily-unit-32efb36591d843d815d90dc6"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "14:00",
+        "daily_start": "06:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T14:00:00",
+            "start_time": "2027-09-03T06:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-ce43b83c0a8a5140e726",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-ce43b83c0a8a5140e726",
+      "unit_id": "daily-unit-02c27a6a1e5c2038212860c3"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "14:15",
+        "daily_start": "06:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T14:15:00",
+            "start_time": "2027-09-03T06:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-94f01fb71294115f0297",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-94f01fb71294115f0297",
+      "unit_id": "daily-unit-fe8032561cefbb097d28830a"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "14:30",
+        "daily_start": "06:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T14:30:00",
+            "start_time": "2027-09-03T06:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-d178a188c2d07c8e64c1",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-d178a188c2d07c8e64c1",
+      "unit_id": "daily-unit-bd8c6dc6fc86162cf765b227"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "14:45",
+        "daily_start": "06:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T14:45:00",
+            "start_time": "2027-09-03T06:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-db752cdae7a8c0a04320",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-db752cdae7a8c0a04320",
+      "unit_id": "daily-unit-1868c7646a5aa2f67d20d39c"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "15:00",
+        "daily_start": "07:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T15:00:00",
+            "start_time": "2027-09-03T07:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-1de4fc7bd1279ccb86b3",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-1de4fc7bd1279ccb86b3",
+      "unit_id": "daily-unit-f3ad7cf185f8636fda092cd0"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "15:15",
+        "daily_start": "07:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T15:15:00",
+            "start_time": "2027-09-03T07:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-1381ca6aef8661972e09",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-1381ca6aef8661972e09",
+      "unit_id": "daily-unit-10dab1cd118f9ca79f0e6c4f"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "15:30",
+        "daily_start": "07:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T15:30:00",
+            "start_time": "2027-09-03T07:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-c6d1282eb84c0b06f209",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-c6d1282eb84c0b06f209",
+      "unit_id": "daily-unit-55b092650d4acc72fb87b876"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "15:45",
+        "daily_start": "07:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T15:45:00",
+            "start_time": "2027-09-03T07:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-b9c7bbd30b24546fc201",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-b9c7bbd30b24546fc201",
+      "unit_id": "daily-unit-a43c28bacd9c6094f71afbfd"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "16:00",
+        "daily_start": "08:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T16:00:00",
+            "start_time": "2027-09-03T08:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-52c6462dc1b4a1da0295",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-52c6462dc1b4a1da0295",
+      "unit_id": "daily-unit-c00222c6bfa7520184737605"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "16:15",
+        "daily_start": "08:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T16:15:00",
+            "start_time": "2027-09-03T08:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-5b5a4fdd584282abb12b",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-5b5a4fdd584282abb12b",
+      "unit_id": "daily-unit-21961b8081be17cb452a9a75"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "16:30",
+        "daily_start": "08:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T16:30:00",
+            "start_time": "2027-09-03T08:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-743056c14aa0a0e5f8a3",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-743056c14aa0a0e5f8a3",
+      "unit_id": "daily-unit-e0763906e1a029d37bd30a62"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "16:45",
+        "daily_start": "08:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T16:45:00",
+            "start_time": "2027-09-03T08:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-4f5e069e7258517f96c5",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-4f5e069e7258517f96c5",
+      "unit_id": "daily-unit-b3dc9e75d73466f7860c8031"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "17:00",
+        "daily_start": "09:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T17:00:00",
+            "start_time": "2027-09-03T09:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-06e13e461e955d4195a0",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-06e13e461e955d4195a0",
+      "unit_id": "daily-unit-2aab1b0ec53981ad323272e5"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "17:15",
+        "daily_start": "09:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T17:15:00",
+            "start_time": "2027-09-03T09:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-d8463018b8fdac3ec613",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-d8463018b8fdac3ec613",
+      "unit_id": "daily-unit-2f9b67601e755186a7a98446"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "17:30",
+        "daily_start": "09:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T17:30:00",
+            "start_time": "2027-09-03T09:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-75cf37b29373e68e1c36",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-75cf37b29373e68e1c36",
+      "unit_id": "daily-unit-7afed313d6a8b1887e49fc72"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "17:45",
+        "daily_start": "09:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T17:45:00",
+            "start_time": "2027-09-03T09:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-954d91c41e512c58faf8",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-954d91c41e512c58faf8",
+      "unit_id": "daily-unit-846abf4f3429ecd0e9fb02f5"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "18:00",
+        "daily_start": "10:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T18:00:00",
+            "start_time": "2027-09-03T10:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-8d0b97ea885b2b17f256",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-8d0b97ea885b2b17f256",
+      "unit_id": "daily-unit-58300053514e4089d7793deb"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "18:15",
+        "daily_start": "10:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T18:15:00",
+            "start_time": "2027-09-03T10:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-823d4ba7e4d1dbcb7ef1",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-823d4ba7e4d1dbcb7ef1",
+      "unit_id": "daily-unit-f2774224d272519e6e8e44d8"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "18:30",
+        "daily_start": "10:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T18:30:00",
+            "start_time": "2027-09-03T10:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-6f6aefb59bb0744eaf4d",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-6f6aefb59bb0744eaf4d",
+      "unit_id": "daily-unit-69c34674b7f132574e67fc59"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "18:45",
+        "daily_start": "10:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T18:45:00",
+            "start_time": "2027-09-03T10:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-c02bdcdf1cd907375e0a",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-c02bdcdf1cd907375e0a",
+      "unit_id": "daily-unit-2ed445fa259a1d6ad06ac93a"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "19:00",
+        "daily_start": "11:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T19:00:00",
+            "start_time": "2027-09-03T11:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-ebf15fa36a2f822961cd",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-ebf15fa36a2f822961cd",
+      "unit_id": "daily-unit-bfb1cc83095af8a0edf102c0"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "19:15",
+        "daily_start": "11:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T19:15:00",
+            "start_time": "2027-09-03T11:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-d97d18b85f209bb6c817",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-d97d18b85f209bb6c817",
+      "unit_id": "daily-unit-5eeb3cde2ac31a3258ab5b94"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "19:30",
+        "daily_start": "11:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T19:30:00",
+            "start_time": "2027-09-03T11:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-7ebc6ed250876320b810",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-7ebc6ed250876320b810",
+      "unit_id": "daily-unit-f404f83ece9bc85ca00beaa9"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "19:45",
+        "daily_start": "11:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T19:45:00",
+            "start_time": "2027-09-03T11:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-7c956f59d68572101e74",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-7c956f59d68572101e74",
+      "unit_id": "daily-unit-ddc6f36289d6a64323a653f6"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "20:00",
+        "daily_start": "12:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T20:00:00",
+            "start_time": "2027-09-03T12:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-64fbb686a020bee3fdd8",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-64fbb686a020bee3fdd8",
+      "unit_id": "daily-unit-30f676c5eaefedfec93ea73b"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "20:15",
+        "daily_start": "12:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T20:15:00",
+            "start_time": "2027-09-03T12:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-72e4f0239225ff6ced57",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-72e4f0239225ff6ced57",
+      "unit_id": "daily-unit-88003d0016d087349756744f"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "20:30",
+        "daily_start": "12:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T20:30:00",
+            "start_time": "2027-09-03T12:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-8a0e6678cbcc67cec3e0",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-8a0e6678cbcc67cec3e0",
+      "unit_id": "daily-unit-4e951e4583462d173f7f57f5"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "20:45",
+        "daily_start": "12:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T20:45:00",
+            "start_time": "2027-09-03T12:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-cb461df02c1ab3617d13",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-cb461df02c1ab3617d13",
+      "unit_id": "daily-unit-ee3bf213d003b0884b540a14"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "21:00",
+        "daily_start": "13:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T21:00:00",
+            "start_time": "2027-09-03T13:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-171178a7ae5f87eb5835",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-171178a7ae5f87eb5835",
+      "unit_id": "daily-unit-4ec40f5a3e8056be9af2147d"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "21:15",
+        "daily_start": "13:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T21:15:00",
+            "start_time": "2027-09-03T13:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-54d6bf5cd61129d6cfd1",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-54d6bf5cd61129d6cfd1",
+      "unit_id": "daily-unit-eafe48b38c8724dbcc334c00"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "21:30",
+        "daily_start": "13:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T21:30:00",
+            "start_time": "2027-09-03T13:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-e59e8ce00e2a8194b04f",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-e59e8ce00e2a8194b04f",
+      "unit_id": "daily-unit-67adfb8a7ddba49b5deb2f18"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "21:45",
+        "daily_start": "13:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T21:45:00",
+            "start_time": "2027-09-03T13:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-e055903f0568c868ebef",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-e055903f0568c868ebef",
+      "unit_id": "daily-unit-305ac69071b0e9e0ee5bd7b6"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "22:00",
+        "daily_start": "14:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T22:00:00",
+            "start_time": "2027-09-03T14:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-8db2076fd50e4d248854",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-8db2076fd50e4d248854",
+      "unit_id": "daily-unit-8ed03c408d163ad36a409a45"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "22:15",
+        "daily_start": "14:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T22:15:00",
+            "start_time": "2027-09-03T14:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-ae764b6083875240acdf",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-ae764b6083875240acdf",
+      "unit_id": "daily-unit-26cbb7d2105efa4b7af30852"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "22:30",
+        "daily_start": "14:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T22:30:00",
+            "start_time": "2027-09-03T14:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-7847c7a959cb74c860e4",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-7847c7a959cb74c860e4",
+      "unit_id": "daily-unit-f8b41de6000341a8c8b5cea3"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "22:45",
+        "daily_start": "14:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T22:45:00",
+            "start_time": "2027-09-03T14:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-def5e048afaa0eb530c3",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-def5e048afaa0eb530c3",
+      "unit_id": "daily-unit-2efcf2118582cfed669feac7"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "23:00",
+        "daily_start": "15:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T23:00:00",
+            "start_time": "2027-09-03T15:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-39937910c3f70d0ed3f5",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-39937910c3f70d0ed3f5",
+      "unit_id": "daily-unit-aafd9768d832ce47d20fe2e5"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "23:15",
+        "daily_start": "15:15",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T23:15:00",
+            "start_time": "2027-09-03T15:15:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-2ff6391b1223f5956208",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-2ff6391b1223f5956208",
+      "unit_id": "daily-unit-a165f8a710cc9e42f065f8f4"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "23:30",
+        "daily_start": "15:30",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T23:30:00",
+            "start_time": "2027-09-03T15:30:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-85a431e4c0bae06c1e50",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-85a431e4c0bae06c1e50",
+      "unit_id": "daily-unit-3bcdc9e1b18b406baa2c4025"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "23:45",
+        "daily_start": "15:45",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-03T23:45:00",
+            "start_time": "2027-09-03T15:45:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-032f245bab1fd9c137d7",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-032f245bab1fd9c137d7",
+      "unit_id": "daily-unit-6be33a8f7221392f5cce43eb"
+    },
+    {
+      "schedule": {
+        "actual_closed_minutes": 480,
+        "daily_end": "24:00",
+        "daily_start": "16:00",
+        "day_count": 1,
+        "first_work_date": "2027-09-03",
+        "intervals": [
+          {
+            "end_time": "2027-09-04T00:00:00",
+            "start_time": "2027-09-03T16:00:00",
+            "work_date": "2027-09-03"
+          }
+        ],
+        "kind": "closure_schedule",
+        "required_work_minutes": 480,
+        "rounding_overshoot_minutes": 0,
+        "schedule_id": "closure-45f1d723693b4bf711c6",
+        "scheduled_work_minutes": 480,
+        "schema_version": 1,
+        "search_content_key": "d38038fd495414129508"
+      },
+      "schedule_id": "closure-45f1d723693b4bf711c6",
+      "unit_id": "daily-unit-abe20bac9743676830dd2bde"
+    }
+  ],
+  "schema": "wci_daily_cache_ab_workload_v1",
+  "spec": {
+    "allowed_weekdays": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "blackout_dates": [],
+    "closure_type": "full",
+    "content_key": "d38038fd495414129508",
+    "demand_build_id": "forecast-2027",
+    "directed_edges": [
+      "26842525_26355153_0"
+    ],
+    "dst_policy": "exclude_transition_dates",
+    "duration_basis": "required_work_time",
+    "interday_policy": "independent_daily_reset_v1",
+    "kind": "closure_search",
+    "max_consecutive_start_days": 5,
+    "min_consecutive_start_days": 5,
+    "objective_profile": "displaced_vehicles_and_detour_v1",
+    "permitted_daily_band": {
+      "earliest_start": "00:00",
+      "latest_end": "24:00"
+    },
+    "permitted_date_end": "2027-09-30",
+    "permitted_date_start": "2027-09-01",
+    "policy_status": "user_supplied_unverified",
+    "required_work_minutes": 2400,
+    "resolution_minutes": 15,
+    "same_daily_window": true,
+    "schema_version": 1,
+    "search_id": "subhour-cold-ledger-profile-2027-09-effect-canary-v2-fdc134ec4e",
+    "source": "forecast",
+    "timezone": "Europe/Stockholm",
+    "work_allocation_policy": "exact_equal_daily_v1",
+    "work_to_closure_assumption": "one_to_one"
+  },
+  "spec_canonical_sha256": "5e9e58fb95a5348f5aa865f8e377d19d85e0f37bb3d3b4154615f34610177c18",
+  "spec_content_key": "d38038fd495414129508",
+  "workload_source": {
+    "profile_path": "runs/step5_code_approved_20260915b/profile/profile.json",
+    "profile_sha256": "399f764272120470b2a32015ed5b1deb24d1ec1b0a786d5646ada104d69a23af",
+    "registration_content_key": "88cb38dd73307f00e9561f0a6830f2bbaf906b1c829bad4cf2d2126fa8729de2",
+    "registration_path": "validation/wci_month_case_registration_20260917-v2.json",
+    "registration_sha256": "ee82146b83cf8e3fb64a2da1516bf2c8c2ff66f7664573b9eb92318533097031",
+    "role": "documented source of the workload CHOICE only; this contract does not report the registration as valid under any other code",
+    "verified_under_the_freezing_code": true
+  }
+}
