@@ -1,0 +1,141 @@
+{
+  "authorisation": {
+    "conservative_upper_wall_s": 8407.7818678125,
+    "decision": "READY_FOR_USER_APPROVED_PROFILE_REBUILD",
+    "decision_content_key": "4464c5224f556ea05dfa5b6335c6f4ca617533dccf1817d728869c23a9b20a2d",
+    "decision_record": "validation/wci_two_phase_decision_20260918-v1.json",
+    "expected_wall_s": 5398.9241437499995,
+    "memory_hard_bytes": 4294967296,
+    "swap_growth_hard_bytes": 1073741824,
+    "wall_hard_s": 11210
+  },
+  "bound_inputs": {
+    "archive_root": {
+      "demand_archives": 30,
+      "path": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+      "read_only": true
+    },
+    "network": {
+      "data_in/sensors.json": "41db5d452cb104405d8bd6ac6b78e2c7748dcfe641a9266c7229a4fc7edf1f20",
+      "sumo/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+      "sumo/network_metadata.json": "dc3493454abc0ea44760abc10ee2996a1beef01d6b537617aa6141374f2ae6ad",
+      "web/data/network.geojson": "92cbcf3895b3d1428d3713a0e919cf6679f00a8e5d00e7974182345d088a1dbf"
+    },
+    "policy": {
+      "path": "validation/monthly_search_policy_v3.json",
+      "sha256": "1d3f3e1ea35f90ecec7e06941391a8a8728f0e7d8603df917dbbdb361ee242b0"
+    },
+    "producer_source_manifest": {
+      "run_scenario.py": "42752227c238be0bbb61d8d55c32359c976c5d91f8c9cdf5607f87146f21ea8b",
+      "tools/process_census.py": "b7fba291fe6314abeebe3da6e131d203ab8377d67a337b99c7f3354a38539b63",
+      "tools/product_arm.py": "63515df5fdd0c8dcb7276c3784de27cca8c8200b023eae5ac6966cc42c7a518c",
+      "tools/profile_monthly_cost_ledger.py": "e82a60d11d64490ca25b6dc9f0de7e2285a34c17c92b40e29698a7788446d2a7",
+      "traffic_sim/core/closure_calendar.py": "0956f98db1b1d24363957d839743c4708f74a86dfe14a0039e3e9e92d129082e",
+      "traffic_sim/simulation/cost_ordered_execution.py": "b8017e2d3b2bac2db24ead95e6cd39a01afc2fd8716578c6f049727f16cfe70e",
+      "traffic_sim/simulation/deterministic_disruption.py": "059d4568c24d6ffc83e01d597c25fac88656fe94df215192f9b9682f09956050",
+      "traffic_sim/simulation/disruption.py": "c7ac9270456ffb1e1b6fafc5c5c7436eb76b0f2bdb30035bc901d0b590b1992a",
+      "traffic_sim/simulation/independent_daily.py": "6ae4eba74fb0df6ec3068cf757164d43e0595fed102001457bab3d7c3446f689",
+      "traffic_sim/simulation/metadata.py": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4",
+      "traffic_sim/simulation/monthly_demand.py": "6082b959fbe6240fc7000fa69ca2782986494e0f8efacbb98ba2c2d3ad431563"
+    },
+    "qualified_demand_manifest": {
+      "archives": 30,
+      "content_key": "2cb32dcddfeb9bb99513fe1ae9cdcc44f0935435b78a278fa6eb3786060159ec",
+      "evidence_id": "subhour-monthly-qualify-2026-09-15b",
+      "path": "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+      "sha256": "1b609f705e08ab7a9c266a974a5976d33660209f0de914c95f66b3189d46f576",
+      "status": "PASS"
+    },
+    "route_catalogs": {
+      "77e237f04c746a4fb1fac7e790fff419": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+      "8548c8191269d61bce2f9bbe85e7785d": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653"
+    },
+    "spec": {
+      "parents": 1690,
+      "path": "validation/subhour_monthly_search_profile_spec_v1.json",
+      "search_content_key": "383c9130a45370c2f296",
+      "search_id": "subhour-cold-ledger-profile-2027-09",
+      "sha256": "10f3939a69b6f0bb6e74eb2b1e08a2b513cf54fa5610dd4a25d4d8366c1261aa"
+    }
+  },
+  "claim_boundary": "what was bound, verified and chosen BEFORE the approved month-ledger profile rebuild started. It authorises nothing and measures nothing",
+  "command": [
+    "/usr/bin/python3",
+    "validation/benchmarks/wci_profile_rebuild_supervisor_v1.py",
+    "--role",
+    "supervise",
+    "--inner-out",
+    "runs/step5_two_phase_20260918/instrumentation.json",
+    "--sample-log",
+    "runs/step5_two_phase_20260918/supervision-samples.jsonl",
+    "--child-log",
+    "runs/step5_two_phase_20260918/profile.log",
+    "--summary",
+    "validation/wci_profile_rebuild_supervision_20260918-v1.json",
+    "--wall-limit-s",
+    "11210",
+    "--memory-limit-bytes",
+    "4294967296",
+    "--swap-growth-limit-bytes",
+    "1073741824",
+    "--watch-archive-root",
+    "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+    "--watch-archive-root",
+    "runs",
+    "--",
+    "--spec",
+    "validation/subhour_monthly_search_profile_spec_v1.json",
+    "--qualified-demand-manifest",
+    "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+    "--runs-root",
+    "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+    "--out",
+    "runs/step5_two_phase_20260918/profile",
+    "--evidence-out",
+    "validation/monthly_cost_ledger_profile_subhour-20260918-v1.json",
+    "--evidence-id",
+    "monthly-cost-ledger-profile-subhour-20260918-v1"
+  ],
+  "content_key": "81913372a97a84463f2dcb243eafd0fc034aaff42352aa3a34c1468e7c516c6c",
+  "diagnostic_only": false,
+  "driver": {
+    "path": "inline preflight script",
+    "recorded_by": "wci_diag_common"
+  },
+  "git": {
+    "head": "2ebfd19008b9be3e1e9b87b6cf67a49f68397482",
+    "tracked_changes": []
+  },
+  "preflight_checks": {
+    "all_30_archives_present_and_readable": true,
+    "annual_population_lock_free": true,
+    "branch": "claude/wci-memory-canary-20260918",
+    "decision_content_key_reproduced_from_disk": true,
+    "demand_build_lock_free": true,
+    "head": "2ebfd19008b9be3e1e9b87b6cf67a49f68397482",
+    "no_profile_cache_or_wci_process_running": true,
+    "old_worktree_read_only": true,
+    "worktree_clean_before_start": true
+  },
+  "release_evidence": false,
+  "restored_before_start": [
+    {
+      "matches_binding": true,
+      "note": "copied only after the source reproduced the bound hash, so no new information entered the chain. It is also the cause of the two known gate-S network_metadata drift baseline failures",
+      "path": "sumo/network_metadata.json",
+      "sha256": "dc3493454abc0ea44760abc10ee2996a1beef01d6b537617aa6141374f2ae6ad",
+      "source": "/Users/gt/Documents/gs-project/sumo/network_metadata.json",
+      "why": "bound by the deterministic provider identity but absent from this worktree's minimal sumo/. Without it sha256_file returns None and load_metadata silently falls back to the XML oracle, so the run would bind a DIFFERENT identity than production"
+    }
+  ],
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_profile_rebuild_preflight_v1"
+}

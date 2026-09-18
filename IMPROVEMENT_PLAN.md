@@ -2495,13 +2495,75 @@ grindpunkter sanna, **`READY_FOR_USER_APPROVED_PROFILE_REBUILD`**.
 
 *Ny prognos för fullprofilen* från den nya ledger-canaryn (2,65–2,87 s per
 enhet, median 2,77): förväntat **5 399 s (1,50 h)**, konservativ övre
-gräns 8 394 s, toppminne ~1,5 GB. Rekommenderad budget: hård wall 11 192 s,
-minne **4 GiB** (ned från 10 GiB), swaptillväxt 1 GiB. Den publicerade
-profilen tog 7 320 s vid 6,52 GB. Maskinens tillstånd flyttar tiden en
-faktor två på egen hand.
+gräns **8 407,782 s**, toppminne ~1,5 GB. Rekommenderad budget: hård wall
+**11 210 s**, minne **4 GiB** (ned från 10 GiB), swaptillväxt 1 GiB. Den
+publicerade profilen tog 7 320 s vid 6,52 GB. Maskinens tillstånd flyttar
+tiden en faktor två på egen hand. (Siffrorna 8 394 och 11 192 var
+avrundningar; beslutspostens värden ovan är de auktoritativa.
+Minnessiffran **4 GiB gäller ledgern, inte profilen** — se nästa avsnitt.)
 
-Profilombyggnaden får fortfarande inte startas utan ett nytt uttryckligt
-godkännande.
+#### Profilombyggnaden godkändes, startades och stoppades på minne, 2026-09-18
+
+Användaren godkände körningen under beslutspostens budget. Den stoppades
+**fail-closed** av sin egen övervakare efter 284,5 s:
+`FOOTPRINT_OVER_LIMIT 4 435 005 112` byte (4,13 GiB) mot taket 4 GiB.
+Swaptillväxt 0, inga överlevande barnprocesser, 30 demandarkiv före och 30
+efter, ingen SUMO, **ingen evidens publicerad** och output-roten tom.
+Beslut: **`PROFILE_CHAIN_BLOCKED_MEMORY_BUDGET`**
+(`validation/wci_profile_chain_decision_20260918-v1.json`, `f9640484…`).
+Censusen och registreringen kördes därför inte.
+
+**Orsaken är `runner.prepare`, inte tvåfasledgern — som aldrig kördes.**
+Fyra oberoende belägg: `tools/profile_monthly_cost_ledger.py` kör
+`runner.prepare(parents)` på rad 691 och når `build_cost_ledger` först på
+rad 697; `ArchiveDisruptionProvider.disruption()` anropar `cache.store()`
+för varje enhet den prissätter, och dagkostnadscachens rot var **tom** vid
+stoppet, alltså var ingen av de 1 950 enheterna prissatt; dagresultatroten
+var också tom; demand-releasen skrevs efter ~120 s, och fotavtrycket ligger
+platt på 200–420 MB fram till dess och stiger monotont därefter.
+Profilverktygets resolver-observatör är inte förbrukaren — den håller
+räknare och en mängd med 569 unika tupler.
+
+**Första mätningen av `prepare` någonsin**
+(`validation/benchmarks/wci_prepare_memory_scaling_v1.py`, `8fde6139…`).
+Tre prefix av månadens föräldrar, tracemalloc:
+
+| föräldrar | dagenheter | byggnycklar | `prepare` | hållen heap |
+|---:|---:|---:|---:|---:|
+| 130 | 390 | 6 | 155,5 s | 1,062 GB |
+| 325 | 585 | 9 | 198,4 s | 1,467 GB |
+| 650 | 910 | 14 | 325,9 s | 2,299 GB |
+
+**2,40 MB hållen heap per dagenhet**, stabilt över alla tre punkterna, vilket
+ger **4,78 GB vid 1 950 enheter för enbart `prepare`**. Döm på heapen:
+spårningen var på, så fotavtrycken i samma körningar är uppblåsta.
+
+**Varför budgeten var fel, och att det gick att veta.** `wci_two_phase_canary_v1`
+anropar `build_cost_ledger` direkt och förbereder bara sina 1–3 byggnycklars
+enheter; den bygger aldrig produktarmen och kör aldrig månadens `prepare`.
+Månadsprognosen är därför `peaks[-1] + 27 × held_slope` över enbart
+LEDGER-toppar — därav ~1,5 GB. Beslutsposten bar redan
+`published_profile_peak_rss_bytes` 6 520 061 952 (6,07 GiB) *bredvid*
+`memory_hard_bytes` 4 GiB; de två motsäger varandra, och preflighten band
+båda utan att märka det. Och även 6,07 GiB avser bara ledgerfasen, eftersom
+profilverktygets RSS-samplare omsluter enbart `build_cost_ledger` — `prepare`
+har aldrig legat inne i någon uppmätt topp.
+
+**Budget som mätningarna stöder för en omgodkänd körning:** wall oförändrad
+**11 210 s** (tiden var aldrig det bindande villkoret), minne **10 GiB**,
+swaptillväxt **3 GiB** — den publicerade profilen växte swappen ~2,6 GB, så
+ett 1 GiB-tak skulle stoppa en korrekt körning av ett skäl som inte har med
+detta att göra. Ingenting höjdes på eget bevåg.
+
+**Inte gjort, avsiktligt:** `prepare` reparerades inte. En källändring inne i
+en godkänd körning skulle ogiltigförklara den readiness-evidens körningen
+godkändes mot. För ett framtida beslut: `independent_daily.py` har redan
+`prepare_from_ledgers`, en strömmande söm som läser publicerade ledgers i
+stället för att bygga upp enhets-/föräldragrafen i minnet.
+
+Profilombyggnaden får inte startas om utan ett nytt uttryckligt godkännande,
+och månadscachen och det fullständiga WCI-bygget är fortfarande inte
+godkända.
 
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 

@@ -1,0 +1,80 @@
+{
+  "archives": {
+    "baseline_counts": {
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives": 30,
+      "runs": 0
+    },
+    "final_counts": {
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives": 30,
+      "runs": 0
+    },
+    "watched_roots": [
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+      "runs"
+    ]
+  },
+  "claim_boundary": "supervision telemetry for one real month-ledger profile run. The profile's own published record is the result; this record is how the run was bounded and what it was observed to do",
+  "command": [
+    "--spec",
+    "validation/subhour_monthly_search_profile_spec_v1.json",
+    "--qualified-demand-manifest",
+    "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+    "--runs-root",
+    "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+    "--out",
+    "runs/step5_two_phase_20260918/profile",
+    "--evidence-out",
+    "validation/monthly_cost_ledger_profile_subhour-20260918-v1.json",
+    "--evidence-id",
+    "monthly-cost-ledger-profile-subhour-20260918-v1"
+  ],
+  "content_key": "aeb51cfaf8f0c936559784abdd8274bc43a0930744c56a9e38724f1098bfd587",
+  "diagnostic_only": false,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_profile_rebuild_supervisor_v1.py",
+    "sha256": "9d038741fc002a0560efb3b879f881909e6f48a100830765b2b8016ef4efd32e"
+  },
+  "exit_code": -15,
+  "git": {
+    "head": "2ebfd19008b9be3e1e9b87b6cf67a49f68397482",
+    "tracked_changes": []
+  },
+  "instrumentation": null,
+  "limits": {
+    "memory_hard_bytes": 4294967296,
+    "swap_growth_hard_bytes": 1073741824,
+    "wall_hard_s": 11210.0
+  },
+  "memory": {
+    "instrument": "proc_pid_rusage over the whole child process tree, sampled; the lifetime maximum is a high-water mark that never falls",
+    "peak_tree_lifetime_max_phys_footprint_bytes": 4437364408,
+    "peak_tree_phys_footprint_bytes": 4435005112,
+    "swap": {
+      "baseline_used_mb": 4411.5,
+      "final_used_mb": 4411.5,
+      "max_growth_bytes": 0
+    }
+  },
+  "processes": {
+    "peak_tree_size": 1,
+    "surviving_children": []
+  },
+  "release_evidence": false,
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "sample_interval_s": 5.0,
+  "samples": 56,
+  "schema": "wci_profile_rebuild_supervision_v1",
+  "stop_reason": "FOOTPRINT_OVER_LIMIT 4435005112",
+  "stopped": true,
+  "wall_s": 284.50780296325684
+}

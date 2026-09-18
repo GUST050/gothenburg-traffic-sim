@@ -3543,6 +3543,34 @@ extrapolated to roughly 8 GB for the month — the same behaviour behind the
 extrapolated month footprint is about 1.5 GB, and the recommended budget is
 4 GiB.
 
+**That 4 GiB is the LEDGER's budget, not the PROFILE's (measured
+2026-09-18).** The approved rebuild stopped fail-closed at 4.13 GiB after
+284.5 s without pricing a single one of the 1,950 daily units — the
+daily-cost cache root was still empty, and `ArchiveDisruptionProvider
+.disruption()` stores a file for every unit it prices. The memory went to
+`runner.prepare(parents)`, which `tools/profile_monthly_cost_ledger.py`
+runs at `:691`, before it reaches `build_cost_ledger` at `:697`. Phase one
+is not implicated; it never ran.
+
+Two scope errors made the smaller number look safe, and both are worth
+keeping in mind whenever a canary is used to size a production run:
+
+* the canary that produced it calls `build_cost_ledger` directly and
+  prepares only its 1–3 build keys, so the month figure extrapolates
+  LEDGER peaks alone;
+* the profiler's own RSS sampler wraps `build_cost_ledger` only, so the
+  published 6.52 GB peak is also a ledger-phase number. Until 2026-09-18
+  nothing had ever measured `prepare`.
+
+Measured now, on prefixes of 130/325/650 parents (390/585/910 daily units):
+`prepare` holds **2.40 MB per daily unit**, steady across all three, which
+is **4.78 GB at 1,950 units** before the ledger starts. A profile rebuild
+therefore needs about 10 GiB, not 4; a ledger-only measurement may not be
+used to budget a run that also prepares. `independent_daily.py` already has
+`prepare_from_ledgers`, a streaming seam that reads published ledgers
+rather than rebuilding the unit/parent graph in memory, if that cost is to
+be reduced rather than budgeted for.
+
 **Publication.** Unit records are content-addressed and written atomically
 by the cache itself. The batch marker is published only after every stored
 record has been reloaded through a fresh cache and compared with what was

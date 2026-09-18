@@ -1,0 +1,127 @@
+{
+  "adoption_eligible": false,
+  "chain_state": {
+    "census": "NOT RUN - forbidden while the profile is blocked",
+    "full_wci_build": "NOT AUTHORISED",
+    "month_cache_build": "NOT AUTHORISED",
+    "profile": "BLOCKED - no evidence published, output root empty",
+    "registration": "NOT RUN - forbidden while the census has not run"
+  },
+  "claim_boundary": "why the user-approved month-ledger profile rebuild stopped, what caused it, and what budget the measurements support. It rebuilds nothing and authorises nothing",
+  "content_key": "f964048439b4bdac3a783ff5d9f2b7beed8c565d3b536e59a0898869b429d11c",
+  "decision": "PROFILE_CHAIN_BLOCKED_MEMORY_BUDGET",
+  "diagnostic_only": false,
+  "driver": {
+    "path": "inline decision script",
+    "recorded_by": "wci_diag_common"
+  },
+  "git": {
+    "head": "2ebfd19008b9be3e1e9b87b6cf67a49f68397482",
+    "tracked_changes": []
+  },
+  "inputs": {
+    "authorising_decision": {
+      "content_key": "4464c5224f556ea05dfa5b6335c6f4ca617533dccf1817d728869c23a9b20a2d",
+      "path": "validation/wci_two_phase_decision_20260918-v1.json"
+    },
+    "preflight": {
+      "content_key": "81913372a97a84463f2dcb243eafd0fc034aaff42352aa3a34c1468e7c516c6c",
+      "path": "validation/wci_profile_rebuild_preflight_20260918-v1.json"
+    },
+    "prepare_scaling": {
+      "content_key": "8fde613958619fae312bb4ad5a5f7e67f1e5697a66ec07411c6cfefbeaff3855",
+      "path": "validation/wci_prepare_memory_scaling_20260918-v1.json"
+    },
+    "supervision": {
+      "content_key": "aeb51cfaf8f0c936559784abdd8274bc43a0930744c56a9e38724f1098bfd587",
+      "path": "validation/wci_profile_rebuild_supervision_20260918-v1.json"
+    }
+  },
+  "options_not_taken": {
+    "raising_the_limit_unilaterally": "refused; the budget is the user's to set",
+    "repairing_prepare": "refused; a source change would invalidate the readiness evidence this run was authorised against. Noted for a future decision: independent_daily.py already has prepare_from_ledgers, a streaming seam that reads published ledgers instead of rebuilding the unit/parent graph in memory"
+  },
+  "production_chain_rebuild_required": true,
+  "release_evidence": false,
+  "root_cause": {
+    "measured_cost_of_prepare": {
+      "fit_intercept_bytes": 103669963.18367355,
+      "instrument": "tracemalloc current heap; the footprint in the same runs is inflated because tracing was on",
+      "points": [
+        {
+          "build_keys": 6,
+          "heap_held_bytes": 1062335021,
+          "parents": 130,
+          "prepare_wall_s": 155.5065519809723,
+          "units": 390
+        },
+        {
+          "build_keys": 9,
+          "heap_held_bytes": 1467306726,
+          "parents": 325,
+          "prepare_wall_s": 198.38314819335938,
+          "units": 585
+        },
+        {
+          "build_keys": 14,
+          "heap_held_bytes": 2298977003,
+          "parents": 650,
+          "prepare_wall_s": 325.8679869174957,
+          "units": 910
+        }
+      ],
+      "projected_retained_heap_at_1950_units_bytes": 4777058439.510204,
+      "retained_heap_bytes_per_daily_unit": 2396609.4750392465
+    },
+    "phase": "runner.prepare(parents), not the two-phase cost ledger",
+    "proof": [
+      "tools/profile_monthly_cost_ledger.py:691 runs runner.prepare(parents); the ledger is only reached at :697",
+      "ArchiveDisruptionProvider.disruption() calls cache.store() for every unit it prices, and the daily-cost cache root was EMPTY at the abort, so not one of the 1,950 units had been priced",
+      "the daily-results root was empty too",
+      "the demand release file was written about 120 s in; the footprint is flat at 200-420 MB until then and climbs monotonically afterwards",
+      "the profiler's resolver observer keeps counters and a 569-entry unique set only, so it is not the sink"
+    ]
+  },
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_profile_chain_decision_v1",
+  "supported_budget_for_a_re_authorised_run": {
+    "memory_hard_bytes": 10737418240,
+    "memory_note": "prepare alone projects to 4.78 GB of retained heap, and the published profile's LEDGER phase peaked at 6.07 GiB on top of prepare's floor. 10 GiB is the budget this chain used before the two-phase round lowered it to 4 GiB on ledger-only evidence",
+    "swap_growth_hard_bytes": 3221225472,
+    "swap_note": "the published profile grew swap by about 2.6 GB; a 1 GiB ceiling would stop a correctly-budgeted run for a reason unrelated to this defect",
+    "wall_hard_s": 11210,
+    "wall_note": "unchanged; time was never the binding constraint here"
+  },
+  "what_happened": {
+    "demand_archives_after": {
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives": 30,
+      "runs": 0
+    },
+    "demand_archives_before": {
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives": 30,
+      "runs": 0
+    },
+    "evidence_published_by_the_profile": null,
+    "memory_hard_bytes": 4294967296,
+    "peak_footprint_bytes": 4435005112,
+    "stop_reason": "FOOTPRINT_OVER_LIMIT 4435005112",
+    "surviving_children": [],
+    "swap_growth_bytes": 0,
+    "wall_hard_s": 11210,
+    "wall_s": 284.50780296325684
+  },
+  "why_the_budget_was_wrong": {
+    "and_that_6_07_gib_is_only_the_ledger": "the profiler's RSS sampler wraps build_cost_ledger only, so no run has ever measured prepare's own peak - this is the first measurement of it",
+    "the_contradiction_was_already_on_disk": "the same decision record carries published_profile_peak_rss_bytes 6,520,061,952 (6.07 GiB) beside memory_hard_bytes 4,294,967,296 (4 GiB). The published profile would itself have breached the budget set from it",
+    "the_forecast_skipped_this_phase": "wci_two_phase_canary_v1 calls build_cost_ledger directly and prepares only its 1-3 build keys' units; it never builds the product arm and never runs the month's prepare. The month footprint in the authorising decision is peaks[-1] + 27 * held_slope over LEDGER peaks alone, which is why it read ~1.5 GB",
+    "the_two_phase_work_is_not_implicated": "the ledger never executed. Its measured gains (195 parses to 3, 65 providers to 1, 1.77x wall on a build key) are untouched by this stop, and equally they are still unverified at month scale"
+  }
+}

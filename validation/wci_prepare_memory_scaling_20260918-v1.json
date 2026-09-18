@@ -1,0 +1,96 @@
+{
+  "adoption_eligible": false,
+  "claim_boundary": "the memory cost of `runner.prepare` alone, on bounded prefixes of the month's parents. It prices no daily unit, builds no demand and authorises no budget change",
+  "content_key": "8fde613958619fae312bb4ad5a5f7e67f1e5697a66ec07411c6cfefbeaff3855",
+  "diagnostic_only": true,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_prepare_memory_scaling_v1.py",
+    "sha256": "06ebc85ebc8bbf677ef5d06e67dc3970cd97362262a80ba9aa1f9718c62c504a"
+  },
+  "footprint_bytes_per_parent": 7397507.292307693,
+  "git": {
+    "head": "2ebfd19008b9be3e1e9b87b6cf67a49f68397482",
+    "tracked_changes": []
+  },
+  "inputs": {
+    "manifest_content_key": "2cb32dcddfeb9bb99513fe1ae9cdcc44f0935435b78a278fa6eb3786060159ec",
+    "month_parents": 1690,
+    "qualified_demand_manifest": "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+    "runs_root": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+    "search_content_key": "383c9130a45370c2f296",
+    "search_id": "subhour-cold-ledger-profile-2027-09",
+    "spec": "validation/subhour_monthly_search_profile_spec_v1.json"
+  },
+  "production_chain_rebuild_required": true,
+  "projected_full_prepare_footprint_bytes": 14968040560.0,
+  "projection_caveat": "a prefix of the parents touches fewer of the 30 archives than the whole month, so the per-parent slope understates the full prepare and this projection is a lower bound",
+  "release_evidence": false,
+  "runs": [
+    {
+      "distinct_build_keys": 6,
+      "footprint_after_bytes": 3427929184,
+      "footprint_before_bytes": 20955568,
+      "footprint_growth_bytes": 3406973616,
+      "lifetime_max_footprint_bytes": 3446869088,
+      "over_limit": true,
+      "parents": 130,
+      "population": {
+        "parents": 130,
+        "units": 390
+      },
+      "python_heap_held_bytes": 1062335021,
+      "python_heap_peak_bytes": 1164001762,
+      "stopped": null,
+      "wall_build_arm_s": 3.826287269592285,
+      "wall_prepare_s": 155.5065519809723
+    },
+    {
+      "distinct_build_keys": 9,
+      "footprint_after_bytes": 5015540008,
+      "footprint_before_bytes": 253347400,
+      "footprint_growth_bytes": 4762192608,
+      "lifetime_max_footprint_bytes": 5033316648,
+      "over_limit": true,
+      "parents": 325,
+      "population": {
+        "parents": 325,
+        "units": 585
+      },
+      "python_heap_held_bytes": 1467306726,
+      "python_heap_peak_bytes": 1568934086,
+      "stopped": null,
+      "wall_build_arm_s": 2.6045081615448,
+      "wall_prepare_s": 198.38314819335938
+    },
+    {
+      "distinct_build_keys": 14,
+      "footprint_after_bytes": 7274632976,
+      "footprint_before_bytes": 363219440,
+      "footprint_growth_bytes": 6911413536,
+      "lifetime_max_footprint_bytes": 7288985360,
+      "over_limit": true,
+      "parents": 650,
+      "population": {
+        "parents": 650,
+        "units": 910
+      },
+      "python_heap_held_bytes": 2298977003,
+      "python_heap_peak_bytes": 2400500864,
+      "stopped": null,
+      "wall_build_arm_s": 2.6612491607666016,
+      "wall_prepare_s": 325.8679869174957
+    }
+  ],
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_prepare_memory_scaling_v1"
+}
