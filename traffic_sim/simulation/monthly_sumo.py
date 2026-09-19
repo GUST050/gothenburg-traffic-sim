@@ -14,6 +14,7 @@ import platform
 import shutil
 import tempfile
 import threading
+import types
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
@@ -811,6 +812,330 @@ def validate_warm_attempt(attempt) -> dict[str, Any]:
     return dict(attempt)
 
 
+@dataclasses.dataclass(frozen=True)
+class SharedRunnerContext:
+    """Immutable network/costing state shared by every archive runner one
+    :class:`MonthlyDemandResolverRunner` constructs.
+
+    Measured 2026-09-19: ``ArchivedDemandSumoRunner.__init__`` built a fresh
+    copy of the active network adjacency graph (twice, once plain and once
+    for disruption costing), the free-flow travel-time table, the rerouter
+    edge set, the topological detour diagnostic, and ~20 source-file hashes
+    -- for EVERY one of the month's 30 build keys, even though none of these
+    depend on the archive. Isolated on the real 1,690-parent month they cost
+    about 22 MB per runner and are byte-identical across every archive
+    measured (``validation/wci_archive_runner_attribution_20260919-v1.json``).
+    This object holds that state ONCE.
+
+    Ownership: built by, and only by, ``build_shared_runner_context`` inside
+    ``MonthlyDemandResolverRunner.prepare`` (never a module-level cache --
+    it is owned by the resolver instance, dies with it). Every archive
+    runner that instance constructs receives the SAME object.
+
+    Immutability: every mapping is wrapped in ``types.MappingProxyType`` and
+    every list in a ``tuple`` before being stored, so a runner that tried to
+    mutate shared state (``self.adjacency[x] = ...``, ``.append``, ...)
+    raises ``TypeError`` immediately instead of silently corrupting every
+    other runner sharing the object. Grep-verified 2026-09-19: nothing in
+    this module or its consumers (``suggest_closure_time.py``,
+    ``deterministic_disruption.py``) writes to these fields after
+    construction; every use is subscript/``.get``/iteration/pass-through.
+
+    Identity: ``verify_identity`` re-derives the cheap, distinguishing part
+    of what this context was built from (the active network's bytes, the
+    search spec's content key, the directed edges under study, whether
+    disruption structures are present, the runtime/SUMO version) and raises
+    ``ValueError`` on ANY mismatch, fail-closed -- a context built for one
+    (network, spec, edges, disruption-flag, runtime) can never silently
+    answer for another.
+    """
+
+    identity: Mapping[str, Any]
+    adjacency: Mapping[str, tuple[str, ...]]
+    freeflow: Mapping[str, float]
+    disruption_adjacency: Mapping[str, tuple[str, ...]] | None
+    disruption_edge_time: Mapping[str, float] | None
+    disruption_edge_len: Mapping[str, float] | None
+    rerouter_edges: tuple[str, ...]
+    detour: Mapping[str, Any]
+    source_records: tuple[Mapping[str, Any], ...]
+    source_digest: str
+    simulation_source_records: tuple[Mapping[str, Any], ...]
+    simulation_source_digest: str
+    runtime_identity: Mapping[str, Any]
+
+    def verify_identity(
+        self, spec: ClosureSearchSpec, *, include_disruption: bool
+    ) -> None:
+        """Fail closed if this context does not describe THIS construction.
+
+        Re-hashes the active network and its metadata cache (cheap relative
+        to what sharing already saves -- the alternative this replaces was
+        rebuilding the whole adjacency graph from the same bytes) and
+        compares every identity field a mismatch could hide behind.
+        """
+        recorded = dict(self.identity)
+        current_sources, current_source_digest, current_simulation_sources, \
+            current_simulation_source_digest = _shared_context_sources()
+        current = _shared_context_identity(
+            spec,
+            include_disruption=include_disruption,
+            sumo_version_value=str(recorded["sumo_version"]),
+            source_digest=current_source_digest,
+            simulation_source_digest=current_simulation_source_digest,
+        )
+        if current != recorded:
+            mismatched = sorted(
+                key for key in current
+                if current[key] != recorded.get(key))
+            raise ValueError(
+                "shared runner context does not match this construction "
+                f"(differs in: {', '.join(mismatched)}); a context built "
+                "for one network/spec/edges/disruption-flag/runtime must "
+                "never be reused for another")
+        expected_runtime = _shared_runtime_identity(
+            str(recorded["sumo_version"]), current_simulation_source_digest)
+        if dict(self.runtime_identity) != expected_runtime:
+            raise ValueError(
+                "shared runner context runtime identity changed after "
+                "construction")
+        if (
+            self.source_digest != current_source_digest
+            or self.simulation_source_digest != current_simulation_source_digest
+            or tuple(dict(item) for item in self.source_records)
+            != tuple(current_sources)
+            or tuple(dict(item) for item in self.simulation_source_records)
+            != tuple(current_simulation_sources)
+        ):
+            raise ValueError(
+                "shared runner context source records changed after "
+                "construction")
+
+
+def _shared_context_identity(
+    spec: ClosureSearchSpec,
+    *,
+    include_disruption: bool,
+    sumo_version_value: str,
+    source_digest: str,
+    simulation_source_digest: str,
+) -> dict[str, Any]:
+    """The cheap, distinguishing fingerprint of a shared runner context.
+
+    Deliberately excludes anything archive-specific (nothing here reads the
+    demand archive) -- that is precisely what makes it shareable.
+    """
+    metadata_path = rs.SUMO_DIR / "network_metadata.json"
+    sumo_binary = Path(rs.sumo_home()) / "bin" / "sumo"
+    return {
+        "net_sha256": sha256_file(rs.NET_PATH),
+        "network_metadata_sha256": (
+            sha256_file(metadata_path) if metadata_path.is_file() else None),
+        "search_content_key": spec.content_key,
+        "directed_edges": tuple(sorted(spec.directed_edges)),
+        "include_disruption": bool(include_disruption),
+        "sumo_binary_sha256": sha256_file(sumo_binary),
+        "sumo_version": str(sumo_version_value),
+        "platform": platform.platform(),
+        "source_digest": source_digest,
+        "simulation_source_digest": simulation_source_digest,
+    }
+
+
+#: The (label, path) pairs whose bytes are hashed into a shared runner
+#: context's costing/routing source identity -- lifted verbatim from
+#: ArchivedDemandSumoRunner.__init__'s per-runner construction (below) so
+#: build_shared_runner_context and a runner with no context still agree on
+#: exactly the same files.
+_COSTING_SOURCE_FILES: tuple[tuple[str, Path], ...] = (
+    ("run_monthly_closure_search.py", Path("run_monthly_closure_search.py")),
+    ("screen_monthly_closures.py", Path("screen_monthly_closures.py")),
+    ("traffic_sim/core/contracts.py", Path("traffic_sim/core/contracts.py")),
+    ("traffic_sim/core/closure_calendar.py",
+     Path("traffic_sim/core/closure_calendar.py")),
+    ("traffic_sim/simulation/monthly_search.py",
+     Path("traffic_sim/simulation/monthly_search.py")),
+    ("traffic_sim/simulation/monthly_sumo.py", Path(__file__)),
+    ("traffic_sim/simulation/closure_teleport.py",
+     Path("traffic_sim/simulation/closure_teleport.py")),
+    ("traffic_sim/simulation/closure_routing.py",
+     Path("traffic_sim/simulation/closure_routing.py")),
+    ("traffic_sim/simulation/disruption.py",
+     Path("traffic_sim/simulation/disruption.py")),
+    ("traffic_sim/simulation/monthly_demand.py",
+     Path("traffic_sim/simulation/monthly_demand.py")),
+    ("traffic_sim/simulation/monthly_proxy.py",
+     Path("traffic_sim/simulation/monthly_proxy.py")),
+    ("traffic_sim/simulation/proxy_projection.py",
+     Path("traffic_sim/simulation/proxy_projection.py")),
+    ("traffic_sim/simulation/pilot_selection.py",
+     Path("traffic_sim/simulation/pilot_selection.py")),
+    ("traffic_sim/simulation/closure_ranking.py",
+     Path("traffic_sim/simulation/closure_ranking.py")),
+    ("traffic_sim/simulation/period_comparison.py",
+     Path("traffic_sim/simulation/period_comparison.py")),
+    ("traffic_sim/simulation/finalist_decision.py",
+     Path("traffic_sim/simulation/finalist_decision.py")),
+    ("traffic_sim/simulation/search_workspace.py",
+     Path("traffic_sim/simulation/search_workspace.py")),
+    ("suggest_closure_time.py", Path("suggest_closure_time.py")),
+    ("run_scenario.py", Path("run_scenario.py")),
+    ("traffic_sim/simulation/envelope.py",
+     Path("traffic_sim/simulation/envelope.py")),
+    ("traffic_sim/simulation/metrics.py",
+     Path("traffic_sim/simulation/metrics.py")),
+)
+_SIMULATION_SOURCE_LABELS = frozenset({
+    "traffic_sim/simulation/monthly_sumo.py",
+    "traffic_sim/simulation/closure_teleport.py",
+    "traffic_sim/simulation/closure_routing.py",
+    "traffic_sim/simulation/disruption.py",
+    "traffic_sim/simulation/monthly_demand.py",
+    "suggest_closure_time.py",
+    "run_scenario.py",
+    "traffic_sim/simulation/envelope.py",
+    "traffic_sim/simulation/metrics.py",
+})
+
+
+def _shared_context_sources():
+    """Return current source records and their two provenance digests."""
+    source_records = [
+        _file_record(path, label=label)
+        for label, path in _COSTING_SOURCE_FILES
+    ]
+    simulation_source_records = [
+        record for record in source_records
+        if record["label"] in _SIMULATION_SOURCE_LABELS
+    ]
+    return (
+        source_records,
+        _canonical_digest(source_records),
+        simulation_source_records,
+        _canonical_digest(simulation_source_records),
+    )
+
+
+def _shared_runtime_identity(
+    sumo_version_value: str, simulation_source_digest: str
+) -> dict[str, Any]:
+    """Runtime record derived from fields verified by the context identity."""
+    return {
+        "sumo_version": str(sumo_version_value),
+        "platform": platform.platform(),
+        "simulation_source_digest": simulation_source_digest,
+        "simulation_mode": "meso",
+        "metric_schema": "closure_decision_metrics_v1",
+    }
+
+
+def build_shared_runner_context(
+    spec: ClosureSearchSpec, *, include_disruption: bool
+) -> SharedRunnerContext:
+    """Build the network/costing state every archive runner would build.
+
+    Byte-for-byte the same computation ``ArchivedDemandSumoRunner.__init__``
+    ran per-archive before 2026-09-19 (``rs.build_edge_graph``,
+    ``rs.edge_freeflow_times``, ``rs.free_flow_edge_cost``,
+    ``rs.edges_near``, ``legacy.detour_availability``, the costing-source
+    hash list) -- only the OWNER changed. Called once per
+    ``MonthlyDemandResolverRunner.prepare()`` and, for any caller that does
+    not build a shared context at all, once per runner (see
+    ``ArchivedDemandSumoRunner.__init__``), so a caller with no opinion on
+    sharing gets exactly today's behaviour.
+    """
+    close_edges = list(spec.directed_edges)
+    sumo_version_value = str(sumo_version(rs.sumo_home()))
+    source_records, source_digest, simulation_source_records, \
+        simulation_source_digest = _shared_context_sources()
+    identity_before = _shared_context_identity(
+        spec,
+        include_disruption=include_disruption,
+        sumo_version_value=sumo_version_value,
+        source_digest=source_digest,
+        simulation_source_digest=simulation_source_digest,
+    )
+    # FULL, un-banned graph -- traffic_sim.simulation.closure_routing derives
+    # its own per-vehicle banned edge set (closure_routing.py), so a
+    # pre-banned graph here would silently misapply exclusions.
+    adjacency = rs.build_edge_graph(set())
+    freeflow = rs.edge_freeflow_times()
+    disruption_adjacency = None
+    disruption_edge_time = None
+    disruption_edge_len = None
+    if include_disruption:
+        disruption_adjacency = rs.build_edge_graph(set())
+        disruption_edge_time, disruption_edge_len = rs.free_flow_edge_cost()
+    rerouter_edges = rs.edges_near(close_edges, rs.REROUTER_RADIUS_M)
+    detour = legacy.detour_availability(close_edges, rs.NET_PATH)
+
+    final_source_records, final_source_digest, final_simulation_sources, \
+        final_simulation_source_digest = _shared_context_sources()
+    identity_after = _shared_context_identity(
+        spec,
+        include_disruption=include_disruption,
+        sumo_version_value=sumo_version_value,
+        source_digest=final_source_digest,
+        simulation_source_digest=final_simulation_source_digest,
+    )
+    if identity_after != identity_before:
+        changed = sorted(
+            key for key in identity_after
+            if identity_after[key] != identity_before.get(key))
+        raise ValueError(
+            "shared runner context inputs changed during construction "
+            f"(differs in: {', '.join(changed)})")
+    source_records = final_source_records
+    source_digest = final_source_digest
+    simulation_source_records = final_simulation_sources
+    simulation_source_digest = final_simulation_source_digest
+    runtime_identity = _shared_runtime_identity(
+        sumo_version_value, simulation_source_digest)
+
+    def _freeze(value):
+        """Recursively freeze the small JSON-shaped context values.
+
+        ``detour_availability`` contains lists nested inside its result dict,
+        and ``_file_record`` returns dicts.  A shallow MappingProxyType would
+        leave those children mutable and let one runner corrupt every sibling
+        that shares the context.
+        """
+        if isinstance(value, Mapping):
+            return types.MappingProxyType({
+                key: _freeze(item) for key, item in value.items()})
+        if isinstance(value, (list, tuple)):
+            return tuple(_freeze(item) for item in value)
+        if isinstance(value, (set, frozenset)):
+            return frozenset(_freeze(item) for item in value)
+        return value
+
+    def _freeze_graph(graph):
+        if graph is None:
+            return None
+        return _freeze(graph)
+
+    return SharedRunnerContext(
+        identity=types.MappingProxyType(identity_after),
+        adjacency=_freeze_graph(adjacency),
+        freeflow=types.MappingProxyType(dict(freeflow)),
+        disruption_adjacency=_freeze_graph(disruption_adjacency),
+        disruption_edge_time=(
+            types.MappingProxyType(dict(disruption_edge_time))
+            if disruption_edge_time is not None else None),
+        disruption_edge_len=(
+            types.MappingProxyType(dict(disruption_edge_len))
+            if disruption_edge_len is not None else None),
+        rerouter_edges=tuple(rerouter_edges),
+        detour=_freeze(detour),
+        source_records=tuple(_freeze(record) for record in source_records),
+        source_digest=source_digest,
+        simulation_source_records=tuple(
+            _freeze(record) for record in simulation_source_records),
+        simulation_source_digest=simulation_source_digest,
+        runtime_identity=types.MappingProxyType(runtime_identity),
+    )
+
+
 class ArchivedDemandSumoRunner:
     # Default boundary controller: NONE. Nothing in this module imports traci,
     # so a runner nobody wired declines to a cold run rather than guessing which
@@ -842,10 +1167,18 @@ class ArchivedDemandSumoRunner:
         boundary_controller=None,
         forensic_observer=None,
         launch_sidecar_path: Path | None = None,
+        shared_context: SharedRunnerContext | None = None,
     ) -> None:
         self.spec = ClosureSearchSpec.from_dict(spec.to_dict())
         self.archive = Path(archive).resolve()
-        self.metadata = _read(self.archive / "demand_meta.json")
+        # LOCAL, not self.X: nothing outside __init__ reads this again (the
+        # few fields anything downstream needs -- epoch, n_intervals --
+        # are extracted into their own small attributes below), and the
+        # parsed demand_meta.json is large: measured 2026-09-19 at
+        # 133-149 MB per archive (mostly build_fingerprint and
+        # pfe_fit_variants), which a `self.X` assignment would have kept
+        # alive for this runner's entire lifetime for nothing.
+        metadata = _read(self.archive / "demand_meta.json")
         manifest_path = self.archive / "manifest.json"
         if manifest_path.is_file():
             manifest = _read(manifest_path)
@@ -861,7 +1194,7 @@ class ArchivedDemandSumoRunner:
             if self.expected_demand_spec is not None
             else self.spec.demand_build_id
         )
-        if self.metadata.get("demand_build_key") != self.demand_build_key:
+        if metadata.get("demand_build_key") != self.demand_build_key:
             raise ValueError(
                 "demand archive build key does not match expected demand"
             )
@@ -873,7 +1206,7 @@ class ArchivedDemandSumoRunner:
                 _read(archived_spec_path)
             )
             metadata_spec = DemandBuildSpec.from_dict(
-                self.metadata.get("demand_spec", {})
+                metadata.get("demand_spec", {})
             )
             if (
                 archived_spec != self.expected_demand_spec
@@ -883,18 +1216,18 @@ class ArchivedDemandSumoRunner:
                     "demand archive contract does not match expected envelope"
                 )
             if (
-                str(self.metadata.get("source"))
+                str(metadata.get("source"))
                 != self.expected_demand_spec.source
-                or str(self.metadata.get("epoch_sim"))
+                or str(metadata.get("epoch_sim"))
                 != f"{self.expected_demand_spec.start_date}T00:00:00"
-                or int(self.metadata.get("n_intervals", -1))
+                or int(metadata.get("n_intervals", -1))
                 != self.expected_demand_spec.days * 96
             ):
                 raise ValueError(
                     "demand archive time/source metadata does not match "
                     "expected envelope"
                 )
-        if int(self.metadata.get("n_variants", 0)) != 3:
+        if int(metadata.get("n_variants", 0)) != 3:
             raise ValueError("monthly SUMO runner requires q10/q50/q90 routes")
         self.variants = {
             variant: (self.archive / filename).resolve()
@@ -915,7 +1248,7 @@ class ArchivedDemandSumoRunner:
         # routes on a different active network would silently break edge
         # identity, so this is a hard gate whenever the record exists.
         recorded_network = (
-            self.metadata.get("sensor_contract") or {}
+            metadata.get("sensor_contract") or {}
         ).get("network_sha256")
         if (
             recorded_network is not None
@@ -1045,33 +1378,43 @@ class ArchivedDemandSumoRunner:
         self.cache_root = Path(cache_root)
         self.seed_workers = seed_workers
         self.envelope_policy = envelope_policy
-        self.epoch = datetime.fromisoformat(str(self.metadata["epoch_sim"]))
-        self.n_intervals = int(self.metadata["n_intervals"])
+        self.epoch = datetime.fromisoformat(str(metadata["epoch_sim"]))
+        self.n_intervals = int(metadata["n_intervals"])
         self.duration_s = self.n_intervals * 900
         self.end = self.epoch + timedelta(seconds=self.duration_s)
         self.home = rs.sumo_home()
         self.close_edges = list(self.spec.directed_edges)
-        # FULL, un-banned graph -- traffic_sim.simulation.closure_routing
-        # derives its own per-vehicle banned edge set (closure_routing.py),
-        # so a pre-banned graph here would silently misapply exclusions.
-        self.adjacency = rs.build_edge_graph(set())
-        self.freeflow = rs.edge_freeflow_times()
         self._disruption_cache: dict[str, tuple[Mapping[str, Any], ...]] = {}
         self._deterministic_provider = None
+        # Network/costing state that depends only on the active network,
+        # the search spec, the directed edges and whether disruption
+        # structures are needed -- never on this runner's own archive.
+        # Reuse the resolver's shared context when one was supplied
+        # (MonthlyDemandResolverRunner.prepare builds exactly one and hands
+        # it to every archive runner); build and verify it locally
+        # otherwise, so a caller with no opinion on sharing (a direct
+        # construction, an older test fixture) gets exactly the same bytes
+        # a per-runner build always produced.
+        if shared_context is None:
+            shared_context = build_shared_runner_context(
+                self.spec, include_disruption=self.include_disruption)
+        else:
+            shared_context.verify_identity(
+                self.spec, include_disruption=self.include_disruption)
+        self._shared_context = shared_context
+        self.adjacency = shared_context.adjacency
+        self.freeflow = shared_context.freeflow
         if self.include_disruption:
-            self._disruption_adjacency = rs.build_edge_graph(set())
-            (
-                self._disruption_edge_time,
-                self._disruption_edge_len,
-            ) = rs.free_flow_edge_cost()
-        self.rerouter_edges = rs.edges_near(
-            self.close_edges,
-            rs.REROUTER_RADIUS_M,
-        )
-        self.detour = legacy.detour_availability(
-            self.close_edges,
-            rs.NET_PATH,
-        )
+            self._disruption_adjacency = shared_context.disruption_adjacency
+            self._disruption_edge_time = shared_context.disruption_edge_time
+            self._disruption_edge_len = shared_context.disruption_edge_len
+        self.rerouter_edges = shared_context.rerouter_edges
+        self.detour = shared_context.detour
+        self.source_records = shared_context.source_records
+        self.source_digest = shared_context.source_digest
+        self.simulation_source_records = shared_context.simulation_source_records
+        self.simulation_source_digest = shared_context.simulation_source_digest
+        self.runtime_identity = shared_context.runtime_identity
         self.input_records = [
             _file_record(
                 self.archive / "demand_meta.json",
@@ -1090,122 +1433,6 @@ class ArchivedDemandSumoRunner:
         self.matched_baseline_id = (
             "monthly-baseline-" + self.archive_digest[:20]
         )
-        sources = [
-            (
-                "run_monthly_closure_search.py",
-                Path("run_monthly_closure_search.py"),
-            ),
-            (
-                "screen_monthly_closures.py",
-                Path("screen_monthly_closures.py"),
-            ),
-            (
-                "traffic_sim/core/contracts.py",
-                Path("traffic_sim/core/contracts.py"),
-            ),
-            (
-                "traffic_sim/core/closure_calendar.py",
-                Path("traffic_sim/core/closure_calendar.py"),
-            ),
-            (
-                "traffic_sim/simulation/monthly_search.py",
-                Path("traffic_sim/simulation/monthly_search.py"),
-            ),
-            (
-                "traffic_sim/simulation/monthly_sumo.py",
-                Path(__file__),
-            ),
-            (
-                "traffic_sim/simulation/closure_teleport.py",
-                Path("traffic_sim/simulation/closure_teleport.py"),
-            ),
-            (
-                "traffic_sim/simulation/closure_routing.py",
-                Path("traffic_sim/simulation/closure_routing.py"),
-            ),
-            (
-                "traffic_sim/simulation/disruption.py",
-                Path("traffic_sim/simulation/disruption.py"),
-            ),
-            (
-                "traffic_sim/simulation/monthly_demand.py",
-                Path("traffic_sim/simulation/monthly_demand.py"),
-            ),
-            (
-                "traffic_sim/simulation/monthly_proxy.py",
-                Path("traffic_sim/simulation/monthly_proxy.py"),
-            ),
-            (
-                "traffic_sim/simulation/proxy_projection.py",
-                Path("traffic_sim/simulation/proxy_projection.py"),
-            ),
-            (
-                "traffic_sim/simulation/pilot_selection.py",
-                Path("traffic_sim/simulation/pilot_selection.py"),
-            ),
-            (
-                "traffic_sim/simulation/closure_ranking.py",
-                Path("traffic_sim/simulation/closure_ranking.py"),
-            ),
-            (
-                "traffic_sim/simulation/period_comparison.py",
-                Path("traffic_sim/simulation/period_comparison.py"),
-            ),
-            (
-                "traffic_sim/simulation/finalist_decision.py",
-                Path("traffic_sim/simulation/finalist_decision.py"),
-            ),
-            (
-                "traffic_sim/simulation/search_workspace.py",
-                Path("traffic_sim/simulation/search_workspace.py"),
-            ),
-            ("suggest_closure_time.py", Path("suggest_closure_time.py")),
-            ("run_scenario.py", Path("run_scenario.py")),
-            (
-                "traffic_sim/simulation/envelope.py",
-                Path("traffic_sim/simulation/envelope.py"),
-            ),
-            (
-                "traffic_sim/simulation/metrics.py",
-                Path("traffic_sim/simulation/metrics.py"),
-            ),
-        ]
-        self.source_digest = _canonical_digest(
-            [
-                _file_record(path, label=label)
-                for label, path in sources
-            ]
-        )
-        self.source_records = [
-            _file_record(path, label=label)
-            for label, path in sources
-        ]
-        simulation_source_labels = {
-            "traffic_sim/simulation/monthly_sumo.py",
-            "traffic_sim/simulation/closure_teleport.py",
-            "traffic_sim/simulation/closure_routing.py",
-            "traffic_sim/simulation/disruption.py",
-            "traffic_sim/simulation/monthly_demand.py",
-            "suggest_closure_time.py",
-            "run_scenario.py",
-            "traffic_sim/simulation/envelope.py",
-            "traffic_sim/simulation/metrics.py",
-        }
-        self.simulation_source_records = [
-            record
-            for record in self.source_records
-            if record["label"] in simulation_source_labels
-        ]
-        self.simulation_source_digest = _canonical_digest(
-            self.simulation_source_records
-        )
-        self.runtime_identity = {
-            "sumo_version": str(sumo_version(self.home)),
-            "platform": platform.platform(),
-            "simulation_source_digest": self.simulation_source_digest,
-            "simulation_mode": "meso",
-            "metric_schema": "closure_decision_metrics_v1",
-        }
 
     def provenance(self) -> Mapping[str, Any]:
         return {
@@ -1224,7 +1451,10 @@ class ArchivedDemandSumoRunner:
             "archive_digest": self.archive_digest,
             "matched_baseline_id": self.matched_baseline_id,
             "archive_inputs": list(self.input_records),
-            "source_files": list(self.source_records),
+            # The shared owner stores immutable mapping proxies. Provenance is
+            # a JSON contract, so cross that boundary with ordinary dicts;
+            # IndependentDailyRunner intentionally rejects non-JSON values.
+            "source_files": [dict(record) for record in self.source_records],
             "source_digest": self.source_digest,
             "simulation_source_digest": self.simulation_source_digest,
             "baseline_trip_duration_p99_s": (
@@ -1662,6 +1892,12 @@ class ArchivedDemandSumoRunner:
         )
 
         if self._deterministic_provider is None or cache is not None:
+            # Provider identity is derived NOW, not at prepare time. Recheck
+            # the shared tables before attaching them so network/source drift
+            # cannot be labelled with a newer identity than the bytes used to
+            # build adjacency and free-flow costs.
+            self._shared_context.verify_identity(
+                self.spec, include_disruption=self.include_disruption)
             network = object.__new__(NetworkCostModel)
             network.network_path = Path(rs.NET_PATH).resolve()
             network.network_sha256 = sha256_file(rs.NET_PATH)
@@ -1677,6 +1913,13 @@ class ArchivedDemandSumoRunner:
             network.edge_len = self._disruption_edge_len
             network.destination_access = rs.destination_access_resolver(
                 network.adjacency)
+            # Close the interval between the first verification and the
+            # provider's own file-state snapshot above. If bytes changed in
+            # that interval, the snapshot must not be paired with tables from
+            # the older context. A later change is caught by the provider's
+            # normal verify_current check against this snapshot.
+            self._shared_context.verify_identity(
+                self.spec, include_disruption=self.include_disruption)
             provider = ArchiveDisruptionProvider(
                 self.spec,
                 archive=self.archive,

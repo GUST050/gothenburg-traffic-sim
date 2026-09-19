@@ -2627,6 +2627,49 @@ grupperar redan arbetet så — eller förbered byggnycklar i vågor. Inte
 försökt här: det är en ändring i produktionens kostnadskod och kräver eget
 godkännande och egen evidens.
 
+#### Per-build-key retention reparerad — kandidat redo för användargodkänd profil, 2026-09-19
+
+`monthly_demand.prepare` behåller inte längre en separat nät-/costing-kopia per
+arkiv. `build_shared_runner_context` bygger en `SharedRunnerContext` en gång
+per resolver-prepare och `ArchivedDemandSumoRunner` tar emot samma objekt.
+Contexten är resolver-ägd (ingen modulglobal cache), identitetsbunden till
+nätets bytes, metadata, sökspec, stängningskanter, disruption-flagga, SUMO-
+version och plattform, och avvisar återanvändning vid drift. Alla delade
+mappingar är rekursivt frysta; archive metadata, varianter, input records,
+telemetri, warm state och cacheidentitet är fortfarande privata per runner.
+
+Attributionen som motiverar ändringen är
+`validation/wci_archive_runner_attribution_20260919-v1.json`: adjacency,
+freeflow, disruptionstrukturer, rerouter, detour och source records är
+innehållsidentiska över tre verkliga arkiv. Den stora archive-specifika posten
+`demand_meta.json` läses lokalt och släpps efter konstruktionen.
+
+Staged A/B/B/A-ersättningen finns i
+`validation/wci_resolver_prepare_ab_20260919-{A,B}{1,2,3,6,14}_rep{1,2}.json`.
+I varje B-arm delas de fyra uppmätta fälten av exakt ett objekt och B:s hållen
+Python-heap ligger på 20,91 / 21,65 / 22,45 / 24,90 / 26,55 MB vid 1/2/3/6/14
+nycklar. Dessa är pre-review-prestandaevidens för ägarskapsdesignen. En final
+B-canary på den härdade koden över alla 30 nycklar (`1950` enheter) gav
+26,98 MB hållen heap, 281,89 MB footprint, 30 runners, 30→30 arkiv och ingen
+SUMO-simulering eller demandbyggnad
+(`validation/wci_resolver_prepare_ab_20260919-B30_rep3.json`, `1e8dc523…`).
+
+Kombinationen prepare + riktig tvåfas-ledger för tre representativa arkiv
+slutfördes utan fallback: 195 kostnadsberäkningar, 9 XML-parsningar, 3
+providers, `alive_when_opening=[0,0,0]`, `alive_after=0`, 1,663 GB peak
+footprint, 0 swap-tillväxt och inga barnprocesser. Parent-cost-digesten
+`d182111d…` matchar tidigare tvåfas-evidens
+(`validation/wci_shared_context_combination_20260919-B3.json`).
+
+Final focused shared-context tests är `25 passed`; den berörda regressionsbunten
+är `325 passed`. Testerna täcker strikt JSON-provenance, faktisk nät-/källdrift,
+drift mellan providerverifieringarna, nätbytesbunden free-flow-cache och atomisk
+resolver-prepare. `git diff --check` och kompilering är rena. Beslutsposten är
+`validation/wci_shared_context_decision_20260919-v2.json` (`91689dc6…`) och
+beslutet för ändringen är **`READY_FOR_USER_APPROVED_PROFILE_REBUILD`**. Det betyder inte att
+profilen är körd: profil, census, registrering, seriell månadscache och fullt
+WCI-bygge är fortfarande separata, uttryckligen ej startade steg.
+
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 
 **Filer:** `build_sumo_demand.py`, `monthly_demand.py:_resolve_new_release`,

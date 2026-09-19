@@ -3605,9 +3605,27 @@ key, provenance and backend digests, `daily_units_for` — verified on the real
 month. It is worth having for the fallback refusal, the shared single
 definition of a ledger's contents, and 2.4x faster preparation. **It is not
 the memory fix**, and must not be described as one: the quantity it changes
-is 4.7 MB. Reducing the real cost means not retaining 30 archive runners at
-once — create them lazily and release each after its build key is priced,
-which is how the two-phase cost ledger already groups the work.
+is 4.7 MB. The subsequent constructor attribution showed that the runners
+may remain archive-specific while their byte-identical network/costing state
+is shared; the resolver-owned design below is the implemented memory fix.
+
+**Resolver-owned shared context (implemented and measured 2026-09-19).**
+`MonthlyDemandResolverRunner.prepare` now builds one immutable
+`SharedRunnerContext` for the active network/spec/directed-edge/disruption
+identity and passes that exact object to every `ArchivedDemandSumoRunner` it
+constructs. The context is not module-global, verifies network, metadata,
+SUMO binary, source digests and runtime identity at every consumer and again
+around provider attachment, and recursively freezes mappings/lists so a child
+runner cannot mutate shared state. The free-flow cache is keyed by exact
+network bytes. Archive metadata and variants, input records, telemetry, warm
+state and cache identity remain per-runner; resolver state is published only
+after every child constructs. Constructor attribution found the shared fields
+byte-identical across real archives; the final 30-key canary held 26.98 MB
+Python heap and 281.89 MB footprint. The earlier prepare-plus-ledger
+combination stayed at 1.663 GB with zero swap growth and zero surviving
+providers. Context construction performs one bounded `sumo --version`
+fingerprint probe but starts no simulation. This is diagnostic readiness
+evidence, not authorization to start the profile chain.
 
 **Publication.** Unit records are content-addressed and written atomically
 by the cache itself. The batch marker is published only after every stored

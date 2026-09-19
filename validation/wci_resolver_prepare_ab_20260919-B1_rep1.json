@@ -1,0 +1,79 @@
+{
+  "adoption_eligible": false,
+  "build_key_count": 1,
+  "build_keys": [
+    "5fcc585e03915396"
+  ],
+  "candidate_provenance_digests": {
+    "closure-544a34ab1f2350e13af7": "c208e3fea2541b886e794c623c7b8cd840cf7a725b7d2315f74c2c6a51a4c5d8"
+  },
+  "child_runner_count": 1,
+  "claim_boundary": "one MonthlyDemandResolverRunner.prepare() call over exactly the requested number of real daily units, in its own fresh process. It prices no daily unit, builds no demand and starts no SUMO",
+  "content_key": "736f7a91cb3c78cee46e112e943fdd9a5c3655f7b27dca3e6c5324cd2877f037",
+  "cpu_s": 66.317407,
+  "demand_archives_after": 30,
+  "demand_archives_before": 30,
+  "demand_release_content_key": "3aca07429e063785ba4f691355789bccb2bf192858ddbc5524bc51c8dd3c5def",
+  "diagnostic_only": true,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_resolver_prepare_ab_v1.py",
+    "sha256": "c430136de0a4d8b7ae9bdc7785443d2b1784051691e5a0c93362dbe17fd21707"
+  },
+  "footprint_after_bytes": 245826832,
+  "footprint_before_bytes": 84705880,
+  "forbidden_processes": [],
+  "git": {
+    "head": "1407044246c23e0161b233486fdfae272de34d67",
+    "tracked_changes": [
+      " M traffic_sim/simulation/monthly_demand.py",
+      " M traffic_sim/simulation/monthly_sumo.py"
+    ]
+  },
+  "has_shared_context": true,
+  "inputs": {
+    "expected_build_keys": 1,
+    "runs_root": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+    "search_content_key": "383c9130a45370c2f296",
+    "spec": "validation/subhour_monthly_search_profile_spec_v1.json",
+    "unit_count_requested": 1
+  },
+  "label": "B1_rep1",
+  "lifetime_max_footprint_bytes": 1272071584,
+  "max_rss_bytes": 1510375424,
+  "production_chain_rebuild_required": true,
+  "provenance_digest": "12a09ba2c87e50b5060b0838047986407a987b61b9a6f5311190db3d84482bcb",
+  "python_heap_held_bytes": 20908815,
+  "python_heap_peak_bytes": 320064522,
+  "release_evidence": false,
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_resolver_prepare_ab_v1",
+  "shared_field_identity": {
+    "adjacency": {
+      "distinct_content_digests": 1,
+      "distinct_object_ids": 1
+    },
+    "detour": {
+      "distinct_content_digests": 1,
+      "distinct_object_ids": 1
+    },
+    "freeflow": {
+      "distinct_content_digests": 1,
+      "distinct_object_ids": 1
+    },
+    "rerouter_edges": {
+      "distinct_content_digests": 1,
+      "distinct_object_ids": 1
+    }
+  },
+  "wall_s": 66.89854121208191
+}

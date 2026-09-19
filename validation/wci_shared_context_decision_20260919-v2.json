@@ -1,0 +1,126 @@
+{
+  "adoption_eligible": false,
+  "chain_state": {
+    "census": "NOT RUN",
+    "full_wci_build": "NOT AUTHORISED",
+    "month_cache_build": "NOT AUTHORISED",
+    "profile": "NOT RUN - requires separate explicit user approval",
+    "registration": "NOT RUN"
+  },
+  "claim_boundary": "a readiness decision over the per-build-key prepare-retention repair. It proves that one resolver-owned recursively immutable network/costing context can serve all 30 archive runners, crosses the real IndependentDailyRunner JSON identity boundary, fails closed on network/source/runtime drift and preserves the bounded three-key two-phase result. It rebuilds no profile and authorises no later production-chain stage",
+  "content_key": "91689dc68f41be87ccfa243e855494e7f67f63ba011b08cf4166a9871eb64154",
+  "decision": "READY_FOR_USER_APPROVED_PROFILE_REBUILD",
+  "diagnostic_only": false,
+  "delivery_scope": "local commit only; the commit is created after this record is finalised and nothing is pushed",
+  "gate": {
+    "checks": {
+      "archive_specific_state_remains_separate": true,
+      "constructor_level_attribution_complete": true,
+      "direct_runner_construction_remains_supported": true,
+      "failed_prepare_publishes_no_partial_resolver_state": true,
+      "final_b30_completed": true,
+      "final_b30_footprint_at_most_2_gib": true,
+      "final_b30_retained_heap_at_most_1_5_gib": true,
+      "freeflow_cache_is_bound_to_network_bytes": true,
+      "network_source_runtime_and_provider_drift_are_refused": true,
+      "no_demand_archive_changed": true,
+      "no_new_affected_test_failure": true,
+      "no_sumo_simulation_or_demand_build_process": true,
+      "one_shared_object_per_measured_field": true,
+      "prepare_plus_two_phase_peak_under_3_2_gib": true,
+      "production_backend_identity_is_strict_json": true,
+      "provenance_cache_and_provider_identity_are_exact": true,
+      "runtime_version_probe_is_declared": true,
+      "shared_context_is_recursively_immutable": true,
+      "swap_growth_at_most_1_gib": true,
+      "zero_surviving_cost_providers_or_children": true
+    },
+    "combination_limit_bytes": 3435973836,
+    "full_prepare_footprint_limit_bytes": 2147483648,
+    "full_prepare_heap_limit_bytes": 1610612736,
+    "swap_growth_limit_bytes": 1073741824
+  },
+  "git": {
+    "base_head": "1407044246c23e0161b233486fdfae272de34d67",
+    "branch": "claude/wci-memory-canary-20260918"
+  },
+  "inputs": {
+    "attribution": {
+      "content_key": "d9156779fb046152bafa4694d1232db153ecbf0e4011213765201d962f0e6c70",
+      "path": "validation/wci_archive_runner_attribution_20260919-v1.json"
+    },
+    "final_full_candidate": {
+      "content_key": "1e8dc5236903ce3b70e5ba196255c1501bc48d40aac8e6313a40f9a406111c74",
+      "path": "validation/wci_resolver_prepare_ab_20260919-B30_rep3.json"
+    },
+    "prior_candidate_combination": {
+      "binding": "performance and semantic evidence for the pre-review candidate; the final diff adds fail-closed checks and JSON-safe provenance without changing the shared tables or ledger arithmetic. Final behavior is bound by the focused and affected regression suites below",
+      "content_key": "d70378761f81724480013776546633d8d082c3be7b57b9890dc203e0ab0d78e2",
+      "path": "validation/wci_shared_context_combination_20260919-B3.json"
+    },
+    "prior_candidate_memory_matrix": {
+      "binding": "performance evidence for the ownership design before review hardening, not a source binding for the final diff",
+      "path_pattern": "validation/wci_resolver_prepare_ab_20260919-{A,B}{1,2,3,6,14}_rep{1,2}.json",
+      "sizes": [1, 2, 3, 6, 14]
+    }
+  },
+  "measurement": {
+    "attribution_reading": "all candidate shared fields are content-identical across three real archives; demand_meta is the large archive-specific construction input and is no longer retained by the runner",
+    "final_full_candidate": {
+      "child_runners": 30,
+      "demand_archives_after": 30,
+      "demand_archives_before": 30,
+      "footprint_after_bytes": 281888040,
+      "forbidden_processes_after_prepare": [],
+      "lifetime_max_footprint_bytes": 1271809512,
+      "max_rss_bytes": 1587494912,
+      "python_heap_held_bytes": 26976084,
+      "python_heap_peak_bytes": 320339811,
+      "shared_field_distinct_content_digests": 1,
+      "shared_field_distinct_object_ids": 1,
+      "wall_s": 892.3310713768005
+    },
+    "prior_candidate_combination": {
+      "alive_after_the_run": 0,
+      "alive_when_each_provider_opened": [0, 0, 0],
+      "cost_computations": 195,
+      "parent_cost_digest": "d182111d6d433d94c41fe712a48c5f43a4b90fc3c037cfc64d6b8cf230960912",
+      "peak_footprint_bytes": 1663469512,
+      "providers_created": 3,
+      "python_heap_bytes_at_end": 669646,
+      "swap_growth_bytes": 0,
+      "surviving_children": 0,
+      "xml_parses": 9
+    },
+    "prior_candidate_staged_heap_held_bytes": {
+      "A": {"1": 155735435, "2": 309434416, "3": 477979510, "6": 988398131, "14": 2279627990},
+      "B": {"1": 20908815, "2": 21646861, "3": 22451415, "6": 24904842, "14": 26553537}
+    },
+    "runtime_probe_note": "context construction performs one bounded sumo --version subprocess to bind the runtime. No SUMO simulation or demand-build process is started; the final record's process census is empty after prepare"
+  },
+  "production_chain_rebuild_required": true,
+  "recommended_profile_budget": {
+    "basis": "the combination canary peaks at 1.663 GB; 4 GiB gives more than 20 percent margin over the 3.2 GiB combination gate while retaining the prior two-phase wall bound",
+    "memory_hard_bytes": 4294967296,
+    "swap_growth_hard_bytes": 1073741824,
+    "wall_hard_s": 11210
+  },
+  "release_evidence": false,
+  "source_bindings": {
+    "run_scenario.py": "24a6ef17d14409636f732d9901c839a5a61a69218c4f615d3509a14169219f72",
+    "tests/test_independent_daily_queue.py": "8e828e0c1fb136bbb1ce13fe1c76d4272d9a04f5bb877143d21866ed4bfad601",
+    "tests/test_shared_runner_context.py": "b14b9a8f87fd4cb36859e40b6fa3382a290a8c1d7a1b8a323ca65ff0a88d60c9",
+    "traffic_sim/simulation/monthly_demand.py": "c6035f19a3ae4084674d2825dbb9bc4a757e33cba06bea115f2d0578ad0536c7",
+    "traffic_sim/simulation/monthly_sumo.py": "97a239f35fb698d16e3c6f14b2de00dc7f433e38f576be451799abb0420de2da",
+    "validation/benchmarks/wci_archive_runner_attribution_v1.py": "611a7717f1e4c81872f8927562e9c909a1f6431cc4a8a083cb712eaf145d6ee8",
+    "validation/benchmarks/wci_resolver_prepare_ab_v1.py": "53fd571569e8106b9f3090c8ae922d1aa8c65245420e5941685c35d36382a27a"
+  },
+  "tests": {
+    "affected_regression_bundle_final_diff": "325 passed",
+    "full_suite_before_review_hardening": "6747 passed, 29 skipped, 17 failed before repairing one source-list compatibility test",
+    "last_failed_after_compatibility_repair": "16 failed, 676 deselected; all 16 are known baseline/environment/frozen-evidence/timing failures outside this change",
+    "shared_context_final_diff": "25 passed",
+    "source_list_compatibility": "1 passed"
+  },
+  "schema": "wci_shared_context_decision_v2"
+}

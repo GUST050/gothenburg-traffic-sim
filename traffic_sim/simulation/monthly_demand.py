@@ -45,6 +45,7 @@ from traffic_sim.simulation.finalist_decision import CandidateEvidence
 from traffic_sim.simulation.monthly_sumo import (
     DEFAULT_BASELINE_CACHE,
     ArchivedDemandSumoRunner,
+    build_shared_runner_context,
 )
 from traffic_sim.demand.route_support import route_edges
 from traffic_sim.simulation.runtime import sumo_home
@@ -1146,6 +1147,10 @@ class MonthlyDemandResolverRunner:
         self.live_release_products = tuple(live_release_products)
         self._schedule_build_keys: dict[str, str] = {}
         self._runners: dict[str, ArchivedDemandSumoRunner] = {}
+        # Built ONCE, lazily, inside prepare() -- owned by this resolver
+        # instance, never a module-level cache. Every archive runner this
+        # resolver constructs shares it. See monthly_sumo.SharedRunnerContext.
+        self._shared_context = None
         self._archive_inputs: dict[Path, Any] = {}
         self._release: dict[str, Any] | None = None
         self._prepared_schedule_ids: tuple[str, ...] | None = None
@@ -1284,13 +1289,14 @@ class MonthlyDemandResolverRunner:
             return
 
         required_by_key: dict[str, DemandBuildSpec] = {}
+        schedule_build_keys: dict[str, str] = {}
         for schedule in schedules:
             required = self._required(schedule)
             previous = required_by_key.get(required.build_key)
             if previous is not None and previous != required:
                 raise ValueError("DemandBuildSpec build-key collision")
             required_by_key[required.build_key] = required
-            self._schedule_build_keys[schedule.schedule_id] = required.build_key
+            schedule_build_keys[schedule.schedule_id] = required.build_key
 
         request = self._request(schedules, required_by_key)
         request_key = _canonical_digest(request, length=32)
@@ -1313,6 +1319,22 @@ class MonthlyDemandResolverRunner:
             raise ValueError("monthly demand release does not cover the shortlist")
         _require_one_demand_generation(by_key)
 
+        # Built ONCE for every archive runner this prepare() call
+        # constructs -- not per key. Measured 2026-09-19: constructing an
+        # ArchivedDemandSumoRunner per build key rebuilt the same network
+        # adjacency graph, free-flow table, rerouter set, detour diagnostic
+        # and ~20 source-file hashes every time, none of which depend on
+        # the archive; at the month's 30 build keys that cost about
+        # 154.7 MB retained per key. Only built for the real backend: a
+        # substituted runner_factory (a test double) may not construct
+        # ArchivedDemandSumoRunner at all and must not be made to touch a
+        # real network file it never asked for.
+        shared_context = None
+        if self.runner_factory is ArchivedDemandSumoRunner:
+            shared_context = build_shared_runner_context(
+                self.spec, include_disruption=self.include_disruption)
+
+        runners: dict[str, ArchivedDemandSumoRunner] = {}
         for key, required in required_by_key.items():
             pinned = by_key[key]
             archive = Path(str(pinned["archive"]))
@@ -1328,8 +1350,7 @@ class MonthlyDemandResolverRunner:
                 raise ValueError(
                     f"pinned monthly demand archive changed: {archive}"
                 )
-            runner = self.runner_factory(
-                self.spec,
+            runner_kwargs = dict(
                 archive=archive,
                 baseline_trip_duration_p99_s=(
                     self.baseline_trip_duration_p99_s
@@ -1344,8 +1365,18 @@ class MonthlyDemandResolverRunner:
                 warm_execution=self.warm_execution,
                 boundary_controller=self.boundary_controller,
             )
-            self._runners[key] = runner
+            if shared_context is not None:
+                runner_kwargs["shared_context"] = shared_context
+            runner = self.runner_factory(self.spec, **runner_kwargs)
+            runners[key] = runner
 
+        # Publish resolver state only after every archive has validated and
+        # every child runner has constructed. A failure can therefore be
+        # retried safely without stale schedule mappings or a partial runner
+        # population leaking into provenance.
+        self._schedule_build_keys = schedule_build_keys
+        self._shared_context = shared_context
+        self._runners = runners
         self._release = {
             **release,
             "manifest_path": str(release_path.resolve()),

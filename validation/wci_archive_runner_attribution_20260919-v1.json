@@ -1,0 +1,559 @@
+{
+  "adoption_eligible": false,
+  "claim_boundary": "field-level memory attribution for ONE ArchivedDemandSumoRunner construction on real archives. It constructs no product arm, prices no daily unit, starts no SUMO process",
+  "content_identical_across_archives": {
+    "_disruption_adjacency": true,
+    "_disruption_edge_len": true,
+    "_disruption_edge_time": true,
+    "adjacency": true,
+    "close_edges": true,
+    "detour": true,
+    "freeflow": true,
+    "rerouter_edges": true,
+    "runtime_identity": true,
+    "simulation_source_digest": true,
+    "simulation_source_records": true,
+    "source_digest": true,
+    "source_records": true
+  },
+  "content_key": "d9156779fb046152bafa4694d1232db153ecbf0e4011213765201d962f0e6c70",
+  "diagnostic_only": true,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_archive_runner_attribution_v1.py",
+    "sha256": "611a7717f1e4c81872f8927562e9c909a1f6431cc4a8a083cb712eaf145d6ee8"
+  },
+  "git": {
+    "head": "1407044246c23e0161b233486fdfae272de34d67",
+    "tracked_changes": []
+  },
+  "inputs": {
+    "archives": [
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72",
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33",
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06"
+    ],
+    "search_content_key": "383c9130a45370c2f296",
+    "spec": "validation/subhour_monthly_search_profile_spec_v1.json"
+  },
+  "production_chain_rebuild_required": true,
+  "reading": "a field with content_identical_across_archives=true is bound only to network/spec/directed-edges, never to the archive, so one shared instance can replace N per-archive copies. A field that differs per archive must stay archive-specific",
+  "release_evidence": false,
+  "runs": [
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72",
+      "close_edges": [
+        "26355153_26842525_0"
+      ],
+      "fields": {
+        "_disruption_adjacency": {
+          "content_digest": "5879cea10dc32edb9c46a1dd1ce7c6406709b3ad56f964dbb1a6b85527518df6",
+          "held_bytes": 8091889,
+          "type": "dict"
+        },
+        "_disruption_edge_len": {
+          "content_digest": "844b0b94b29843759f2060a02f3258d9da716701fdb1a50be8690eefaec8ffa7",
+          "held_bytes": 964437,
+          "type": "dict"
+        },
+        "_disruption_edge_time": {
+          "content_digest": "623281a136958fd9f5eaa47a3bb402b393b420046cc65d74e465dfc578771b47",
+          "held_bytes": 964437,
+          "type": "dict"
+        },
+        "adjacency": {
+          "content_digest": "5879cea10dc32edb9c46a1dd1ce7c6406709b3ad56f964dbb1a6b85527518df6",
+          "held_bytes": 8091889,
+          "type": "dict"
+        },
+        "archive_digest": {
+          "content_digest": "e5b859302e3e92478a02c1bc4624ec60ecde60b08e6d7b426ce8d13d4b6600da",
+          "held_bytes": 113,
+          "type": "str"
+        },
+        "close_edges": {
+          "content_digest": "5ae8febde46ee6211fd039bc6548f34f9ad82292aa851b7bfcf0d62451674cad",
+          "held_bytes": 132,
+          "type": "list"
+        },
+        "detour": {
+          "content_digest": "6eead37cfef4052004518612eb5f08b6541d8edd1fe39123b78f1cd10862e34f",
+          "held_bytes": 1655,
+          "type": "dict"
+        },
+        "expected_demand_spec": {
+          "content_digest": "28873d8c7407ce0c0a5f15e8110cfe7b4babdab44eddffe2a1f78882526e4faf",
+          "held_bytes": 971,
+          "type": "DemandBuildSpec"
+        },
+        "freeflow": {
+          "content_digest": "01ea56274109877fd5229afc2c3071d76dd6bef76b5f16249522f71572c9640c",
+          "held_bytes": 3725142,
+          "type": "dict"
+        },
+        "input_records": {
+          "content_digest": "e8c049f62ea49367b2c15d66e69789d02aaa805130dfe6459b0124c771a864b5",
+          "held_bytes": 2467,
+          "type": "list"
+        },
+        "matched_baseline_id": {
+          "content_digest": "e13bf5eaf1907b3fc89f83e81de3c0772fbbbf9393a8b8a2aa2882baaaafb598",
+          "held_bytes": 86,
+          "type": "str"
+        },
+        "metadata": {
+          "content_digest": "dc1ec6d861adf0282d6121cb90a78336f5a742e059a499aceaef7269d2305eda",
+          "held_bytes": 149368955,
+          "type": "dict"
+        },
+        "rerouter_edges": {
+          "content_digest": "5df07fd599cc3cfd03efcf650cd115b3183095323a324b103c558b4606bd45d5",
+          "held_bytes": 13972,
+          "type": "list"
+        },
+        "runtime_identity": {
+          "content_digest": "d997f769e076d4546e95da6ec0582ad60688f5e0e65bd5fbf715c1bd70a21b00",
+          "held_bytes": 1785,
+          "type": "dict"
+        },
+        "simulation_source_digest": {
+          "content_digest": "f5ce6bc2a25bbba30aa3e4e024bc21a0dadf097ebee3cde6596d91c6071ad773",
+          "held_bytes": 113,
+          "type": "str"
+        },
+        "simulation_source_records": {
+          "content_digest": "c4867bb9fd074fd19011c20d420bb66d3cc8b28a0bc8b7eecfd5208459090691",
+          "held_bytes": 4447,
+          "type": "list"
+        },
+        "source_digest": {
+          "content_digest": "736ecc6317923bb609b81aed970377538e07c8627aa8caf3f485be8235955d9b",
+          "held_bytes": 113,
+          "type": "str"
+        },
+        "source_records": {
+          "content_digest": "a405fd7cb858146b5efab3940174738bb68080301ed9c43b3940ec0c3787d78f",
+          "held_bytes": 10026,
+          "type": "list"
+        },
+        "variants": {
+          "content_digest": "56761aeda807f729a3b70cd00b1ac8e0565e50317cc7eff54bed159cde545138",
+          "held_bytes": 676,
+          "type": "dict"
+        }
+      },
+      "top_allocation_sites": [
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/decoder.py:353",
+          "size_diff_bytes": 149373361
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/xml/etree/ElementTree.py:580",
+          "size_diff_bytes": 10963646
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/run_scenario.py:1727",
+          "size_diff_bytes": 7483136
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/run_scenario.py:1141",
+          "size_diff_bytes": 1974272
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/run_scenario.py:369",
+          "size_diff_bytes": 465936
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/run_scenario.py:370",
+          "size_diff_bytes": 294936
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/run_scenario.py:367",
+          "size_diff_bytes": 171000
+        },
+        {
+          "file_line": "<frozen importlib._bootstrap_external>:647",
+          "size_diff_bytes": 53394
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/plistlib.py:177",
+          "size_diff_bytes": 10261
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1242",
+          "size_diff_bytes": 4368
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/plistlib.py:172",
+          "size_diff_bytes": 3152
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/simulation/monthly_sumo.py:1075",
+          "size_diff_bytes": 3008
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/suggest_closure_time.py:194",
+          "size_diff_bytes": 2976
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/core/fingerprint.py:31",
+          "size_diff_bytes": 2938
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/plistlib.py:164",
+          "size_diff_bytes": 2448
+        }
+      ],
+      "wall_s": 6.577676584000001,
+      "whole_construction_traced_current_bytes": 170914873,
+      "whole_construction_traced_peak_bytes": 271139481
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33",
+      "close_edges": [
+        "26355153_26842525_0"
+      ],
+      "fields": {
+        "_disruption_adjacency": {
+          "content_digest": "5879cea10dc32edb9c46a1dd1ce7c6406709b3ad56f964dbb1a6b85527518df6",
+          "held_bytes": 8091889,
+          "type": "dict"
+        },
+        "_disruption_edge_len": {
+          "content_digest": "844b0b94b29843759f2060a02f3258d9da716701fdb1a50be8690eefaec8ffa7",
+          "held_bytes": 964437,
+          "type": "dict"
+        },
+        "_disruption_edge_time": {
+          "content_digest": "623281a136958fd9f5eaa47a3bb402b393b420046cc65d74e465dfc578771b47",
+          "held_bytes": 964437,
+          "type": "dict"
+        },
+        "adjacency": {
+          "content_digest": "5879cea10dc32edb9c46a1dd1ce7c6406709b3ad56f964dbb1a6b85527518df6",
+          "held_bytes": 8091889,
+          "type": "dict"
+        },
+        "archive_digest": {
+          "content_digest": "a4095091b10dcd0da5d1a05d81c9dae0dad2f731abda0fb7b406e709960b73d2",
+          "held_bytes": 113,
+          "type": "str"
+        },
+        "close_edges": {
+          "content_digest": "5ae8febde46ee6211fd039bc6548f34f9ad82292aa851b7bfcf0d62451674cad",
+          "held_bytes": 132,
+          "type": "list"
+        },
+        "detour": {
+          "content_digest": "6eead37cfef4052004518612eb5f08b6541d8edd1fe39123b78f1cd10862e34f",
+          "held_bytes": 1655,
+          "type": "dict"
+        },
+        "expected_demand_spec": {
+          "content_digest": "765c47c9970507a634ac0ae129f6af286f3a14c3249dfcd8a792e35cdce44190",
+          "held_bytes": 971,
+          "type": "DemandBuildSpec"
+        },
+        "freeflow": {
+          "content_digest": "01ea56274109877fd5229afc2c3071d76dd6bef76b5f16249522f71572c9640c",
+          "held_bytes": 3725142,
+          "type": "dict"
+        },
+        "input_records": {
+          "content_digest": "171960da3be511cbb8ce026c45f7432881624388818c6be7a40f93d768e48edf",
+          "held_bytes": 2467,
+          "type": "list"
+        },
+        "matched_baseline_id": {
+          "content_digest": "049fc08eae7ce75875f4298b2dc31d0585fdbb395498e839a74ffee835b99cf9",
+          "held_bytes": 86,
+          "type": "str"
+        },
+        "metadata": {
+          "content_digest": "f7825f7ed90cbbf7149280714750ea0e828c68dc7f5cb86fc3aadcbf688638c0",
+          "held_bytes": 147656617,
+          "type": "dict"
+        },
+        "rerouter_edges": {
+          "content_digest": "5df07fd599cc3cfd03efcf650cd115b3183095323a324b103c558b4606bd45d5",
+          "held_bytes": 13972,
+          "type": "list"
+        },
+        "runtime_identity": {
+          "content_digest": "d997f769e076d4546e95da6ec0582ad60688f5e0e65bd5fbf715c1bd70a21b00",
+          "held_bytes": 1785,
+          "type": "dict"
+        },
+        "simulation_source_digest": {
+          "content_digest": "f5ce6bc2a25bbba30aa3e4e024bc21a0dadf097ebee3cde6596d91c6071ad773",
+          "held_bytes": 113,
+          "type": "str"
+        },
+        "simulation_source_records": {
+          "content_digest": "c4867bb9fd074fd19011c20d420bb66d3cc8b28a0bc8b7eecfd5208459090691",
+          "held_bytes": 4447,
+          "type": "list"
+        },
+        "source_digest": {
+          "content_digest": "736ecc6317923bb609b81aed970377538e07c8627aa8caf3f485be8235955d9b",
+          "held_bytes": 113,
+          "type": "str"
+        },
+        "source_records": {
+          "content_digest": "a405fd7cb858146b5efab3940174738bb68080301ed9c43b3940ec0c3787d78f",
+          "held_bytes": 10026,
+          "type": "list"
+        },
+        "variants": {
+          "content_digest": "d41a80080d9f2cc51fda7d85569b19d6f0ac3d73e1f0845d8a419c5d54e76450",
+          "held_bytes": 676,
+          "type": "dict"
+        }
+      },
+      "top_allocation_sites": [
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/decoder.py:353",
+          "size_diff_bytes": 147659743
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/xml/etree/ElementTree.py:580",
+          "size_diff_bytes": 10467125
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/run_scenario.py:1727",
+          "size_diff_bytes": 7483136
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/run_scenario.py:1141",
+          "size_diff_bytes": 1974272
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1242",
+          "size_diff_bytes": 4368
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/core/fingerprint.py:31",
+          "size_diff_bytes": 2938
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/suggest_closure_time.py:194",
+          "size_diff_bytes": 2912
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/simulation/monthly_sumo.py:523",
+          "size_diff_bytes": 1664
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/run_scenario.py:1642",
+          "size_diff_bytes": 1496
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/subprocess.py:843",
+          "size_diff_bytes": 1112
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/encoder.py:257",
+          "size_diff_bytes": 1008
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/core/fingerprint.py:66",
+          "size_diff_bytes": 917
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/simulation/monthly_sumo.py:846",
+          "size_diff_bytes": 744
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1222",
+          "size_diff_bytes": 728
+        },
+        {
+          "file_line": "<string>:3",
+          "size_diff_bytes": 648
+        }
+      ],
+      "wall_s": 5.5969096669999985,
+      "whole_construction_traced_current_bytes": 167614848,
+      "whole_construction_traced_peak_bytes": 269410000
+    },
+    {
+      "archive": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06",
+      "close_edges": [
+        "26355153_26842525_0"
+      ],
+      "fields": {
+        "_disruption_adjacency": {
+          "content_digest": "5879cea10dc32edb9c46a1dd1ce7c6406709b3ad56f964dbb1a6b85527518df6",
+          "held_bytes": 8091889,
+          "type": "dict"
+        },
+        "_disruption_edge_len": {
+          "content_digest": "844b0b94b29843759f2060a02f3258d9da716701fdb1a50be8690eefaec8ffa7",
+          "held_bytes": 964437,
+          "type": "dict"
+        },
+        "_disruption_edge_time": {
+          "content_digest": "623281a136958fd9f5eaa47a3bb402b393b420046cc65d74e465dfc578771b47",
+          "held_bytes": 964437,
+          "type": "dict"
+        },
+        "adjacency": {
+          "content_digest": "5879cea10dc32edb9c46a1dd1ce7c6406709b3ad56f964dbb1a6b85527518df6",
+          "held_bytes": 8091889,
+          "type": "dict"
+        },
+        "archive_digest": {
+          "content_digest": "e2dfe7a8c14e1e74db82b9560158f71e4459e67322565387fb6de34a87d5d3af",
+          "held_bytes": 113,
+          "type": "str"
+        },
+        "close_edges": {
+          "content_digest": "5ae8febde46ee6211fd039bc6548f34f9ad82292aa851b7bfcf0d62451674cad",
+          "held_bytes": 132,
+          "type": "list"
+        },
+        "detour": {
+          "content_digest": "6eead37cfef4052004518612eb5f08b6541d8edd1fe39123b78f1cd10862e34f",
+          "held_bytes": 1655,
+          "type": "dict"
+        },
+        "expected_demand_spec": {
+          "content_digest": "d1dbe27a40af5bc1074e6ab27c14ea9be96de2b7d40955d55f0a194b0b507469",
+          "held_bytes": 971,
+          "type": "DemandBuildSpec"
+        },
+        "freeflow": {
+          "content_digest": "01ea56274109877fd5229afc2c3071d76dd6bef76b5f16249522f71572c9640c",
+          "held_bytes": 3725142,
+          "type": "dict"
+        },
+        "input_records": {
+          "content_digest": "4ce3343b80f4db09f7100a3706f4ac3ae6d6fce96cd5aa0bce5446cec4369e7f",
+          "held_bytes": 2467,
+          "type": "list"
+        },
+        "matched_baseline_id": {
+          "content_digest": "a8f4f524887de0af956ec39f13185c638556d51cc692f81a4113b460a0f8f6ff",
+          "held_bytes": 86,
+          "type": "str"
+        },
+        "metadata": {
+          "content_digest": "e2d0d050c6728c13899f4c949f81a79dbe34be41b1ce28674727efe065da641b",
+          "held_bytes": 133784282,
+          "type": "dict"
+        },
+        "rerouter_edges": {
+          "content_digest": "5df07fd599cc3cfd03efcf650cd115b3183095323a324b103c558b4606bd45d5",
+          "held_bytes": 13972,
+          "type": "list"
+        },
+        "runtime_identity": {
+          "content_digest": "d997f769e076d4546e95da6ec0582ad60688f5e0e65bd5fbf715c1bd70a21b00",
+          "held_bytes": 1785,
+          "type": "dict"
+        },
+        "simulation_source_digest": {
+          "content_digest": "f5ce6bc2a25bbba30aa3e4e024bc21a0dadf097ebee3cde6596d91c6071ad773",
+          "held_bytes": 113,
+          "type": "str"
+        },
+        "simulation_source_records": {
+          "content_digest": "c4867bb9fd074fd19011c20d420bb66d3cc8b28a0bc8b7eecfd5208459090691",
+          "held_bytes": 4447,
+          "type": "list"
+        },
+        "source_digest": {
+          "content_digest": "736ecc6317923bb609b81aed970377538e07c8627aa8caf3f485be8235955d9b",
+          "held_bytes": 113,
+          "type": "str"
+        },
+        "source_records": {
+          "content_digest": "a405fd7cb858146b5efab3940174738bb68080301ed9c43b3940ec0c3787d78f",
+          "held_bytes": 10026,
+          "type": "list"
+        },
+        "variants": {
+          "content_digest": "8c3482a93b7b30211db8160b9e09d199fbca9cdaae594d1dbd7ab0c4fea7318e",
+          "held_bytes": 676,
+          "type": "dict"
+        }
+      },
+      "top_allocation_sites": [
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/decoder.py:353",
+          "size_diff_bytes": 133787296
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/xml/etree/ElementTree.py:580",
+          "size_diff_bytes": 10467125
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/run_scenario.py:1727",
+          "size_diff_bytes": 7483136
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/run_scenario.py:1141",
+          "size_diff_bytes": 1974272
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1242",
+          "size_diff_bytes": 4368
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/core/fingerprint.py:31",
+          "size_diff_bytes": 2938
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/suggest_closure_time.py:194",
+          "size_diff_bytes": 2912
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/simulation/monthly_sumo.py:523",
+          "size_diff_bytes": 1664
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/run_scenario.py:1642",
+          "size_diff_bytes": 1496
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/encoder.py:257",
+          "size_diff_bytes": 1008
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/core/fingerprint.py:66",
+          "size_diff_bytes": 917
+        },
+        {
+          "file_line": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/simulation/monthly_sumo.py:846",
+          "size_diff_bytes": 744
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1222",
+          "size_diff_bytes": 728
+        },
+        {
+          "file_line": "<string>:3",
+          "size_diff_bytes": 648
+        },
+        {
+          "file_line": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:718",
+          "size_diff_bytes": 591
+        }
+      ],
+      "wall_s": 5.329277500000003,
+      "whole_construction_traced_current_bytes": 153741289,
+      "whole_construction_traced_peak_bytes": 255535525
+    }
+  ],
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_archive_runner_attribution_v1"
+}

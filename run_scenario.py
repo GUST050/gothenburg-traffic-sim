@@ -353,9 +353,10 @@ def demand_window_label(meta: dict) -> str:
 
 
 def free_flow_edge_cost() -> tuple[dict[str, float], dict[str, float]]:
-    """(seconds, metres) per edge at free flow, read once from the network."""
-    global _FREE_FLOW_EDGE_TIME
-    if _FREE_FLOW_EDGE_TIME is None:
+    """(seconds, metres) per edge, cached only for exact network bytes."""
+    global _FREE_FLOW_EDGE_TIME, _FREE_FLOW_EDGE_IDENTITY
+    identity = (str(Path(NET_PATH).resolve()), sha256_file(NET_PATH))
+    if _FREE_FLOW_EDGE_TIME is None or _FREE_FLOW_EDGE_IDENTITY != identity:
         table = {}
         metres = {}
         for edge in ET.parse(NET_PATH).getroot().iter("edge"):
@@ -368,11 +369,15 @@ def free_flow_edge_cost() -> tuple[dict[str, float], dict[str, float]]:
             speed = max(float(lanes[0].get("speed", 1) or 1), 0.1)
             table[edge.get("id")] = length / speed
             metres[edge.get("id")] = length
+        if sha256_file(NET_PATH) != identity[1]:
+            raise ValueError("network changed while free-flow costs were parsed")
         _FREE_FLOW_EDGE_TIME = (table, metres)
+        _FREE_FLOW_EDGE_IDENTITY = identity
     return _FREE_FLOW_EDGE_TIME
 
 
 _FREE_FLOW_EDGE_TIME: tuple[dict, dict] | None = None
+_FREE_FLOW_EDGE_IDENTITY: tuple[str, str | None] | None = None
 _DESTINATION_ACCESS_CACHE: dict[
     tuple[str, int, int, str], disruption_analysis.DestinationAccessResolver
 ] = {}

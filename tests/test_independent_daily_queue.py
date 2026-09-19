@@ -608,16 +608,13 @@ def test_the_cli_is_cache_bound_so_the_queue_switch_must_live_elsewhere():
     so the flag would have orphaned every cached unit of the stopped campaign.
     """
     import hashlib
-    import re
     from pathlib import Path
+    from traffic_sim.simulation.monthly_sumo import _COSTING_SOURCE_FILES
 
-    source = Path("traffic_sim/simulation/monthly_sumo.py").read_text()
-    block = re.search(r"\n        sources = \[(.*?)\n        \]\n", source, re.S)
-    assert block is not None, "monthly_sumo.py no longer declares a source list"
-    labels = []
-    for label in re.findall(r'"([^"]+\.py)"', block.group(1)):
-        if label not in labels:
-            labels.append(label)
+    # The source table is shared by the resolver-owned context and direct
+    # runner construction.  Read the production table instead of depending on
+    # the old constructor-local source-list spelling.
+    labels = [label for label, _path in _COSTING_SOURCE_FILES]
 
     assert "run_monthly_closure_search.py" in labels
     assert "traffic_sim/simulation/independent_daily.py" not in labels
