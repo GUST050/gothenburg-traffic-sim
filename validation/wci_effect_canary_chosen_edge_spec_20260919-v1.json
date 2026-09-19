@@ -1,0 +1,41 @@
+{
+ "allowed_weekdays": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6
+ ],
+ "blackout_dates": [],
+ "closure_type": "full",
+ "content_key": "d38038fd495414129508",
+ "demand_build_id": "forecast-2027",
+ "directed_edges": [
+  "26842525_26355153_0"
+ ],
+ "dst_policy": "exclude_transition_dates",
+ "duration_basis": "required_work_time",
+ "interday_policy": "independent_daily_reset_v1",
+ "kind": "closure_search",
+ "max_consecutive_start_days": 5,
+ "min_consecutive_start_days": 5,
+ "objective_profile": "displaced_vehicles_and_detour_v1",
+ "permitted_daily_band": {
+  "earliest_start": "00:00",
+  "latest_end": "24:00"
+ },
+ "permitted_date_end": "2027-09-30",
+ "permitted_date_start": "2027-09-01",
+ "policy_status": "user_supplied_unverified",
+ "required_work_minutes": 2400,
+ "resolution_minutes": 15,
+ "same_daily_window": true,
+ "schema_version": 1,
+ "search_id": "subhour-cold-ledger-profile-2027-09-effect-canary-v2-fdc134ec4e",
+ "source": "forecast",
+ "timezone": "Europe/Stockholm",
+ "work_allocation_policy": "exact_equal_daily_v1",
+ "work_to_closure_assumption": "one_to_one"
+}

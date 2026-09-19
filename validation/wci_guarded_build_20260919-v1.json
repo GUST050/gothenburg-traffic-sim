@@ -1,0 +1,361 @@
+{
+ "argv": [
+  "/Library/Developer/CommandLineTools/usr/bin/python3",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/tools/wci_guarded_child.py",
+  "--job",
+  "build",
+  "--telemetry",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/runs/step5_two_phase_20260919b/guarded-build-status/child-telemetry.json",
+  "--profile",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/runs/step5_two_phase_20260919b/profile/profile.json",
+  "--index-out",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/runs/step5_two_phase_20260919b/wci-index",
+  "--evidence-out",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/validation/subhour_phase5_window_cost_index_evidence_20260919-v1.json",
+  "--evidence-id",
+  "wci-guarded-build-20260919-v1"
+ ],
+ "bindings": {
+  "registration": {
+   "chosen_edge": "26842525_26355153_0",
+   "content_key": "72e44a83a7f0cc13759b5a2d40dc5339c688fdad836f84eb7a3269a940545298",
+   "path": "validation/wci_month_case_registration_20260919-v1.json",
+   "sha256": "80401fe432dfb43a523531dab92636551c11e6d01f11569cef5ffbb1f99cdb9f"
+  }
+ },
+ "content_key": "1f36a4da5066973419af13df30ae7cb64dde24a4ec736d7e35978c2608e20707",
+ "diagnostic": false,
+ "drift_identity": "88e526d28742c9f7ebb1726c063ce9c26af7a670ae0d4610be13083fc20b835a",
+ "expectations": {
+  "build_keys": 30,
+  "daily_units": 1950,
+  "ledger_required": true,
+  "parents": 1690,
+  "variant_files": 90,
+  "variant_records": 5850
+ },
+ "limits": {
+  "drift_every_s": 30.0,
+  "kill_grace_s": 10.0,
+  "memory_hard_bytes": 12884901888,
+  "poll_s": 2.0,
+  "raw_hard_s": 1820.0,
+  "raw_soft_s": 1090.0,
+  "swap_growth_hard_bytes": 1073741824,
+  "telemetry_stale_s": 60.0,
+  "term_grace_s": 20.0,
+  "total_hard_s": 7320.348
+ },
+ "mode": "build",
+ "outcome": {
+  "child_output_tail": "",
+  "problems": [],
+  "reason": null,
+  "returncode": 0,
+  "state": "passed",
+  "status": {
+   "affected_vehicles_total": 9222927,
+   "counters": {
+    "archive_index_build": 1,
+    "max_parses_per_file": 1,
+    "max_validations_per_key": 1,
+    "parsed_variant_files": 90,
+    "validated_build_keys": 30
+   },
+   "drift": {
+    "checked_elapsed_s": 354.084,
+    "identity": "88e526d28742c9f7ebb1726c063ce9c26af7a670ae0d4610be13083fc20b835a",
+    "kind": "full",
+    "problems": []
+   },
+   "elapsed_s": 354.084,
+   "events": [
+    {
+     "elapsed_s": 2.031,
+     "kind": "started",
+     "pid": 60881
+    }
+   ],
+   "ledger": {
+    "identical": true,
+    "status": "PASS"
+   },
+   "memory": {
+    "checked_bytes": 0,
+    "footprint_bytes": 0,
+    "lifetime_max_footprint_bytes": 0,
+    "pids": [],
+    "resident_bytes": 0
+   },
+   "memory_peak": {
+    "at_elapsed_s": 337.39,
+    "bytes": 1160118272,
+    "sample": {
+     "footprint_bytes": 922879296,
+     "lifetime_max_footprint_bytes": 927401280,
+     "pids": [
+      60881
+     ],
+     "resident_bytes": 1160118272
+    }
+   },
+   "mode": "build",
+   "oracle": {
+    "complete": true,
+    "identical": true,
+    "records": 5850
+   },
+   "pgid": 60881,
+   "phase": "done",
+   "pid": 60881,
+   "population": {
+    "daily_units": 1950,
+    "parents": 1690,
+    "variant_records": 5850
+   },
+   "provider_identity": {
+    "complete": true,
+    "units": 1950
+   },
+   "published": {
+    "evidence": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/validation/subhour_phase5_window_cost_index_evidence_20260919-v1.json",
+    "evidence_content_key": "a598035f7381a00c2c73399c21e24b72f7ff69bf27c210b71274c8c38e9a99d2",
+    "index": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/runs/step5_two_phase_20260919b/wci-index/window-cost-index.json"
+   },
+   "raw_elapsed_s": 341.56244425,
+   "reason": null,
+   "schema": "wci_guarded_status_v1",
+   "sequence": 172,
+   "started_at": "2026-09-19T19:29:56.447837+00:00",
+   "state": "passed",
+   "stop": null,
+   "sumo_processes": 0,
+   "swap": {
+    "before_bytes": 3812884480,
+    "growth_bytes": 0,
+    "now_bytes": 3812884480
+   },
+   "warnings": []
+  },
+  "stop": null,
+  "telemetry": {
+   "affected_vehicles_total": 9222927,
+   "counters": {
+    "archive_index_build": 1,
+    "archive_validate": {
+     "06cc309e4779897c": 1,
+     "084cedb913d5197c": 1,
+     "0a6c5266d76b5b39": 1,
+     "16f1d6176c7a9133": 1,
+     "187fca60022dedc5": 1,
+     "2d4f272bb3dfc5d2": 1,
+     "340168e305f8381e": 1,
+     "3f5d86eed8fe5c17": 1,
+     "4008e6387839d7a3": 1,
+     "5803fd9aa62080cb": 1,
+     "5fcc585e03915396": 1,
+     "657fa0b9f3268e78": 1,
+     "6e3416af316f91cc": 1,
+     "7e395749f1712cb4": 1,
+     "8dcbe1518a5b0898": 1,
+     "90a93715895966dc": 1,
+     "9c7ad9c97b6bdbc6": 1,
+     "b7e7cef8b702abae": 1,
+     "c796667235591888": 1,
+     "cc8eb82bc98de729": 1,
+     "cff4da5d9bb7efb7": 1,
+     "d42db159b3ee565f": 1,
+     "d482aa0afa27e9ce": 1,
+     "dae23c801891223c": 1,
+     "dce1407ed7d893a6": 1,
+     "e72299dc2abeabcd": 1,
+     "e9b489b9b469e9b6": 1,
+     "eb0bd33739d5e926": 1,
+     "eb5d47e234425a98": 1,
+     "f3d1a9ac4d14bd7a": 1
+    },
+    "variant_parses": {
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-215415-af2d83e6-bc11/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-215415-af2d83e6-bc11/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-215415-af2d83e6-bc11/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220012-de032bcb-2165/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220012-de032bcb-2165/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220012-de032bcb-2165/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220648-791840d4-c887/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220648-791840d4-c887/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-220648-791840d4-c887/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221303-3a1fda45-188f/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221303-3a1fda45-188f/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221303-3a1fda45-188f/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221533-52837f59-7e5d/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221533-52837f59-7e5d/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221533-52837f59-7e5d/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221806-7415a4c6-0d68/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221806-7415a4c6-0d68/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-221806-7415a4c6-0d68/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222404-4b5941dd-77c7/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222404-4b5941dd-77c7/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222404-4b5941dd-77c7/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222709-889e6f89-d6d5/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222709-889e6f89-d6d5/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-222709-889e6f89-d6d5/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223016-ef0f3cf3-44e9/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223016-ef0f3cf3-44e9/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223016-ef0f3cf3-44e9/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223222-19b614fb-7ce8/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223222-19b614fb-7ce8/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223222-19b614fb-7ce8/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223440-de070de9-581d/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223744-a3782377-418d/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223744-a3782377-418d/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223744-a3782377-418d/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223804-04518454-6d14/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223804-04518454-6d14/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223804-04518454-6d14/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223825-2bbb1a66-845d/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223825-2bbb1a66-845d/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-223825-2bbb1a66-845d/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224149-53fb2fd0-6182/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224149-53fb2fd0-6182/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224149-53fb2fd0-6182/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224309-23459e2e-c9ef/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224309-23459e2e-c9ef/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224309-23459e2e-c9ef/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224428-7dfb00a9-cd72/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224643-2bbcf31e-3b33/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-224959-e136d191-ae06/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225121-de7e3e34-015d/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225121-de7e3e34-015d/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225121-de7e3e34-015d/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225243-61cb7aca-8652/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225243-61cb7aca-8652/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225243-61cb7aca-8652/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225307-3abbaf06-06d6/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225650-83f1213a-5e40/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225650-83f1213a-5e40/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225650-83f1213a-5e40/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225714-b593ac27-7b71/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225714-b593ac27-7b71/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225714-b593ac27-7b71/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225738-e3bfe154-7e43/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225738-e3bfe154-7e43/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-225738-e3bfe154-7e43/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230115-82a40eaf-7603/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230407-7f119ae2-9f58/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230407-7f119ae2-9f58/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230407-7f119ae2-9f58/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230432-5b265029-5e0f/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230432-5b265029-5e0f/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230432-5b265029-5e0f/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230455-3e34ff00-af60/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230455-3e34ff00-af60/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230455-3e34ff00-af60/calibrated_v2.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230620-a893719c-a662/calibrated.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230620-a893719c-a662/calibrated_v1.rou.xml": 1,
+     "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives/demand-20260913-230620-a893719c-a662/calibrated_v2.rou.xml": 1
+    }
+   },
+   "error": null,
+   "job": "build",
+   "ledger": {
+    "identical": true,
+    "status": "PASS"
+   },
+   "oracle": {
+    "complete": true,
+    "identical": true,
+    "records": 5850
+   },
+   "pgid": 60881,
+   "phase": "done",
+   "phases": [
+    {
+     "monotonic": 0.563963041,
+     "phase": "bound_inputs"
+    },
+    {
+     "monotonic": 0.68923475,
+     "phase": "raw_index_records"
+    },
+    {
+     "monotonic": 342.256534416,
+     "phase": "oracle_compare"
+    },
+    {
+     "monotonic": 342.365130833,
+     "phase": "verify_before_publication"
+    },
+    {
+     "monotonic": 344.645417708,
+     "phase": "persist_index"
+    },
+    {
+     "monotonic": 344.986027291,
+     "phase": "indexed_ledger"
+    },
+    {
+     "monotonic": 345.49075775,
+     "phase": "verify_before_publication"
+    },
+    {
+     "monotonic": 347.639215041,
+     "phase": "publish_evidence"
+    },
+    {
+     "monotonic": 347.768721666,
+     "phase": "done"
+    }
+   ],
+   "pid": 60881,
+   "population": {
+    "daily_units": 1950,
+    "parents": 1690,
+    "variant_records": 5850
+   },
+   "provider_identity": {
+    "complete": true,
+    "units": 1950
+   },
+   "published": {
+    "evidence": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/validation/subhour_phase5_window_cost_index_evidence_20260919-v1.json",
+    "evidence_content_key": "a598035f7381a00c2c73399c21e24b72f7ff69bf27c210b71274c8c38e9a99d2",
+    "index": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/runs/step5_two_phase_20260919b/wci-index/window-cost-index.json"
+   },
+   "result": {
+    "status": "PASS"
+   },
+   "schema": "wci_guarded_child_telemetry_v1",
+   "sequence": 338,
+   "written_monotonic": 347.76909325
+  }
+ },
+ "release_evidence": false,
+ "runner_sources": {
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/run_scenario.py": "24a6ef17d14409636f732d9901c839a5a61a69218c4f615d3509a14169219f72",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/tools/build_window_cost_index.py": "dcfc5e6412fc3b3d1ca46f6564d5588b56f6d5025d95db0b55d087247e2974cc",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/tools/closure_effect_eligibility.py": "5226af5e848f6841b0b3fa14d4928cef2d8e870e246e0df9154463e5e13bb331",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/tools/guarded_wci_build.py": "c1aa2c24a35449ac4c7416605488ea798dc069ce893cabcb1a6841bceedab32e",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/tools/wci_guarded_child.py": "2e9f55c9a9c0baa2dfc2059a5e6f35287bf24165b25c2936a21b801a9434d181",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/core/contracts.py": "53818f1d6154bda8dc72a49f921cbeb9f01048d451612775d94b344c02e2255a",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/simulation/closure_ranking.py": "c0ba6eecd3c4ba07727f164372b46957f91f815358e1f8b703d927c20e0fda9d",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/simulation/deterministic_disruption.py": "059d4568c24d6ffc83e01d597c25fac88656fe94df215192f9b9682f09956050",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/simulation/disruption.py": "c7ac9270456ffb1e1b6fafc5c5c7436eb76b0f2bdb30035bc901d0b590b1992a",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/simulation/independent_daily.py": "6ae4eba74fb0df6ec3068cf757164d43e0595fed102001457bab3d7c3446f689",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/simulation/metadata.py": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/simulation/monthly_demand.py": "c6035f19a3ae4084674d2825dbb9bc4a757e33cba06bea115f2d0578ad0536c7",
+  "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/traffic_sim/simulation/window_cost_index.py": "837267e4b137f1b06648717eec4b09fe7e3ca5777566feafc4442c9f7c8dff59"
+ },
+ "schema": "wci_guarded_run_v1"
+}

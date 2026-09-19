@@ -1,0 +1,336 @@
+{
+  "archives": {
+    "baseline_counts": {
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives": 30,
+      "runs": 0
+    },
+    "final_counts": {
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives": 30,
+      "runs": 0
+    },
+    "watched_roots": [
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+      "runs"
+    ]
+  },
+  "claim_boundary": "supervision telemetry for one real month-ledger profile run. The profile's own published record is the result; this record is how the run was bounded and what it was observed to do",
+  "command": [
+    "--spec",
+    "validation/wci_effect_canary_chosen_edge_spec_20260919-v1.json",
+    "--qualified-demand-manifest",
+    "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+    "--runs-root",
+    "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+    "--out",
+    "runs/step5_two_phase_20260919b/profile",
+    "--evidence-out",
+    "validation/monthly_cost_ledger_profile_subhour-20260919-chosen-edge-v1.json",
+    "--evidence-id",
+    "monthly-cost-ledger-profile-subhour-20260919-chosen-edge-v1"
+  ],
+  "content_key": "c738ae4194bbace56fd91de4382c51f4074b108eae1122178d9008ce961ccc25",
+  "cpu_s": 4503.888748125,
+  "diagnostic_only": false,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_profile_rebuild_supervisor_v1.py",
+    "sha256": "d72c96fe3a5484ab5ef9be7e1b2aafa79d0db70bb07e775ac38a55b9151feca0"
+  },
+  "exit_code": 0,
+  "git": {
+    "head": "d25d1ba5917f7f67c4d06fcf83543f5dedcff73f",
+    "tracked_changes": [
+      " M IMPROVEMENT_PLAN.md"
+    ]
+  },
+  "instrumentation": {
+    "alive_when_each_provider_opened": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "distinct_parsed_paths": 90,
+    "error": null,
+    "exit_status": 0,
+    "providers": [
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789841742.897352,
+        "index": 0,
+        "parses_so_far": 0,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789841939.123845,
+        "index": 1,
+        "parses_so_far": 3,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789842149.1491299,
+        "index": 2,
+        "parses_so_far": 6,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789842358.2140312,
+        "index": 3,
+        "parses_so_far": 9,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789842624.488596,
+        "index": 4,
+        "parses_so_far": 12,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789842818.883159,
+        "index": 5,
+        "parses_so_far": 15,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789842993.6512792,
+        "index": 6,
+        "parses_so_far": 18,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789843165.885164,
+        "index": 7,
+        "parses_so_far": 21,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789843377.2070458,
+        "index": 8,
+        "parses_so_far": 24,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789843553.959521,
+        "index": 9,
+        "parses_so_far": 27,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789843760.636427,
+        "index": 10,
+        "parses_so_far": 30,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789843867.7009668,
+        "index": 11,
+        "parses_so_far": 33,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789843975.348125,
+        "index": 12,
+        "parses_so_far": 36,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789844098.235668,
+        "index": 13,
+        "parses_so_far": 39,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789844228.901332,
+        "index": 14,
+        "parses_so_far": 42,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789844338.123807,
+        "index": 15,
+        "parses_so_far": 45,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789844445.772266,
+        "index": 16,
+        "parses_so_far": 48,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789844563.7503638,
+        "index": 17,
+        "parses_so_far": 51,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789844696.6049652,
+        "index": 18,
+        "parses_so_far": 54,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789844805.2156632,
+        "index": 19,
+        "parses_so_far": 57,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789844911.242892,
+        "index": 20,
+        "parses_so_far": 60,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789845033.502456,
+        "index": 21,
+        "parses_so_far": 63,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789845166.934529,
+        "index": 22,
+        "parses_so_far": 66,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789845290.630176,
+        "index": 23,
+        "parses_so_far": 69,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789845410.402714,
+        "index": 24,
+        "parses_so_far": 72,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789845516.275481,
+        "index": 25,
+        "parses_so_far": 75,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789845625.078911,
+        "index": 26,
+        "parses_so_far": 78,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789845748.20736,
+        "index": 27,
+        "parses_so_far": 81,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789845857.009033,
+        "index": 28,
+        "parses_so_far": 84,
+        "reuse_parsed_routes": true
+      },
+      {
+        "alive_when_opened": 0,
+        "at_s": 1789845987.8366342,
+        "index": 29,
+        "parses_so_far": 87,
+        "reuse_parsed_routes": true
+      }
+    ],
+    "providers_alive_after_the_run": 0,
+    "providers_created": 30,
+    "reuse_parsed_routes_every_provider": true,
+    "schema": "wci_profile_rebuild_instrumentation_v1",
+    "xml_parses": 90
+  },
+  "limits": {
+    "memory_hard_bytes": 4294967296,
+    "swap_growth_hard_bytes": 1073741824,
+    "wall_hard_s": 11210.0
+  },
+  "memory": {
+    "instrument": "proc_pid_rusage over the whole child process tree, sampled; the lifetime maximum is a high-water mark that never falls",
+    "peak_tree_lifetime_max_phys_footprint_bytes": 960677256,
+    "peak_tree_phys_footprint_bytes": 960677256,
+    "swap": {
+      "baseline_used_mb": 3636.25,
+      "final_used_mb": 3636.25,
+      "max_growth_bytes": 0
+    }
+  },
+  "processes": {
+    "peak_tree_size": 1,
+    "surviving_children": []
+  },
+  "release_evidence": false,
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "sample_interval_s": 5.0,
+  "samples": 893,
+  "schema": "wci_profile_rebuild_supervision_v1",
+  "stop_reason": null,
+  "stopped": false,
+  "wall_s": 4511.081570148468
+}

@@ -1,0 +1,158 @@
+{
+  "authorisation": {
+    "authorising_message": "explicit 2026-09-19 user approval to run the serial chain profilombyggnad -> census -> registrering -> serial manadscache -> fullstandigt overvakat WCI-bygge, one gate at a time",
+    "b30_canary": "validation/wci_resolver_prepare_ab_20260919-B30_rep3.json",
+    "b30_content_key": "1e8dc5236903ce3b70e5ba196255c1501bc48d40aac8e6313a40f9a406111c74",
+    "expected_wall_s_prior_forecast": 5398.9241437499995,
+    "memory_hard_bytes": 4294967296,
+    "published_profile_peak_bytes": 6520061952,
+    "published_profile_wall_s": 7320.348,
+    "readiness_content_key": "91689dc68f41be87ccfa243e855494e7f67f63ba011b08cf4166a9871eb64154",
+    "readiness_record": "validation/wci_shared_context_decision_20260919-v2.json",
+    "swap_growth_hard_bytes": 1073741824,
+    "wall_hard_s": 11210
+  },
+  "bound_inputs": {
+    "archive_root": {
+      "count_matches": true,
+      "demand_archives": 30,
+      "expected": 30,
+      "path": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+      "read_only": true
+    },
+    "network": {
+      "data_in/sensors.json": "41db5d452cb104405d8bd6ac6b78e2c7748dcfe641a9266c7229a4fc7edf1f20",
+      "sumo/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+      "sumo/network_metadata.json": "dc3493454abc0ea44760abc10ee2996a1beef01d6b537617aa6141374f2ae6ad",
+      "web/data/network.geojson": "92cbcf3895b3d1428d3713a0e919cf6679f00a8e5d00e7974182345d088a1dbf"
+    },
+    "network_drift_since_prior_attempt": {
+      "data_in/sensors.json": false,
+      "sumo/net.net.xml": false,
+      "sumo/network_metadata.json": false,
+      "web/data/network.geojson": false
+    },
+    "policy": {
+      "path": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/validation/monthly_search_policy_v3.json",
+      "sha256": "1d3f3e1ea35f90ecec7e06941391a8a8728f0e7d8603df917dbbdb361ee242b0",
+      "sha256_matches_prior": true
+    },
+    "producer_source_drift_since_prior_attempt": {
+      "run_scenario.py": true,
+      "tools/process_census.py": false,
+      "tools/product_arm.py": false,
+      "tools/profile_monthly_cost_ledger.py": true,
+      "traffic_sim/core/closure_calendar.py": false,
+      "traffic_sim/simulation/cost_ordered_execution.py": false,
+      "traffic_sim/simulation/deterministic_disruption.py": false,
+      "traffic_sim/simulation/disruption.py": false,
+      "traffic_sim/simulation/independent_daily.py": false,
+      "traffic_sim/simulation/metadata.py": false,
+      "traffic_sim/simulation/monthly_demand.py": true
+    },
+    "producer_source_manifest": {
+      "run_scenario.py": "24a6ef17d14409636f732d9901c839a5a61a69218c4f615d3509a14169219f72",
+      "tools/process_census.py": "b7fba291fe6314abeebe3da6e131d203ab8377d67a337b99c7f3354a38539b63",
+      "tools/product_arm.py": "63515df5fdd0c8dcb7276c3784de27cca8c8200b023eae5ac6966cc42c7a518c",
+      "tools/profile_monthly_cost_ledger.py": "328fd06fe5956f382ce7ae18495f577997316a87d57286d4803d82c44772248f",
+      "traffic_sim/core/closure_calendar.py": "0956f98db1b1d24363957d839743c4708f74a86dfe14a0039e3e9e92d129082e",
+      "traffic_sim/simulation/cost_ordered_execution.py": "b8017e2d3b2bac2db24ead95e6cd39a01afc2fd8716578c6f049727f16cfe70e",
+      "traffic_sim/simulation/deterministic_disruption.py": "059d4568c24d6ffc83e01d597c25fac88656fe94df215192f9b9682f09956050",
+      "traffic_sim/simulation/disruption.py": "c7ac9270456ffb1e1b6fafc5c5c7436eb76b0f2bdb30035bc901d0b590b1992a",
+      "traffic_sim/simulation/independent_daily.py": "6ae4eba74fb0df6ec3068cf757164d43e0595fed102001457bab3d7c3446f689",
+      "traffic_sim/simulation/metadata.py": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4",
+      "traffic_sim/simulation/monthly_demand.py": "c6035f19a3ae4084674d2825dbb9bc4a757e33cba06bea115f2d0578ad0536c7"
+    },
+    "qualified_demand_manifest": {
+      "content_key": "2cb32dcddfeb9bb99513fe1ae9cdcc44f0935435b78a278fa6eb3786060159ec",
+      "path": "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+      "sha256": "1b609f705e08ab7a9c266a974a5976d33660209f0de914c95f66b3189d46f576",
+      "sha256_matches_prior": true,
+      "status": "PASS"
+    },
+    "shared_context_files_not_in_producer_source_manifest": {
+      "traffic_sim/simulation/monthly_sumo.py": "97a239f35fb698d16e3c6f14b2de00dc7f433e38f576be451799abb0420de2da"
+    },
+    "spec": {
+      "path": "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/validation/subhour_monthly_search_profile_spec_v1.json",
+      "sha256": "10f3939a69b6f0bb6e74eb2b1e08a2b513cf54fa5610dd4a25d4d8366c1261aa",
+      "sha256_matches_prior": true
+    }
+  },
+  "claim_boundary": "what was bound, verified and chosen BEFORE the 2026-09-19 re-authorised profile rebuild started. It authorises nothing and measures nothing. Re-derived fresh from disk at the CURRENT head, not copied from the 2026-09-18 preflight",
+  "content_key": "6506ccca20e51dc3843a7586fce32cd2962bf4cd6a80ac8b5fdb123da045766b",
+  "derived_command": [
+    "/usr/bin/python3",
+    "validation/benchmarks/wci_profile_rebuild_supervisor_v1.py",
+    "--role",
+    "supervise",
+    "--inner-out",
+    "runs/step5_two_phase_20260919/instrumentation.json",
+    "--sample-log",
+    "runs/step5_two_phase_20260919/supervision-samples.jsonl",
+    "--child-log",
+    "runs/step5_two_phase_20260919/profile.log",
+    "--summary",
+    "validation/wci_profile_rebuild_supervision_20260919-v1.json",
+    "--wall-limit-s",
+    "11210",
+    "--memory-limit-bytes",
+    "4294967296",
+    "--swap-growth-limit-bytes",
+    "1073741824",
+    "--watch-archive-root",
+    "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+    "--watch-archive-root",
+    "runs",
+    "--",
+    "--spec",
+    "validation/subhour_monthly_search_profile_spec_v1.json",
+    "--qualified-demand-manifest",
+    "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+    "--runs-root",
+    "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+    "--out",
+    "runs/step5_two_phase_20260919/profile",
+    "--evidence-out",
+    "validation/monthly_cost_ledger_profile_subhour-20260919-v1.json",
+    "--evidence-id",
+    "monthly-cost-ledger-profile-subhour-20260919-v1"
+  ],
+  "diagnostic_only": false,
+  "disk": {
+    "free_bytes": 33123422208,
+    "free_gib": 30.85,
+    "total_bytes": 494384795648
+  },
+  "git": {
+    "branch": "claude/wci-memory-canary-20260918",
+    "commits_since_prior_attempt": [
+      "d25d1ba perf: share monthly runner context across archives"
+    ],
+    "head": "d25d1ba5917f7f67c4d06fcf83543f5dedcff73f",
+    "prior_attempt_head": "2ebfd19008b9be3e1e9b87b6cf67a49f68397482",
+    "worktree_clean": true
+  },
+  "leftover_prior_attempt_artifacts": {
+    "note": "200KB partial state from the 2026-09-18 FOOTPRINT_OVER_LIMIT abort; left untouched; NOT reused as this run's output root",
+    "path": "runs/step5_two_phase_20260918"
+  },
+  "output_targets_free": {
+    "runs/step5_two_phase_20260919": true,
+    "validation/monthly_cost_ledger_profile_subhour-20260919-v1.json": true,
+    "validation/wci_profile_rebuild_supervision_20260919-v1.json": true
+  },
+  "process_and_lock_checks": {
+    "annual_population_lock_free": true,
+    "demand_build_lock_free": true,
+    "matched_process_lines": [],
+    "no_forbidden_process_running": true
+  },
+  "readiness_record_verified": {
+    "content_key_matches": true,
+    "decision": "READY_FOR_USER_APPROVED_PROFILE_REBUILD",
+    "path": "validation/wci_shared_context_decision_20260919-v2.json"
+  },
+  "release_evidence": false,
+  "schema": "wci_profile_rebuild_preflight_v1"
+}

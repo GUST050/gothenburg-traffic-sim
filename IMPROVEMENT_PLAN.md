@@ -1165,6 +1165,59 @@ inte jämförbar.
 `phase_5_decision: TRIGGERED`, eftersom 7 320 s överskrider gränsen 600 s.
 WindowCostIndex utvärderas därför enligt planens villkor.
 
+#### Profilombyggnad efter SharedRunnerContext — PASS, 2026-09-19
+
+`MonthlyDemandResolverRunner.prepare` dupplicerade tidigare nätverks-/
+kostnadsstrukturer per arkiv (30 gånger om), vilket gav både en projicerad
+minnesexplosion (~4,77 GB) och dold, redundant XML/JSON-parsning. Fixen
+(commit `d25d1ba`, `SharedRunnerContext`, byggd en gång per resolver och delad
+mellan arkiv) godkändes genom 25 riktade tester, 325 berörda
+regressionstester, en 30-nyckelscanary (26,98 MB heap, 281,89 MB footprint)
+och en oberoende kodgranskning — se
+`validation/wci_shared_context_decision_20260919-v2.json` (`91689dc6…`).
+
+Fas 0–2 av den godkända kedjan kördes samma dag under övervakad budget (wall
+11 210 s, footprint 4 GiB, swaptillväxt 1 GiB). Preflight:
+`validation/wci_profile_rebuild_preflight_20260919-v1.json` (`6506ccca…`,
+alla bindningar omräknade från disk, inga ogranskade avvikelser). Profil:
+`validation/monthly_cost_ledger_profile_subhour-20260919-v1.json`
+(`e65cfa1a…`), supervision:
+`validation/wci_profile_rebuild_supervision_20260919-v1.json` (`96cc3e51…`),
+Fas 2-granskning: `validation/wci_profile_fas2_review_20260919-v1.json`
+(`fbe16b51…`).
+
+**Resultat: PASS, 2 485,08 s profil-tid (2 722,49 s övervakad väggtid), peak
+RSS 1,134 GB, footprint-topp 973 MB (den instantana toppmätningen som
+supervisorns egen gräns jämför mot; den monotona "lifetime max"-varianten
+läser 976 MB och var inte det avgörande talet), 0 svaptillväxt, 0
+SUMO-starter, 30/30 arkiv oförändrade.** Jämfört med den publicerade profilen (7 320,348 s,
+6,52 GB): **2,946× snabbare, 5,75× mindre toppminne.**
+
+**Kostnadsinnehållet är bevisat oförändrat**, inte bara jämförbart:
+`costs`-arrayen (alla 1 690 föräldrars beräknade kostnad) är byte-identisk
+mellan den nya och den gamla ledgern, och all cache-bokföring matchar exakt
+(6 500 minnesträffar, 1 950 missar, 1 950 diskmissar, 8 450 uppslag på båda).
+Ledgerns `content_key` skiljer sig (`bebfc81b…` mot `eb8b9568…`) enbart för
+att `provider_identity.costing_sources` binder källfilshashar, och tre filer
+har legitimt driftat: `run_scenario.py`/`monthly_demand.py` genom denna
+sessions egen fix, samt `deterministic_disruption.py`/`disruption.py` genom
+en tidigare, redan dokumenterad drift (commit `aa0ab8b`, som redan gjorde
+2026-09-15b-registreringen inaktuell — se `AGENT_NOTES.md`). Ingen ogranskad
+källdrift.
+
+**Ny verklig flaskhalsordning — prioriteringen nedan är föråldrad för de
+faser som ändrat plats.** `xml_parse` kollapsade från 54,5 % (4 368,7 s) till
+2,4 % (60,74 s) — den redundanta per-arkiv-parsningen av delade nätverks-/
+kostnadskällor är borta. `route_vehicle_grouping` var tidigare 30,9 %
+(2 477,3 s) och är nu **97,5 % av den uppmätta fastiden (2 391,18 s av
+~2 452,3 s)** — helt dominerande. Framtida optimeringsarbete i denna kedja
+ska rikta sig mot `route_vehicle_grouping`, inte mot XML-parsning eller
+minnesretention (det problemet är stängt). `phase_5_decision` förblir
+`TRIGGERED` (fastiden överskrider fortfarande 600 s-gränsen), men
+WindowCostIndex-utvärderingen nedan (2026-09-16, 4,27× LÅNGSAMMARE av ett
+separat, oreparerat-och-omätt fel) är opåverkad av och inte omprövad i denna
+runda.
+
 #### WindowCostIndex — utvärderad, inte aktiverad, 2026-09-16
 
 `tools/build_window_cost_index.py` kördes mot profilen med en färsk indexrot

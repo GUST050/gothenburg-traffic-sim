@@ -3431,6 +3431,19 @@ provider identity and the ledger all agree, the index and build evidence
 are published and self-consistent, and a final full drift check is clean. A
 child that disappears, or a group member that survives, is a failure.
 
+**First real PASS (2026-09-19).** This contract's first end-to-end
+execution, for the effect-eligible edge `26842525_26355153_0`: 354.08 s
+(well inside every limit above), 9,222,927 affected vehicles, oracle
+field-identical across all 5,850 records, ledger identical, zero drift,
+zero SUMO processes. It followed a per-build-key retention fix
+(`SharedRunnerContext`, see the monthly-runner sections above) that cut the
+month-ledger profile from 7,320.348 s / 6.52 GB to 2,485.08 s / 0.91 GiB —
+without that fix, the month-ledger profile this contract's own preflight
+depends on could not complete under any of this project's memory budgets.
+The built index is verified evidence only; nothing in this pass wires it
+into a consuming code path, which remains a separate, unmade decision.
+Evidence `validation/wci_guarded_build_20260919-v1.json`.
+
 ### Independent daily-cost cache batches (2026-09-17)
 
 The daily-cost cache is the index's oracle, so it is built by the per-file

@@ -1,0 +1,195 @@
+{
+  "bottleneck_finding": "route_vehicle_grouping is now ~96% of measured phase time (2391.18s of ~2452.3s), where it was previously 30.9% (2477.3s of 7320.35s) alongside a comparably large xml_parse phase (54.5%, 4368.7s). xml_parse collapsed to 2.4% (60.74s), consistent with the fix eliminating ~30x redundant parsing of shared network/costing-source files that ArchivedDemandSumoRunner used to redo per archive instead of once via SharedRunnerContext. The dominant remaining cost is route_vehicle_grouping, NOT memory retention or XML parsing. Any further Fas-3-onward optimization priority should target route_vehicle_grouping, not the old XML-parse/memory bottleneck this session closed.",
+  "claim_boundary": "Fas 2 review of the 2026-09-19 profile run: disk re-verification, comparison against the published (pre-SharedRunnerContext) profile, and the new real bottleneck order. Authorises nothing beyond what it measures",
+  "content_key": "fbe16b5120dc48861ee6d0a79e9787cf8e0a7f8cb9ab8ae1b5f25f63e1131138",
+  "diagnostic_only": false,
+  "ledger_comparison": {
+    "cache_accounting_identical": {
+      "cache_hits": true,
+      "cache_misses": true,
+      "computed_daily_units": true,
+      "disk_cache_hits": true,
+      "disk_cache_misses": true,
+      "memory_cache_hits": true,
+      "memory_cache_misses": true
+    },
+    "candidate_count_identical": true,
+    "content_keys_differ": true,
+    "costs_array_byte_identical": true,
+    "new_ledger_content_key": "eb8b9568eb1cce7260e09e4eb2503ccc4fea03a8aa542f2cc81ff92898200af6",
+    "old_ledger_content_key": "bebfc81bfaa810fe8d31a86dfc71b54d3da72668ba9a5424797e0de839be63cf",
+    "provider_identity_costing_sources_drift": {
+      "run_scenario.py": {
+        "changed": true,
+        "new": "24a6ef17d14409636f732d9901c839a5a61a69218c4f615d3509a14169219f72",
+        "old": "d0948b4a29d07b4f4fbe125600b7dcf25a7446bdc7337514c39edb30a679ceaf"
+      },
+      "traffic_sim/simulation/closure_ranking.py": {
+        "changed": false,
+        "new": "c0ba6eecd3c4ba07727f164372b46957f91f815358e1f8b703d927c20e0fda9d",
+        "old": "c0ba6eecd3c4ba07727f164372b46957f91f815358e1f8b703d927c20e0fda9d"
+      },
+      "traffic_sim/simulation/deterministic_disruption.py": {
+        "changed": true,
+        "new": "059d4568c24d6ffc83e01d597c25fac88656fe94df215192f9b9682f09956050",
+        "old": "e1b4cbf38722263df18bec67df5be009c43f27aae58f48e067ca828bb6c8a472"
+      },
+      "traffic_sim/simulation/disruption.py": {
+        "changed": true,
+        "new": "c7ac9270456ffb1e1b6fafc5c5c7436eb76b0f2bdb30035bc901d0b590b1992a",
+        "old": "2317127aa27698d1576aa33415104bef1ddc06e5f8c547ef4cecc1340cd676d9"
+      },
+      "traffic_sim/simulation/metadata.py": {
+        "changed": false,
+        "new": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4",
+        "old": "f97a8cf30d1839d65156788749f48936f9f424ebaf3ba95ed72e2620893a52e4"
+      }
+    },
+    "reading": "the content keys differ ONLY because provider_identity binds costing source file hashes, and three of those files legitimately changed since the 2026-09-15b run: run_scenario.py and monthly_demand.py by this session's own SharedRunnerContext fix (commits 1407044/d25d1ba), and deterministic_disruption.py/disruption.py by an EARLIER, already-documented, pre-existing drift (predates this session, recorded at commit aa0ab8b, already known to make the 2026-09-15b registration stale). The costs array itself -- every one of the 1,690 parents' computed cost -- is BYTE-IDENTICAL, and every cache accounting field matches exactly (6,500 memory hits, 1,950 memory misses, 1,950 disk misses, 8,450 lookups on both runs). This is direct proof that the performance fix changed nothing about WHAT is computed, only how fast and with how much memory."
+  },
+  "new_evidence": {
+    "content_key": "e65cfa1a9042bf467d8fecba76e9b6023822761cbe1875019ef5d89b15feb398",
+    "content_key_self_consistent": true,
+    "path": "validation/monthly_cost_ledger_profile_subhour-20260919-v1.json",
+    "status": "PASS"
+  },
+  "new_real_bottleneck_order": [
+    {
+      "pct_of_measured_phases": 97.51,
+      "phase": "route_vehicle_grouping",
+      "wall_time_s": 2391.176217
+    },
+    {
+      "pct_of_measured_phases": 2.48,
+      "phase": "xml_parse",
+      "wall_time_s": 60.738829
+    },
+    {
+      "pct_of_measured_phases": 0.01,
+      "phase": "shortest_path_detour",
+      "wall_time_s": 0.193901
+    },
+    {
+      "pct_of_measured_phases": 0.01,
+      "phase": "window_aggregation",
+      "wall_time_s": 0.139596
+    },
+    {
+      "pct_of_measured_phases": 0.0,
+      "phase": "parent_aggregation_sorting",
+      "wall_time_s": 0.075785
+    }
+  ],
+  "new_supervision": {
+    "content_key": "96cc3e51ded6dffeebd40a0bcb54c161fa69c1e14e3aa5f9a937bd707c481993",
+    "content_key_self_consistent": true,
+    "path": "validation/wci_profile_rebuild_supervision_20260919-v1.json",
+    "stop_reason": null,
+    "stopped": false
+  },
+  "old_evidence_compared_against": {
+    "content_key": "46ee26660056e416e7cf1318efd551d51a4dd3b92b7b34f83e1af073fd02de08",
+    "note": "the last published full-month profile before this session's fix; read from the read-only sibling worktree /private/tmp/gs-step3-departure-bounds, not copied",
+    "path": "/private/tmp/gs-step3-departure-bounds/validation/monthly_cost_ledger_profile_subhour-20260915-v2.json"
+  },
+  "performance_comparison": {
+    "memory_reduction_x": 5.75,
+    "new_peak_rss_bytes": 1133854720,
+    "new_peak_tree_footprint_bytes": 975914304,
+    "new_supervised_wall_s": 2722.4885272979736,
+    "new_wall_time_s": 2485.080458167,
+    "old_peak_rss_bytes": 6520061952,
+    "old_peak_tree_footprint_bytes": null,
+    "old_supervised_wall_s": null,
+    "old_wall_time_s": 7320.348144709,
+    "speedup_x": 2.946,
+    "sumo_started_new": false,
+    "sumo_started_old": false,
+    "swap_growth_new_bytes": 0
+  },
+  "phase_5_window_cost_index": {
+    "decision": "TRIGGERED",
+    "needed": true,
+    "note": "still TRIGGERED because wall time still exceeds the 600s threshold, but IMPROVEMENT_PLAN.md's 2026-09-16 evaluation already found WindowCostIndex itself 4.27x SLOWER (31273.03s) due to a separate, already-diagnosed-and-partially-repaired-but-unmeasured per-unit archive re-resolution defect, unrelated to this session's fix. Not re-evaluated here; out of scope for this chain."
+  },
+  "phase_comparison": {
+    "new_phase_pct": {
+      "parent_aggregation_sorting": 0.0,
+      "route_vehicle_grouping": 96.22,
+      "shortest_path_detour": 0.01,
+      "window_aggregation": 0.01,
+      "xml_parse": 2.44
+    },
+    "new_phases_s": {
+      "parent_aggregation_sorting": {
+        "measured_by": "exclusive provider or ledger timer",
+        "wall_time_s": 0.075785
+      },
+      "route_vehicle_grouping": {
+        "measured_by": "exclusive provider or ledger timer",
+        "wall_time_s": 2391.176217
+      },
+      "shortest_path_detour": {
+        "measured_by": "exclusive provider or ledger timer",
+        "wall_time_s": 0.193901
+      },
+      "window_aggregation": {
+        "measured_by": "exclusive provider or ledger timer",
+        "wall_time_s": 0.139596
+      },
+      "xml_parse": {
+        "measured_by": "exclusive provider or ledger timer",
+        "wall_time_s": 60.738829
+      }
+    },
+    "old_phase_pct": {
+      "parent_aggregation_sorting": 0.0,
+      "route_vehicle_grouping": 33.84,
+      "shortest_path_detour": 0.0,
+      "window_aggregation": 0.0,
+      "xml_parse": 59.68
+    },
+    "old_phases_s": {
+      "parent_aggregation_sorting": {
+        "measured_by": "exclusive provider or ledger timer",
+        "wall_time_s": 0.125529
+      },
+      "route_vehicle_grouping": {
+        "measured_by": "exclusive provider or ledger timer",
+        "wall_time_s": 2477.295615
+      },
+      "shortest_path_detour": {
+        "measured_by": "exclusive provider or ledger timer",
+        "wall_time_s": 0.347944
+      },
+      "window_aggregation": {
+        "measured_by": "exclusive provider or ledger timer",
+        "wall_time_s": 0.174722
+      },
+      "xml_parse": {
+        "measured_by": "exclusive provider or ledger timer",
+        "wall_time_s": 4368.718919
+      }
+    }
+  },
+  "population": {
+    "identical": true,
+    "new": {
+      "daily_units": 1950,
+      "daily_variant_records": 5850,
+      "parents": 1690,
+      "variants_per_daily_unit": 3
+    },
+    "old": {
+      "daily_units": 1950,
+      "daily_variant_records": 5850,
+      "parents": 1690,
+      "variants_per_daily_unit": 3
+    }
+  },
+  "producer_source_manifest_reference": {
+    "note": "PROFILE_SOURCE_FILES in tools/profile_monthly_cost_ledger.py binds monthly_demand.py but not monthly_sumo.py, where SharedRunnerContext itself is defined. This run's ledger identity was still correctly invalidated because monthly_demand.py also changed in the same fix commit. Flagged as a latent robustness gap for a future monthly_sumo.py-only change, not acted on here (out of scope for the current bottleneck)."
+  },
+  "release_evidence": false,
+  "schema": "wci_profile_fas2_review_v1"
+}

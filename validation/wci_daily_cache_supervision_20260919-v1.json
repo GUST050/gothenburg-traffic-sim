@@ -1,0 +1,83 @@
+{
+  "archives": {
+    "baseline_counts": {
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives": 30,
+      "runs": 0
+    },
+    "final_counts": {
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives": 30,
+      "runs": 0
+    },
+    "watched_roots": [
+      "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+      "runs"
+    ]
+  },
+  "claim_boundary": "supervision telemetry for the serial daily-cost-cache build. The tool's own --status output and per-build-key evidence are the result; this record is how the run was bounded and what it was observed to do",
+  "command": [
+    "/usr/bin/python3",
+    "tools/build_daily_cost_cache.py",
+    "--registration",
+    "validation/wci_month_case_registration_20260919-v1.json",
+    "--profile",
+    "runs/step5_two_phase_20260919/profile/profile.json",
+    "--cache-root",
+    "runs/step5_two_phase_20260919/profile-daily-cost-cache",
+    "--allow-production-cache",
+    "--build-key",
+    "",
+    "--status",
+    "runs/step5_two_phase_20260919/daily-cache-status.json"
+  ],
+  "content_key": "4c4ef1df888f0cbbd3f39259d74d83d74b27194fb5d5d75c3fb41f444f740f09",
+  "cpu_s": 8.176491583333332,
+  "diagnostic_only": false,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_daily_cache_supervisor_v1.py",
+    "sha256": "0acdcaf8acdce7d673dbe750d93641597bdfeb19f4e4a75df0951faa62956424"
+  },
+  "exit_code": 1,
+  "git": {
+    "head": "d25d1ba5917f7f67c4d06fcf83543f5dedcff73f",
+    "tracked_changes": [
+      " M IMPROVEMENT_PLAN.md"
+    ]
+  },
+  "limits": {
+    "memory_hard_bytes": 4294967296,
+    "swap_growth_hard_bytes": 1073741824,
+    "wall_hard_s": 17328.0
+  },
+  "memory": {
+    "instrument": "proc_pid_rusage over the whole child process tree, sampled (reused from wci_profile_rebuild_supervisor_v1); the lifetime maximum is a high-water mark that never falls",
+    "peak_tree_lifetime_max_phys_footprint_bytes": 105349816,
+    "peak_tree_phys_footprint_bytes": 98910904,
+    "swap": {
+      "baseline_used_mb": 3644.25,
+      "final_used_mb": 3644.25,
+      "max_growth_bytes": 0
+    }
+  },
+  "processes": {
+    "peak_tree_size": 1,
+    "surviving_children": []
+  },
+  "release_evidence": false,
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "sample_interval_s": 5.0,
+  "samples": 2,
+  "schema": "wci_daily_cache_supervision_v1",
+  "stop_reason": null,
+  "stopped": false,
+  "wall_s": 10.16748595237732
+}
