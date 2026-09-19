@@ -1,0 +1,115 @@
+{
+  "adoption_eligible": false,
+  "claim_boundary": "the unit/parent graph alone, with the demand resolver replaced by a stub, on the real frozen month. It validates no archive, starts no process and prices nothing",
+  "content_key": "51c361a398e8dfad7e39802301262e5f2ae4a91312036328c19f78802da10abf",
+  "decision_relevance": "this is the ONLY quantity the streaming seam can change. Whatever else the profile's prepare holds is not in this layer and no ledger change can move it",
+  "diagnostic_only": true,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_prepare_layer_attribution_v1.py",
+    "sha256": "13e8c703cff6dbb5dfda977495f10cdda07edb683014b5e220eac0546cf4b268"
+  },
+  "git": {
+    "head": "29e0017ef40e2d33dfb80e88f811da14762af900",
+    "tracked_changes": [
+      " M tools/profile_monthly_cost_ledger.py",
+      " M traffic_sim/simulation/monthly_search.py"
+    ]
+  },
+  "inputs": {
+    "ledger_manifest_content_key": "c9df03a73e2752e16ca21a61ba9e01941e2f7b8ffb237236b5f18f07b6ec3f04",
+    "ledger_parent_count": 1690,
+    "ledger_unique_unit_count": 1950,
+    "parents": 1690,
+    "search_content_key": "383c9130a45370c2f296",
+    "search_id": "subhour-cold-ledger-profile-2027-09",
+    "spec": "validation/subhour_monthly_search_profile_spec_v1.json"
+  },
+  "order": [
+    "materialised",
+    "streaming",
+    "streaming",
+    "materialised"
+  ],
+  "production_chain_rebuild_required": true,
+  "reading": "the whole month's unit/parent graph is a few megabytes on either path, so it cannot be where a multi-gigabyte prepare goes. Streaming holds MORE here, because it parses 1,950 JSON rows into fresh strings where the materialised path shares interned keys and spec attributes across units",
+  "release_evidence": false,
+  "runs": [
+    {
+      "daily_backend_digest": "27eded20257ffac08c70bade6f724029a765fc5f016f996e89ca0ee5b84555c9",
+      "order": 0,
+      "parents": 1690,
+      "path": "materialised",
+      "provenance_digest": "83203cd149aa5728fbca6d95e4998e403a0d10900cd1769205e5b9accc976c09",
+      "python_heap_held_bytes": 4678605,
+      "python_heap_peak_bytes": 5615501,
+      "unit_ids_digest": "55aba663e46d505c11273b45509680c640d11e22b054211f9e2708ba36bfbe16",
+      "units": 1950,
+      "wall_s": 0.5165149170000001
+    },
+    {
+      "daily_backend_digest": "27eded20257ffac08c70bade6f724029a765fc5f016f996e89ca0ee5b84555c9",
+      "order": 1,
+      "parents": 1690,
+      "path": "streaming",
+      "provenance_digest": "83203cd149aa5728fbca6d95e4998e403a0d10900cd1769205e5b9accc976c09",
+      "python_heap_held_bytes": 8444017,
+      "python_heap_peak_bytes": 9389414,
+      "unit_ids_digest": "55aba663e46d505c11273b45509680c640d11e22b054211f9e2708ba36bfbe16",
+      "units": 1950,
+      "wall_s": 0.21964408400000002
+    },
+    {
+      "daily_backend_digest": "27eded20257ffac08c70bade6f724029a765fc5f016f996e89ca0ee5b84555c9",
+      "order": 2,
+      "parents": 1690,
+      "path": "streaming",
+      "provenance_digest": "83203cd149aa5728fbca6d95e4998e403a0d10900cd1769205e5b9accc976c09",
+      "python_heap_held_bytes": 8435452,
+      "python_heap_peak_bytes": 9381281,
+      "unit_ids_digest": "55aba663e46d505c11273b45509680c640d11e22b054211f9e2708ba36bfbe16",
+      "units": 1950,
+      "wall_s": 0.21767575000000017
+    },
+    {
+      "daily_backend_digest": "27eded20257ffac08c70bade6f724029a765fc5f016f996e89ca0ee5b84555c9",
+      "order": 3,
+      "parents": 1690,
+      "path": "materialised",
+      "provenance_digest": "83203cd149aa5728fbca6d95e4998e403a0d10900cd1769205e5b9accc976c09",
+      "python_heap_held_bytes": 4666167,
+      "python_heap_peak_bytes": 5608512,
+      "unit_ids_digest": "55aba663e46d505c11273b45509680c640d11e22b054211f9e2708ba36bfbe16",
+      "units": 1950,
+      "wall_s": 0.5180935409999998
+    }
+  ],
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_prepare_layer_attribution_v1",
+  "semantics_identical": {
+    "daily_backend_digest": true,
+    "provenance_digest": true,
+    "unit_ids_digest": true,
+    "units": true
+  },
+  "streaming_costs_more_bytes": 3756847,
+  "unit_graph_held_bytes": {
+    "materialised": [
+      4678605,
+      4666167
+    ],
+    "streaming": [
+      8444017,
+      8435452
+    ]
+  }
+}

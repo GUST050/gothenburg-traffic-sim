@@ -32,8 +32,12 @@ if str(ROOT) not in sys.path:
 
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.ops import io_phases
+from traffic_sim.simulation import closure_ledgers
 from traffic_sim.simulation.cost_ordered_execution import build_cost_ledger
-from traffic_sim.simulation.monthly_search import MonthlySearchPolicy
+from traffic_sim.simulation.monthly_search import (
+    MonthlySearchPolicy,
+    ledger_unit_records,
+)
 from tools.product_arm import ProcessCensusUnavailable, ProcessTreeRSSSampler
 
 EXPECTED_DAILY_UNITS = 1950
@@ -41,6 +45,16 @@ EXPECTED_VARIANTS = 3
 EXPECTED_PARENTS = 1690
 PROFILE_SCHEMA = "monthly_cost_ledger_profile_v1"
 _RESOLVER_PATCH_LOCK = threading.RLock()
+
+#: Where a profile keeps the enumeration it prepares from.
+LEDGER_DIRNAME = "ledgers"
+#: Above this many parents the profile refuses to materialise the object
+#: graph instead of streaming.  Deliberately far below the month's 1,690: a
+#: production-sized profile must never reach it, while a small fixture may
+#: still use a runner without the streaming seam.  Mirrors `monthly_search`'s
+#: MATERIALISED_SHORTLIST_LIMIT for the same reason — a silent fallback is how
+#: a memory gate stops meaning anything.
+MATERIALISED_PARENT_LIMIT = 256
 
 # A Phase 4 profile is evidence produced by this complete import/runtime
 # surface, not just by the four numeric costing files.  Keep this list explicit
@@ -63,6 +77,96 @@ PROFILE_SOURCE_FILES = (
 
 def producer_source_manifest() -> dict[str, str]:
     return {path: sha256_file(ROOT / path) for path in PROFILE_SOURCE_FILES}
+
+
+def prepared_ledgers(directory: Path, spec: Any) -> Any:
+    """Verify this spec's published enumeration, or stream it once.
+
+    Three states, the same order `monthly_search._candidate_ledger` uses:
+
+    1. A COMPLETE set already sits there: it is verified against its manifest
+       — digest, size and row count — and reused byte for byte. A mismatch
+       raises rather than rebuilding, because regenerating would destroy the
+       only trace that finished evidence was damaged.
+    2. Files exist but nothing declared them finished: an interrupted build
+       area, rebuilt from the same deterministic enumeration.
+    3. Nothing there: enumerate lazily and publish.
+
+    `iter_closure_schedules` is passed as a generator on purpose. The parents
+    are consumed one at a time and never collected, which is the whole reason
+    this path exists.
+    """
+    from traffic_sim.core.closure_calendar import (  # noqa: PLC0415
+        iter_closure_schedules,
+    )
+
+    directory = Path(directory)
+    # WHICH CODE computed these unit IDs, not only which spec they belong to.
+    # `search_content_key` describes the SPEC; it says nothing about
+    # `daily_unit_records` or `closure_calendar`. Without this, a ledger set
+    # left behind by a failed run would be reused after those sources changed,
+    # and the profile would prepare on unit IDs from the previous code while
+    # recording the new digests. The row counts cannot catch that: the
+    # population is identical, only the identities moved.
+    producer = {
+        "producer": "tools/profile_monthly_cost_ledger.py",
+        "producer_source_manifest": producer_source_manifest(),
+    }
+    if not (directory / closure_ledgers.MANIFEST_NAME).is_file():
+        closure_ledgers.write_ledgers(
+            directory,
+            spec,
+            iter_closure_schedules(spec),
+            unit_records=ledger_unit_records,
+            provenance={
+                "search_id": spec.search_id,
+                "interday_policy": spec.interday_policy,
+                "work_allocation_policy": spec.work_allocation_policy,
+                "source": spec.source,
+                **producer,
+            },
+        )
+    # Verified either way, including immediately after writing: the profile
+    # proceeds on bytes that were read back and checked, never on the
+    # manifest the writer happened to return.
+    manifest = closure_ledgers.verify_ledgers(
+        directory, expected_search_content_key=spec.content_key)
+    recorded = dict(manifest.provenance).get("producer_source_manifest")
+    if recorded != producer["producer_source_manifest"]:
+        raise closure_ledgers.LedgerCorrupt(
+            "ledgers were enumerated by different producer sources; rebuild "
+            "them in a fresh directory rather than preparing on unit "
+            "identities this code did not compute")
+    return manifest
+
+
+def prepare_runner_from_ledgers(
+    runner: Any, directory: Path, parent_ids: Sequence[str]
+) -> None:
+    """Prepare the arm from the ledgers, or refuse — never quietly both.
+
+    The profile's whole memory claim is that it does not build the month's
+    unit/parent object graph. A runner that cannot read ledgers is therefore
+    allowed only for a shortlist small enough that materialising it proves
+    nothing either way; above that it raises, so a regression cannot show up
+    as a silently larger profile instead of a failure.
+    """
+    from_ledgers = getattr(runner, "prepare_from_ledgers", None)
+    if callable(from_ledgers):
+        from_ledgers(Path(directory), tuple(parent_ids))
+        return
+    if len(parent_ids) > MATERIALISED_PARENT_LIMIT:
+        raise ValueError(
+            f"shortlist of {len(parent_ids)} parents exceeds the "
+            f"materialising compatibility limit {MATERIALISED_PARENT_LIMIT}: "
+            f"this backend has no prepare_from_ledgers and a profile of this "
+            f"size must stream its enumeration")
+    prepare = getattr(runner, "prepare", None)
+    if prepare is None:
+        raise ValueError("runner can neither stream nor materialise a "
+                         "shortlist")
+    index = closure_ledgers.ParentLedgerIndex(Path(directory))
+    prepare([index[parent_id] for parent_id in parent_ids])
 
 
 def producer_runtime_manifest() -> dict[str, str]:
@@ -266,6 +370,7 @@ def profile_ledger(
     runs_root: Path | None = None,
     policy_path: Path | None = None,
     producer_binding: Mapping[str, Any] | None = None,
+    closure_ledger_binding: Mapping[str, Any] | None = None,
     qualified_demand_manifest: Mapping[str, Any] | None = None,
     qualified_demand_manifest_path: Path | None = None,
     io_collector: io_phases.PhaseCollector | None = None,
@@ -278,6 +383,15 @@ def profile_ledger(
     validate_qualified_demand_manifest_shape(qualified_demand_manifest)
     if qualified_demand_manifest.get("status") != "PASS":
         raise ValueError("Phase 4 requires a passing qualified-demand manifest")
+    # A profile large enough to require streaming must SAY which enumeration
+    # it streamed.  Without this the fail-closed property lives only in
+    # `main`'s control flow, and a record prepared some other way is
+    # structurally indistinguishable from a streamed one.
+    if (expected_parents > MATERIALISED_PARENT_LIMIT
+            and not closure_ledger_binding):
+        raise ValueError(
+            f"a profile of {expected_parents} parents must bind the closure "
+            f"ledgers it was prepared from")
     binding_snapshot = validate_producer_binding(
         producer_binding
         if producer_binding is not None
@@ -565,6 +679,10 @@ def profile_ledger(
             "producer_runtime_manifest": binding_snapshot[
                 "producer_runtime_manifest"],
             "policy": binding_snapshot["policy"],
+            # The enumeration this profile was prepared FROM. Without it the
+            # record says which spec it bound but not which published
+            # population it actually streamed.
+            "closure_ledgers": closure_ledger_binding,
         },
         # The Phase 5 timing trigger is deliberately independent of the
         # process-tree RSS completeness gate.  A sandbox may deny `ps` while
@@ -619,6 +737,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                         help="append-only validation record for this profile")
     parser.add_argument("--evidence-id", default=None)
     parser.add_argument("--qualified-demand-manifest", type=Path, required=True)
+    parser.add_argument(
+        "--ledger-root", type=Path,
+        help="closure-ledger directory for this spec; reused when it is "
+             "already complete, streamed once otherwise. Defaults to a "
+             f"'{LEDGER_DIRNAME}' sibling of --out")
     args = parser.parse_args(argv)
     if args.spec is None:
         raise SystemExit("--spec is required for a real cold profile")
@@ -658,6 +781,33 @@ def main(argv: Sequence[str] | None = None) -> int:
     _require_fresh_root(output_root, "output")
     daily_results_root = output_root.parent / (output_root.name + "-daily-results")
     _require_fresh_root(daily_results_root, "daily-results")
+    # The enumeration the arm is prepared from.  NOT a fresh root: a verified
+    # complete ledger set is evidence to reuse, not an output to overwrite.
+    # Built after the cheap freshness checks so a stale output root fails
+    # before the enumeration is streamed.
+    ledger_root = (Path(args.ledger_root) if args.ledger_root is not None
+                   else output_root.parent / (output_root.name + "-"
+                                              + LEDGER_DIRNAME))
+    # Timed and sized explicitly: this work happens OUTSIDE the profile's own
+    # sampler and phase collector, so without recording it here the published
+    # record would show less I/O and a lower peak than the process paid.
+    ledger_started = time.perf_counter()
+    ledger_existed = (ledger_root / closure_ledgers.MANIFEST_NAME).is_file()
+    ledger_manifest = prepared_ledgers(ledger_root, spec)
+    ledger_elapsed = time.perf_counter() - ledger_started
+    ledger_bytes = sum(
+        path.stat().st_size for path in Path(ledger_root).rglob("*")
+        if path.is_file())
+    if ledger_manifest.parent_count != EXPECTED_PARENTS:
+        raise SystemExit(
+            f"ledgers enumerate {ledger_manifest.parent_count} parents, "
+            f"expected {EXPECTED_PARENTS}")
+    if ledger_manifest.unique_unit_count != EXPECTED_DAILY_UNITS:
+        raise SystemExit(
+            f"ledgers enumerate {ledger_manifest.unique_unit_count} daily "
+            f"units, expected {EXPECTED_DAILY_UNITS}")
+    if ledger_manifest.search_content_key != spec.content_key:
+        raise SystemExit("ledgers belong to another search")
     runner, _screen_builder, source = product_arm.build_arm(
         spec, cost_ordered=True, runs_root=args.runs_root,
         release_root=release_root, daily_cost_cache=cache_root,
@@ -688,7 +838,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         io_collector = io_phases.PhaseCollector()
         with _observe_resolver_activity(io_collector):
             with io_phases.observe(io_collector):
-                runner.prepare(parents)
+                prepare_runner_from_ledgers(
+                    runner, ledger_root,
+                    [parent.schedule_id for parent in parents])
             sumo_after_prepare = sumo_start_probe()
             if sumo_after_prepare != 0:
                 raise RuntimeError(
@@ -704,6 +856,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                 sumo_start_before=sumo_after_prepare,
                 runs_root=args.runs_root, policy_path=policy_path,
                 producer_binding=producer_binding,
+                closure_ledger_binding={
+                    "directory": str(Path(ledger_root).resolve()),
+                    "manifest_content_key": ledger_manifest.key,
+                    "search_content_key":
+                        ledger_manifest.search_content_key,
+                    "parent_schedules": ledger_manifest.parent_count,
+                    "unique_daily_units": ledger_manifest.unique_unit_count,
+                    "parent_unit_edges":
+                        ledger_manifest.parent_unit_edge_count,
+                    "prepared_by": "prepare_from_ledgers",
+                    "reused_existing_ledgers": ledger_existed,
+                    "build_or_verify_wall_s": ledger_elapsed,
+                    "bytes_on_disk": ledger_bytes,
+                    "measurement_note": (
+                        "this work runs before the profile's RSS sampler and "
+                        "phase collector, so its time and I/O are NOT part of "
+                        "wall_time_s, peak_rss_bytes or the io_phases "
+                        "counters; they are recorded here instead"),
+                },
                 qualified_demand_manifest=qualified_manifest,
                 qualified_demand_manifest_path=(
                     args.qualified_demand_manifest),

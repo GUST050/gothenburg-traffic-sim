@@ -1,0 +1,228 @@
+{
+  "adoption_eligible": false,
+  "claim_boundary": "the cost and the output of PREPARE alone, materialised against streaming, on one frozen workload. It prices no daily unit, builds no demand, starts no SUMO and authorises nothing",
+  "content_key": "32ca43e2523111340b81f01cdd9555c2c90397c7d2db939263f1f996d47e2980",
+  "diagnostic_only": true,
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_prepare_streaming_ab_v1.py",
+    "sha256": "509e9512d1f443a1dc1a5595747dddcea713217084caba0be564240cf8b6175f"
+  },
+  "git": {
+    "head": "29e0017ef40e2d33dfb80e88f811da14762af900",
+    "tracked_changes": [
+      " M tools/profile_monthly_cost_ledger.py",
+      " M traffic_sim/simulation/monthly_search.py"
+    ]
+  },
+  "inputs": {
+    "ledger_manifest_content_key": "653152022cb21e75a15c74a81a96d392e47b4c157d2f80bdc3ba4fa5650be13e",
+    "ledger_parent_count": 1690,
+    "ledger_root": "runs/step5_streaming_ab_20260918/ledgers",
+    "ledger_unique_unit_count": 1950,
+    "manifest_content_key": "2cb32dcddfeb9bb99513fe1ae9cdcc44f0935435b78a278fa6eb3786060159ec",
+    "month_parents": 1690,
+    "qualified_demand_manifest": "/private/tmp/gs-step3-departure-bounds/validation/subhour_qualified_demand_manifest_20260915b.json",
+    "runs_root": "/private/tmp/gs-step3-departure-bounds/runs/step5_monthly_qualify_20260913/demand_archives",
+    "search_content_key": "383c9130a45370c2f296",
+    "search_id": "subhour-cold-ledger-profile-2027-09",
+    "spec": "validation/subhour_monthly_search_profile_spec_v1.json"
+  },
+  "instrument_note": "python_heap_* is tracemalloc, restarted per arm, so each figure is what that arm allocated and still holds. The footprint is a high-water mark and tracing inflates it; it is recorded for completeness, not as retention evidence",
+  "process_checks": {
+    "arms_that_used_materialised_prepare": [
+      "A"
+    ],
+    "demand_archives_after": 30,
+    "demand_archives_before": 30,
+    "forbidden_processes_seen": []
+  },
+  "production_chain_rebuild_required": true,
+  "release_evidence": false,
+  "runs": [
+    {
+      "arm": "A",
+      "cpu_s": 159.369651,
+      "daily_backend_digest": "d44ef2ef90d966837905043bc83d5ecf8276fc1cdec9a2bf52223c63f15ce9ac",
+      "distinct_build_keys": 6,
+      "footprint_after_bytes": 3415592080,
+      "footprint_before_bytes": 23937432,
+      "forbidden_processes": [],
+      "lifetime_max_footprint_bytes": 3435285648,
+      "max_rss_bytes": 3368583168,
+      "parents": 130,
+      "provenance_digest": "0d1596fe9d19720dc5aa61115b28c5830a7be3f31c20aad34488a692a3927865",
+      "python_heap_held_bytes": 1061130643,
+      "python_heap_peak_bytes": 1162797228,
+      "relationships_digest": "41e298df459e0c4aa8b0c4d0275bedd563c0122bc6842c016ca490eb76677a71",
+      "unit_ids_digest": "aaf90067fa6daad2ef960bcf9a31c0906d16dee9dac2aee5a6f59e2a65f086e5",
+      "unit_schedules_digest": "2c4a8d74f4d8c7afa9ff2370d6aef6d3eb23ed972dfa0ec61e1320858ffdee6e",
+      "units": 390,
+      "used_materialised_prepare": true,
+      "wall_build_arm_s": 3.802858829498291,
+      "wall_prepare_s": 154.78375005722046
+    },
+    {
+      "arm": "B",
+      "cpu_s": 140.63344699999996,
+      "daily_backend_digest": "d44ef2ef90d966837905043bc83d5ecf8276fc1cdec9a2bf52223c63f15ce9ac",
+      "distinct_build_keys": 6,
+      "footprint_after_bytes": 3236105360,
+      "footprint_before_bytes": 253822704,
+      "forbidden_processes": [],
+      "lifetime_max_footprint_bytes": 3435285648,
+      "max_rss_bytes": 3744956416,
+      "parents": 130,
+      "provenance_digest": "0d1596fe9d19720dc5aa61115b28c5830a7be3f31c20aad34488a692a3927865",
+      "python_heap_held_bytes": 1002642097,
+      "python_heap_peak_bytes": 1104376123,
+      "relationships_digest": "41e298df459e0c4aa8b0c4d0275bedd563c0122bc6842c016ca490eb76677a71",
+      "unit_ids_digest": "aaf90067fa6daad2ef960bcf9a31c0906d16dee9dac2aee5a6f59e2a65f086e5",
+      "unit_schedules_digest": "2c4a8d74f4d8c7afa9ff2370d6aef6d3eb23ed972dfa0ec61e1320858ffdee6e",
+      "units": 390,
+      "used_materialised_prepare": false,
+      "wall_build_arm_s": 2.6002140045166016,
+      "wall_prepare_s": 138.69020795822144
+    },
+    {
+      "arm": "A",
+      "cpu_s": 199.435613,
+      "daily_backend_digest": "8b1d40963ca04be07d1423c286b8f0caa433ece7c3976da553ce946b06ae0528",
+      "distinct_build_keys": 9,
+      "footprint_after_bytes": 4965568856,
+      "footprint_before_bytes": 251185120,
+      "forbidden_processes": [],
+      "lifetime_max_footprint_bytes": 4983624024,
+      "max_rss_bytes": 5171331072,
+      "parents": 325,
+      "provenance_digest": "b143f7cc45fa91d2c2f9b68a6e016302ca89b6e8dd8d9c725bed1311ce37c32d",
+      "python_heap_held_bytes": 1467312246,
+      "python_heap_peak_bytes": 1568939503,
+      "relationships_digest": "2a206efc62cc6a24f1b67481ba19b9327488bd17ed3243fe1c9ef62d3eece8ea",
+      "unit_ids_digest": "a52a67ad316c3476fe464c3a2132c1157ac921292e9d668b14f1b474a4891c47",
+      "unit_schedules_digest": "0747183ac15003f50045d88424402e836cf768044e5519bcd0c90051feb5df0b",
+      "units": 585,
+      "used_materialised_prepare": true,
+      "wall_build_arm_s": 2.594265937805176,
+      "wall_prepare_s": 198.2258801460266
+    },
+    {
+      "arm": "B",
+      "cpu_s": 201.81209400000006,
+      "daily_backend_digest": "8b1d40963ca04be07d1423c286b8f0caa433ece7c3976da553ce946b06ae0528",
+      "distinct_build_keys": 9,
+      "footprint_after_bytes": 5000286624,
+      "footprint_before_bytes": 371051160,
+      "forbidden_processes": [],
+      "lifetime_max_footprint_bytes": 5019406752,
+      "max_rss_bytes": 5174378496,
+      "parents": 325,
+      "provenance_digest": "b143f7cc45fa91d2c2f9b68a6e016302ca89b6e8dd8d9c725bed1311ce37c32d",
+      "python_heap_held_bytes": 1468499844,
+      "python_heap_peak_bytes": 1570212747,
+      "relationships_digest": "2a206efc62cc6a24f1b67481ba19b9327488bd17ed3243fe1c9ef62d3eece8ea",
+      "unit_ids_digest": "a52a67ad316c3476fe464c3a2132c1157ac921292e9d668b14f1b474a4891c47",
+      "unit_schedules_digest": "0747183ac15003f50045d88424402e836cf768044e5519bcd0c90051feb5df0b",
+      "units": 585,
+      "used_materialised_prepare": false,
+      "wall_build_arm_s": 2.7008519172668457,
+      "wall_prepare_s": 200.26160502433777
+    },
+    {
+      "arm": "A",
+      "cpu_s": 327.77185700000007,
+      "daily_backend_digest": "20f6baf527786a6a47245919283d4a71eb26c7aa02fdc4018c3c3d71c3510e51",
+      "distinct_build_keys": 14,
+      "footprint_after_bytes": 7310022512,
+      "footprint_before_bytes": 455019424,
+      "forbidden_processes": [],
+      "lifetime_max_footprint_bytes": 7328896880,
+      "max_rss_bytes": 6657458176,
+      "parents": 650,
+      "provenance_digest": "d8e892eefe34fed0d7309b462620403aafbf7b07c187af28ac39cdf07cd1058d",
+      "python_heap_held_bytes": 2298970300,
+      "python_heap_peak_bytes": 2400495023,
+      "relationships_digest": "a3595bf01d647a86048d74dc2287a61878b347da9373c100d9af234a9e39a791",
+      "unit_ids_digest": "ac8ce6dadac8106881a6755da11465f0fb239f32c1bf237f9b5866edaa753b40",
+      "unit_schedules_digest": "4ae93e24ce21a84c3aef3407a330867471b9d862338697cbeea065f0b5bc5434",
+      "units": 910,
+      "used_materialised_prepare": true,
+      "wall_build_arm_s": 2.686399221420288,
+      "wall_prepare_s": 328.62890672683716
+    },
+    {
+      "arm": "B",
+      "cpu_s": 318.1569840000002,
+      "daily_backend_digest": "20f6baf527786a6a47245919283d4a71eb26c7aa02fdc4018c3c3d71c3510e51",
+      "distinct_build_keys": 14,
+      "footprint_after_bytes": 7358978240,
+      "footprint_before_bytes": 658935408,
+      "forbidden_processes": [],
+      "lifetime_max_footprint_bytes": 7380392128,
+      "max_rss_bytes": 6848462848,
+      "parents": 650,
+      "provenance_digest": "d8e892eefe34fed0d7309b462620403aafbf7b07c187af28ac39cdf07cd1058d",
+      "python_heap_held_bytes": 2300804915,
+      "python_heap_peak_bytes": 2402363797,
+      "relationships_digest": "a3595bf01d647a86048d74dc2287a61878b347da9373c100d9af234a9e39a791",
+      "unit_ids_digest": "ac8ce6dadac8106881a6755da11465f0fb239f32c1bf237f9b5866edaa753b40",
+      "unit_schedules_digest": "4ae93e24ce21a84c3aef3407a330867471b9d862338697cbeea065f0b5bc5434",
+      "units": 910,
+      "used_materialised_prepare": false,
+      "wall_build_arm_s": 2.7735040187835693,
+      "wall_prepare_s": 317.0199830532074
+    }
+  ],
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_prepare_streaming_ab_v1",
+  "semantics": [
+    {
+      "arms": [
+        "A",
+        "B"
+      ],
+      "daily_backend_digest_identical": true,
+      "parents": 130,
+      "provenance_digest_identical": true,
+      "relationships_digest_identical": true,
+      "unit_ids_digest_identical": true,
+      "unit_schedules_digest_identical": true,
+      "units_identical": true
+    },
+    {
+      "arms": [
+        "A",
+        "B"
+      ],
+      "daily_backend_digest_identical": true,
+      "parents": 325,
+      "provenance_digest_identical": true,
+      "relationships_digest_identical": true,
+      "unit_ids_digest_identical": true,
+      "unit_schedules_digest_identical": true,
+      "units_identical": true
+    },
+    {
+      "arms": [
+        "A",
+        "B"
+      ],
+      "daily_backend_digest_identical": true,
+      "parents": 650,
+      "provenance_digest_identical": true,
+      "relationships_digest_identical": true,
+      "unit_ids_digest_identical": true,
+      "unit_schedules_digest_identical": true,
+      "units_identical": true
+    }
+  ]
+}

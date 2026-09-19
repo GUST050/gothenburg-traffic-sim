@@ -1,0 +1,185 @@
+{
+  "ab_measurement": {
+    "design_limits": [
+      "both arms share one process in fixed A then B order, so the first arm absorbs one-time imports; the -58 MB at 130 parents is that artifact, not a saving",
+      "one draw per (arm, size), no interleaving",
+      "lifetime footprint and max_rss are process-lifetime high-water marks, so arm B's include arm A's peak by construction",
+      "at a prefix, arm A walks n parents while arm B scans the whole ledger files"
+    ],
+    "instrument": "tracemalloc, restarted per arm; footprint recorded but not used as retention evidence",
+    "rows": [
+      {
+        "arm": "A",
+        "build_keys": 6,
+        "cpu_s": 159.369651,
+        "footprint_after_bytes": 3415592080,
+        "heap_held_bytes": 1061130643,
+        "parents": 130,
+        "prepare_wall_s": 154.78375005722046,
+        "units": 390
+      },
+      {
+        "arm": "B",
+        "build_keys": 6,
+        "cpu_s": 140.63344699999996,
+        "footprint_after_bytes": 3236105360,
+        "heap_held_bytes": 1002642097,
+        "parents": 130,
+        "prepare_wall_s": 138.69020795822144,
+        "units": 390
+      },
+      {
+        "arm": "A",
+        "build_keys": 9,
+        "cpu_s": 199.435613,
+        "footprint_after_bytes": 4965568856,
+        "heap_held_bytes": 1467312246,
+        "parents": 325,
+        "prepare_wall_s": 198.2258801460266,
+        "units": 585
+      },
+      {
+        "arm": "B",
+        "build_keys": 9,
+        "cpu_s": 201.81209400000006,
+        "footprint_after_bytes": 5000286624,
+        "heap_held_bytes": 1468499844,
+        "parents": 325,
+        "prepare_wall_s": 200.26160502433777,
+        "units": 585
+      },
+      {
+        "arm": "A",
+        "build_keys": 14,
+        "cpu_s": 327.77185700000007,
+        "footprint_after_bytes": 7310022512,
+        "heap_held_bytes": 2298970300,
+        "parents": 650,
+        "prepare_wall_s": 328.62890672683716,
+        "units": 910
+      },
+      {
+        "arm": "B",
+        "build_keys": 14,
+        "cpu_s": 318.1569840000002,
+        "footprint_after_bytes": 7358978240,
+        "heap_held_bytes": 2300804915,
+        "parents": 650,
+        "prepare_wall_s": 317.0199830532074,
+        "units": 910
+      }
+    ],
+    "streaming_minus_materialised_heap_bytes": {
+      "130": -58488546,
+      "325": 1187598,
+      "650": 1834615
+    }
+  },
+  "adoption_eligible": false,
+  "attribution": {
+    "build_keys_measured": [
+      6,
+      9,
+      14
+    ],
+    "conclusion": "the month's whole unit/parent graph is about 4.7 MB. Prepare holds about 4.8 GB. The graph is roughly a thousandth of it, so no ledger or streaming change can move the number that stopped the rebuild. The cost is about 155 MB per distinct build key, paid inside monthly_demand.prepare, which builds one archive runner per key and which BOTH paths call identically",
+    "fit_intercept_bytes": 132750900.25,
+    "per_build_key_bytes": 154729957.125,
+    "projected_heap_at_30_build_keys_bytes": 4774649614.0,
+    "question": "is prepare's memory per daily unit, or per build key?",
+    "resolved_by": "removing the demand layer entirely and measuring the unit/parent graph alone on the real 1,690-parent month",
+    "unit_graph_held_bytes": {
+      "materialised": [
+        4678605,
+        4666167
+      ],
+      "streaming": [
+        8444017,
+        8435452
+      ]
+    },
+    "unit_graph_share_of_prepare": 0.0009798844686490958,
+    "why_it_was_ambiguous": "units and build keys grow together across prefixes of one month, so a per-unit fit and a per-build-key fit are collinear and both fit"
+  },
+  "chain_state": {
+    "census": "NOT RUN",
+    "full_wci_build": "NOT AUTHORISED",
+    "month_cache_build": "NOT AUTHORISED",
+    "profile": "STILL BLOCKED - not started in this round",
+    "registration": "NOT RUN"
+  },
+  "claim_boundary": "whether replacing the profile's materialising prepare with the existing streaming seam fixes the memory that stopped the approved rebuild. It rebuilds no profile and authorises nothing",
+  "content_key": "29cc51103c630fd41bae67c9d29ff7ed2eb6fefb5a750f87e0fe42fe0cc9a4e6",
+  "decision": "PROFILE_REBUILD_BLOCKED_PREPARE_MEMORY_IS_PER_ARCHIVE_NOT_PER_UNIT",
+  "diagnostic_only": false,
+  "driver": {
+    "path": "inline decision script",
+    "recorded_by": "wci_diag_common"
+  },
+  "gate": {
+    "checks": {
+      "a_large_run_cannot_fall_back_to_materialised_prepare": true,
+      "every_semantic_comparison_is_exact": true,
+      "full_b_prepare_completed_1690_1950": false,
+      "full_b_prepare_footprint_under_2_gib": false,
+      "no_demand_archive_changed": true,
+      "no_partial_ledger_or_output_published_on_error": true,
+      "no_provenance_or_evidence_gate_weakened": true,
+      "no_sumo_or_demand_process": true,
+      "no_swap_growth": true,
+      "prepare_plus_two_phase_transient_under_4_gib": false,
+      "retained_heap_after_full_b_at_most_1_5_gib": false
+    },
+    "full_population_b_run": "NOT RUN, deliberately. The brief permits it only if B is safely under the limits; measured at 650 parents B holds 2.30 GB and 7.36 GB footprint, projecting to about 4.8 GB at 30 build keys, so it is not"
+  },
+  "git": {
+    "head": "29e0017ef40e2d33dfb80e88f811da14762af900",
+    "tracked_changes": [
+      " M tools/profile_monthly_cost_ledger.py",
+      " M traffic_sim/simulation/monthly_search.py"
+    ]
+  },
+  "inputs": {
+    "ab": {
+      "content_key": "32ca43e2523111340b81f01cdd9555c2c90397c7d2db939263f1f996d47e2980",
+      "path": "validation/wci_prepare_streaming_ab_20260918-v1.json"
+    },
+    "layer_attribution": {
+      "content_key": "51c361a398e8dfad7e39802301262e5f2ae4a91312036328c19f78802da10abf",
+      "path": "validation/wci_prepare_layer_attribution_20260919-v1.json"
+    },
+    "ledger_manifest_content_key": "653152022cb21e75a15c74a81a96d392e47b4c157d2f80bdc3ba4fa5650be13e",
+    "ledger_parent_count": 1690,
+    "ledger_unique_unit_count": 1950,
+    "prior_block": {
+      "content_key": "f964048439b4bdac3a783ff5d9f2b7beed8c565d3b536e59a0898869b429d11c",
+      "path": "validation/wci_profile_chain_decision_20260918-v1.json"
+    },
+    "qualified_demand_manifest_content_key": "2cb32dcddfeb9bb99513fe1ae9cdcc44f0935435b78a278fa6eb3786060159ec",
+    "search_content_key": "383c9130a45370c2f296"
+  },
+  "production_chain_rebuild_required": true,
+  "release_evidence": false,
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_streaming_prepare_decision_v1",
+  "supersedes_readiness_of": {
+    "record": "validation/wci_two_phase_decision_20260918-v1.json",
+    "why": "production source changed in this round, so that readiness decision no longer describes the code that would run"
+  },
+  "what_the_change_is_still_worth": [
+    "the profile can no longer materialise a month-sized parent graph, and a silent fallback is impossible rather than merely unlikely",
+    "prepare is 2.4x faster in this layer (0.218 s against 0.517 s)",
+    "the enumeration is now verified, versioned and bound into the evidence, and stale ledgers from other producer sources are refused",
+    "one definition of a ledger's contents instead of two"
+  ],
+  "what_was_built": "tools/profile_monthly_cost_ledger.py now prepares through IndependentDailyRunner.prepare_from_ledgers over a verified, versioned, append-only closure-ledger population, refuses to materialise above MATERIALISED_PARENT_LIMIT, re-verifies the ledgers it just wrote, binds them to the producer source manifest, and records the binding in the profile evidence. monthly_search's ledger_unit_records was made public so both producers share ONE definition of a ledger's contents",
+  "where_a_real_fix_would_go": "monthly_demand.prepare builds and retains one ArchivedDemandSumoRunner per build key for the whole run. A fix would create them lazily and release each after its build key is priced - which the two-phase cost ledger already groups by - or prepare build keys in waves. Not attempted here: it is a separate change to production costing code and needs its own approval and its own evidence"
+}

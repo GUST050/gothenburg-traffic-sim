@@ -3562,14 +3562,52 @@ keeping in mind whenever a canary is used to size a production run:
   published 6.52 GB peak is also a ledger-phase number. Until 2026-09-18
   nothing had ever measured `prepare`.
 
-Measured now, on prefixes of 130/325/650 parents (390/585/910 daily units):
-`prepare` holds **2.40 MB per daily unit**, steady across all three, which
-is **4.78 GB at 1,950 units** before the ledger starts. A profile rebuild
-therefore needs about 10 GiB, not 4; a ledger-only measurement may not be
-used to budget a run that also prepares. `independent_daily.py` already has
-`prepare_from_ledgers`, a streaming seam that reads published ledgers
-rather than rebuilding the unit/parent graph in memory, if that cost is to
-be reduced rather than budgeted for.
+Measured on prefixes of 130/325/650 parents (390/585/910 daily units),
+`prepare` reaches **4.78 GB at the month's size** before the ledger starts.
+A profile rebuild therefore needs about 10 GiB, not 4; a ledger-only
+measurement may not be used to budget a run that also prepares.
+
+**That cost is per ARCHIVE, not per daily unit (corrected 2026-09-19).**
+The prefix fit first read as "2.40 MB per daily unit". It is not: units and
+build keys grow together across prefixes of one month, so a per-unit fit and
+a per-build-key fit are collinear and both fit the same three points. The
+tie is broken by removing the demand layer and measuring the unit/parent
+graph alone on the real 1,690-parent month, alternating the two paths:
+
+| path | held heap | wall |
+|---|---:|---:|
+| materialised `prepare(parents)` | 4.679 / 4.666 MB | 0.517 s |
+| streaming `prepare_from_ledgers` | 8.444 / 8.435 MB | 0.218 s |
+
+The whole month's graph is **4.7 MB**, about a thousandth of prepare's
+4.8 GB. Fitting on BUILD KEYS instead gives **154.7 MB per key** (intercept
+132.9 MB), projecting to 4.77 GB at 30 keys — where the aborted run was
+heading. The memory is one `ArchivedDemandSumoRunner` per build key,
+retained for the whole run inside `monthly_demand.prepare`, which every
+preparation path calls identically.
+
+**The profile's preparation contract (2026-09-19).**
+`tools/profile_monthly_cost_ledger.py` prepares ONLY through
+`IndependentDailyRunner.prepare_from_ledgers`, over a verified, versioned,
+append-only closure-ledger population. It refuses to materialise a shortlist
+above `MATERIALISED_PARENT_LIMIT = 256` — the month is 1,690, so for a
+production profile the refusal is unconditional — mirroring
+`monthly_search._prepare_shortlist`'s policy, because a silent fallback is
+how a memory gate stops meaning anything. The ledgers are re-verified after
+being written rather than trusted from the writer's return value, are
+refused when enumerated by different producer sources, and are bound into
+the profile record, which also carries the ledger build's time and bytes
+because that work happens outside the profile's own sampler.
+
+This preserves every identity exactly — parent order and bytes, unit IDs and
+bytes, parent→unit order, build keys, the demand release and its content
+key, provenance and backend digests, `daily_units_for` — verified on the real
+month. It is worth having for the fallback refusal, the shared single
+definition of a ledger's contents, and 2.4x faster preparation. **It is not
+the memory fix**, and must not be described as one: the quantity it changes
+is 4.7 MB. Reducing the real cost means not retaining 30 archive runners at
+once — create them lazily and release each after its build key is priced,
+which is how the two-phase cost ledger already groups the work.
 
 **Publication.** Unit records are content-addressed and written atomically
 by the cache itself. The batch marker is published only after every stored

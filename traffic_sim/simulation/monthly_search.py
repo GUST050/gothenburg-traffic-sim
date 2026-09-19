@@ -909,7 +909,7 @@ class _StreamingCandidates(MappingABC):
         return len(self._index)
 
 
-def _ledger_unit_records(
+def ledger_unit_records(
     spec: ClosureSearchSpec,
     parent: ClosureSchedule,
 ) -> Sequence[tuple[str, Mapping[str, Any], Callable[[], ClosureSchedule]]]:
@@ -919,6 +919,13 @@ def _ledger_unit_records(
     daily SUMO units.  Under any other interday policy the parent IS the unit
     of execution, so the unit and relationship ledgers stay empty rather than
     inventing a decomposition the executor would never use.
+
+    PUBLIC because more than one producer writes these ledgers: the search
+    here and ``tools/profile_monthly_cost_ledger.py``.  Two copies of "what a
+    ledger contains" is how a future interday policy gains daily units in one
+    producer and silently writes empty unit ledgers in the other -- which no
+    digest can catch, because the digests would match the bytes that were
+    actually written.
     """
     if spec.interday_policy != "independent_daily_reset_v1":
         return ()
@@ -991,7 +998,7 @@ def _candidate_ledger(
             directory,
             spec,
             iter_closure_schedules(spec),
-            unit_records=_ledger_unit_records,
+            unit_records=ledger_unit_records,
             provenance={
                 "search_id": spec.search_id,
                 "interday_policy": spec.interday_policy,

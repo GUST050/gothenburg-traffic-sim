@@ -2565,6 +2565,68 @@ Profilombyggnaden får inte startas om utan ett nytt uttryckligt godkännande,
 och månadscachen och det fullständiga WCI-bygget är fortfarande inte
 godkända.
 
+#### Strömmande prepare byggd — och den är inte minnesfixen, 2026-09-19
+
+Profilen förbereder nu genom `IndependentDailyRunner.prepare_from_ledgers`
+över en verifierad, versionssatt och append-only closure-ledgerpopulation
+(`parents.ndjson`, `units.ndjson`, `parent_units.ndjson`,
+`ledgers.manifest.json`) i stället för att materialisera månadens
+föräldragraf. Den vägrar materialisera över `MATERIALISED_PARENT_LIMIT = 256`
+— månaden har 1 690, så vägran är ovillkorlig där — verifierar om de ledgers
+den just skrivit i stället för att lita på skrivarens returvärde, avvisar en
+uppsättning som räknats upp av andra producentkällor, och binder in ledgern
+plus sin egen tid och sina byte utanför mätfönstret i profilens evidens.
+`monthly_search._ledger_unit_records` gjordes publik så att båda producenterna
+delar EN definition av vad en ledger innehåller.
+
+**Mätningen som avgör.** Tar man bort demandlagret helt och mäter
+enhets-/föräldragrafen ensam på den verkliga 1 690-föräldersmånaden,
+alternerande A,B,B,A:
+
+| väg | hållen heap | wall |
+|---|---:|---:|
+| materialiserad | 4,679 / 4,666 MB | 0,517 s |
+| strömmande | 8,444 / 8,435 MB | 0,218 s |
+
+**Hela månadens enhets-/föräldragraf är 4,7 MB** — ungefär en tusendel av
+`prepare`s 4,8 GB. Strömningen håller **3,76 MB MER** (den tolkar 1 950
+JSON-rader till färska strängar där den materialiserade vägen delar internade
+nycklar och spec-attribut) och är 2,4× snabbare. Samtliga semantiska digests
+är identiska. Evidens `validation/wci_prepare_layer_attribution_20260919-v1.json`
+(`51c361a3…`).
+
+**Varför den tidigare per-enhet-attributionen var fel.** Enheter och
+byggnycklar är kollineära över prefix av samma månad, så »2,40 MB per
+dagenhet« och »155 MB per byggnyckel« passar samma tre punkter lika bra.
+Bara borttagandet av demandlagret bryter kopplingen. En anpassning av arm A
+mot BYGGNYCKLAR ger 154,7 MB per nyckel, intercept 132,9 MB, vilket
+projicerar till **4,77 GB vid månadens 30 nycklar** — precis dit den avbrutna
+körningen var på väg.
+
+**A/B mot de verkliga arkiven**
+(`validation/wci_prepare_streaming_ab_20260918-v1.json`, `32ca43e2…`),
+130/325/650 föräldrar = 390/585/910 enheter över 6/9/14 byggnycklar: A
+1 061,1 / 1 467,3 / 2 299,0 MB mot B 1 002,6 / 1 468,5 / 2 300,8 MB. B är
+58 MB billigare i första punkten och 1–2 MB DYRARE i de andra två; den
+första punktens gap är artefakten av att vara första armen i processen.
+Behandla den drivarens A-mot-B-differens som icke-avgörande *by design* — en
+process, fast A→B-ordning, ett drag per punkt, och high-water-märken över
+processens livstid — vilket är skälet till att den isolerade attributionen
+ovan är beviset, inte differensen.
+
+**Beslut** `validation/wci_streaming_prepare_decision_20260919-v1.json`
+(`29cc5110…`): **`PROFILE_REBUILD_BLOCKED_PREPARE_MEMORY_IS_PER_ARCHIVE_NOT_PER_UNIT`**.
+Den fullständiga B-körningen kördes medvetet INTE: uppdraget tillåter den
+bara om B ligger säkert under gränserna, och vid 650 föräldrar håller B redan
+2,30 GB med 7,36 GB fotavtryck.
+
+**Var en riktig fix hör hemma.** `monthly_demand.prepare` bygger och behåller
+en `ArchivedDemandSumoRunner` per byggnyckel för hela körningen. Skapa dem
+lat och släpp varje efter att dess byggnyckel prissatts — tvåfasledgern
+grupperar redan arbetet så — eller förbered byggnycklar i vågor. Inte
+försökt här: det är en ändring i produktionens kostnadskod och kräver eget
+godkännande och egen evidens.
+
 ### Steg 6 — isolerad byggare och kontrollerad parallellism
 
 **Filer:** `build_sumo_demand.py`, `monthly_demand.py:_resolve_new_release`,
