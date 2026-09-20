@@ -915,6 +915,82 @@ which model may continue. See `AGENTS.md`.
   it is evidence for its date, not current workflow authority.`
 <!-- CURRENT_HANDOFF_END -->
 
+## Finding — 2026-09-20 · what `active_closure_edge_throughput` can and cannot mean
+
+A monthly three-day-period search (`ui-monthly-q50-cold-september-2027-3days-v1`,
+28 start dates, ~36.5 min) disqualified EVERY candidate on
+`active_closure_edge_throughput`, with zero teleports and a reported 311
+entries spread over 24 of 30 days. The working hypothesis was a routing
+timing problem: vehicles delayed past the closure start slipping onto the
+closed edge. MEASURED against real SUMO 1.27.1 at the deployed settings
+(`--mesosim`, `--meso-junction-control.limited`, `--ignore-route-errors`,
+`--time-to-teleport -1`), that hypothesis is REFUTED. Eight configurations,
+every one reporting `entered == 0` in every fully-contained closed bucket:
+
+* a vehicle that passes the rerouter ring BEFORE the closure opens and
+  reaches the edge after it — it waits on the approach until reopening
+  (exit times 884 s -> 2700 s), it does not slip through;
+* saturated demand, one vehicle per second across the closure boundary;
+* an 8 h closure under 12 h of dense demand (2 160 vehicles);
+* three closure intervals with gaps, and two ADJACENT intervals (the shape
+  a per-day multi-day closure writes) — no reopening at the seam;
+* a `--load-state` warm resume, which is how the search actually runs;
+* a closure interval already open at `--begin`;
+* departures on a closed edge, which SUMO refuses outright.
+
+So `disallow="all"` seals the edge in mesoscopic SUMO, and a late arrival
+becomes a queue, never an entry. With teleporting disabled there is no known
+path onto a sealed edge, which matches the Stage 1 finding that a teleport is
+NECESSARY for throughput. A positive count therefore means the gate scored a
+bucket in which the edge was OPEN — a bookkeeping fault — and the two causes
+need opposite fixes. `tools/explain_closure_throughput.py` decides which from
+the run's own edgeData plus the closure additional SUMO was given, and says
+`bookkeeping` or `simulator` in one line.
+
+TWO REAL DEFECTS were found in that gate while looking, both in the
+independent-daily/monthly path and both failing in the CLEAN direction:
+
+1. `simulate_closure` handed `rs.parse_edgedata` the caller's `n_intervals`,
+   which a windowed run computes as `(duration_s - begin_s) // 900` — a
+   LENGTH — while the parser files every bucket at its ABSOLUTE quarter and
+   drops anything past the width it is given. On the canonical
+   independent-daily envelope (three-day archive, `begin_s` one midnight in)
+   that is every bucket there is. MEASURED on a real windowed SUMO run in
+   exactly that geometry: 96 vehicles on the closed edge during the scored
+   window, reported as `None` — "never measured", which
+   `closure_edge_leaked` reads as clean. The width is now the run's absolute
+   end; `begin_s == 0` is unchanged because there the two numbers are equal.
+2. `aggregate_seed_metrics` summed only the measured seeds, so `[0, None, 0]`
+   became a confident zero — the very thing
+   `run_scenario.aggregate_active_closure_entries` was written to prevent in
+   the 2026-07-12 review. Both now call one shared
+   `combine_measured_closure_entries`.
+3. Nothing enforced that an edgeData collector starts on a period boundary,
+   although every reader files buckets by `begin // 900`. This is the ONE
+   mechanism measured here that produces a FALSE POSITIVE, and it produces
+   one the size of a single bucket: at a 300 s offset the bucket covering a
+   closure's last quarter also covers the first 300 s after the reopening,
+   and 17 legitimate post-reopening vehicles were scored as an active-closure
+   leak where the same traffic on an aligned collector scored 0. Every
+   production caller is aligned today (all warm alignments are 900 and
+   `simulate_closure` already validated its own `begin_s`), so
+   `write_edgedata_additional` now refuses an offset begin outright rather
+   than leaving the class open to the next caller.
+
+Closed edges are also zero-filled in the cold arm now, as the warm arm has
+done since LUNA-WARM-06, so a clean closure reads as a measured 0 rather than
+as "nobody looked". That is safe ONLY together with fix 1: under the old width
+a partly-dropped series would have been scored over its surviving buckets and
+reported as a whole-window total.
+
+NOT EXPLAINED, and still open: neither defect can produce a POSITIVE count, so
+neither is the cause of the 311 entries. The failing run's own artifacts are
+the missing evidence, and the monthly workspaces are deleted at the end of a
+run, so the explainer needs one retained re-run of a failing day. The reporting
+UI also names a generic gate set ("omväg, strandade fordon, simuleringshälsa")
+instead of the gate that actually fired, which is why the run had to be
+theorised about at all.
+
 ## Historical handoff — 2026-08-17
 
 <!-- HISTORICAL_HANDOFF_2026_08_17_START -->

@@ -469,6 +469,26 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
                      "seed_truncated": seed_truncated,
                      "seed_dropped": seed_dropped})
 
+    # WIDTH OF THE CLOSED-EDGE INTEGRITY ARRAY — absolute, never the window
+    # length. `rs.parse_edgedata` files every bucket at its ABSOLUTE quarter
+    # (`begin // 900`) and drops any index that reaches past the width it is
+    # given, and `cm.active_closure_throughput` then scores ABSOLUTE closure
+    # quarters. A windowed run (`begin_s > 0`) receives an `n_intervals` of
+    # `(duration_s - begin_s) // 900` — a LENGTH — so every bucket from
+    # absolute quarter `n_intervals` onward was silently discarded. On the
+    # canonical independent-daily envelope that is every bucket there is: the
+    # three-day archive puts `begin_s` one midnight in (96) and the envelope
+    # runs one more day (`n_intervals` 96), so the closed edge never entered
+    # `flows` at all and the gate returned None — "never measured", which
+    # `closure_edge_leaked` reads as CLEAN. MEASURED on a real SUMO run in
+    # exactly that geometry (begin_s 86400, duration_s 172800): 96 vehicles
+    # crossed the closed edge inside the scored window and the gate reported
+    # None under the window length, 96 under the absolute width.
+    # `begin_s == 0` is byte-identical, because there the two counts are the
+    # same number. Integer arithmetic, so an unaligned duration keeps its
+    # final short bucket instead of rounding it away.
+    closure_gate_width = (duration_s + 899) // 900
+
     # The BASELINE arm (close_edges empty) keeps SUMO's own teleport default:
     # it has no closed edge to leak onto, and its teleports are the genuine
     # congestion signal `closure_feasibility` disqualifies a whole observation
@@ -485,7 +505,18 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
             **({"work_dir": job["seed_dir"]} if work_dir is not None else {}))
         active_throughput = None
         if closures and job["ed_file"].exists():
-            seed_flows = rs.parse_edgedata(job["ed_file"], n_intervals)
+            # Closed edges are zero-filled for the same reason the warm arm
+            # zero-fills them (LUNA-WARM-06): `excludeEmpty="true"` omits an
+            # edge that WAS measured and carried nothing, so without this a
+            # perfectly clean closure is indistinguishable from one nobody
+            # looked at. Safe only because `closure_gate_width` above now
+            # spans the run: under the old window length a series whose
+            # later buckets were dropped would have been scored over the
+            # surviving ones alone and reported as a whole-window total —
+            # a confident zero whenever the leak sat in the dropped part.
+            seed_flows = rs.parse_edgedata(
+                job["ed_file"], closure_gate_width,
+                measured_empty_edges=tuple(close_edges))
             active_throughput = cm.active_closure_throughput(seed_flows, closures)
         metrics = cm.build_metrics(
             metric_paths["tripinfo"], metric_paths["statistics"],
@@ -677,8 +708,12 @@ def aggregate_seed_metrics(per_seed: list[cm.DisruptionMetrics]) -> cm.Disruptio
         for k, v in m.teleport_reasons.items():
             teleport_reasons[k] = teleport_reasons.get(k, 0) + v
     queues = [m.max_queue_vehicles for m in per_seed if m.max_queue_vehicles is not None]
-    throughputs = [m.closed_edge_throughput for m in per_seed
-                   if m.closed_edge_throughput is not None]
+    # NOT "sum whatever was measured": one unmeasured seed makes the whole
+    # Monte Carlo claim unmeasured, so [0, None, 0] is None and never a
+    # confident zero. One implementation, in run_scenario, so this and the
+    # published-scenario path cannot disagree about the same evidence.
+    closure_entries = rs.combine_measured_closure_entries(
+        [m.closed_edge_throughput for m in per_seed])
     return cm.DisruptionMetrics(
         total_time_loss_s=mean("total_time_loss_s"),
         trip_count=round(mean("trip_count")),
@@ -693,7 +728,7 @@ def aggregate_seed_metrics(per_seed: list[cm.DisruptionMetrics]) -> cm.Disruptio
         truncated_unreachable=max(m.truncated_unreachable for m in per_seed),
         dropped_unreachable=max(m.dropped_unreachable for m in per_seed),
         max_queue_vehicles=max(queues) if queues else None,
-        closed_edge_throughput=sum(throughputs) if throughputs else None,
+        closed_edge_throughput=closure_entries,
     )
 
 

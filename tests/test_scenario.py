@@ -1291,6 +1291,34 @@ class TestScenarioManifestDemandScope:
         edge_data = ET.parse(additional).getroot().find("edgeData")
         assert edge_data.get("writeAttributes") is None
 
+    def test_an_offset_collector_is_refused_at_write_time(self, tmp_path):
+        """An unaligned begin_s mis-files every bucket, undetectably.
+
+        SUMO lays the intervals out from begin_s; every reader files them
+        under `begin // 900`. At a 300 s offset the bucket covering a
+        closure's last quarter also covers the first 300 s after the
+        reopening, and `active_closure_throughput` scores that traffic as
+        flow on a closed road — measured at 17 vehicles against 0 from the
+        same traffic on an aligned collector. Nothing downstream can tell,
+        so it has to fail here.
+        """
+        with pytest.raises(ValueError, match="multiple of the 900 s period"):
+            run_scenario.write_edgedata_additional(
+                tmp_path / "edge.add.xml", tmp_path / "edge.xml", 86400,
+                begin_s=1200)
+        with pytest.raises(ValueError, match="multiple of the 900 s period"):
+            run_scenario.write_edgedata_additional(
+                tmp_path / "edge.add.xml", tmp_path / "edge.xml", 86400,
+                begin_s=-900)
+
+    def test_aligned_window_starts_are_still_accepted(self, tmp_path):
+        for begin_s in (0, 900, 86400):
+            additional = tmp_path / f"edge_{begin_s}.add.xml"
+            run_scenario.write_edgedata_additional(
+                additional, tmp_path / "edge.xml", 172800, begin_s=begin_s)
+            assert ET.parse(additional).getroot().find(
+                "edgeData").get("begin") == str(begin_s)
+
     def test_aggregate_flows_includes_edges_with_zero_traffic_in_every_seed(self):
         """Finding #1 from a bug review 2026-07-10, independently verified
         and fixed: excludeEmpty="true" means an edge with genuinely zero

@@ -618,3 +618,109 @@ class TestLoadBaselineFlows:
         monkeypatch.setattr(sct, "BASELINE_SCENARIO", baseline)
         with pytest.raises(SystemExit):
             sct.load_baseline_flows("sig", 192)
+
+
+class TestWindowedClosureIsActuallyMeasured:
+    """The closed-edge integrity gate must survive a windowed run.
+
+    `rs.parse_edgedata` files every bucket at its ABSOLUTE quarter
+    (`begin // 900`) and drops any index past the width it is handed;
+    `cm.active_closure_throughput` then scores ABSOLUTE closure quarters.
+    `simulate_closure` used to hand it `n_intervals`, which a windowed
+    caller computes as `(duration_s - begin_s) // 900` — a LENGTH. Every
+    bucket from absolute quarter `n_intervals` onward was therefore
+    discarded in silence, and on the canonical independent-daily envelope
+    (three-day archive, `begin_s` one midnight in) that is every bucket
+    there is: the closed edge never reached `flows`, the gate returned
+    None, and `closure_edge_leaked(None)` reads as CLEAN.
+    """
+
+    def test_absolute_buckets_survive_a_windowed_run(self, tmp_path, monkeypatch):
+        # One day into a two-day run: begin_s=86400 (absolute quarter 96),
+        # duration_s=172800, so the old width was (172800-86400)//900 = 96
+        # and EVERY bucket the run writes lands at index >= 96.
+        begin_s, duration_s = 86400, 172800
+        closed_quarter = 100                      # 01:00 on the second day
+        closure = [{"edge_id": "closed",
+                    "begin_s": closed_quarter * 900,
+                    "end_s": (closed_quarter + 1) * 900}]
+
+        net_path = tmp_path / "net.net.xml"
+        net_path.write_text('<net>\n  <connection from="lead" to="closed"/>\n</net>')
+        monkeypatch.setattr(run_scenario, "NET_PATH", net_path)
+        monkeypatch.setattr(sct.rs, "SUMO_DIR", tmp_path)
+        (tmp_path / "plain.edg.xml").write_text(
+            '<edges>\n  <edge id="closed" from="a" to="b" shape="0,0 1,1"/>\n</edges>')
+        variant = tmp_path / "calibrated.rou.xml"
+        variant.write_text("<routes>\n</routes>")
+
+        def fake_run_sumo(seed, route_path, add_paths, duration_s_, home, **kw):
+            # Stand in for SUMO: write the edgeData the run would have
+            # produced, with seven vehicles crossing the closed edge inside
+            # the closure's own quarter.
+            edge_file = tmp_path / "run" / f"seed-{seed}" / f"{sct.SCT_PREFIX}ed_w0_{seed}.xml"
+            edge_file.write_text(
+                "<meandata>\n"
+                f'  <interval begin="{closed_quarter * 900}" '
+                f'end="{(closed_quarter + 1) * 900}">\n'
+                '    <edge id="closed" entered="7"/>\n'
+                "  </interval>\n"
+                "</meandata>\n")
+            return _write_tiny_metrics_fixtures(tmp_path, f"seed{seed}")
+
+        monkeypatch.setattr(sct.rs, "run_sumo", fake_run_sumo)
+
+        metrics, _, _, _ = sct.simulate_closure(
+            name="w0", closures=closure, close_edges=["closed"],
+            variants=[variant], seeds=1,
+            n_intervals=(duration_s - begin_s) // 900,
+            duration_s=duration_s, begin_s=begin_s, flush_s=0,
+            home=tmp_path, micro=True,
+            adj=run_scenario.build_edge_graph({"closed"}),
+            freeflow={"lead": 10.0}, scratch=[],
+            work_dir=tmp_path / "run", variant_labels=["q50"])
+
+        assert metrics.closed_edge_throughput == 7
+        assert "active_closure_edge_throughput" in cm.disqualification_reasons(metrics)
+
+
+class TestClosureEntryCompletenessIsShared:
+    """[0, None, 0] is not a verified zero — and both consumers say so.
+
+    `run_scenario.aggregate_active_closure_entries` has refused to sum
+    around a missing seed since the 2026-07-12 review; `aggregate_seed_metrics`
+    summed the measured values and reported a confident total anyway, so the
+    monthly/period search could rank a closure clean on evidence one of its
+    seeds never produced.
+    """
+
+    def _metrics(self, throughput):
+        return cm.DisruptionMetrics(
+            total_time_loss_s=1.0, trip_count=1, unfinished_trips=0,
+            unfinished_waiting_trips=0, teleport_total=0, teleport_reasons={},
+            loaded=1, inserted=1, running_at_end=0, waiting_at_end=0,
+            truncated_unreachable=0, dropped_unreachable=0,
+            closed_edge_throughput=throughput)
+
+    def test_one_unmeasured_seed_makes_the_total_unmeasured(self):
+        agg = sct.aggregate_seed_metrics(
+            [self._metrics(0), self._metrics(None), self._metrics(0)])
+        assert agg.closed_edge_throughput is None
+
+    def test_every_seed_measured_still_totals(self):
+        agg = sct.aggregate_seed_metrics(
+            [self._metrics(0), self._metrics(2), self._metrics(1)])
+        assert agg.closed_edge_throughput == 3
+
+    def test_no_closure_at_all_stays_none(self):
+        agg = sct.aggregate_seed_metrics(
+            [self._metrics(None), self._metrics(None)])
+        assert agg.closed_edge_throughput is None
+
+    def test_both_consumers_use_one_rule(self):
+        mixed = [0, None, 0]
+        assert run_scenario.combine_measured_closure_entries(mixed) is None
+        assert run_scenario.aggregate_active_closure_entries(
+            mixed, [{"edge_id": "closed", "begin_s": 0, "end_s": 900}]) is None
+        assert sct.aggregate_seed_metrics(
+            [self._metrics(v) for v in mixed]).closed_edge_throughput is None

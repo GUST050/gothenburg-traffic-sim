@@ -301,20 +301,35 @@ def closure_integrity_status(active_closure_entries: int | None,
     return None
 
 
-def aggregate_active_closure_entries(entries_by_seed: list[int | None],
-                                     closures: list[dict]) -> int | None:
-    """Return a closure-throughput total only when every seed was measured.
+def combine_measured_closure_entries(
+        entries_by_seed: list[int | None]) -> int | None:
+    """Total the per-seed closed-edge entries, or None if any seed is missing.
 
     Summing the non-``None`` values would turn ``[0, None, 0]`` into a
     supposedly verified zero-flow result. The Monte Carlo claim requires
     evidence for every seed: one missing edgeData series makes the closure
     unmeasured, regardless of the remaining seeds' clean values.
+
+    Shared with `suggest_closure_time.aggregate_seed_metrics`, which reached
+    the opposite answer on the same evidence until 2026-09-20 — the same
+    "one rule, one owner" reason `closure_edge_leaked` is shared rather than
+    reimplemented beside every consumer that judges this measurement.
     """
-    if not closures:
-        return None
     if not entries_by_seed or any(value is None for value in entries_by_seed):
         return None
     return sum(int(value) for value in entries_by_seed)
+
+
+def aggregate_active_closure_entries(entries_by_seed: list[int | None],
+                                     closures: list[dict]) -> int | None:
+    """Return a closure-throughput total only when every seed was measured.
+
+    A run with no closure at all has nothing to measure, which is reported
+    as None before the per-seed rule is consulted.
+    """
+    if not closures:
+        return None
+    return combine_measured_closure_entries(entries_by_seed)
 
 
 def baseline_output_fit_errors(meta: dict, audit: dict, *, n_intervals: int,
@@ -1501,7 +1516,24 @@ def write_edgedata_additional(path: Path, edgedata_file: Path,
     begin_s=0 (default) preserves every existing caller's whole-run
     behaviour exactly. A windowed caller (e.g. signal_optimize.run_condition
     evaluating a bounded time-of-day window) must pass its own begin_s so
-    the edgeData interval doesn't also count activity before the window."""
+    the edgeData interval doesn't also count activity before the window.
+
+    begin_s must land on a period boundary, and that is a CONTRACT, not
+    tidiness: SUMO lays the intervals out from begin_s, while every reader
+    downstream (`parse_edgedata`, and `closure_metrics
+    .active_closure_throughput` scoring absolute closure quarters on top of
+    it) files each bucket under `begin // 900`. An offset collector puts a
+    bucket that spans two absolute quarters under the earlier one, so the
+    last bucket of a closure window reaches past the reopening and its
+    legitimate traffic is scored as flow on a closed road. Measured on a
+    300 s offset: 17 post-reopening vehicles reported as an active-closure
+    leak, against 0 from the same traffic on an aligned collector. It fails
+    here, loudly, because nothing downstream can detect it."""
+    if begin_s < 0 or begin_s % 900:
+        raise ValueError(
+            "edgeData begin_s must be a non-negative multiple of the 900 s "
+            f"period; {begin_s} would offset every interval and mis-file "
+            "every bucket read back by absolute quarter")
     with open(path, "w") as f:
         f.write("<additional>\n")
         attributes = (' writeAttributes="entered timeLoss"'
