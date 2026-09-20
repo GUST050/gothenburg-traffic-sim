@@ -359,6 +359,7 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
                      variant_labels: Sequence[str] | None = None,
                      replication_records: list[dict[str, Any]] | None = None,
                      time_to_teleport_s: int | None = ct.CLOSURE_TIME_TO_TELEPORT_S,
+                     reroute_period_s: int | None = None,
                      ) -> tuple[cm.DisruptionMetrics, int, int, list[float]]:
     """Run `seeds` Monte Carlo replications of one candidate (or the
     baseline, when close_edges is empty) and aggregate their disruption
@@ -448,7 +449,8 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
             fp = base_dir / f"{vp.stem}_{SCT_PREFIX}{name}.rou.xml"
             t, d = rs.truncate_stranded_vehicles(
                 vp, close_edges, fp, adj, closures=closures,
-                edge_travel_s=freeflow)
+                edge_travel_s=freeflow,
+                reroute_committed=reroute_period_s is not None)
             per_variant_trunc[i] = (t, d)
             filtered.append(fp)
             scratch.append(fp)
@@ -508,6 +510,9 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
             duration_s, home, micro=micro, metrics=True, begin_s=begin_s,
             flush_s=flush_s,
             time_to_teleport_s=seed_teleport_policy,
+            # Like the teleport policy, this belongs to the arm that closes
+            # something: a baseline has no barrier to re-plan around.
+            reroute_period_s=reroute_period_s if close_edges else None,
             **({"work_dir": job["seed_dir"]} if work_dir is not None else {}))
         active_throughput = None
         if closures and job["ed_file"].exists():

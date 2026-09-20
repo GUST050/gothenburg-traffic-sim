@@ -51,6 +51,7 @@ import pandas as pd
 
 from traffic_sim.simulation import metrics as cm
 from traffic_sim.simulation import closure_teleport as ct
+from traffic_sim.simulation import closure_rerouting as cr
 from traffic_sim.simulation import disruption as disruption_analysis
 from traffic_sim.simulation.sensor_fit import (assess_output_fit,
                                                build_exact_output_fit,
@@ -944,6 +945,20 @@ def parse_args() -> argparse.Namespace:
                         "stuck-vehicle relocation, which is the only observed "
                         "route to traffic on a closed edge. A positive value "
                         "restores a finite threshold for comparison runs.")
+    p.add_argument("--reroute-committed", type=int, nargs="?",
+                   const=cr.DEFAULT_PERIOD_S, default=None, metavar="SECONDS",
+                   help="Let vehicles a closure catches mid-trip re-plan every "
+                        "SECONDS (default "
+                        f"{cr.DEFAULT_PERIOD_S} when the flag is given without "
+                        "a value). Without it, a vehicle that committed just "
+                        "before the closure opened, or that queues outside the "
+                        "400 m rerouter ring, waits at the barrier for the whole "
+                        "closure — measured at 3589 s of timeLoss with a legal "
+                        "turn one junction away. The device is granted ONLY to "
+                        "vehicles whose own route uses a closed edge in the "
+                        "window, and edge weights are frozen at free flow, so no "
+                        "other route changes. OFF by default: it changes what a "
+                        "closure costs.")
     args = p.parse_args()
     if args.seeds < 1:
         p.error("--seeds must be >= 1")
@@ -974,6 +989,11 @@ def parse_args() -> argparse.Namespace:
         ct.normalize_time_to_teleport(args.time_to_teleport)
     except ct.ClosureTeleportPolicyError as error:
         p.error(f"--time-to-teleport: {error}")
+    if args.reroute_committed is not None:
+        try:
+            cr.normalize_period(args.reroute_committed)
+        except cr.ClosureReroutingPolicyError as error:
+            p.error(f"--reroute-committed: {error}")
     return args
 
 
@@ -1725,10 +1745,32 @@ def reachable(adj: dict[str, list[str]], start: str, goal: str,
     return False
 
 
+def equip_rerouting_device(vehicle) -> None:
+    """Force SUMO's rerouting device onto ONE vehicle, idempotently.
+
+    Granting it globally is what C1 rejected — it changes route choice for
+    the whole calibrated demand. Per vehicle, every other route in the file
+    is byte-identical to a run without the policy.
+    """
+    for param in vehicle.findall("param"):
+        if param.get("key") == cr.DEVICE_PARAM:
+            param.set("value", "true")
+            return
+    element = ET.SubElement(vehicle, "param")
+    element.set("key", cr.DEVICE_PARAM)
+    element.set("value", "true")
+    # SUMO accepts either order; keeping params ahead of the route matches
+    # the hand-written fixtures and keeps diffs of generated files readable.
+    vehicle.remove(element)
+    vehicle.insert(0, element)
+
+
 def truncate_stranded_vehicles(route_path: Path, close_edges: list[str],
                                out_path: Path, adj: dict[str, list[str]],
                                closures: list[dict] | None = None,
-                               edge_travel_s: dict[str, float] | None = None) -> tuple[int, int]:
+                               edge_travel_s: dict[str, float] | None = None,
+                               reroute_committed: bool = False,
+                               equipped: list[str] | None = None) -> tuple[int, int]:
     """Shorten (don't delete) vehicles whose route has no detour at all.
 
     FOUND 2026-07-09 (Gustav asked for the closure-leak finding from the
@@ -1852,7 +1894,21 @@ def truncate_stranded_vehicles(route_path: Path, close_edges: list[str],
         if ok is None:
             ok = cache[key] = reachable(adj, *key, closed)
         if ok:
-            continue   # the live rerouter will detour this one fine
+            # A detour exists, so the live rerouter CAN save this one — but
+            # only if the vehicle enters a rerouter edge while the closure
+            # is active. One that committed just before it opened, or that
+            # is queued in spillback outside the 400 m ring, is never told
+            # and waits at the barrier instead (measured: 3 589 s of
+            # timeLoss for a vehicle with a legal turn at the next
+            # junction). `reroute_committed` hands THIS vehicle a rerouting
+            # device so it re-plans on a timer wherever it is. Off by
+            # default: it changes what a closure costs, so adopting it is a
+            # decision, not a default. See closure_rerouting.
+            if reroute_committed:
+                equip_rerouting_device(v)
+                if equipped is not None:
+                    equipped.append(v.get("id"))
+            continue
         route_el.set("edges", " ".join(edges[:i]))
         n_truncated += 1
     tree.write(out_path, xml_declaration=True, encoding="UTF-8")
@@ -1896,6 +1952,7 @@ def build_sumo_invocation(seed: int, route_path: Path, add_paths: list[Path],
              output_precision: int | None = None,
              keep_after_arrival_s: int | None = None,
              time_to_teleport_s: int | None = None,
+             reroute_period_s: int | None = None,
              rerouting_threads: int | None = None,
              routing_algorithm: str | None = None,
              suppress_warnings: bool = True,
@@ -2007,6 +2064,9 @@ def build_sumo_invocation(seed: int, route_path: Path, add_paths: list[Path],
         # nothing at all, so every non-closure caller's argv — and therefore
         # the warm/cold equivalence contract — is byte-identical to before.
         *ct.sumo_arguments(time_to_teleport_s),
+        # Re-planning for vehicles a closure catches mid-trip. None emits
+        # nothing, so every non-closure caller's argv is unchanged.
+        *cr.sumo_arguments(reroute_period_s),
     ]
     metric_paths: dict[str, Path] = {}
     if (save_state_path is None) != (save_state_time_s is None):
@@ -2138,6 +2198,7 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
              output_precision: int | None = None,
              keep_after_arrival_s: int | None = None,
              time_to_teleport_s: int | None = None,
+             reroute_period_s: int | None = None,
              rerouting_threads: int | None = None,
              routing_algorithm: str | None = None,
              suppress_warnings: bool = True,
@@ -2157,6 +2218,7 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         output_precision=output_precision,
         keep_after_arrival_s=keep_after_arrival_s,
         time_to_teleport_s=time_to_teleport_s,
+        reroute_period_s=reroute_period_s,
         rerouting_threads=rerouting_threads,
         routing_algorithm=routing_algorithm,
         suppress_warnings=suppress_warnings,
@@ -2732,11 +2794,15 @@ def prepare_variant_job(job: dict) -> dict:
     serial versus 1.4596 s threaded). ``index`` is retained on the result so the
     caller keeps the deterministic variant order explicit.
     """
+    equipped: list[str] = []
     truncated, dropped = truncate_stranded_vehicles(
         job["route_path"], job["close_edges"], job["out_path"], job["adj"],
-        closures=job["closures"], edge_travel_s=job["edge_travel_s"])
+        closures=job["closures"], edge_travel_s=job["edge_travel_s"],
+        reroute_committed=bool(job.get("reroute_committed")),
+        equipped=equipped)
     return {"index": job["index"], "out_path": job["out_path"],
-            "truncated": truncated, "dropped": dropped}
+            "truncated": truncated, "dropped": dropped,
+            "equipped": len(equipped)}
 
 
 def prepare_closure_variants(prep_jobs: list[dict]) -> tuple[list[Path], int, int]:
@@ -2792,6 +2858,7 @@ def run_seed_job(job: SeedRunPlan | dict) -> dict:
         # baseline that silently stopped teleporting would lose the congestion
         # signal its own health gate is built on.
         time_to_teleport_s=plan.time_to_teleport_s,
+        reroute_period_s=plan.reroute_period_s,
         rerouting_threads=plan.rerouting_threads,
         routing_algorithm=plan.routing_algorithm,
         suppress_warnings=plan.suppress_warnings,
@@ -3018,6 +3085,7 @@ def main() -> None:
             # Preserve the exact tested function path for legacy --close.
             "closures": closures if windowed_closure else None,
             "edge_travel_s": freeflow,
+            "reroute_committed": args.reroute_committed is not None,
         } for index, vp in enumerate(variants)]
 
         # Preparation is serial regardless of --seed-workers (the threaded
@@ -3035,6 +3103,10 @@ def main() -> None:
         if n_dropped:
             print(f"  dropped {n_dropped} vehicle(s) that couldn't even "
                   f"depart with the closure in place")
+        if args.reroute_committed is not None:
+            print(f"  re-planning policy: "
+                  f"{cr.policy_label(args.reroute_committed)} — vehicles the "
+                  f"closure catches mid-trip re-plan instead of waiting it out")
         variants = filtered_variants
 
     closure_preparation.__exit__(None, None, None)
@@ -3096,6 +3168,7 @@ def main() -> None:
             timing=timer.enabled,
             suppress_warnings=not args.sumo_warnings,
             time_to_teleport_s=teleport_policy_s,
+            reroute_period_s=(args.reroute_committed if close_edges else None),
             rerouting_threads=args.rerouting_threads,
             routing_algorithm=args.routing_algorithm,
         ))

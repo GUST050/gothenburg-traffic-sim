@@ -121,6 +121,7 @@ SEMANTIC_SOURCES = (
     "traffic_sim/simulation/closure_ledgers.py",
     "traffic_sim/simulation/closure_preflight.py",
     "traffic_sim/simulation/closure_ranking.py",
+    "traffic_sim/simulation/closure_rerouting.py",
     "traffic_sim/simulation/closure_teleport.py",
     "traffic_sim/simulation/cost_ordered_execution.py",
     "traffic_sim/simulation/cost_ordered_search.py",

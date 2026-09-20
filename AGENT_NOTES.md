@@ -1025,6 +1025,30 @@ WHAT WAS BUILT SO THE NEXT ONE IS NOT THEORISED ABOUT (same day):
   workspace is deleted, and ONLY when it reports flow, so a healthy campaign
   writes nothing. Both arms previously deleted their workspace in a
   `finally`, which is precisely why one integer was all that survived.
+* OPTIONAL RE-PLANNING FOR VEHICLES A CLOSURE CATCHES MID-TRIP
+  (`traffic_sim/simulation/closure_rerouting.py`, `--reroute-committed`,
+  OFF by default). The rerouter is event-driven: it offers a new route only
+  to a vehicle that ENTERS one of its edges while the closure is active.
+  MEASURED how much that misses — 37 of 3 600 vehicles diverted on a
+  saturated corridor against 2 267 with a per-vehicle rerouting device,
+  because under a closure severe enough to matter the queue never reaches
+  the trigger edges. The device is granted ONLY to vehicles whose own route
+  uses a closed edge in the window and that keep a detour, so every other
+  calibrated route is untouched; that is the difference from the global
+  experiment C1 rejected.
+  A TRAP WORTH KNOWING, measured: `--device.rerouting.adaptation-weight 1`
+  and `--device.rerouting.adaptation-interval 0` — the obvious way to stop
+  the router chasing congestion rather than closures — each silently
+  DISABLE the re-planning (the committed vehicle waited its full 3 589 s),
+  so a run configured that way reports the policy as on while doing
+  nothing. The working guard is `--device.rerouting.threshold.factor`: a
+  closed edge makes the current route impossible so no threshold blocks
+  that diversion, while congestion never clears the bar. Verified inert
+  without a closure: 0 of 3 600 equipped vehicles diverted and total time
+  loss was identical to a run without the device.
+  IT IS OFF BY DEFAULT BECAUSE IT MOVES THE ANSWER: on that probe the
+  measured closure cost went from +176 vehicle-hours to −77. Adoption needs
+  a measurement on the real network, not a default.
 * The `no_viable` message in `web/app.js` now TALLIES the gates that
   actually fired, from the `hard_failures` the result already carries, and
   prints an untranslated gate code verbatim rather than dropping it. It used

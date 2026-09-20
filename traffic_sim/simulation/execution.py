@@ -30,6 +30,7 @@ class SeedRunPlan:
     timing: bool = False
     suppress_warnings: bool = True
     time_to_teleport_s: int | None = None
+    reroute_period_s: int | None = None
     rerouting_threads: int | None = None
     routing_algorithm: str | None = None
 
@@ -66,6 +67,7 @@ class SeedRunPlan:
             timing=bool(raw.get("timing", False)),
             suppress_warnings=bool(raw.get("suppress_warnings", True)),
             time_to_teleport_s=raw.get("time_to_teleport_s"),
+            reroute_period_s=raw.get("reroute_period_s"),
             rerouting_threads=raw.get("rerouting_threads"),
             routing_algorithm=raw.get("routing_algorithm"),
         )
