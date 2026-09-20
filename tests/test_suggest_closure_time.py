@@ -724,3 +724,64 @@ class TestClosureEntryCompletenessIsShared:
             mixed, [{"edge_id": "closed", "begin_s": 0, "end_s": 900}]) is None
         assert sct.aggregate_seed_metrics(
             [self._metrics(v) for v in mixed]).closed_edge_throughput is None
+
+
+class TestTheGateScoresTheSimulatedWindow:
+    """The window that decides the gate is the window SUMO was handed.
+
+    `active_closure_edge_throughput` returns one integer, and that integer
+    cannot distinguish a vehicle that crossed a SEALED edge from a bucket
+    scored while the edge was OPEN — two faults needing opposite fixes. The
+    second is now impossible by construction: `simulate_closure` reads the
+    closure windows back out of the additional it wrote for SUMO, so a
+    scored bucket is always one the simulator had shut.
+    """
+
+    def test_round_trip_recovers_every_written_window(self, tmp_path):
+        closures = [{"edge_id": "closed", "begin_s": 900, "end_s": 2700},
+                    {"edge_id": "other", "begin_s": 900, "end_s": 2700},
+                    {"edge_id": "closed", "begin_s": 5400, "end_s": 7200}]
+        path = tmp_path / "closure.add.xml"
+        run_scenario.write_closure_additional(path, closures, ["closed", "other"])
+
+        recovered = run_scenario.read_closure_intervals(path)
+
+        assert sorted((r["edge_id"], r["begin_s"], r["end_s"]) for r in recovered) \
+            == sorted((c["edge_id"], c["begin_s"], c["end_s"]) for c in closures)
+        run_scenario.assert_closures_were_simulated(closures, recovered, path)
+
+    def test_a_requested_closure_missing_from_the_file_is_refused(self, tmp_path):
+        # The other direction: reading the window back cannot notice a
+        # closure nobody wrote, which would leave the edge open for a window
+        # no gate scores — a silent PASS, the opposite of a phantom leak.
+        path = tmp_path / "closure.add.xml"
+        run_scenario.write_closure_additional(
+            path, [{"edge_id": "closed", "begin_s": 900, "end_s": 2700}],
+            ["closed"])
+
+        with pytest.raises(ValueError, match="does not close"):
+            run_scenario.assert_closures_were_simulated(
+                [{"edge_id": "closed", "begin_s": 900, "end_s": 2700},
+                 {"edge_id": "forgotten", "begin_s": 900, "end_s": 2700}],
+                run_scenario.read_closure_intervals(path), path)
+
+    def test_the_breakdown_names_the_buckets_behind_the_number(self):
+        flows = {"closed": [0, 0, 7, 0, 5, 0]}
+        closures = [{"edge_id": "closed", "begin_s": 1800, "end_s": 4500}]
+
+        breakdown = cm.active_closure_breakdown(flows, closures)
+
+        assert breakdown["total"] == 12
+        assert [(row["quarter"], row["entered"]) for row in breakdown["scored"]] \
+            == [(2, 7.0), (4, 5.0)]
+        assert breakdown["windows"] == closures
+        assert cm.active_closure_throughput(flows, closures) == breakdown["total"]
+
+    def test_a_clean_closure_still_reports_a_measured_zero(self):
+        flows = {"closed": [0, 0, 0, 0]}
+        closures = [{"edge_id": "closed", "begin_s": 900, "end_s": 2700}]
+
+        breakdown = cm.active_closure_breakdown(flows, closures)
+
+        assert (breakdown["total"], breakdown["measured"], breakdown["scored"]) \
+            == (0, True, [])

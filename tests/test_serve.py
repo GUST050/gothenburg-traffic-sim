@@ -93,7 +93,7 @@ def test_web_shell_is_desktop_only_and_uses_the_professional_palette():
     # Bumped with the step-4 progress phases and their detail line so a cached
     # bundle cannot hide them; the pin exists to force exactly this deliberate
     # edit.
-    assert 'app.js?v=24' in html
+    assert 'app.js?v=25' in html
 
 
 def _signal_scenario_spec(*, closure=False, simulation_mode="micro",

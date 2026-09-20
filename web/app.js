@@ -2,6 +2,20 @@
 // (IMPROVEMENT_PLAN.md J: a real Content-Security-Policy needs script-src 'self',
 // which an inline <script> block violates). Same code, same load order
 // (after state/provider/render/controls/clock).
+
+// Swedish glosses for the hard integrity gates, for readers who see only the
+// UI. An unknown code is shown VERBATIM rather than dropped or bundled into a
+// friendlier word: the one thing a disqualification message must never do is
+// leave the reader guessing which gate fired.
+const GATE_LABELS = {
+  active_closure_edge_throughput: 'trafik på avstängd kant',
+  teleports: 'teleporterade fordon',
+  dropped_unreachable_vehicles: 'fordon utan möjlig avfärd',
+  truncated_unreachable_vehicles: 'fordon med avkortad resa',
+  baseline_teleports: 'teleporter i baslinjen',
+  baseline_active_closure_edge_throughput: 'trafik på avstängd kant i baslinjen',
+};
+
     (async () => {
       try {
         // These assets are independent. Start all requests together so the
@@ -2267,9 +2281,23 @@
             metaLines.push(`<b>Ingen ensam vinnare:</b> ${result.tie_ids.length} ` +
               `scheman är praktiskt likvärdiga.`);
           } else if (result.status === 'no_viable') {
+            // Name the grindar that ACTUALLY fired, counted. The old text
+            // listed three guesses ("omväg, strandade fordon,
+            // simuleringshälsa") whatever the cause, so a month that fell
+            // entirely on active_closure_edge_throughput read as if the
+            // road were simply impossible to close, and the real reason had
+            // to be dug out of result.json by hand.
+            const gateTally = {};
+            ((result.robust_decision || {}).candidates || []).forEach(c =>
+              (c.hard_failures || []).forEach(reason => {
+                gateTally[reason] = (gateTally[reason] || 0) + 1;
+              }));
+            const named = Object.entries(gateTally)
+              .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+              .map(([reason, n]) => `${GATE_LABELS[reason] || reason} (${n})`);
             metaLines.push('<span class="monthly-warn">Ingen genomförbar ' +
-              'arbetsperiod hittades — alla kandidater föll på hårda grindar ' +
-              '(omväg, strandade fordon, simuleringshälsa).</span>');
+              'arbetsperiod hittades — alla kandidater föll på hårda grindar' +
+              (named.length ? ': ' + named.join(', ') : '') + '.</span>');
           } else {
             metaLines.push('<span class="monthly-warn">Inget säkert svar — ' +
               'resultatet är statistiskt oavgjort eller pilotgrinden kunde ' +

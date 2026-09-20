@@ -983,6 +983,26 @@ as "nobody looked". That is safe ONLY together with fix 1: under the old width
 a partly-dropped series would have been scored over its surviving buckets and
 reported as a whole-window total.
 
+WHO STILL WANTS THE CLOSED ROAD, MEASURED. Routes are built on the OPEN
+network and the closure is a runtime event, so re-planning is event-driven and
+local: `closingReroute` offers a new route only to a vehicle that ENTERS one of
+the rerouter's edges (the closed edges plus everything within
+`REROUTER_RADIUS_M` = 400 m) while the interval is active. On a corridor probe
+with a detour and 240 veh/h across a 1 h closure: 240 vehicles were re-planned
+onto the detour, 236 crossed before it opened, and exactly **4** were left
+wanting the closed road — the ones already committed past their last rerouter
+decision point when it shut. They waited at the stop line for 15 s to 3 600 s
+(the whole closure) and none of them entered it. So the population is real but
+small, it scales as flow x the travel time over the last committed stretch, and
+it shows up as time loss, queue and unfinished trips — never as throughput.
+Two consequences worth knowing: a driver modelled as waiting out an eight-hour
+closure at a stop line is not realistic, and `truncate_stranded_vehicles`'
+give-up rule (`MAX_CLOSURE_WAIT_S`) does not cover them — it only removes the
+NO-DETOUR population, and only when their FREE-FLOW arrival lands inside the
+window, which is an optimistic estimate. That is an open modelling question,
+not a defect, and it changes route choice, so it needs a decision rather than
+a patch.
+
 NOT EXPLAINED, and still open: neither defect can produce a POSITIVE count, so
 neither is the cause of the 311 entries. The failing run's own artifacts are
 the missing evidence, and the monthly workspaces are deleted at the end of a
@@ -990,6 +1010,28 @@ run, so the explainer needs one retained re-run of a failing day. The reporting
 UI also names a generic gate set ("omväg, strandade fordon, simuleringshälsa")
 instead of the gate that actually fired, which is why the run had to be
 theorised about at all.
+
+WHAT WAS BUILT SO THE NEXT ONE IS NOT THEORISED ABOUT (same day):
+* The gate now scores the window SUMO WAS GIVEN. `read_closure_intervals`
+  reads the closure additional back, both arms score those intervals, and
+  `assert_closures_were_simulated` covers the other direction — a requested
+  closure that never reached the file would leave a window open that no gate
+  scores, a silent pass. A scored-but-open bucket is now impossible by
+  construction rather than by agreement between two lists.
+* `active_closure_breakdown` returns the buckets the total was built from,
+  and both arms write a `closure_throughput_breakdown_v1` JSON beside the
+  run. `ArchivedDemandSumoRunner.retain_closure_evidence` copies it to
+  `cache_root/closure-evidence/<schedule>-<variant>-<seed>-<arm>/` before the
+  workspace is deleted, and ONLY when it reports flow, so a healthy campaign
+  writes nothing. Both arms previously deleted their workspace in a
+  `finally`, which is precisely why one integer was all that survived.
+* The `no_viable` message in `web/app.js` now TALLIES the gates that
+  actually fired, from the `hard_failures` the result already carries, and
+  prints an untranslated gate code verbatim rather than dropping it. It used
+  to name three fixed guesses ("omväg, strandade fordon, simuleringshälsa")
+  whatever the cause, which is why a month that fell entirely on
+  `active_closure_edge_throughput` read as if the road were simply
+  impossible to close. `app.js?v=` bumped to 25.
 
 ## Historical handoff — 2026-08-17
 

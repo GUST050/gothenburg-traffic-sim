@@ -163,9 +163,30 @@ def active_closure_throughput(flows: Mapping[str, Sequence[float]],
     vehicles that entered before closure start while making measured active
     closure flow a hard integrity signal.
     """
+    return active_closure_breakdown(flows, closures, interval_s)["total"]
+
+
+def active_closure_breakdown(flows: Mapping[str, Sequence[float]],
+                             closures: Sequence[Mapping[str, object]],
+                             interval_s: int = 900) -> dict:
+    """The same measurement, with the buckets it was built from.
+
+    The gate reports one integer, which is enough to disqualify a candidate
+    and not enough to explain it: a reader cannot tell a vehicle that
+    crossed a sealed edge from a bucket that was scored while the edge was
+    open. Those two need opposite fixes, so the per-bucket detail is
+    computed here, beside the total, rather than reconstructed later from a
+    run whose workspace has already been deleted.
+
+    `scored` carries every bucket the total is made of, nonzero ones
+    included; `windows` is what was scored. Both are plain JSON values so a
+    caller can persist them as evidence.
+    """
     total = 0.0
     measured = False
     seen: set[tuple[str, int]] = set()
+    scored: list[dict] = []
+    windows: list[dict] = []
     for closure in closures:
         edge = closure.get("edge_id")
         begin = closure.get("begin_s")
@@ -173,6 +194,7 @@ def active_closure_throughput(flows: Mapping[str, Sequence[float]],
         if not isinstance(edge, str) or not isinstance(begin, (int, float)) or \
            not isinstance(end, (int, float)) or end <= begin:
             raise ValueError("closures require edge_id and increasing begin_s/end_s")
+        windows.append({"edge_id": edge, "begin_s": begin, "end_s": end})
         first_full = int((begin + interval_s - 1) // interval_s)
         end_full = int(end // interval_s)
         series = flows.get(edge)
@@ -181,9 +203,19 @@ def active_closure_throughput(flows: Mapping[str, Sequence[float]],
         for quarter in range(first_full, min(end_full, len(series))):
             if (edge, quarter) not in seen:
                 seen.add((edge, quarter))
-                total += float(series[quarter])
+                entered = float(series[quarter])
+                total += entered
                 measured = True
-    return int(round(total)) if measured else None
+                if entered:
+                    scored.append({"edge_id": edge, "quarter": quarter,
+                                   "begin_s": quarter * interval_s,
+                                   "end_s": (quarter + 1) * interval_s,
+                                   "entered": entered})
+    return {"total": int(round(total)) if measured else None,
+            "measured": measured,
+            "interval_s": interval_s,
+            "windows": windows,
+            "scored": scored}
 
 
 def read_summary_max_queue(path: Path) -> int:

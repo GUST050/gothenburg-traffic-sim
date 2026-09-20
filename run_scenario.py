@@ -1634,6 +1634,52 @@ def write_closure_additional(path: Path, closures: list[dict],
         f.write("</additional>\n")
 
 
+def read_closure_intervals(path: Path) -> list[dict]:
+    """The closures SUMO was actually given, read back from its own file.
+
+    The inverse of `write_closure_additional`. It exists so the integrity
+    gate can score the window that was SIMULATED instead of a second list
+    that is merely believed to match it. A gate scoring a window SUMO never
+    closed reports ordinary traffic on an open road as flow through a
+    closure — indistinguishable, from the single number the gate returns,
+    from a simulator that let a vehicle through, and needing the opposite
+    fix. One source removes the whole class.
+    """
+    intervals: list[dict] = []
+    for interval in ET.parse(path).getroot().iter("interval"):
+        begin, end = interval.get("begin"), interval.get("end")
+        if begin is None or end is None:
+            raise ValueError(f"closure interval without begin/end in {path}")
+        for closing in interval.findall("closingReroute"):
+            edge = closing.get("id")
+            if not edge:
+                raise ValueError(f"closingReroute without an edge id in {path}")
+            intervals.append({"edge_id": edge,
+                              "begin_s": int(float(begin)),
+                              "end_s": int(float(end))})
+    return intervals
+
+
+def assert_closures_were_simulated(requested: list[dict],
+                                   simulated: list[dict], path: Path) -> None:
+    """Every requested closure must appear in the file handed to SUMO.
+
+    Reading the window back makes a phantom leak impossible; it cannot by
+    itself notice a closure that was never written, which would leave the
+    edge open for a window nobody scores — a silent PASS. Both directions
+    are therefore checked here, once, where both lists exist.
+    """
+    def key(rows):
+        return {(row["edge_id"], int(row["begin_s"]), int(row["end_s"]))
+                for row in rows}
+
+    missing = sorted(key(requested) - key(simulated))
+    if missing:
+        raise ValueError(
+            f"{path} does not close {missing}; the run would leave those "
+            "windows open and no gate would score them")
+
+
 def build_edge_graph(banned: set[str]) -> dict[str, list[str]]:
     """Directed edge->edge adjacency from net.net.xml's <connection> elements,
     with `banned` edges (the closure) removed from both ends — the same

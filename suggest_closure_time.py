@@ -437,6 +437,12 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
         rs.write_closure_additional(cpath, closures, selected_rerouter_edges)
         closure_add = [cpath]
         scratch.append(cpath)
+        # SCORE THE WINDOW THAT WAS SIMULATED, not a second list believed to
+        # match it. `closures` writes the file and the file decides the gate,
+        # so a scored-but-open bucket cannot exist; the assertion covers the
+        # other direction, a requested closure that never reached SUMO.
+        simulated_closures = rs.read_closure_intervals(cpath)
+        rs.assert_closures_were_simulated(closures, simulated_closures, cpath)
         filtered = []
         for i, vp in enumerate(variants):
             fp = base_dir / f"{vp.stem}_{SCT_PREFIX}{name}.rou.xml"
@@ -517,7 +523,25 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
             seed_flows = rs.parse_edgedata(
                 job["ed_file"], closure_gate_width,
                 measured_empty_edges=tuple(close_edges))
-            active_throughput = cm.active_closure_throughput(seed_flows, closures)
+            breakdown = cm.active_closure_breakdown(
+                seed_flows, simulated_closures)
+            active_throughput = breakdown["total"]
+            # The buckets the number was built from, written beside the
+            # edgeData. A disqualification used to be one integer whose
+            # workspace was deleted moments later, so explaining it meant
+            # re-running the search; the caller can now retain this instead.
+            breakdown_path = job["ed_file"].with_suffix(".breakdown.json")
+            breakdown_path.write_text(json.dumps({
+                "schema": "closure_throughput_breakdown_v1",
+                "name": name, "seed": job["seed"],
+                "demand_variant": job["demand_variant"],
+                "edgedata": str(job["ed_file"]),
+                "closure_additional": str(cpath),
+                "begin_s": begin_s, "duration_s": duration_s,
+                "gate_width_quarters": closure_gate_width,
+                **breakdown,
+            }, indent=2, sort_keys=True) + "\n")
+            scratch.append(breakdown_path)
         metrics = cm.build_metrics(
             metric_paths["tripinfo"], metric_paths["statistics"],
             truncated_unreachable=job["seed_truncated"],

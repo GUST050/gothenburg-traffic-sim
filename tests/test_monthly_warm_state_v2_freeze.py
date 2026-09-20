@@ -239,9 +239,27 @@ class TestMissingVersusZeroThroughput:
     def test_the_invoker_measures_throughput_when_a_closure_is_present(self):
         source = Path("traffic_sim/simulation/monthly_sumo.py").read_text()
         invoker = source.split("def _default_warm_invoker(")[1].split("\n    def ")[0]
-        assert "active_closure_throughput" in invoker
+        # `active_closure_breakdown` IS the throughput measurement: the gate's
+        # total is one field of it, and `active_closure_throughput` now
+        # returns exactly that field. The invoker takes the breakdown form so
+        # a disqualification also leaves the buckets it was built from.
+        assert "active_closure_breakdown" in invoker
         assert "measured_empty_edges" in invoker
+        assert 'active_throughput = breakdown["total"]' in invoker
         assert "closed_edge_throughput=active_throughput" in invoker
+
+    def test_the_invoker_scores_the_window_sumo_was_given(self):
+        """Not a second list believed to match the closure additional.
+
+        A window the simulator never closed scores ordinary traffic on an
+        open road as flow through a closure, and the gate's single integer
+        cannot tell that apart from a vehicle crossing a sealed edge.
+        """
+        source = Path("traffic_sim/simulation/monthly_sumo.py").read_text()
+        invoker = source.split("def _default_warm_invoker(")[1].split("\n    def ")[0]
+        assert "read_closure_intervals" in invoker
+        assert "assert_closures_were_simulated" in invoker
+        assert "active_closure_breakdown(\n                seed_flows, simulated_closures)" in invoker
 
     def test_an_unmeasured_closure_domain_fails_closed(self):
         source = Path("traffic_sim/simulation/monthly_sumo.py").read_text()

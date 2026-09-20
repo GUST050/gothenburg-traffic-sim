@@ -44,16 +44,9 @@ from traffic_sim.simulation import metrics as cm
 INTERVAL_S = 900
 
 
-def read_closing_intervals(path: Path) -> list[dict]:
-    """Closure windows as SUMO received them, one row per closed edge."""
-    rows: list[dict] = []
-    for interval in ET.parse(path).getroot().iter("interval"):
-        begin, end = interval.get("begin"), interval.get("end")
-        for closing in interval.findall("closingReroute"):
-            rows.append({"edge_id": closing.get("id"),
-                         "begin_s": int(float(begin)),
-                         "end_s": int(float(end))})
-    return rows
+# One reader, in run_scenario, so the explainer cannot disagree with the gate
+# about which windows SUMO was given — which is the very question it answers.
+read_closing_intervals = rs.read_closure_intervals
 
 
 def parse_closure_arguments(values: list[str]) -> list[dict]:

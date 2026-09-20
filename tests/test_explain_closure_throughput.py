@@ -104,3 +104,36 @@ class TestVerdict:
         edgedata = _edgedata(tmp_path / "ed.xml", [(900, 1800, 0)])
         with pytest.raises(SystemExit):
             ect.main(["--edgedata", str(edgedata)])
+
+
+class TestTheUiNamesTheGateThatFired:
+    """A disqualification message must not guess at the cause.
+
+    The no_viable text listed three fixed gates ("omväg, strandade fordon,
+    simuleringshälsa") whatever had actually happened, so a month that fell
+    entirely on `active_closure_edge_throughput` read as if the road were
+    simply impossible to close — and the real reason had to be dug out of
+    result.json by hand.
+    """
+
+    APP_JS = ROOT / "web" / "app.js"
+
+    def test_the_hardcoded_gate_guess_is_gone(self):
+        source = self.APP_JS.read_text(encoding="utf-8")
+        assert "omväg, strandade fordon, simuleringshälsa" not in source
+
+    def test_the_message_is_built_from_the_reported_failures(self):
+        source = self.APP_JS.read_text(encoding="utf-8")
+        no_viable = source.split("result.status === 'no_viable'")[1][:1200]
+        assert "hard_failures" in no_viable
+        assert "GATE_LABELS" in no_viable
+
+    def test_an_unknown_gate_code_is_shown_verbatim(self):
+        # `GATE_LABELS[reason] || reason` — a gate nobody has translated yet
+        # must still reach the reader, not be dropped or renamed.
+        source = self.APP_JS.read_text(encoding="utf-8")
+        assert "GATE_LABELS[reason] || reason" in source
+
+    def test_the_gate_the_failing_search_hit_has_a_gloss(self):
+        source = self.APP_JS.read_text(encoding="utf-8")
+        assert "active_closure_edge_throughput: 'trafik på avstängd kant'" in source

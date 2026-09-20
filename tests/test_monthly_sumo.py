@@ -1389,3 +1389,63 @@ class TestBootstrapDiagnosticsReachTheRecord:
             for key, value in event["details"].items():
                 assert len(key) <= WARM_DETAIL_MAX_KEY_CHARS
                 assert not isinstance(value, (dict, list, tuple))
+
+
+class TestClosureLeakEvidenceOutlivesItsWorkspace:
+    """A disqualification must leave behind the buckets it was built from.
+
+    Both arms delete their workspace in a `finally`, so an
+    `active_closure_edge_throughput` failure used to leave exactly one
+    integer and explaining it meant re-running the search — which is how a
+    28-candidate month came to be argued about from a gate name alone. Only
+    a breakdown that actually reports flow is kept, so a healthy campaign
+    still writes nothing.
+    """
+
+    def _runner(self, cache_root):
+        runner = object.__new__(ArchivedDemandSumoRunner)
+        runner.cache_root = cache_root
+        return runner
+
+    def test_a_leaking_breakdown_is_copied_out(self, tmp_path):
+        runner = self._runner(tmp_path / "cache")
+        workspace = tmp_path / "ws" / "post"
+        workspace.mkdir(parents=True)
+        (workspace / "closure_throughput_breakdown.json").write_text(json.dumps(
+            {"total": 7, "scored": [{"quarter": 40, "entered": 7}]}))
+
+        kept = runner.retain_closure_evidence(
+            workspace.parent, label="sched-q50-1000")
+
+        assert len(kept) == 1
+        assert json.loads(kept[0].read_text())["total"] == 7
+        assert kept[0].parent == (
+            tmp_path / "cache" / "closure-evidence" / "sched-q50-1000")
+
+    def test_a_measured_clean_closure_keeps_nothing(self, tmp_path):
+        runner = self._runner(tmp_path / "cache")
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / "closure_throughput_breakdown.json").write_text(
+            json.dumps({"total": 0, "scored": []}))
+
+        assert runner.retain_closure_evidence(workspace, label="x") == []
+        assert not (tmp_path / "cache" / "closure-evidence").exists()
+
+    def test_an_unmeasured_closure_keeps_nothing(self, tmp_path):
+        # None is "never looked", not a leak — the same distinction
+        # `closure_edge_leaked` draws for the gate itself.
+        runner = self._runner(tmp_path / "cache")
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / "b.breakdown.json").write_text(json.dumps({"total": None}))
+
+        assert runner.retain_closure_evidence(workspace, label="x") == []
+
+    def test_unreadable_evidence_never_breaks_the_cleanup(self, tmp_path):
+        runner = self._runner(tmp_path / "cache")
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / "truncated.breakdown.json").write_text("{not json")
+
+        assert runner.retain_closure_evidence(workspace, label="x") == []

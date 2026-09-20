@@ -1576,6 +1576,12 @@ class ArchivedDemandSumoRunner:
         run_dir.mkdir(parents=True, exist_ok=True)
         rs.write_closure_additional(plan.closure_additional, closures,
                                     self.rerouter_edges)
+        # The warm arm scores the window SUMO was given, exactly as the cold
+        # arm does, so the two arms cannot disagree about what was closed and
+        # neither can score a bucket the simulator left open.
+        simulated_closures = rs.read_closure_intervals(plan.closure_additional)
+        rs.assert_closures_were_simulated(
+            closures, simulated_closures, plan.closure_additional)
         truncated, dropped = rs.truncate_stranded_vehicles(
             self.variants[variant], self.close_edges, plan.filtered_route,
             self.adjacency, closures, self.freeflow)
@@ -1616,10 +1622,23 @@ class ArchivedDemandSumoRunner:
             seed_flows = rs.parse_edgedata(
                 edge_data, self.n_intervals,
                 measured_empty_edges=tuple(self.close_edges))
-            active_throughput = closure_metrics.active_closure_throughput(
-                seed_flows, closures)
+            breakdown = closure_metrics.active_closure_breakdown(
+                seed_flows, simulated_closures)
+            active_throughput = breakdown["total"]
             if active_throughput is None:
                 return None
+            # Retained beside the run so a disqualification can be explained
+            # from its own buckets instead of from a re-run.
+            (run_dir / "closure_throughput_breakdown.json").write_text(
+                json.dumps({
+                    "schema": "closure_throughput_breakdown_v1",
+                    "schedule_id": schedule.schedule_id,
+                    "demand_variant": variant, "seed": seed,
+                    "warm_point_s": plan.warm_point_s,
+                    "edgedata": str(edge_data),
+                    "closure_additional": str(plan.closure_additional),
+                    **breakdown,
+                }, indent=2, sort_keys=True) + "\n")
         else:
             active_throughput = None
         raw_post_metrics = closure_metrics.build_metrics(
@@ -1991,7 +2010,35 @@ class ArchivedDemandSumoRunner:
             # otherwise.
             if not any(entry["state_path"].parent == workspace
                        for entry in self.provisional_states):
+                self.retain_closure_evidence(
+                    workspace,
+                    label=f"{schedule.schedule_id}-{variant}-{seed}-warm")
                 shutil.rmtree(workspace, ignore_errors=True)
+
+    def retain_closure_evidence(self, root: Path, *, label: str) -> list[Path]:
+        """Copy leak evidence out of a workspace that is about to be deleted.
+
+        Both arms delete their workspace in a `finally`, so until now a
+        disqualified candidate left exactly one integer behind and explaining
+        it meant re-running the whole search — which is how a 28-candidate
+        month came to be argued about from a single gate name. Only a
+        breakdown that actually reports flow is kept, so a healthy campaign
+        writes nothing at all.
+        """
+        kept: list[Path] = []
+        for path in sorted(Path(root).rglob("*breakdown*.json")):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if not closure_metrics.closure_edge_leaked(payload.get("total")):
+                continue
+            target = self.cache_root / "closure-evidence" / label
+            target.mkdir(parents=True, exist_ok=True)
+            destination = target / path.name
+            shutil.copy2(path, destination)
+            kept.append(destination)
+        return kept
 
     def _cached_prefix_evidence(self, identity):
         """Versioned prefix evidence from the VERIFIED cache entry, or None.
@@ -2205,6 +2252,9 @@ class ArchivedDemandSumoRunner:
                 canonical_observation,
             )
         finally:
+            self.retain_closure_evidence(
+                temporary_root,
+                label=f"{schedule.schedule_id}-{variant}-{seed}-cold")
             shutil.rmtree(temporary_root, ignore_errors=True)
 
     def _bump_launch_telemetry(
