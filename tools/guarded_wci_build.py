@@ -103,7 +103,6 @@ class Expectations:
 
 
 PRODUCTION_LIMITS = Limits()
-PRODUCTION_EXPECTATIONS = Expectations()
 
 
 # -- pure evaluation ----------------------------------------------------------
@@ -783,11 +782,24 @@ def production_setup(args) -> Dict[str, Any]:
         problems.append(
             f"profile binds another spec: {bound.get('search_content_key')} "
             f"!= {record.get('spec_content_key')}")
+    # The registration's own population is the truth for THIS month; a
+    # fixed default only ever matches the one month it was measured
+    # against, so a new month's registration must describe itself.
+    registration_population = record.get("population") or {}
+    build_keys = int(registration_population.get("build_keys", 0))
+    expect = Expectations(
+        build_keys=build_keys,
+        daily_units=int(registration_population.get("daily_units", 0)),
+        variant_records=int(registration_population.get("variant_records", 0)),
+        parents=int(registration_population.get("parents", 0)),
+        variant_files=3 * build_keys,
+    )
     population = profile.get("population") or {}
     if (population.get("daily_units"), population.get("parents")) != (
-            PRODUCTION_EXPECTATIONS.daily_units,
-            PRODUCTION_EXPECTATIONS.parents):
-        problems.append(f"profile population is {population or None}")
+            expect.daily_units, expect.parents):
+        problems.append(
+            f"profile population {population or None} does not match the "
+            f"registration's population {registration_population or None}")
     problems.extend(_fresh([args.index_out, args.build_evidence_out]))
     files = {**month.drift_files(record), **_file_bindings(RUNTIME_SOURCES),
              str(Path(args.profile).resolve()): sha256_path(args.profile)}
@@ -802,7 +814,7 @@ def production_setup(args) -> Dict[str, Any]:
                                        .resolve()),
                  "--evidence-id", args.evidence_id or "guarded-build"],
         "limits": PRODUCTION_LIMITS,
-        "expect": PRODUCTION_EXPECTATIONS,
+        "expect": expect,
         "drift": DriftChecker(files, month.drift_archives(record)),
         "verify": build_outputs_verifier(
             Path(args.index_out) / "window-cost-index.json",

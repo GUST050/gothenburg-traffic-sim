@@ -33,13 +33,11 @@ if str(ROOT) not in sys.path:
 # pylint: disable=wrong-import-position
 import tools.closure_effect_eligibility as cee  # noqa: E402
 import tools.cost_ordered_benchmark as bench  # noqa: E402
-from traffic_sim.core.closure_calendar import (  # noqa: E402
-    iter_closure_schedules,
-)
 from traffic_sim.core.contracts import ClosureSearchSpec  # noqa: E402
 from traffic_sim.core.fingerprint import sha256_file  # noqa: E402
 from traffic_sim.simulation.independent_daily import (  # noqa: E402
     daily_unit_records,
+    population_of,
 )
 from traffic_sim.simulation.window_cost_index import (  # noqa: E402
     publish_new_file,
@@ -156,18 +154,6 @@ def _chosen_requirements(chosen: Mapping[str, Any]) -> List[str]:
     if not (summary.get("daily_units_with_crossings") or 0) > 0:
         problems.append("no daily unit has crossing traffic")
     return problems
-
-
-def population_of(spec: ClosureSearchSpec) -> Dict[str, int]:
-    """Parents, distinct daily units and variant records of one month."""
-    parents = 0
-    units = set()
-    for parent in iter_closure_schedules(spec):
-        parents += 1
-        for unit_id, _identity, _build in daily_unit_records(spec, parent):
-            units.add(str(unit_id))
-    return {"parents": parents, "daily_units": len(units),
-            "variant_records": 3 * len(units)}
 
 
 def _archive_bindings(inventory: cee.Inventory) -> Dict[str, Any]:

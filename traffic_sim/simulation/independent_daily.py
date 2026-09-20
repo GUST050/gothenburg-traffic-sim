@@ -560,6 +560,26 @@ def daily_unit_records(
     return tuple(records)
 
 
+def population_of(spec: ClosureSearchSpec) -> dict[str, int]:
+    """Parents, distinct daily units and variant records of one month.
+
+    The single canonical definition: a WCI-related tool that hardcodes its
+    own population figures (as opposed to deriving them from THIS spec) only
+    ever works for the one month it was measured against. Every WCI
+    identity/completeness check derives its expected counts from here so a
+    new month needs no code change, only a new spec.
+    """
+    from traffic_sim.core.closure_calendar import iter_closure_schedules
+    parents = 0
+    units: set[str] = set()
+    for parent in iter_closure_schedules(spec):
+        parents += 1
+        for unit_id, _identity, _build in daily_unit_records(spec, parent):
+            units.add(str(unit_id))
+    return {"parents": parents, "daily_units": len(units),
+            "variant_records": 3 * len(units)}
+
+
 def decompose_schedules(
     spec: ClosureSearchSpec,
     schedules: Sequence[ClosureSchedule],

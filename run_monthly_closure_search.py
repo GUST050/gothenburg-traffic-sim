@@ -1815,6 +1815,80 @@ def _independent_exhaustive_preflight(
     return report
 
 
+def _window_cost_index_matches(bound_identity, *, spec, policy):
+    """The four checks a loaded index must pass beyond its own file bytes.
+
+    ``load_index``/``WindowCostIndex.from_dict`` already prove the JSON is
+    complete, unswapped and self-consistent. Only the ACTIVE resolver can
+    independently reconstruct what source, runtime and policy identity this
+    invocation actually has, so that check stays here rather than moving
+    into the file-loading seam.
+    """
+    from tools.profile_monthly_cost_ledger import (
+        producer_runtime_manifest,
+        producer_source_manifest,
+    )
+    return (bound_identity.get("search_content_key") == spec.content_key
+            and bound_identity.get("policy_content_key") == policy.content_key
+            and bound_identity.get("producer_source_manifest")
+            == producer_source_manifest()
+            and bound_identity.get("producer_runtime_manifest")
+            == producer_runtime_manifest())
+
+
+def _load_explicit_window_cost_index(path, *, spec, policy, spec_population):
+    """``--window-cost-index <path>``: load exactly this file or refuse."""
+    from traffic_sim.simulation.window_cost_index import load_index
+    index = load_index(
+        path,
+        expected_daily_units=spec_population["daily_units"],
+        expected_variant_records=spec_population["variant_records"],
+    )
+    if not _window_cost_index_matches(index.bound_identity, spec=spec,
+                                      policy=policy):
+        raise ValueError(
+            "window cost index source/input/policy identity is stale")
+    return index
+
+
+def _resolve_window_cost_index_for_search(args, *, spec, policy,
+                                          spec_population):
+    """``--window-cost-index-root``: find, or optionally build, a match.
+
+    Returns ``(index_or_None, resolution_dict)``. Never raises for a
+    missing or stale index -- the caller decides whether that is a fallback
+    or a hard failure via ``--window-cost-index-strict``. A resolved index
+    still goes through the SAME four identity checks an explicit path would,
+    because the resolver only proves the file's OWN binding, not that this
+    invocation's live spec/policy/source/runtime agree with it.
+    """
+    from traffic_sim.simulation.window_cost_index_resolver import (
+        resolve_window_cost_index,
+    )
+    if args.wci_profile is None or args.wci_registration is None:
+        raise ValueError(
+            "--window-cost-index-root requires --wci-profile and "
+            "--wci-registration")
+    result = resolve_window_cost_index(
+        profile_path=args.wci_profile,
+        registration_path=args.wci_registration,
+        index_root=args.window_cost_index_root,
+        expected_identity=None,
+        expected_daily_units=spec_population["daily_units"],
+        expected_variant_records=spec_population["variant_records"],
+        auto_build=args.window_cost_index_auto_build,
+    )
+    resolution = result.to_dict()
+    if result.index is None:
+        raise ValueError(f"no usable window cost index: {result.reason}")
+    if not _window_cost_index_matches(result.index.bound_identity, spec=spec,
+                                      policy=policy):
+        raise ValueError(
+            "resolved window cost index source/input/policy identity is "
+            "stale")
+    return result.index, resolution
+
+
 def _cost_source_for(spec, runner, args=None, *, daily_cost_cache=None,
                      window_cost_index=None,
                      objective_method="closure_cost_v1"):
@@ -2048,9 +2122,59 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--window-cost-index", type=Path, default=None,
         help=(
-            "Opt-in complete Phase 5 WindowCostIndex JSON. The default is "
-            "off; the index is accepted only after current source, runtime, "
-            "policy and resolver-input identity checks."
+            "Opt-in complete Phase 5 WindowCostIndex JSON, an explicit path. "
+            "The default is off; the index is accepted only after current "
+            "source, runtime, policy and resolver-input identity checks. "
+            "Mutually exclusive with --window-cost-index-root."
+        ),
+    )
+    parser.add_argument(
+        "--window-cost-index-root", type=Path, default=None,
+        help=(
+            "Opt-in content-addressed root under which a matching Phase 5 "
+            "WindowCostIndex is looked up automatically, keyed by the "
+            "(profile, registration) identity -- no path needs naming per "
+            "run. Requires --wci-profile and --wci-registration. Mutually "
+            "exclusive with --window-cost-index."
+        ),
+    )
+    parser.add_argument(
+        "--wci-profile", type=Path, default=None,
+        help=(
+            "A separately-produced monthly_cost_ledger_profile_v1 JSON, "
+            "required with --window-cost-index-root. This is NOT built by "
+            "this search: a real month-ledger profile is a standalone, "
+            "expensive measurement produced by "
+            "tools/profile_monthly_cost_ledger.py ahead of time."
+        ),
+    )
+    parser.add_argument(
+        "--wci-registration", type=Path, default=None,
+        help=(
+            "A wci_month_case_registration_v1 JSON from "
+            "tools/freeze_wci_month_case.py, required with "
+            "--window-cost-index-root. Distinct from --phase6-registration, "
+            "which registers the whole search run, not the WCI case."
+        ),
+    )
+    parser.add_argument(
+        "--window-cost-index-auto-build", action="store_true",
+        help=(
+            "With --window-cost-index-root: if no matching index exists, "
+            "build one via the guarded builder under a single-flight lock "
+            "before pricing. Off by default -- a missing index otherwise "
+            "just falls back to the direct ledger path."
+        ),
+    )
+    parser.add_argument(
+        "--window-cost-index-strict", action="store_true",
+        help=(
+            "Refuse to start instead of falling back to the direct ledger "
+            "path when the requested WindowCostIndex is missing, stale or "
+            "fails its identity checks. Off by default: since the direct "
+            "path is the reference implementation the index only "
+            "accelerates, a fallback can never be less correct, only "
+            "slower -- use this flag to instead PROVE the index was used."
         ),
     )
     parser.add_argument("--seed-workers", type=int, default=1)
@@ -2226,6 +2350,22 @@ def main() -> None:
                 and args.screening_mode != "independent-cost-ordered-exact":
             raise ValueError(
                 "--window-cost-index requires independent cost-ordered mode")
+        if args.window_cost_index_root is not None \
+                and args.screening_mode != "independent-cost-ordered-exact":
+            raise ValueError(
+                "--window-cost-index-root requires independent cost-ordered "
+                "mode")
+        if args.window_cost_index is not None \
+                and args.window_cost_index_root is not None:
+            raise ValueError(
+                "--window-cost-index and --window-cost-index-root are "
+                "mutually exclusive: name one index explicitly, or let the "
+                "resolver find one, never both")
+        if args.window_cost_index_root is not None \
+                and (args.wci_profile is None or args.wci_registration is None):
+            raise ValueError(
+                "--window-cost-index-root requires --wci-profile and "
+                "--wci-registration")
         if getattr(args, "operational_no_evidence", False):
             # Measured on this machine: a 3-day closure-envelope demand build
             # costs 373 s regenerating candidates from scratch and 37 s when
@@ -2555,33 +2695,37 @@ def main() -> None:
             )
         cost_source = None
         window_cost_index = None
+        window_cost_index_resolution: dict[str, Any] | None = None
         if args.screening_mode == "independent-cost-ordered-exact":
             # REAL cost-first execution: candidates are priced from the
             # calibrated routes before anything is simulated, and SUMO runs
             # only for the ones the ordering boundary requires. The exhaustive
             # mode remains the untouched reference.
-            if args.window_cost_index is not None:
-                from traffic_sim.simulation.window_cost_index import load_index
-                from tools.profile_monthly_cost_ledger import (
-                    producer_runtime_manifest,
-                    producer_source_manifest,
+            if args.window_cost_index is not None \
+                    or args.window_cost_index_root is not None:
+                # Only walk the calendar a second time when an index is
+                # actually being sought -- the direct (non-WCI) path must
+                # cost exactly what it always did.
+                from traffic_sim.simulation.independent_daily import (
+                    population_of,
                 )
-                window_cost_index = load_index(
-                    args.window_cost_index,
-                    expected_daily_units=1950,
-                    expected_variant_records=5850,
-                )
-                bound_identity = window_cost_index.bound_identity
-                if (bound_identity.get("search_content_key")
-                        != spec.content_key
-                        or bound_identity.get("policy_content_key")
-                        != policy.content_key
-                        or bound_identity.get("producer_source_manifest")
-                        != producer_source_manifest()
-                        or bound_identity.get("producer_runtime_manifest")
-                        != producer_runtime_manifest()):
-                    raise ValueError(
-                        "window cost index source/input/policy identity is stale")
+                spec_population = population_of(spec)
+                try:
+                    if args.window_cost_index is not None:
+                        window_cost_index = _load_explicit_window_cost_index(
+                            args.window_cost_index, spec=spec, policy=policy,
+                            spec_population=spec_population)
+                    else:
+                        window_cost_index, window_cost_index_resolution = (
+                            _resolve_window_cost_index_for_search(
+                                args, spec=spec, policy=policy,
+                                spec_population=spec_population))
+                except (ValueError, OSError) as error:
+                    if args.window_cost_index_strict:
+                        raise
+                    print(f"window cost index not used, falling back to "
+                         f"the direct ledger path: {error}", file=sys.stderr)
+                    window_cost_index = None
             cost_source = _cost_source_for(
                 spec, runner, args, window_cost_index=window_cost_index,
                 objective_method=policy.objective_method)
@@ -2625,13 +2769,20 @@ def main() -> None:
                 process_tree_rss_error=phase6_rss_error)
             phase6_telemetry["active_elapsed_s"] = active_controller.elapsed_s
             phase6_telemetry["work_stopped_elapsed_s"] = work_stopped_elapsed_s
+            if window_cost_index_resolution is not None:
+                phase6_telemetry["window_cost_index_resolution"] = (
+                    window_cost_index_resolution)
         if cost_source is not None:
             print(
                 "cost-ordered execution: "
                 f"priced {getattr(cost_source, 'computed_units', 0)} daily "
-                f"units, {getattr(cost_source, 'cache_hits', 0)} cache hits",
+                f"units, {getattr(cost_source, 'cache_hits', 0)} cache hits, "
+                f"{getattr(cost_source, 'index_lookups', 0)} index lookups",
                 file=sys.stderr,
             )
+        if window_cost_index_resolution is not None:
+            print(f"window cost index resolution: "
+                 f"{window_cost_index_resolution}", file=sys.stderr)
     except ActiveBudgetExceeded as exc:
         if phase6_registration is None:
             raise SystemExit(str(exc)) from exc

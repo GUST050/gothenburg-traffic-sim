@@ -1284,6 +1284,11 @@ def test_independent_cli_rejects_before_network_or_search_workspace(monkeypatch)
         spec="unused-spec.json",
         policy="unused-policy.json",
         window_cost_index=None,
+        window_cost_index_root=None,
+        wci_profile=None,
+        wci_registration=None,
+        window_cost_index_auto_build=False,
+        window_cost_index_strict=False,
     )
 
     class Lock:

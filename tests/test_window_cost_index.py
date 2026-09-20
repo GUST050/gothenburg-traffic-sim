@@ -678,6 +678,7 @@ def _build_path_fixture(tmp_path, monkeypatch, *, baseline_time_s,
         "runs_root": tmp_path,
         "parents": parents,
         "baseline_time_s": baseline_time_s,
+        "spec_population": builder.population_of(spec),
     }
     monkeypatch.setattr(builder, "_bound_inputs", lambda _path: bound)
     monkeypatch.setattr(

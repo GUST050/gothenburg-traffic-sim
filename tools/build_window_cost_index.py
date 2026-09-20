@@ -39,7 +39,10 @@ from traffic_sim.simulation.disruption import (
     build_parsed_window_cost_index,
     parse_route_vehicles,
 )
-from traffic_sim.simulation.independent_daily import daily_unit_records
+from traffic_sim.simulation.independent_daily import (
+    daily_unit_records,
+    population_of,
+)
 from traffic_sim.simulation.monthly_demand import (
     MonthlyDemandResolverRunner,
     _archives_for_build_key,
@@ -291,10 +294,10 @@ def _resolve_units(
                   archive_of[required_by_unit[unit_id].build_key])
         for unit_id, (identity, schedule) in collected.items()
     }
-    if len(units) != EXPECTED_DAILY_UNITS:
+    if len(units) != len(collected):
         raise WindowCostIndexError(
             f"raw input population has {len(units)} units, expected "
-            f"{EXPECTED_DAILY_UNITS}")
+            f"{len(collected)}")
     return units, tuple(descriptors)
 
 
@@ -680,8 +683,11 @@ def _bound_inputs(profile_path: Path) -> dict[str, Any]:
         for parent in ledger.get("costs", ())
         for unit_id in parent.get("daily_unit_ids", ())
     }
-    if len(parent_unit_ids) != EXPECTED_DAILY_UNITS:
-        raise WindowCostIndexError("ledger does not contain 1,950 unique units")
+    spec_population = population_of(spec)
+    if len(parent_unit_ids) != spec_population["daily_units"]:
+        raise WindowCostIndexError(
+            f"ledger does not contain {spec_population['daily_units']} "
+            "unique units")
     cache_root = Path(str(profile.get("cache", {}).get("root", "")))
     if not cache_root.is_dir():
         raise WindowCostIndexError(f"daily-cost cache is missing: {cache_root}")
@@ -693,9 +699,10 @@ def _bound_inputs(profile_path: Path) -> dict[str, Any]:
         raise WindowCostIndexError("ledger unit population changed while reading")
     runs_root = Path(str(profile.get("runs_root", ROOT / "runs")))
     parents = tuple(iter_closure_schedules(spec))
-    if len(parents) != EXPECTED_PARENTS:
+    if len(parents) != spec_population["parents"]:
         raise WindowCostIndexError(
-            f"bound spec has {len(parents)} parents, expected {EXPECTED_PARENTS}")
+            f"bound spec has {len(parents)} parents, expected "
+            f"{spec_population['parents']}")
     baseline_time_s = float(profile.get("wall_time_s", 0.0))
     if baseline_time_s <= 0:
         raise WindowCostIndexError(
@@ -713,6 +720,7 @@ def _bound_inputs(profile_path: Path) -> dict[str, Any]:
         "runs_root": runs_root,
         "parents": parents,
         "baseline_time_s": baseline_time_s,
+        "spec_population": spec_population,
     }
 
 
@@ -736,6 +744,10 @@ def build_from_profile(
     runs_root = bound["runs_root"]
     parents = bound["parents"]
     baseline_time_s = bound["baseline_time_s"]
+    spec_population = bound["spec_population"]
+    expected_daily_units = spec_population["daily_units"]
+    expected_variant_records = spec_population["variant_records"]
+    expected_parents = spec_population["parents"]
     raw_input_sources = _raw_input_sources()
     started = time.perf_counter()
     records, oracle_records, raw_measurement = _raw_index_records(
@@ -770,7 +782,7 @@ def build_from_profile(
         preparation_time_s=preparation_time_s,
     )
     oracle = index.compare_oracle(oracle_records)
-    if oracle["indexed_variant_records"] != EXPECTED_VARIANT_RECORDS \
+    if oracle["indexed_variant_records"] != expected_variant_records \
             or not oracle["oracle_complete"] or not oracle["field_identical"]:
         raise WindowCostIndexError("Phase 5 oracle is not complete and identical")
     index_out = Path(index_out)
@@ -785,8 +797,8 @@ def build_from_profile(
     persisted = load_index(
         index_path,
         expected_identity=bound_identity,
-        expected_daily_units=EXPECTED_DAILY_UNITS,
-        expected_variant_records=EXPECTED_VARIANT_RECORDS,
+        expected_daily_units=expected_daily_units,
+        expected_variant_records=expected_variant_records,
     )
     persistence_load_time_s = time.perf_counter() - persistence_started
     indexed_source = _IndexedLedgerSource(spec, persisted)
@@ -797,14 +809,14 @@ def build_from_profile(
     # days), which is not the 5,850 variant-record count the old check used.
     expected_lookups = sum(
         len(item.get("daily_unit_ids", ())) for item in ledger.get("costs", ()))
-    if len(indexed_ledger.costs) != EXPECTED_PARENTS \
-            or len(indexed_source.units) != EXPECTED_DAILY_UNITS \
+    if len(indexed_ledger.costs) != expected_parents \
+            or len(indexed_source.units) != expected_daily_units \
             or indexed_source.lookups != expected_lookups:
         raise WindowCostIndexError(
             f"indexed adoption ledger covered {len(indexed_ledger.costs)} "
             f"parents, {len(indexed_source.units)} distinct daily units and "
-            f"{indexed_source.lookups} lookups; expected {EXPECTED_PARENTS}, "
-            f"{EXPECTED_DAILY_UNITS} and {expected_lookups}")
+            f"{indexed_source.lookups} lookups; expected {expected_parents}, "
+            f"{expected_daily_units} and {expected_lookups}")
     indexed_total_time_s = (
         preparation_time_s + persistence_load_time_s + indexed_ledger_time_s)
     cold_benefit_s = baseline_time_s - indexed_total_time_s
@@ -1026,12 +1038,16 @@ def prove_existing_index(
     parents = bound["parents"]
     parent_unit_ids = bound["parent_unit_ids"]
     baseline_time_s = bound["baseline_time_s"]
+    spec_population = bound["spec_population"]
+    expected_daily_units = spec_population["daily_units"]
+    expected_variant_records = spec_population["variant_records"]
+    expected_parents = spec_population["parents"]
 
     index_path = Path(index_path).resolve()
     persisted = load_index(
         index_path,
-        expected_daily_units=EXPECTED_DAILY_UNITS,
-        expected_variant_records=EXPECTED_VARIANT_RECORDS,
+        expected_daily_units=expected_daily_units,
+        expected_variant_records=expected_variant_records,
     )
     identity = dict(persisted.bound_identity)
     bindings = profile.get("bindings") or {}
@@ -1109,7 +1125,7 @@ def prove_existing_index(
             }
     oracle_read_time_s = time.perf_counter() - oracle_started
     oracle = persisted.compare_oracle(oracle_records)
-    if oracle["indexed_variant_records"] != EXPECTED_VARIANT_RECORDS \
+    if oracle["indexed_variant_records"] != expected_variant_records \
             or not oracle["oracle_complete"] or not oracle["field_identical"]:
         raise WindowCostIndexError("resumed index is not oracle-identical")
 
@@ -1119,14 +1135,14 @@ def prove_existing_index(
     replay_time_s = time.perf_counter() - replay_started
     expected_lookups = sum(
         len(item.get("daily_unit_ids", ())) for item in ledger.get("costs", ()))
-    if len(indexed_ledger.costs) != EXPECTED_PARENTS \
-            or len(indexed_source.units) != EXPECTED_DAILY_UNITS \
+    if len(indexed_ledger.costs) != expected_parents \
+            or len(indexed_source.units) != expected_daily_units \
             or indexed_source.lookups != expected_lookups:
         raise WindowCostIndexError(
             f"resumed adoption ledger covered {len(indexed_ledger.costs)} "
             f"parents, {len(indexed_source.units)} distinct daily units and "
-            f"{indexed_source.lookups} lookups; expected {EXPECTED_PARENTS}, "
-            f"{EXPECTED_DAILY_UNITS} and {expected_lookups}")
+            f"{indexed_source.lookups} lookups; expected {expected_parents}, "
+            f"{expected_daily_units} and {expected_lookups}")
     indexed_dict = indexed_ledger.to_dict()
 
     ledger_identical, ledger_comparison = compare_decision_ledgers(
