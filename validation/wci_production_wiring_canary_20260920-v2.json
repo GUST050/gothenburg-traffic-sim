@@ -1,0 +1,161 @@
+{
+  "claim_boundary": "DIAGNOSTIC_ONLY_NOT_RELEASE_EVIDENCE",
+  "content_key": "8982e112d70985a840a6c0ff52132a015d24053c6f956795b1b7b913bcde1d0e",
+  "diagnostic_only": true,
+  "direct_ledger": {
+    "cache_hits": 520,
+    "cache_misses": 455,
+    "candidate_count": 195,
+    "content_key": "e01892807b6645ad4bd3deccf5b0f08e26c19b1a953b384d0c9b4a9fc227407e"
+  },
+  "driver": {
+    "helper_path": "validation/benchmarks/wci_diag_common.py",
+    "helper_sha256": "356a1a53422505321ff313a8ab6cec19c6a23a24aeaac8c91ea63291464dcd6e",
+    "path": "validation/benchmarks/wci_production_wiring_canary_v1.py",
+    "sha256": "3192183e6512fbaa6a884a8073199b8ee1500187cb3139f433a6ebc9ba46b950"
+  },
+  "entry_point_functions_check": {
+    "attempted": true,
+    "error": "window cost index source/input/policy identity is stale",
+    "loaded": false
+  },
+  "external_archive_root_untouched": true,
+  "git": {
+    "head": "1468978b5416c4d7c8901f9bd2f124d00cdd25c5",
+    "tracked_changes": [
+      " M run_monthly_closure_search.py",
+      " M tests/test_independent_daily.py",
+      " M tests/test_subhour_cost_ordered_contracts.py",
+      " M tests/test_window_cost_index.py",
+      " M tools/build_window_cost_index.py",
+      " M tools/freeze_wci_month_case.py",
+      " M tools/guarded_wci_build.py",
+      " M traffic_sim/simulation/independent_daily.py"
+    ]
+  },
+  "identical_outputs": {
+    "cache_accounting": {
+      "direct_computed_units": 975,
+      "wci_computed_units": 975,
+      "wci_index_lookups": 975
+    },
+    "candidate_count": true,
+    "parent_costs": true,
+    "winner": {
+      "direct_candidate_id": "closure-706f86e22d4635c62c4b",
+      "same_cost": true,
+      "same_winner": true,
+      "wci_candidate_id": "closure-706f86e22d4635c62c4b"
+    }
+  },
+  "narrow_spec": {
+    "content_key": "bab074482c2998eac63e",
+    "path": "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/wci_fas_c_canary/wci_fas_c_narrow_spec.json",
+    "selection_rule": "result-blind: first calendar week of the frozen month, same chosen edge, declared before population was measured"
+  },
+  "population": {
+    "daily_units": 455,
+    "parents": 195,
+    "variant_records": 1365
+  },
+  "release_evidence": false,
+  "runtime": {
+    "hw_memsize_bytes": 25769803776,
+    "hw_ncpu": 10,
+    "machine": "arm64",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python_executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "python_version": "3.9.6",
+    "telemetry_errors": []
+  },
+  "schema": "wci_production_wiring_canary_v1",
+  "wci_wiring_results": {
+    "cold_build": {
+      "build_attempted": true,
+      "build_outcome": {
+        "command": [
+          "/Library/Developer/CommandLineTools/usr/bin/python3",
+          "/Users/gt/Documents/gs-project/.claude/worktrees/wci-memory-canary-20260918/validation/benchmarks/wci_diagnostic_builder_v1.py",
+          "--mode",
+          "build",
+          "--profile",
+          "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/wci_fas_c_canary/profile.json",
+          "--status-dir",
+          "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/wci_fas_c_canary/index-root/83/83d6e7eeb2fa30e1a75ed2cd165c5383/status",
+          "--evidence-out",
+          "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/wci_fas_c_canary/index-root/83/83d6e7eeb2fa30e1a75ed2cd165c5383/guarded-build-evidence.json",
+          "--registration",
+          "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/wci_fas_c_canary/registration.json",
+          "--index-out",
+          "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/wci_fas_c_canary/index-root/83/83d6e7eeb2fa30e1a75ed2cd165c5383",
+          "--build-evidence-out",
+          "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/wci_fas_c_canary/index-root/83/83d6e7eeb2fa30e1a75ed2cd165c5383/phase5-build-evidence.json",
+          "--evidence-id",
+          "auto-83d6e7eeb2fa30e1a75ed2cd165c5383"
+        ],
+        "evidence_path": "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/wci_fas_c_canary/index-root/83/83d6e7eeb2fa30e1a75ed2cd165c5383/guarded-build-evidence.json",
+        "returncode": 0,
+        "state": "passed",
+        "stderr_tail": "",
+        "stdout_tail": ""
+      },
+      "index_path": "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/wci_fas_c_canary/index-root/83/83d6e7eeb2fa30e1a75ed2cd165c5383/window-cost-index.json",
+      "lock_acquired": true,
+      "reason": null,
+      "source": "cold_build",
+      "used_index": true
+    },
+    "interrupted_build": {
+      "build_attempted": true,
+      "build_outcome": {
+        "reason": "simulated interruption",
+        "state": "failed"
+      },
+      "index_path": "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/wci_fas_c_canary/interrupted-index-root/83/83d6e7eeb2fa30e1a75ed2cd165c5383/window-cost-index.json",
+      "lock_acquired": true,
+      "reason": "guarded build did not produce a loadable index: failed",
+      "source": "fallback",
+      "used_index": false
+    },
+    "interrupted_build_leaves_no_file": true,
+    "mismatch_rejection": {
+      "build_attempted": false,
+      "build_outcome": null,
+      "index_path": "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/wci_fas_c_canary/index-root/83/83d6e7eeb2fa30e1a75ed2cd165c5383/window-cost-index.json",
+      "lock_acquired": null,
+      "reason": "no matching index and auto-build is not enabled",
+      "source": "fallback",
+      "used_index": false
+    },
+    "miss": {
+      "build_attempted": false,
+      "build_outcome": null,
+      "index_path": "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/wci_fas_c_canary/index-root/83/83d6e7eeb2fa30e1a75ed2cd165c5383/window-cost-index.json",
+      "lock_acquired": null,
+      "reason": "no matching index and auto-build is not enabled",
+      "source": "fallback",
+      "used_index": false
+    },
+    "single_flight": {
+      "both_resolved_to_an_index": false,
+      "builder_invocations": 1,
+      "sources": [
+        "cold_build",
+        "fallback"
+      ]
+    },
+    "warm_hit_new_process": {
+      "returncode": 0,
+      "stderr_tail": "",
+      "stdout": {
+        "build_attempted": false,
+        "build_outcome": null,
+        "index_path": "/private/tmp/claude-501/-Users-gt-Documents-gs-project/6d415b35-3aa1-457c-8673-dbb2f5271b82/scratchpad/wci_fas_c_canary/index-root/83/83d6e7eeb2fa30e1a75ed2cd165c5383/window-cost-index.json",
+        "lock_acquired": null,
+        "reason": null,
+        "source": "warm_hit",
+        "used_index": true
+      }
+    }
+  }
+}
