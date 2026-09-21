@@ -19,7 +19,8 @@ The manifest binds, in one place:
     candidate at all, not a trusted summary);
   * the frozen 30-date/65-window/five-consecutive-day search contract and the
     unchanged `closure_cost_v1` policy identity this plan may never loosen;
-  * one q10/q50/q90 demand build's three variants, each independently
+  * the demand build's declared variants (q50 for new monthly builds;
+    explicit historical q10/q50/q90 contracts remain readable), independently
     re-proved via `traffic_sim.demand.provenance.validate_calibrated_provenance`
     (every emitted vehicle resolves one-for-one to a qualified candidate and
     its exact route), read against the SAME `demand_meta.json` a
@@ -93,7 +94,7 @@ FROZEN_SEARCH_CONTRACT: dict[str, object] = {
 PHASE_PREREQUISITE_CONTRACT = {
     "phase_0": {
         **FROZEN_SEARCH_CONTRACT,
-        "q_variants": ["q10", "q50", "q90"],
+        "q_variants": ["q50"],
         "work_budget_seconds": 3300,
         "publication_budget_seconds": 300,
         "fresh_roots": True,
@@ -590,12 +591,14 @@ def resolve_variant_contract(demand_meta: Mapping) -> dict[str, dict]:
     `build_sumo_demand.direction_variant_manifest` writes into
     `demand_meta.json`), instead of guessing route-file suffixes here."""
     contract = demand_meta.get("demand_variant_contract")
-    if not isinstance(contract, Mapping) or contract.get("mode") != "direction_stress":
+    if not isinstance(contract, Mapping) or contract.get("mode") not in {
+            "q50_only", "direction_stress"}:
         raise QualificationError(
             "demand metadata is not a q10/q50/q90 direction-stress build")
     entries = contract.get("variants")
     if not isinstance(entries, list):
-        raise QualificationError("demand metadata variant contract is malformed")
+        raise QualificationError("demand metadata direction-stress/q50 variant contract is malformed")
+    expected = {"q50"} if contract["mode"] == "q50_only" else set(REQUIRED_VARIANTS)
     resolved: dict[str, dict] = {}
     for entry in entries:
         if not isinstance(entry, Mapping):
@@ -606,9 +609,14 @@ def resolve_variant_contract(demand_meta: Mapping) -> dict[str, dict]:
         if not isinstance(name, str) or not isinstance(target_key, str) \
                 or not isinstance(route_file, str):
             raise QualificationError("demand metadata variant entry is malformed")
-        if name in REQUIRED_VARIANTS:
-            resolved[name] = {"target_key": target_key, "route_file": route_file}
-    if set(resolved) != set(REQUIRED_VARIANTS):
+        if name not in expected or name in resolved:
+            raise QualificationError("demand metadata has extra or duplicate variants")
+        suffix = {"q50": "", "q10": "_v1", "q90": "_v2"}[name]
+        expected_target = "edge_shares" + ("" if name == "q50" else f"_{name}")
+        if route_file != f"calibrated{suffix}.rou.xml" or target_key != expected_target:
+            raise QualificationError("demand metadata variant mapping is inconsistent")
+        resolved[name] = {"target_key": target_key, "route_file": route_file}
+    if set(resolved) != expected:
         raise QualificationError(
             "demand metadata variant contract lacks all three q10/q50/q90 "
             "variants")
@@ -744,7 +752,7 @@ def build_manifest(
     """Assemble the single Phase D qualified-demand manifest.
 
     A missing/malformed producer input (no archive, no candidate pool, not a
-    3-variant build) raises `QualificationError` -- there is nothing
+    declared-variant build) raises `QualificationError` -- there is nothing
     scientific to report. A genuine support-floor shortfall does not raise:
     it is folded into `support_audit_pass: False` and `status:
     "INCONCLUSIVE_SENSOR_SHORTEST_SUPPORT"`, matching the plan's declared

@@ -702,6 +702,10 @@ def parse_args() -> argparse.Namespace:
         args.begin = spec.begin
         args.end = spec.end
         args.demand_contract = spec
+        if spec.variant_mode == "q50_only" and args.direction_stress_variants:
+            p.error("--direction-stress-variants conflicts with q50_only demand spec")
+        if spec.variant_mode == "direction_stress":
+            args.direction_stress_variants = True
     else:
         if args.days < 1:
             p.error("--days must be at least 1")
@@ -1124,6 +1128,7 @@ def main() -> None:
         sys.exit("demand spec structural_reference_date does not match "
                  f"the pipeline reference {STRUCTURAL_REFERENCE_DATE}")
     if demand_spec.purpose == "closure_envelope" \
+            and demand_spec.variant_mode != "q50_only" \
             and not args.direction_stress_variants:
         sys.exit("closure-envelope demand requires "
                  "--direction-stress-variants")

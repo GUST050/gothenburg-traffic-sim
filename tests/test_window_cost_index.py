@@ -21,9 +21,7 @@ def _records(unit="unit-a", schedule="schedule-a"):
         unit: {
             "schedule_id": schedule,
             "records": [
-                {"demand_variant": "q10", "value": 10},
                 {"demand_variant": "q50", "value": 50},
-                {"demand_variant": "q90", "value": 90},
             ],
         }
     }
@@ -64,7 +62,7 @@ def _adoption_index(spec, parent):
                 "vehicles_no_detour": 0,
                 "added_metres_total": 100.0,
                 "added_vehicle_hours": 0.25,
-            } for variant in ("q10", "q50", "q90")],
+            } for variant in ("q50",)],
         }
     return WindowCostIndex(bound_identity={"source": "digest-a"},
                            records=records)
@@ -91,7 +89,7 @@ def test_indexed_ledger_source_follows_the_real_daily_unit_records_contract():
     assert source.lookups == len(index.records)
     assert cost.candidate_id == parent.schedule_id
     assert set(cost.daily_unit_ids) == set(index.records)
-    assert len(cost.per_variant) == 3
+    assert len(cost.per_variant) == 1
 
 
 def test_index_round_trips_and_requires_field_identical_oracle():
@@ -99,16 +97,16 @@ def test_index_round_trips_and_requires_field_identical_oracle():
                             records=_records(), preparation_time_s=1.25)
     restored = WindowCostIndex.from_dict(
         index.to_dict(), expected_identity={"source": "digest-a"},
-        expected_daily_units=1, expected_variant_records=3)
-    assert restored.lookup("unit-a", "schedule-a")[1]["value"] == 50
+        expected_daily_units=1, expected_variant_records=1)
+    assert restored.lookup("unit-a", "schedule-a")[0]["value"] == 50
     comparison = restored.compare_oracle(_records())
     assert comparison["oracle_complete"] is True
     assert comparison["field_identical"] is True
-    assert comparison["indexed_variant_records"] == 3
+    assert comparison["indexed_variant_records"] == 1
 
 
 def test_index_rejects_partial_stale_and_swapped_state():
-    with pytest.raises(WindowCostIndexError, match="q10/q50/q90"):
+    with pytest.raises(WindowCostIndexError, match="variants"):
         WindowCostIndex(bound_identity={"source": "digest-a"}, records={
             "unit-a": {"schedule_id": "schedule-a", "records": [
                 {"demand_variant": "q10"},
@@ -127,7 +125,7 @@ def test_index_detects_a_single_field_change_in_the_full_oracle():
     index = WindowCostIndex(bound_identity={"source": "digest-a"},
                             records=_records())
     oracle = _records()
-    oracle["unit-a"]["records"][2]["value"] = 91
+    oracle["unit-a"]["records"][0]["value"] = 91
     comparison = index.compare_oracle(oracle)
     assert comparison["oracle_complete"] is True
     assert comparison["field_identical"] is False
@@ -144,15 +142,15 @@ def test_load_index_validates_the_bound_identity_and_population(tmp_path):
         path,
         expected_identity={"source": "digest-a"},
         expected_daily_units=1,
-        expected_variant_records=3,
+        expected_variant_records=1,
     )
-    assert restored.lookup("unit-a", "schedule-a")[0]["value"] == 10
+    assert restored.lookup("unit-a", "schedule-a")[0]["value"] == 50
     with pytest.raises(WindowCostIndexError, match="stale"):
         load_index(
             path,
             expected_identity={"source": "digest-b"},
             expected_daily_units=1,
-            expected_variant_records=3,
+            expected_variant_records=1,
         )
 
 
@@ -235,7 +233,7 @@ def test_phase5_builder_rejects_tampered_profile_before_opening_inputs(
     spec_path = tmp_path / "spec.json"
     spec_path.write_text("{}", encoding="utf-8")
     profile = {
-        "schema": "monthly_cost_ledger_profile_v1",
+        "schema": builder.PROFILE_SCHEMA,
         "bindings": {
             "bound_spec": {"path": str(spec_path)},
             "bound_spec_sha256": builder.sha256_file(spec_path),
@@ -298,7 +296,7 @@ class _StubProvider:
             "vehicles_no_detour": 0,
             "added_metres_total": 10.0,
             "added_vehicle_hours": 0.1,
-        } for variant in ("q10", "q50", "q90"))
+        } for variant in ("q50",))
 
     def cache_identity(self, schedule):
         return {"schedule": schedule.schedule_id}
@@ -434,10 +432,10 @@ def _resume_fixture(tmp_path, monkeypatch, *, ledger_key_drift=False,
                     "vehicles_no_detour": 0,
                     "added_metres_total": 10.0,
                     "added_vehicle_hours": 0.1,
-                } for variant in ("q10", "q50", "q90")],
+                } for variant in ("q50",)],
             })
     monkeypatch.setattr(builder, "EXPECTED_DAILY_UNITS", len(records))
-    monkeypatch.setattr(builder, "EXPECTED_VARIANT_RECORDS", len(records) * 3)
+    monkeypatch.setattr(builder, "EXPECTED_VARIANT_RECORDS", len(records))
     monkeypatch.setattr(builder, "EXPECTED_PARENTS", len(parents))
 
     class _BaselineSource:
@@ -473,7 +471,7 @@ def _resume_fixture(tmp_path, monkeypatch, *, ledger_key_drift=False,
                         lambda manifest: None)
 
     profile = {
-        "schema": "monthly_cost_ledger_profile_v1",
+        "schema": builder.PROFILE_SCHEMA,
         "wall_time_s": 1000.0,
         "ledger_content_key": ledger_dict["content_key"],
         "phase_5_decision": "TRIGGERED",
@@ -576,7 +574,7 @@ def test_resume_proves_an_existing_index_without_rebuilding_it(
 
     assert record["status"] == "NOT_ADOPTED"
     assert record["population"] == {
-        "daily_units": units, "daily_variant_records": units * 3,
+        "daily_units": units, "daily_variant_records": units,
         "parent_schedules": parents}
     assert record["oracle"]["field_identical"] is True
     assert record["ledger_identical"] is True
@@ -625,10 +623,10 @@ def _build_path_fixture(tmp_path, monkeypatch, *, baseline_time_s,
                     "vehicles_no_detour": 0,
                     "added_metres_total": 10.0,
                     "added_vehicle_hours": 0.1,
-                } for variant in ("q10", "q50", "q90")],
+                } for variant in ("q50",)],
             })
     monkeypatch.setattr(builder, "EXPECTED_DAILY_UNITS", len(records))
-    monkeypatch.setattr(builder, "EXPECTED_VARIANT_RECORDS", len(records) * 3)
+    monkeypatch.setattr(builder, "EXPECTED_VARIANT_RECORDS", len(records))
     monkeypatch.setattr(builder, "EXPECTED_PARENTS", len(parents))
 
     class _BaselineSource:
@@ -692,7 +690,7 @@ def _build_path_fixture(tmp_path, monkeypatch, *, baseline_time_s,
              "provider_identities": {unit: {"schema": "stub"}
                                      for unit in records},
              "daily_units": len(records),
-             "daily_variant_records": len(records) * 3,
+             "daily_variant_records": len(records),
              "timings": {}}))
     monkeypatch.setattr(builder, "DailyCostCache", lambda root: object())
     # The stubbed bound inputs name no real profile or archives, so the
@@ -724,7 +722,7 @@ def test_build_path_publishes_a_negative_benefit_instead_of_raising(
     assert record["cold_benefit_proven"] is False
     assert record["cold_benefit_s"] < 0
     assert record["population"] == {
-        "daily_units": units, "daily_variant_records": units * 3,
+        "daily_units": units, "daily_variant_records": units,
         "parent_schedules": parents}
     published = json.loads(evidence_out.read_text())
     assert published["status"] == "NOT_ADOPTED"

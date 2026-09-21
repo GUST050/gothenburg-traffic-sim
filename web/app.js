@@ -2193,8 +2193,12 @@
           monthlyMinDays.value = spec.min_consecutive_start_days || 1;
           monthlyMaxDays.value = spec.max_consecutive_start_days || 1;
           const band = spec.permitted_daily_band || {};
+          const exactDayCount = Number(spec.min_consecutive_start_days || 1) ===
+            Number(spec.max_consecutive_start_days || 1);
           const fullDay = band.earliest_start === '00:00' &&
-            band.latest_end === '24:00';
+            band.latest_end === '24:00' && exactDayCount &&
+            Number(spec.required_work_minutes || 0) ===
+              Number(spec.max_consecutive_start_days || 1) * 24 * 60;
           monthlyFullday.checked = fullDay;
           if (!fullDay) {
             monthlyBandStart.value = band.earliest_start || '07:00';
@@ -2397,7 +2401,9 @@
             monthlyColEnd.textContent = 'Slutdatum';
             monthlyColStartTime.textContent = 'Start/dag';
             monthlyColEndTime.textContent = 'Slut/dag';
-            monthlyColPrimary.textContent = 'ΔTid p50 (värsta variant)';
+            monthlyColPrimary.textContent =
+              result.direction_sensitivity_evaluated === false
+                ? 'ΔTid p50 (q50)' : 'ΔTid p50 (värsta variant)';
             monthlyColSecondary.textContent = 'Övre 95 %';
           }
           if (!boundary.ui_exposure_allowed) {
@@ -2424,16 +2430,20 @@
               'och antal berörda fordon. Optimeringen väljer samma dagliga ' +
               'start/slut i 15-minuterssteg inom det tillåtna tidsfönstret. ' +
               'Perioder får korsa vecko- och månadsgränser.'
-            : 'Varje kandidat körs parat mot sin egen baslinje i SUMO över ' +
-              'q10/q50/q90-varianterna.');
+            : 'Varje kandidat körs parat mot sin egen baslinje i SUMO.');
+          if (result.direction_sensitivity_evaluated === false) {
+            metaLines.push('Endast q50 · riktningskänslighet för q10/q90 ' +
+              'är inte utvärderad. Seedvariation och simuleringshälsa ' +
+              'kontrolleras fortfarande.');
+          }
           if (periodComparison) {
             metaLines.push('Samma tider varje dag: en period tas med när den ' +
               'totala arbetstiden kan delas exakt i lika långa 15-minuterspass ' +
               'per arbetsdag. Maxgränsen är 90 arbetsdagar.');
           }
           if (result.policy_status === 'provisional') {
-            noticeLines.push('Periodanalysen använder ' +
-              'den preliminära v2-policyn. Resultatet är beslutsstöd, inte en ' +
+            noticeLines.push('Analysen använder ' +
+              'en preliminär policy. Resultatet är beslutsstöd, inte en ' +
               'releasegodkänd global rekommendation.');
           }
           if (periodComparison &&

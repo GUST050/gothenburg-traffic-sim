@@ -4,7 +4,7 @@ Structural discovery (``tools.cost_ordered_benchmark.surviving_roads`` and
 ``discovered_specs``) proves only that closing a directed edge leaves the
 network usable; it may name edges that no calibrated route uses. When a tool
 picks a WCI, benchmark or performance case by itself, the policy
-``closure_effect_eligibility_v1`` additionally requires a verified traffic
+``closure_effect_eligibility_q50_v2`` additionally requires a verified traffic
 effect in the exact archives the case will use. It is never applied to a
 closure a user chose: a directed edge without traffic is a legitimate
 closure, and its honest answer is zero.
@@ -12,7 +12,7 @@ closure, and its honest answer is zero.
 Policy versions. Artifacts that name no ``case_selection_policy`` were
 selected by ``structural_survivability_v1`` and are replayed with it.
 
-Definition of ``closure_effect_eligibility_v1`` for one directed edge and the
+Definition of ``closure_effect_eligibility_q50_v2`` for one directed edge and the
 build keys a case requires (reason codes in brackets; ``eligible`` when none
 applies):
 
@@ -22,7 +22,7 @@ applies):
 * every such archive binds catalog pools in metadata, each pool file exists
   and matches its declared SHA-256, and one pool name never maps to two
   catalogs [missing_required_pool];
-* every archive has q10, q50 and q90, each with a resolver-validated SHA-256,
+* every archive has q50 with a resolver-validated SHA-256,
   unchanged while it was parsed, readable by the production parser, and
   yielding exactly the vehicle count its ``demand_meta.json`` declares
   [missing_required_variant];
@@ -30,7 +30,7 @@ applies):
   hash-bound ``catalog.meta.json`` [missing_required_pool];
 * every bound pool has at least one catalog route using the edge
   [no_catalog_route_support];
-* each of q10, q50 and q90 has at least one vehicle crossing the edge, and
+* q50 has at least one vehicle crossing the edge, and
   at least one daily unit belongs to an archive with a crossing
   [no_observed_archive_crossings].
 
@@ -64,10 +64,10 @@ from xml.etree import ElementTree as ET
 from traffic_sim.simulation.deterministic_disruption import VARIANT_FILENAMES
 from traffic_sim.simulation.disruption import parse_route_vehicles
 
-POLICY = "closure_effect_eligibility_v1"
+POLICY = "closure_effect_eligibility_q50_v2"
 LEGACY_POLICY = "structural_survivability_v1"
 POLICIES = (LEGACY_POLICY, POLICY)
-REQUIRED_VARIANTS = tuple(sorted(VARIANT_FILENAMES))
+REQUIRED_VARIANTS = ("q50",)
 #: Where ``demand_meta.json`` declares each variant's published vehicle count.
 VARIANT_FIT_KEYS = {"q50": "edge_shares", "q10": "edge_shares_q10",
                     "q90": "edge_shares_q90"}
@@ -205,7 +205,7 @@ class Inventory:
     parses: Mapping[str, int]
 
     def body(self) -> dict[str, Any]:
-        return {"schema": "closure_effect_inventory_v1", "policy": POLICY,
+        return {"schema": "closure_effect_inventory_q50_v2", "policy": POLICY,
                 "candidates": list(self.candidates),
                 "archives": self.archives, "catalogs": self.catalogs,
                 "crossings": self.crossings,
@@ -411,7 +411,7 @@ def assess(edge: str, inventory: Inventory, *,
            network_edges: frozenset[str] | set[str],
            required_build_keys: Iterable[str],
            daily_units: Mapping[str, int]) -> Verdict:
-    """Apply ``closure_effect_eligibility_v1`` to one edge."""
+    """Apply ``closure_effect_eligibility_q50_v2`` to one edge."""
     edge = str(edge)
     if edge not in inventory.crossings:
         raise ValueError(f"{edge} is not an inventoried candidate")
@@ -507,7 +507,7 @@ def verify_selection_evidence(selection: Mapping[str, Any] | None
     """Drift problems for a selection block; its own policy decides.
 
     Legacy selections carry no effect evidence and need none. A selection
-    made under ``closure_effect_eligibility_v1`` must carry its inventory,
+    made under ``closure_effect_eligibility_q50_v2`` must carry its inventory,
     and every file that inventory bound must still hash the same.
     """
     if policy_of(selection) != POLICY:
@@ -526,6 +526,9 @@ def verify_selection_evidence(selection: Mapping[str, Any] | None
 
 def verify_inventory(record: Mapping[str, Any]) -> list[str]:
     """Problems that invalidate inventory evidence now; empty when valid."""
+    if (record.get("schema") != "closure_effect_inventory_q50_v2"
+            or record.get("policy") != POLICY):
+        return ["unsupported q50 inventory schema or policy"]
     body = {key: value for key, value in record.items()
             if key != "content_key"}
     problems = []

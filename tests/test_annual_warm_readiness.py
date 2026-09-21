@@ -16,7 +16,9 @@ def _stored():
 def test_readiness_manifest_is_superseded_by_current_sources():
     assert _stored()["status"] == "ready_for_full_population"
     with pytest.raises(
-            ValueError, match="tracked annual plan differs from current sources"
+            ValueError,
+            match=("annual warm plan does not recompose exactly|"
+                   "tracked annual plan differs from current sources"),
     ):
         build_readiness_manifest()
 

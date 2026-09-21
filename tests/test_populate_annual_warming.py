@@ -2,6 +2,7 @@ import gzip
 import hashlib
 import json
 from pathlib import Path
+from threading import Event
 from types import SimpleNamespace
 
 import pytest
@@ -737,18 +738,12 @@ class TestPruningInsideExecutePopulation:
     leaves the archive in place.
     """
 
-    @staticmethod
-    def _smallest_build(plan):
-        counts: dict[str, int] = {}
-        for unit in tool.iter_work_units(plan):
-            counts[unit["demand_build_key"]] = counts.get(
-                unit["demand_build_key"], 0) + 1
-        return min(counts, key=lambda key: counts[key])
-
     def _run(self, plan, tmp_path, monkeypatch, *, keep):
         root = tmp_path / "annual"
-        tool.initialize_root(plan, root)
-        build_key = self._smallest_build(plan)
+        units = _units_from_distinct_builds(plan, count=1)
+        progress, artifact_store = _install_fast_population_harness(
+            monkeypatch, plan, units, patch_prune=False)
+        build_key = units[0]["demand_build_key"]
         # The archive must live where a real one does, so the prune guard's
         # "inside runs/ and named demand-*" check is genuinely exercised.
         archive_dir = tmp_path / "runs" / "demand-20270101-000000-aaaa-bbbb"
@@ -758,41 +753,15 @@ class TestPruningInsideExecutePopulation:
         (archive_dir / "build.log").write_text("placeholder")
         monkeypatch.setattr(tool, "ROOT", tmp_path)
 
-        def fake_resolve(required):
-            unit = _progress(plan, root).selectable(
-                limit=1, demand_build_key=build_key)[0]
-            context = annual_unit_context(
-                plan, unit["unit_id"], unit_hint=_hint(unit))
-            return _archive_record(context, archive_dir)
+        def fake_resolve(_required):
+            return {"archive": str(archive_dir)}
 
-        def fake_worker(unit, archive):
-            unit_id = unit["unit_id"]
-            context = annual_unit_context(
-                plan, unit_id, unit_hint=_hint(unit))
-            # A whole-build run walks past link 1, so every later unit must
-            # carry its exact plan predecessor or metadata validation refuses it.
-            predecessor = unit.get("_predecessor_unit")
-            metadata = build_unit_metadata(
-                plan, unit_id,
-                demand_archive=_archive_record(context, archive_dir),
-                unit_hint=_hint(unit),
-                predecessor_unit_id=(
-                    predecessor["unit_id"] if predecessor else None
-                ),
-            )
-            return AnnualWarmArtifactStore(root / "store").pack_artifact(
-                plan_content_key=plan["content_key"],
-                unit_id=unit_id,
-                members=_member_files(
-                    tmp_path / "members" / unit_id, unit["checkpoint_s"],
-                    context["demand_build_spec"],
-                ),
-                metadata=metadata,
-            )
+        def fake_worker(unit, _archive):
+            artifact = {"content_key": "a" * 64}
+            artifact_store.manifests[unit["unit_id"]] = artifact
+            return artifact
 
         monkeypatch.setattr(tool, "_resolve_demand_archive", fake_resolve)
-        monkeypatch.setattr(
-            tool, "_verify_plan_source_seal", lambda checked_plan: None)
         tool.execute_population(
             plan,
             plan_path=tmp_path / "plan.json",
@@ -804,7 +773,7 @@ class TestPruningInsideExecutePopulation:
             keep_demand_archives=keep,
             worker_function=fake_worker,
         )
-        return archive_dir, _progress(plan, root), build_key
+        return archive_dir, progress, build_key
 
     def test_completed_build_releases_its_archive(
         self, plan, tmp_path, monkeypatch
@@ -930,36 +899,109 @@ def test_initialized_root_rejects_a_symlinked_plan(plan, tmp_path):
         tool.initialize_root(plan, root)
 
 
-def _record_events(plan, root, tmp_path, events):
-    """Fake resolve/worker pair that logs the order of build vs unit work."""
+def _units_from_distinct_builds(plan, count=2):
+    """Return minimal identities from ``count`` real plan demand groups."""
+    units = []
+    seen = set()
+    mapping = plan["seed_variants"][0]
+    for request in plan["checkpoint_requests"]:
+        key = request["demand_build_key"]
+        if key in seen:
+            continue
+        units.append({
+            "unit_id": f"fast-scheduling-unit-{len(units)}",
+            "plan_content_key": plan["content_key"],
+            "request_id": request["request_id"],
+            "demand_build_key": key,
+            "checkpoint_s": request["checkpoint_s"],
+            "seed": mapping["seed"],
+            "variant": mapping["variant"],
+            "state": "pending",
+            "attempts": 0,
+            "artifact_content_key": None,
+            "error": None,
+        })
+        seen.add(key)
+        if len(units) == count:
+            return tuple(units)
+    raise AssertionError(f"annual plan has fewer than {count} demand groups")
 
-    def fake_resolve(required):
-        events.append(("resolve", required.build_key))
-        unit = _progress(plan, root).selectable(limit=1)[0]
-        context = annual_unit_context(
-            plan, unit["unit_id"], unit_hint=_hint(unit))
-        return _archive_record(context, tmp_path / "archive")
 
-    def fake_worker(unit, archive):
-        events.append(("unit", unit["demand_build_key"]))
-        predecessor = unit.get("_predecessor_unit")
-        context = annual_unit_context(
-            plan, unit["unit_id"], unit_hint=_hint(unit))
-        metadata = build_unit_metadata(
-            plan, unit["unit_id"],
-            demand_archive=_archive_record(context, tmp_path / "archive"),
-            unit_hint=_hint(unit),
-            predecessor_unit_id=(
-                None if predecessor is None else predecessor["unit_id"]),
-        )
-        return AnnualWarmArtifactStore(root / "store").pack_artifact(
-            plan_content_key=plan["content_key"], unit_id=unit["unit_id"],
-            members=_member_files(
-                tmp_path / "members" / unit["unit_id"], unit["checkpoint_s"],
-                context["demand_build_spec"]),
-            metadata=metadata)
+def _install_fast_population_harness(
+    monkeypatch, plan, units, *, patch_prune=True
+):
+    """Keep scheduling tests on orchestration, not 274 tar/gzip round trips.
 
-    return fake_resolve, fake_worker
+    Artifact packing, restoration and SQLite row verification have dedicated
+    tests in this module and in ``test_annual_warm_*``.  Repeating them for
+    every unit in a scheduling-order test made two assertions cost more than
+    twelve minutes while adding no scheduling coverage.
+    """
+    units = tuple(dict(unit) for unit in units)
+
+    class FastProgress:
+        def __init__(self):
+            self.succeeded = set()
+            self.attempts = {}
+
+        def selectable(self, *, limit=None, demand_build_key=None):
+            selected = [
+                dict(unit) for unit in units
+                if unit["unit_id"] not in self.succeeded
+                and (demand_build_key is None
+                     or unit["demand_build_key"] == demand_build_key)
+            ]
+            return tuple(selected if limit is None else selected[:limit])
+
+        def mark_running_many(self, unit_ids):
+            result = {}
+            for unit_id in unit_ids:
+                self.attempts[unit_id] = self.attempts.get(unit_id, 0) + 1
+                result[unit_id] = {"attempts": self.attempts[unit_id]}
+            return result
+
+        def finish_batch(self, *, succeeded, failed):
+            assert not failed
+            self.succeeded.update(succeeded)
+
+        def summary(self):
+            return {
+                "total": len(units),
+                "pending": len(units) - len(self.succeeded),
+                "running": 0,
+                "succeeded": len(self.succeeded),
+                "failed": 0,
+                "attempts": sum(self.attempts.values()),
+                "complete": len(self.succeeded) == len(units),
+                "plan_content_key": plan["content_key"],
+            }
+
+    class FastStore:
+        manifests = {}
+
+        def __init__(self, _root):
+            pass
+
+        def artifact_exists(self, unit_id):
+            return unit_id in self.manifests
+
+        def load_artifact_manifest(self, unit_id):
+            return self.manifests[unit_id]
+
+    progress = FastProgress()
+    monkeypatch.setattr(tool, "_verify_initialized_root",
+                        lambda _plan, _root: progress)
+    monkeypatch.setattr(tool, "AnnualWarmPlanContext", lambda _plan: object())
+    monkeypatch.setattr(tool, "iter_work_units", lambda _plan: iter(units))
+    monkeypatch.setattr(tool, "AnnualWarmArtifactStore", FastStore)
+    monkeypatch.setattr(tool, "validate_unit_artifact",
+                        lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(tool, "_verify_plan_source_seal", lambda _plan: None)
+    monkeypatch.setattr(tool, "_runtime_disk_guard", lambda _root: None)
+    if patch_prune:
+        monkeypatch.setattr(tool, "_prune_demand_archive",
+                            lambda *_args, **_kwargs: False)
+    return progress, FastStore
 
 
 def _phase_order(events):
@@ -971,8 +1013,37 @@ def _phase_order(events):
             len(events) - 1 - events[::-1].index(("unit", first)))
 
 
-# 273 units exhaust the first demand build, so 274 reaches a second group.
-_TWO_GROUPS = 274
+def _run_phase_order_case(plan, tmp_path, monkeypatch, *, prefetch):
+    units = _units_from_distinct_builds(plan)
+    _progress_store, artifact_store = _install_fast_population_harness(
+        monkeypatch, plan, units)
+    events = []
+    second_started = Event()
+    first_key = units[0]["demand_build_key"]
+    second_key = units[1]["demand_build_key"]
+
+    def fake_resolve(required):
+        events.append(("resolve", required.build_key))
+        if required.build_key == second_key:
+            second_started.set()
+        return {"archive": str(tmp_path / required.build_key)}
+
+    def fake_worker(unit, _archive):
+        if prefetch and unit["demand_build_key"] == first_key:
+            assert second_started.wait(timeout=2), (
+                "the second demand build was not started with the first unit")
+        events.append(("unit", unit["demand_build_key"]))
+        artifact = {"content_key": "a" * 64}
+        artifact_store.manifests[unit["unit_id"]] = artifact
+        return artifact
+
+    monkeypatch.setattr(tool, "_resolve_demand_archive", fake_resolve)
+    tool.execute_population(
+        plan, plan_path=tmp_path / "plan.json", root=tmp_path / "annual",
+        state_workers=1, max_units=2, reference_edge="edge_0",
+        demand_build_key=None, prefetch_demand=prefetch,
+        worker_function=fake_worker)
+    return events
 
 
 def test_the_next_demand_build_starts_while_the_current_units_run(
@@ -986,16 +1057,8 @@ def test_the_next_demand_build_starts_while_the_current_units_run(
     population. No artifact changes -- archives are content-addressed -- so
     what this asserts is ORDER, which is the entire change.
     """
-    root = tmp_path / "annual"
-    tool.initialize_root(plan, root)
-    events = []
-    fake_resolve, fake_worker = _record_events(plan, root, tmp_path, events)
-    monkeypatch.setattr(tool, "_resolve_demand_archive", fake_resolve)
-
-    tool.execute_population(
-        plan, plan_path=tmp_path / "plan.json", root=root,
-        state_workers=3, max_units=_TWO_GROUPS, reference_edge="edge_0",
-        demand_build_key=None, worker_function=fake_worker)
+    events = _run_phase_order_case(
+        plan, tmp_path, monkeypatch, prefetch=True)
 
     started_second, last_first_unit = _phase_order(events)
     assert started_second < last_first_unit, (
@@ -1046,17 +1109,8 @@ def test_prefetch_can_be_switched_off_for_measurement(plan, tmp_path, monkeypatc
     """--no-prefetch-demand restores strict phase ordering so the two
     schedules can be A/B'd on one machine, and is the escape hatch when a
     second resident archive would not fit."""
-    root = tmp_path / "annual"
-    tool.initialize_root(plan, root)
-    events = []
-    fake_resolve, fake_worker = _record_events(plan, root, tmp_path, events)
-    monkeypatch.setattr(tool, "_resolve_demand_archive", fake_resolve)
-
-    tool.execute_population(
-        plan, plan_path=tmp_path / "plan.json", root=root,
-        state_workers=3, max_units=_TWO_GROUPS, reference_edge="edge_0",
-        demand_build_key=None, prefetch_demand=False,
-        worker_function=fake_worker)
+    events = _run_phase_order_case(
+        plan, tmp_path, monkeypatch, prefetch=False)
 
     started_second, last_first_unit = _phase_order(events)
     assert started_second > last_first_unit, (

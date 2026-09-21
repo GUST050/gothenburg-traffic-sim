@@ -1227,11 +1227,13 @@ class ArchivedDemandSumoRunner:
                     "demand archive time/source metadata does not match "
                     "expected envelope"
                 )
-        if int(metadata.get("n_variants", 0)) != 3:
-            raise ValueError("monthly SUMO runner requires q10/q50/q90 routes")
+        if (type(metadata.get("n_variants")) is not int
+                or metadata["n_variants"] not in (1, 3)):
+            raise ValueError("monthly SUMO runner requires declared q50 or q10/q50/q90 routes")
+        archive_variants = ("q50",) if metadata["n_variants"] == 1 else DEMAND_VARIANTS
         self.variants = {
-            variant: (self.archive / filename).resolve()
-            for variant, filename in VARIANT_FILENAMES.items()
+            variant: (self.archive / VARIANT_FILENAMES[variant]).resolve()
+            for variant in archive_variants
         }
         for path in self.variants.values():
             if not path.is_file():
@@ -1425,7 +1427,7 @@ class ArchivedDemandSumoRunner:
                     self.variants[variant],
                     label=f"demand_routes_{variant}",
                 )
-                for variant in DEMAND_VARIANTS
+                for variant in self.variants
             ),
             _file_record(rs.NET_PATH, label="sumo_network"),
         ]
@@ -1645,6 +1647,11 @@ class ArchivedDemandSumoRunner:
                 seed_workers=1,
                 seed_start=seed,
                 variant_labels=[variant],
+                route_window=(
+                    (begin_s, duration_s)
+                    if begin_s != 0 or duration_s != self.duration_s
+                    else None
+                ),
             )
             edge_data = (
                 temporary_root
@@ -2458,17 +2465,16 @@ class ArchivedDemandSumoRunner:
         # MEASURE closure throughput. LUNA-WARM-05 left this unmeasured, so the
         # warm arm reported None against the cold arm's 0 — and "we did not
         # look" is not the same statement as "nothing crossed a closed edge".
-        # Closed edges are zero-filled because `excludeEmpty=true` omits an edge
-        # that was measured and carried nothing.
+        # `excludeEmpty=true` omits an edge that was measured and carried
+        # nothing. Supplying the closed-edge set preserves that measured zero,
+        # while the XML reader keeps interval and closure times absolute.
         if closures:
             if not edge_data.exists():
                 # A closure with no measured post domain cannot be certified.
                 return None
-            seed_flows = rs.parse_edgedata(
-                edge_data, self.n_intervals,
+            active_throughput = closure_metrics.read_active_closure_throughput(
+                edge_data, closures,
                 measured_empty_edges=tuple(self.close_edges))
-            active_throughput = closure_metrics.active_closure_throughput(
-                seed_flows, closures, window_begin_s=plan.warm_point_s)
             if active_throughput is None:
                 return None
         else:
@@ -3030,6 +3036,11 @@ class ArchivedDemandSumoRunner:
                     "work_date": schedule.first_work_date,
                     "vehicle_class": closure_routing.DEFAULT_VCLASS,
                 },
+                route_window=(
+                    (run_begin_s, run_duration_s)
+                    if run_begin_s != 0 or run_duration_s != self.duration_s
+                    else None
+                ),
             )
             # Preserve the cold path's per-trip denial evidence the same way
             # the warm path does, before `temporary_root` below is deleted.
@@ -3504,7 +3515,9 @@ class ArchivedDemandSumoRunner:
         }
         self.canonical_observations = []
         pending: list[tuple[str, int]] = []
-        for variant in DEMAND_VARIANTS:
+        if set(target_repetitions) != set(self.variants):
+            raise ValueError("requested variants do not match archive scope")
+        for variant in self.variants:
             target = target_repetitions.get(variant)
             if (
                 isinstance(target, bool)

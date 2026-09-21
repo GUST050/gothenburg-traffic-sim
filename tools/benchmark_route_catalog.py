@@ -18,9 +18,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from traffic_sim.demand.build_lock import child_environment, demand_build_lock
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.demand.catalog_qualification import (
+    OPERATIONAL_QUALIFICATION_MODE,
     PER_TRIAL_HARD_GATES,
     SUITE_HARD_GATES,
+    validate_suite_gate_evidence,
 )
+from traffic_sim.core.contracts import DemandBuildSpec, write_demand_build_spec
 from traffic_sim.simulation.monthly_demand import (
     LIVE_DEMAND_RELEASE_PRODUCTS,
     restore_live_demand_release,
@@ -57,44 +60,17 @@ FIXTURES = (
     {"name": "holiday", "date": "2027-05-13", "days": 1},
     {"name": "mixed", "date": "2027-09-10", "days": 2},
 )
+FULL_QUALIFICATION_MODE = "full_30_pair_v2"
 
 
-def load_suite_gate_record(path: Path) -> dict[str, bool]:
+def load_suite_gate_record(
+        path: Path, *, require_source_hashes: bool = False) -> dict[str, bool]:
     """Load once-per-campaign suite evidence, failing closed on prose-only claims."""
     payload = json.loads(Path(path).read_text())
-    raw = payload.get("gates") if isinstance(payload, dict) else None
-    if (not isinstance(payload, dict)
-            or payload.get("schema_version") != 2
-            or payload.get("kind") != "route_catalog_suite_gate_evidence"
-            or not isinstance(raw, dict)):
-        raise ValueError("suite-gate record must contain a gates object")
-    missing = sorted(set(SUITE_HARD_GATES) - set(raw))
-    extra = sorted(set(raw) - set(SUITE_HARD_GATES))
-    if missing or extra:
-        raise ValueError(
-            "suite-gate record does not match the suite contract; missing="
-            + ",".join(missing) + " extra=" + ",".join(extra))
-    result = {}
     project_root = Path(__file__).resolve().parents[1]
-    for gate in SUITE_HARD_GATES:
-        record = raw.get(gate)
-        tests = record.get("tests") if isinstance(record, dict) else None
-        if (not isinstance(record, dict)
-                or record.get("status") not in {"pass", "fail"}
-                or not isinstance(tests, list) or not tests
-                or any(not isinstance(test, str) or not test for test in tests)):
-            raise ValueError(
-                f"suite gate {gate} needs status and non-empty test evidence")
-        for test in tests:
-            evidence_path = Path(test.split("::", 1)[0])
-            resolved = (project_root / evidence_path).resolve()
-            if (evidence_path.is_absolute()
-                    or not resolved.is_relative_to(project_root)
-                    or not resolved.is_file()):
-                raise ValueError(
-                    f"suite gate {gate} names missing evidence: {test}")
-        result[gate] = record["status"] == "pass"
-    return result
+    return validate_suite_gate_evidence(
+        payload, project_root=project_root,
+        require_source_hashes=require_source_hashes)
 
 
 def parse_args() -> argparse.Namespace:
@@ -103,7 +79,14 @@ def parse_args() -> argparse.Namespace:
                         help="Verified root produced by build_route_catalog.py")
     parser.add_argument("--suite-gates", type=Path, required=True,
                         help="JSON object containing the non-timing hard gates")
+    parser.add_argument("--catalog-build", type=Path,
+                        help="Catalog build report (required in operational mode)")
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--qualification-mode",
+        choices=("full-30-pair", "operational-four-class-q50"),
+        default="full-30-pair",
+    )
     parser.add_argument("--trials", type=int, default=30,
                         help="Paired trials (minimum 30)")
     parser.add_argument("--timeout-s", type=float, default=1800.0)
@@ -114,8 +97,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume", action="store_true",
                         help="Resume the exact existing --out campaign")
     args = parser.parse_args()
-    if args.trials < 30:
-        parser.error("--trials must be at least 30")
+    if args.qualification_mode == "operational-four-class-q50":
+        if args.trials != 4:
+            parser.error("operational qualification requires --trials 4")
+        if args.catalog_build is None:
+            parser.error("operational qualification requires --catalog-build")
+    elif args.trials < 30:
+        parser.error("full qualification requires at least 30 trials")
     if args.timeout_s <= 0:
         parser.error("--timeout-s must be positive")
     if args.n_total < 1:
@@ -133,6 +121,33 @@ def _atomic_json(path: Path, payload: dict) -> None:
 def _rss_bytes() -> int:
     value = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
     return int(value if sys.platform == "darwin" else value * 1024)
+
+
+def demand_variant_mode(meta: dict) -> str:
+    """Return q50 scope only when the producer recorded the exact contract."""
+    contract = meta.get("demand_variant_contract")
+    variants = contract.get("variants") if isinstance(contract, dict) else None
+    if (meta.get("n_variants") != 1
+            or not isinstance(contract, dict)
+            or contract.get("mode") != "q50_only"
+            or not isinstance(variants, list) or len(variants) != 1
+            or not isinstance(variants[0], dict)
+            or variants[0].get("name") != "q50"):
+        raise ValueError("operational catalog arm did not produce exact q50 scope")
+    return "q50_only"
+
+
+def validate_resume_campaign(existing: object, expected: dict) -> None:
+    """Fail closed unless every immutable campaign field is identical."""
+    if not isinstance(existing, dict):
+        raise ValueError("existing campaign does not match this invocation")
+    immutable = set(expected) - {"trials"}
+    if (set(existing) - {"trials"} != immutable
+            or any(existing.get(field) != expected.get(field)
+                   for field in immutable)
+            or not isinstance(existing.get("trials"), list)
+            or len(existing["trials"]) > expected["requested_pairs"]):
+        raise ValueError("existing campaign does not match this invocation")
 
 
 def evaluate_hard_gates(meta: dict, validation: dict) -> dict[str, bool]:
@@ -190,12 +205,20 @@ def evaluate_hard_gates(meta: dict, validation: dict) -> dict[str, bool]:
 
 def run_arm(*, arm: str, fixture: dict, scratch: Path,
             catalog_root: Path, timeout_s: float,
-            n_total: int) -> dict:
+            n_total: int, variant_mode: str | None = None) -> dict:
     candidate_cache = scratch / "candidate-cache"
     day_library = scratch / "day-library"
     trial_catalog = scratch / "route-catalog"
     if arm == "catalog":
         shutil.copytree(catalog_root, trial_catalog)
+    demand_spec = None
+    if variant_mode == "q50_only":
+        demand_spec = scratch / "demand-spec.json"
+        write_demand_build_spec(demand_spec, DemandBuildSpec(
+            start_date=fixture["date"], source="forecast",
+            days=fixture["days"], begin="00:00", end="24:00",
+            variant_mode="q50_only",
+        ))
     command = [
         sys.executable, "-c",
         "import build_sumo_demand as module; module.main()",
@@ -207,6 +230,8 @@ def run_arm(*, arm: str, fixture: dict, scratch: Path,
         "--route-catalog-root", str(trial_catalog),
         "--day-library-root", str(day_library),
     ]
+    if demand_spec is not None:
+        command.extend(["--demand-spec", str(demand_spec)])
     started = time.perf_counter()
     completed = subprocess.run(
         command, cwd=Path(__file__).resolve().parents[1],
@@ -220,8 +245,11 @@ def run_arm(*, arm: str, fixture: dict, scratch: Path,
             + "\n--- stderr ---\n" + completed.stderr[-4000:])
     meta = json.loads(Path("sumo/demand_meta.json").read_text())
     validation = json.loads(Path("web/data/validation.json").read_text())
+    recorded_variant_mode = (
+        demand_variant_mode(meta) if variant_mode == "q50_only" else None
+    )
     timings = meta.get("timings_s") or {}
-    return {
+    result = {
         "wall_s": round(wall_s, 6),
         "adapter_s": float(timings.get("catalog_restore_or_build", 0.0))
                      + float(timings.get("catalog_adapter", 0.0)),
@@ -244,13 +272,20 @@ def run_arm(*, arm: str, fixture: dict, scratch: Path,
             "pfe_source_candidates"),
         "validation_overall": validation.get("overall"),
     }
+    if recorded_variant_mode is not None:
+        result["variant_mode"] = recorded_variant_mode
+    return result
 
 
 def main() -> int:
     args = parse_args()
-    suite = load_suite_gate_record(args.suite_gates)
+    operational = args.qualification_mode == "operational-four-class-q50"
+    suite = load_suite_gate_record(
+        args.suite_gates, require_source_hashes=operational)
+    mode = OPERATIONAL_QUALIFICATION_MODE if operational \
+        else FULL_QUALIFICATION_MODE
     campaign = {
-        "schema_version": 2,
+        "schema_version": 3 if operational else 2,
         "kind": "route_catalog_paired_trials",
         "requested_pairs": args.trials,
         "fixtures": list(FIXTURES),
@@ -263,6 +298,13 @@ def main() -> int:
         "execute": bool(args.execute),
         "trials": [],
     }
+    if operational:
+        campaign["qualification_mode"] = mode
+        campaign["variant_mode"] = "q50_only"
+        campaign["catalog_build_evidence"] = {
+            "path": str(args.catalog_build),
+            "sha256": sha256_file(args.catalog_build),
+        }
     if not args.execute:
         print(json.dumps(campaign, indent=1, sort_keys=True))
         return 0
@@ -271,17 +313,7 @@ def main() -> int:
             raise FileExistsError(
                 f"refusing to overwrite existing campaign: {args.out}; use --resume")
         existing = json.loads(args.out.read_text())
-        if (not isinstance(existing, dict)
-                or existing.get("schema_version") != campaign["schema_version"]
-                or existing.get("kind") != campaign["kind"]
-                or existing.get("requested_pairs") != args.trials
-                or existing.get("fixtures") != campaign["fixtures"]
-                or existing.get("candidate_n_total") != args.n_total
-                or existing.get("suite_gate_evidence")
-                   != campaign["suite_gate_evidence"]
-                or not isinstance(existing.get("trials"), list)
-                or len(existing["trials"]) > args.trials):
-            raise ValueError("existing campaign does not match this invocation")
+        validate_resume_campaign(existing, campaign)
         campaign = existing
 
     extra_products = tuple(LIVE_DEMAND_RELEASE_PRODUCTS) + tuple(
@@ -310,7 +342,8 @@ def main() -> int:
                         record[arm] = run_arm(
                             arm=arm, fixture=fixture, scratch=Path(raw),
                             catalog_root=args.catalog_root,
-                            timeout_s=args.timeout_s, n_total=args.n_total)
+                            timeout_s=args.timeout_s, n_total=args.n_total,
+                            variant_mode=("q50_only" if operational else None))
                 campaign["trials"].append(record)
                 _atomic_json(args.out, campaign)
                 print(f"completed paired catalog trial {index + 1}/{args.trials}",

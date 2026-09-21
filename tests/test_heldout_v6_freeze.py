@@ -315,6 +315,9 @@ class TestSourceFingerprintsAndReproduction:
         assert hashlib.sha256(mutated).hexdigest() != fp[target]
 
     def test_freeze_preview_reports_drift_without_rewriting_history(self):
+        canonical = Path(_load(SELECTION)["canonical_demand"]["path"])
+        if not canonical.is_dir():
+            pytest.skip("the exact frozen v6 demand archive is absent")
         import sys
         sys.path.insert(0, "tools")
         from freeze_heldout_v6 import build_artifacts

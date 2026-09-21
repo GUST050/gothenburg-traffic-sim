@@ -262,6 +262,7 @@ def envelope_demand_spec(
         end="24:00",
         structural_reference_date=structural_reference_date,
         purpose="closure_envelope",
+        variant_mode="q50_only",
     )
 
 
@@ -327,6 +328,7 @@ def independent_daily_demand_spec(
             end="24:00",
             structural_reference_date=structural_reference_date,
             purpose="closure_envelope",
+            variant_mode="q50_only",
         )
     return envelope_demand_spec(
         search,

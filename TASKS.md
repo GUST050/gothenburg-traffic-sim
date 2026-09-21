@@ -8,6 +8,19 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- WORKFLOW_CONTROL_START -->
 ## WORKFLOW_CONTROL
 
+- Mode: Implementation and verification.
+- Current focus: q50 monthly execution with the current-input route catalog active and closure-throughput time-axis repair verified.
+- Status: Q50_ROUTE_CATALOG_ADOPTED; trimmed/warm edgeData is scored on SUMO's absolute clock. Full cold month remains separate and not release-qualified.
+- Suggested next action: Rerun the bounded three-day search to replace the invalid pre-fix result, then measure a complete cold q50 month before selecting another optimization.
+- Eligible actors: Any capable actor.
+- Safety boundary: Preserve q50 calibration, seeds, catalog provenance and health/release gates. No commit, push or full-month launch without explicit scope.
+- Updated: 2026-09-21.
+<!-- WORKFLOW_CONTROL_END -->
+
+### Superseded coordination snapshot before q50-only (2026-09-20)
+
+## WORKFLOW_CONTROL
+
 - Mode: `FLEXIBLE — simulation quality and performance research`
 - Current focus: `The full WCI production chain (profile rebuild -> census -> registration -> serial month cache -> guarded WCI build) has been run end to end, under explicit user approval, one gate at a time, and every stage PASSED. The WindowCostIndex is built and verified for the effect-eligible edge 26842525_26355153_0. It is NOT yet adopted into any production routing/serving path -- that remains a separate, unstarted decision.`
 - Status: `CHAIN_COMPLETE_PASS_NOT_ADOPTED. Fas 1 profile rebuild: PASS, 2,485.08 s (2,722.49 s supervised wall), 973,276,480 B peak physical footprint, 0 swap growth -- 2.946x faster and 5.75x less peak memory than the last published profile (7,320.348 s / 6.52 GB). Chain step 2 census: PASS, closure_effect_eligibility_v1 independently re-selected the same edge fresh against current HEAD. Chain step 3 registration: PASS, tools.freeze_wci_month_case.verify_registration reports zero problems. Chain step 4 serial month cache: PASS, 30/30 build keys, 1,950/1,950 daily units, 0 failures, 5,226.05 s, 929,072,400 B peak footprint, 0 swap growth. A second month-ledger profile bound to the chosen edge's own spec (required by guarded_wci_build.py's own preflight, since the first profile run is deliberately bound to a frozen zero-effect spec) also PASSED: 4,355.12 s, 1,138,589,696 B peak RSS, and independently cross-verified byte-for-byte identical to chain step 4's separately-built oracle cache on all 1,950 overlapping daily-unit records. Chain step 5 guarded WCI build: PASSED, 0 problems, 354.08 s elapsed (well under the 1,820 s raw-phase and 7,320.348 s whole-build hard limits), 9,222,927 affected vehicles (a genuine nonzero month), oracle field-identical (0 mismatches, 5,850/5,850 records), ledger identical, 0 swap growth, 0 SUMO processes. Decision chain: validation/wci_shared_context_decision_20260919-v2.json (91689dc6...) authorised the rebuild; validation/wci_guarded_build_20260919-v1.json (1f36a4da...) is the final PASS.`
@@ -15,7 +28,6 @@ owners, states and approval formulas are not active workflow rules. See
 - Eligible actors: `Any capable actor.`
 - Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. Never apply effect eligibility to user-chosen closures. No production gate was weakened or skipped: every stage ran under its own documented hard budget, derived from repo evidence rather than guessed, and every result was re-verified from disk in a fresh process before the next stage started. The built WindowCostIndex is evidence only -- it is not wired into any consuming code path. Keep unrelated local changes outside this delivery.`
 - Updated: `2026-09-19. Full WCI chain (profile -> census -> registration -> serial month cache -> guarded build) run under explicit user approval and PASSED end to end. WindowCostIndex built and verified for 26842525_26355153_0; not adopted anywhere.`
-<!-- WORKFLOW_CONTROL_END -->
 
 <!-- WORKFLOW_HISTORY_START -->
 
@@ -686,6 +698,22 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
+### MONTHLY-Q50-2026-09-20 — Median-only monthly execution
+
+- Status: IMPLEMENTED_FULL_SUITE_VERIFIED; current route catalog adopted; full month not release-qualified.
+- Objective and scope: User approved removing q10/q90 from current monthly execution.
+- Completion outcome: q50 implementation and closure-throughput time-axis repair full-suite verified; cold-run population bug fixed with strict real-SUMO canary evidence; new catalog qualified and active. No completed full-month speed claim.
+- Context or checkpoints: The cold October run built 31 archives, then failed its first pilot because a shortened SUMO horizon still received the full three-day route file. The fixed q50 catalog path passed four current cold classes at 3.38x-5.54x versus legacy. Historical tri-variant evidence remains distinct.
+- Primary files: `suggest_closure_time.py`, `traffic_sim/simulation/monthly_sumo.py`, their regression tests, plus the existing q50 demand/WCI changes.
+- Constraints and safety: No weaker calibration/health/release gates or expensive simulations.
+- Acceptance criteria: q50 throughout current chain; canonical seeds retained; scope-bound caches; explicit UI scope.
+- Useful checks: Full suite 6,814 passed, 43 skipped, 0 failed in 798.17 s. Closure time-axis focused set: 570 passed. Catalog suite after review fixes: 58 passed; fresh source-sealed suite evidence: 132 passed. Runtime semantically recomputes raw trials, verifies exact fixture/pool bindings and requires all suite-test plus validator/adopter source hashes. Real Oct-25 q50/seed-1001 canary: 34,604 loaded/inserted/trips, zero waiting/teleports/closed-edge throughput, 21.467 s.
+<!-- ACTIVE_TASK_END -->
+
+### Superseded coordination snapshot before q50-only (2026-09-20)
+
+## ACTIVE_TASK
+
 ### PASSAGE-SPEED-STEP5-2026-09-13 — Archive and deterministic-cost measurement
 
 - Status: `THE ORACLE CACHE IS RESUMABLE AND MEASURED FOR ONE BUILD KEY; THE MONTH CACHE BUILD IS DECIDED AGAINST IN THIS ROUND; WCI NOT ADOPTED.`
@@ -696,7 +724,6 @@ owners, states and approval formulas are not active workflow rules. See
 - Evidence: `validation/wci_month_cache_decision_20260917-v1.json (6c44a2ba…, DO_NOT_START_MONTH_CACHE_BUILD); validation/wci_daily_cache_canary_20260917-v2.json (53286080…, PASS) and -v1.json (the first run, failed on a mis-measured child check); validation/wci_month_case_registration_20260917-v2.json (88cb38dd…); validation/wci_month_cache_preflight_20260917-v2.json (121d8c68…); validation/wci_guarded_canary_20260917-v2.json; validation/wci_full_build_decision_20260917-v2.json.`
 - Constraints and safety: `All new evidence is diagnostic with release_evidence=false. The diagnostic cache root is separate from the production cache and from canary v4's oracle root, both of which are untouched. Bounded measurements are not a WCI runtime.`
 - Acceptance criteria: `Before any full build: a complete verified daily-cost cache for 26842525_26355153_0, a month ledger profile bound to that case, and then a guarded run under the production budget.`
-<!-- ACTIVE_TASK_END -->
 
 <!-- ACTIVE_TASK_HISTORY_START -->
 

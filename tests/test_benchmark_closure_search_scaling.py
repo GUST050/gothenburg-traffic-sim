@@ -319,6 +319,9 @@ class TestFrozenArtifact:
         "traffic_sim/simulation/closure_preflight.py",
         "traffic_sim/simulation/closure_ranking.py",
         "traffic_sim/simulation/closure_teleport.py",
+        # Monthly q50-only envelopes changed the live result shape. The
+        # published scaling baseline remains immutable historical evidence.
+        "traffic_sim/simulation/envelope.py",
         "traffic_sim/simulation/independent_daily.py",
         "traffic_sim/simulation/monthly_search.py",
         "run_monthly_closure_search.py",

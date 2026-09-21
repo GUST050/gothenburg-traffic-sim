@@ -231,7 +231,7 @@ class IndependentDailyCostSource:
     def _check_variants(self, records: Sequence[Mapping[str, Any]]) -> None:
         variants = tuple(str(item.get("demand_variant", ""))
                          for item in records)
-        if variants != ("q10", "q50", "q90"):
+        if variants not in (("q50",), ("q10", "q50", "q90")):
             raise ValueError(
                 "deterministic cost provider must return one actual "
                 "q10/q50/q90 record per daily unit")

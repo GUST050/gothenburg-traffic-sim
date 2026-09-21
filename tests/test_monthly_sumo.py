@@ -224,6 +224,110 @@ def test_cold_run_stops_at_schedule_envelope_not_archive_tail(
         96, 2 * 24 * 3600, 24 * 3600, 0)
 
 
+def test_trimmed_baseline_passes_the_exact_departure_window_to_sumo(
+        tmp_path, patched_runtime, monkeypatch):
+    """Baseline and candidate must use the same bounded route population."""
+    spec = ClosureSearchSpec.from_dict({
+        **{key: value for key, value in _spec().to_dict().items()
+           if key != "content_key"},
+        "permitted_date_start": "2025-09-17",
+        "permitted_date_end": "2025-09-17",
+        "interday_policy": "independent_daily_reset_v1",
+    })
+    runner = ArchivedDemandSumoRunner(
+        spec,
+        archive=_archive(tmp_path, days=3),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        cache_root=tmp_path / "cache",
+    )
+    seen = []
+    metrics = monthly_sumo.closure_metrics.DisruptionMetrics(
+        total_time_loss_s=0.0,
+        trip_count=0,
+        unfinished_trips=0,
+        unfinished_waiting_trips=0,
+        teleport_total=0,
+        teleport_reasons={},
+        loaded=0,
+        inserted=0,
+        running_at_end=0,
+        waiting_at_end=0,
+    )
+
+    def fake_simulate_closure(**kwargs):
+        seen.append(kwargs.get("route_window"))
+        return metrics, 0, 0, [], []
+
+    monkeypatch.setattr(monthly_sumo.legacy, "simulate_closure",
+                        fake_simulate_closure)
+    monkeypatch.setattr(monthly_sumo, "read_edgedata_time_loss",
+                        lambda _path: ())
+
+    runner._run_baseline_locked(
+        "q50", 1001,
+        n_intervals=96,
+        duration_s=2 * 24 * 3600,
+        begin_s=24 * 3600,
+        flush_s=0,
+    )
+
+    assert seen == [(24 * 3600, 2 * 24 * 3600)]
+
+
+def test_trimmed_candidate_passes_the_exact_departure_window_to_sumo(
+        tmp_path, patched_runtime, monkeypatch):
+    """The candidate arm must not retain the archive-tail population."""
+    spec = ClosureSearchSpec.from_dict({
+        **{key: value for key, value in _spec().to_dict().items()
+           if key != "content_key"},
+        "permitted_date_start": "2025-09-17",
+        "permitted_date_end": "2025-09-17",
+        "interday_policy": "independent_daily_reset_v1",
+    })
+    runner = ArchivedDemandSumoRunner(
+        spec,
+        archive=_archive(tmp_path, days=3),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        cache_root=tmp_path / "cache",
+    )
+    schedule = generate_closure_schedules(spec)[0]
+    metrics = monthly_sumo.closure_metrics.DisruptionMetrics(
+        total_time_loss_s=0.0,
+        trip_count=0,
+        unfinished_trips=0,
+        unfinished_waiting_trips=0,
+        teleport_total=0,
+        teleport_reasons={},
+        loaded=0,
+        inserted=0,
+        running_at_end=0,
+        waiting_at_end=0,
+    )
+    monkeypatch.setattr(
+        runner,
+        "_run_baseline_for_window",
+        lambda *args, **kwargs: (metrics, ()),
+    )
+    seen = []
+
+    class ProbeComplete(RuntimeError):
+        pass
+
+    def fake_simulate_closure(**kwargs):
+        seen.append(kwargs.get("route_window"))
+        raise ProbeComplete
+
+    monkeypatch.setattr(monthly_sumo.legacy, "simulate_closure",
+                        fake_simulate_closure)
+
+    with pytest.raises(ProbeComplete):
+        runner._run_observation(schedule, variant="q50", seed=1001)
+
+    assert seen == [(24 * 3600, 2 * 24 * 3600)]
+
+
 def test_warm_execution_is_gated_when_its_horizon_differs_from_cold(
         tmp_path, patched_runtime):
     """The pre-adf765b warm proof cannot authorize the trimmed cold arm."""
@@ -428,6 +532,53 @@ def test_runner_adds_only_missing_canonical_repetitions(
         ("q90", canonical_seed("q90", 1)),
     ]
     assert len(final.observations) == 5
+
+
+def test_q50_archive_schedules_only_original_q50_seeds(
+        tmp_path, patched_runtime, monkeypatch):
+    archive = _archive(tmp_path)
+    metadata = json.loads((archive / "demand_meta.json").read_text())
+    metadata["n_variants"] = 1
+    (archive / "demand_meta.json").write_text(json.dumps(metadata))
+    (archive / "calibrated_v1.rou.xml").unlink()
+    (archive / "calibrated_v2.rou.xml").unlink()
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=archive, baseline_trip_duration_p99_s=1800,
+        study_provenance_key="q50-study", cache_root=tmp_path / "cache")
+    schedule = generate_closure_schedules(_spec())[0]
+    calls = []
+
+    def observation(selected, *, variant, seed):
+        calls.append((variant, seed))
+        return (PairedObservation(
+            candidate_id=selected.schedule_id, demand_variant=variant,
+            seed=seed, baseline_time_loss_s=100.0, candidate_time_loss_s=110.0,
+            matched_baseline_id=runner.matched_baseline_id,
+            provenance_key="q50-study"), (), None)
+
+    monkeypatch.setattr(runner, "_run_observation", observation)
+    pilot = runner.run_candidate(schedule, target_repetitions={"q50": 1},
+                                 existing=None, stage="pilot")
+    final = runner.run_candidate(schedule, target_repetitions={"q50": 4},
+                                 existing=pilot, stage="finalist")
+    assert calls == [("q50", seed) for seed in (1001, 1004, 1007, 1010)]
+    assert len(final.observations) == 4
+    with pytest.raises(ValueError, match="variant.*scope"):
+        runner.run_candidate(schedule, target_repetitions={
+            "q10": 1, "q50": 1, "q90": 1}, existing=None, stage="pilot")
+    assert len(calls) == 4
+
+
+@pytest.mark.parametrize("invalid_count", [True, 1.0, "1"])
+def test_archive_variant_count_requires_integer(tmp_path, patched_runtime, invalid_count):
+    archive = _archive(tmp_path)
+    metadata = json.loads((archive / "demand_meta.json").read_text())
+    metadata["n_variants"] = invalid_count
+    (archive / "demand_meta.json").write_text(json.dumps(metadata))
+    with pytest.raises(ValueError, match="variant|routes"):
+        ArchivedDemandSumoRunner(
+            _spec(), archive=archive, baseline_trip_duration_p99_s=1800,
+            study_provenance_key="study", cache_root=tmp_path / "cache")
 
 
 def test_hard_failure_stops_additional_work(

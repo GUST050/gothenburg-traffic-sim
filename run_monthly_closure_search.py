@@ -2027,7 +2027,11 @@ def _publish_cost_ordered_shadow(spec, policy, *, root) -> dict:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--spec", type=Path, required=True)
-    parser.add_argument("--policy", type=Path, required=True)
+    parser.add_argument(
+        "--policy", type=Path,
+        default=Path(__file__).resolve().parent / "validation" /
+        "monthly_search_policy_v5_q50_only.json",
+        help="Monthly policy (default: provisional q50-only analysis).")
     parser.add_argument(
         "--demand-archive",
         type=Path,

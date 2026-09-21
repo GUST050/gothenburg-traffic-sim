@@ -68,6 +68,7 @@ DISRUPTION_SCHEMA = "deterministic_closure_disruption_v4"
 DAILY_COST_CACHE_SCHEMA = "deterministic_daily_cost_cache_v1"
 
 DEMAND_VARIANTS = ("q10", "q50", "q90")
+MONTHLY_DEMAND_VARIANTS = ("q50",)
 
 #: Which calibrated route file carries which direction-split variant. Defined
 #: here, in a module with no simulation dependency, because both the SUMO
@@ -328,14 +329,17 @@ class DailyCostCache:
                 f"deterministic daily cost cache entry does not match its "
                 f"identity: {path}")
         records = payload.get("disruption")
-        if not isinstance(records, list) or len(records) != len(DEMAND_VARIANTS):
+        if not isinstance(records, list) or any(not isinstance(item, Mapping) for item in records):
             raise DailyCostCacheCorrupt(
                 f"deterministic daily cost cache entry lacks q10/q50/q90: "
                 f"{path}")
         variants = [str(item.get("demand_variant", "")) for item in records]
-        if variants != list(DEMAND_VARIANTS):
+        declared_routes = identity.get("demand", {}).get("variant_routes")
+        if declared_routes is not None and set(variants) != set(declared_routes):
+            raise DailyCostCacheCorrupt("cached variant scope differs from bound archive")
+        if tuple(variants) not in (MONTHLY_DEMAND_VARIANTS, DEMAND_VARIANTS):
             raise DailyCostCacheCorrupt(
-                f"deterministic daily cost cache entry has the wrong variant "
+                f"deterministic daily cost cache entry requires q50 or q10/q50/q90 in variant "
                 f"order: {path}")
         return tuple(dict(item) for item in records)
 
@@ -400,7 +404,12 @@ class ArchiveInputs:
         variant_paths: dict[str, Path] = {}
         variant_sha256: dict[str, str] = {}
         variant_states: dict[str, tuple[int, int, int, int]] = {}
-        for variant, filename in VARIANT_FILENAMES.items():
+        count = metadata.get("n_variants")
+        if type(count) is not int or count not in (1, 3):
+            raise DisruptionUnavailable("demand archive must declare one or three variants")
+        variants = MONTHLY_DEMAND_VARIANTS if count == 1 else DEMAND_VARIANTS
+        for variant in variants:
+            filename = VARIANT_FILENAMES[variant]
             path = (archive / filename).resolve()
             if not path.is_file():
                 raise DisruptionUnavailable(
@@ -612,6 +621,8 @@ class ArchiveDisruptionProvider:
         closed = set(self.spec.directed_edges)
         records: list[Mapping[str, Any]] = []
         for variant in DEMAND_VARIANTS:
+            if variant not in self.inputs.variant_paths:
+                continue
             try:
                 call_kwargs = {"adj": self.network.adjacency,
                                "timing": self._record_timing}
@@ -708,13 +719,18 @@ def sum_daily_disruption(
                     "daily disruption evidence must contain one unique record "
                     "for each q10/q50/q90 variant")
             by_variant[variant] = record
-        if set(by_variant) != set(DEMAND_VARIANTS):
+        if set(by_variant) not in (set(MONTHLY_DEMAND_VARIANTS), set(DEMAND_VARIANTS)):
             raise DisruptionUnavailable(
                 "daily disruption evidence lacks q10/q50/q90 coverage")
         indexed.append(by_variant)
 
+    if any(set(item) != set(indexed[0]) for item in indexed):
+        raise DisruptionUnavailable("daily disruption evidence mixes variant scopes")
+
     combined: list[dict[str, Any]] = []
     for variant in DEMAND_VARIANTS:
+        if variant not in indexed[0]:
+            continue
         records = [item[variant] for item in indexed]
         combined.append({
             "demand_variant": variant,

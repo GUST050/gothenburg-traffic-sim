@@ -96,9 +96,9 @@ class Limits:
 class Expectations:
     build_keys: int = 30
     daily_units: int = 1950
-    variant_records: int = 5850
+    variant_records: int = 1950
     parents: Optional[int] = 1690
-    variant_files: int = 90
+    variant_files: int = 30
     ledger_required: bool = True
 
 
@@ -842,10 +842,6 @@ def canary_setup(args) -> Dict[str, Any]:
             "archive": record["archive"],
             "files": {"demand_meta.json": record["demand_meta_sha256"],
                       "calibrated.rou.xml": variants["q50"][
-                          "validated_sha256"],
-                      "calibrated_v1.rou.xml": variants["q10"][
-                          "validated_sha256"],
-                      "calibrated_v2.rou.xml": variants["q90"][
                           "validated_sha256"]}}
     files = dict(_file_bindings(RUNTIME_SOURCES))
     for catalog in inventory["inventory"]["catalogs"].values():
@@ -870,8 +866,8 @@ def canary_setup(args) -> Dict[str, Any]:
                  "--build-keys", args.build_keys],
         "limits": Limits(**json.loads(args.diagnostic_budget)),
         "expect": Expectations(build_keys=len(keys), daily_units=units,
-                               variant_records=3 * units, parents=None,
-                               variant_files=3 * len(keys),
+                               variant_records=units, parents=None,
+                               variant_files=len(keys),
                                ledger_required=False),
         "drift": DriftChecker(files, archives),
         "verify": canary_outputs_verifier([]),

@@ -104,6 +104,8 @@ DEFAULT_OUTCOME = (
 #: discovers its own contents would also quietly shrink when an import moved,
 #: and a registration must fail loudly instead.
 SEMANTIC_SOURCES = (
+    "demand/__init__.py",
+    "demand/day_library.py",
     "run_monthly_closure_search.py",
     "run_monthly_proxy_validation.py",
     "run_scenario.py",
@@ -128,6 +130,8 @@ SEMANTIC_SOURCES = (
     "traffic_sim/demand/build_lock.py",
     "traffic_sim/demand/route_support.py",
     "traffic_sim/demand/source_identity.py",
+    "traffic_sim/ops/__init__.py",
+    "traffic_sim/ops/io_phases.py",
     "traffic_sim/simulation/__init__.py",
     "traffic_sim/simulation/closure_ledgers.py",
     "traffic_sim/simulation/closure_preflight.py",

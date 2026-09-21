@@ -1,5 +1,241 @@
 # Gothenburg Traffic Simulation Improvement Plan
 
+## Specifikation: snabb operativ katalogkvalificering — 2026-09-20
+
+### Mål och beslut
+
+Nästa katalog för aktuella inputbytes ska kunna kvalificeras och aktiveras utan
+att varje inputförändring upprepar den historiska 30-parskampanjen på cirka
+80 minuter. Den befintliga fulla kampanjen behålls oförändrad som statistiskt
+prestandabevis. Den nya vägen är ett separat operativt korrekthets- och
+icke-regressionsbevis; den får inte beskrivas som en ny 30-parsmätning.
+
+Aktivering är tillåten först när samtliga nya grindar nedan passerar. Vid fel
+ska den befintliga adoptionen och katalogfilerna vara orörda och produktionen
+fortsätta använda sin verifierade fallback.
+
+### Evidensmodell
+
+`benchmark_route_catalog.py` får ett explicit operativt läge med exakt fyra
+parade kalla fall, ett för vardag, helg, helgdag och blandad tvådagarsperiod.
+Armordningen alterneras. Varje par kör den verkliga `build_sumo_demand`-vägen
+med samma kandidatantal, q50-omfattning, runtime och privata cache-/biblioteks-
+rötter. Den befintliga 30-parsvägen och dess miniminivå förblir oförändrade.
+
+Den operativa kvalificeringen ska kräva:
+
+- exakt en komplett observation av alla fyra dagklasser;
+- både `legacy_first` och `catalog_first`;
+- identiskt begärt kandidatantal och katalognycklar bundna till den nya
+  buildrapporten;
+- alla sju befintliga per-arm-grindar i varje arm och alla sju befintliga
+  suite-grindar;
+- högst en procents fordonsdifferens i varje par;
+- katalogarmen snabbare än legacy i varje dagklass och inom 8 GiB;
+- positiv medianbesparing samt katalogbyggets amortering inom tre dagar;
+- q50 som uttryckligen bunden variantomfattning i kampanj, armar och rapport.
+
+Rapporten ska ange `qualification_mode=operational_four_class_q50_v1`, exakt
+fyra försök och en claim boundary som förbjuder ny statistisk p95-/spridnings-
+eller generell prestandaclaim. Den får däremot styrka att den aktuella katalogen
+är korrekt, snabbare i de fyra bundna kalla fallen och säker att adoptera under
+legacy-fallback.
+
+### Publicering och återställning
+
+Kampanjen skriver append-only till en ny evidensfil och kan återupptas endast
+om schema, läge, fixtures, q50-omfattning, kandidatantal, katalogbuild och
+suite-evidens är identiska. Live-demand och befintlig katalogadoption
+snapshotas och återställs även efter avbrott. Kvalificering och adoption skriver
+via temporär fil och `os.replace`; ingen partiell adoption får bli synlig.
+
+`adopt_route_catalog.py` ska verifiera det operativa läget, claim boundary,
+alla grindar, de fyra parade försöken, buildrapporten och de immutabla
+katalogposterna innan `sumo/route_catalog_adoption.json` ersätts. Det vanliga
+`adopted_catalog_config()`-anropet ska därefter återläsa hela kedjan från disk.
+
+### Tester och acceptans
+
+RED/GREEN-tester ska visa att 3 fall, saknad dagklass, fel variantomfattning,
+bara en armordning, en falsk hard gate, nyckel-/storleksdrift, långsammare
+katalogarm, saknad claim boundary och trasig evidensbindning alla vägras.
+Befintliga 30-parstester ska fortsatt kräva 30 par. Ett avbrotts-/resume-test
+ska visa att redan publicerade par återanvänds utan att fel kampanj accepteras.
+
+Före aktivering krävs fokuserad katalogsvit, `git diff --check`, källförsegling,
+en verklig fyrparskampanj mot den nya buildrapporten, ny kvalificeringsrapport,
+atomisk adoption och oberoende återläsning via `adopted_catalog_config()`.
+Slutrapporten ska redovisa faktisk väggtid och får inte extrapolera den till
+framtida inputförändringar.
+
+### Resultat och aktivering — 2026-09-20
+
+Implementationen, fyrfallskvalificeringen och adoptionen är slutförda. Den
+operativa kampanjen tog cirka 29 minuter i stället för den historiska
+30-parskampanjens cirka 80 minuter. Katalogarmen var snabbare i samtliga fyra
+bundna kalla fall: 5,31x vardag, 5,49x helg, 5,54x helgdag och 3,38x blandad
+tvådagarsperiod; medianen var 5,40x. Största fordonsdifferensen var 0,569 %,
+maximalt katalog-RSS cirka 1,30 GiB och alla per-arm- samt suite-grindar
+passerade. Detta är ett aktuellt operativt korrekthets- och
+icke-regressionsbevis, inte en ny generell statistisk prestandaclaim.
+
+En oberoende granskning stoppade den första adoptionen: runtime hashede trials
+men räknade inte om rapporten, dagklasser var inte exakt bundna till rätt
+katalogpool och suite-källförseglingen var ofullständig. V2 stänger samtliga
+tre luckor med semantisk omräkning, canonical fixture-/poolbindning och
+obligatoriska aktuella hashvärden för alla citerade testkällor och alla
+validator-/adoptionskällor. Den oförändrade v1-trialfilen återanvänds som rå
+mätdata; slutliga v3-suite och v3-qualification är nya append-only poster.
+
+`sumo/route_catalog_adoption.json` är atomiskt ersatt och oberoende återläst.
+Aktiva nycklar är vardag `fbb84089cf34abb8cf9fcdce02fbca9d` och helg
+`1c8248d388fec388dd82749b4beca1d9`; implicit kandidatsource är `catalog`.
+Efter granskning och aktivering passerade katalogsviten 58 tester, den färska
+suite-grinden 132 tester, syntaxkontroll och
+`git diff --check`. Ingen commit eller push gjordes.
+
+### Implementationsplan: operativ fyrfallskvalificering
+
+> **För agentiskt arbete:** kör planen sekventiellt med RED/GREEN och verifiera
+> varje del innan nästa. Arbetet utförs nativt i den nuvarande arbetskopian;
+> inga subagenter, commits eller pushar ingår.
+
+**Mål:** kvalificera den redan byggda q50-katalogen för aktuella inputbytes med
+fyra verkliga parade dagklasser och aktivera den endast efter full verifiering.
+
+**Arkitektur:** den historiska 30-parsfunktionen lämnas orörd. En separat ren
+operativ bedömningsfunktion använder samma armrecords och hårda grindar men
+kräver exakt fyra bundna klasser och publicerar en snäv claim boundary.
+Benchmark-, qualification- och adoption-CLI:erna bär läget explicit genom hela
+evidenskedjan.
+
+**Teknik:** Python 3.9, pytest, JSON/SHA-256, atomiska filbyten och befintliga
+`build_sumo_demand`-/route-catalog-komponenter.
+
+**Specifikation:** avsnittet `Specifikation: snabb operativ
+katalogkvalificering` direkt ovan.
+
+**Globala begränsningar:** q50, kandidatantal 6 000, fyra namngivna dagklasser,
+oförändrade sensor-/population-/health-grindar, 8 GiB RSS-gräns, legacy-fallback,
+append-only evidens och ingen ny statistisk prestandaclaim.
+
+**Granskningsfokus:** saknad/duplicerad dagklass ska vägras; armordning får inte
+vara ensidig; en arm utan `variant_mode=q50_only` ska vägras; resume får inte
+blanda katalogbuild eller suite-evidens; adoption ska lämna föregående fil
+orörd om en länkad digest ändras.
+
+#### Uppgift 1: Ren operativ kvalificeringsfunktion
+
+**Filer:** `traffic_sim/demand/catalog_qualification.py` och
+`tests/test_catalog_qualification.py`.
+
+**Gränssnitt:** producera
+`qualify_operational_catalog_trials(trials: list[dict], *, catalog_build_s:
+float, suite_gates: dict[str, bool], rss_budget_bytes: int = 8 * 1024**3) ->
+dict` med `qualification_mode=operational_four_class_q50_v1`.
+
+- [x] Skriv RED-tester för fyra godkända klasser samt avvisning av 3 fall,
+  duplicerad/saknad klass, ensidig ordning, fel variant, hard-gate-fel,
+  fordonsdrift, långsammare katalog och RSS-överträdelse.
+- [x] Kör de nya testnoderna och verifiera att import/funktion saknas.
+- [x] Implementera genom att återanvända gemensam recordvalidering och statistik,
+  utan att ändra `qualify_catalog_trials` eller dess 30-parsgrind.
+- [x] Kräv följande operativa gates i resultatet:
+  `four_bound_day_classes`, `both_arm_orders`, `hard_correctness`,
+  `catalog_faster_in_every_class`, `paired_vehicle_population_delta_le_1pct`,
+  `rss_within_8gib`, `positive_median_saving` och
+  `catalog_amortizes_within_3_days`.
+- [x] Kör hela `tests/test_catalog_qualification.py` grönt.
+
+#### Uppgift 2: Benchmark och återupptagning
+
+**Filer:** `tools/benchmark_route_catalog.py` och
+`tests/test_catalog_qualification.py`.
+
+**Gränssnitt:** `--qualification-mode full-30-pair` behåller dagens default;
+`--qualification-mode operational-four-class-q50` kräver `--trials 4` och
+skriver `qualification_mode` samt `variant_mode=q50_only` i kampanjen och varje
+armrecord.
+
+- [x] Skriv RED-tester mot argumentvalidering och en ren
+  `validate_resume_campaign(existing, expected) -> None` för exakt respektive
+  driftad build/suite/mode/fixture-identitet.
+- [x] Kör testnoderna och verifiera rätt felorsaker.
+- [x] Implementera läget; behåll samma `run_arm`, privata scratchrötter,
+  live-snapshot och `finally`-återställning.
+- [x] Lägg armens q50-omfattning i record från producerad `demand_meta.json` och
+  vägra om metadata inte uttryckligen visar en q50-variant.
+- [x] Kör benchmarkens processfria tester och befintlig katalogsvit grönt.
+
+#### Uppgift 3: Qualification- och adoptionskedja
+
+**Filer:** `tools/qualify_route_catalog.py`, `tools/adopt_route_catalog.py`,
+`traffic_sim/demand/route_catalog.py`, `tests/test_catalog_qualification.py` och
+`tests/test_route_catalog.py`.
+
+**Gränssnitt:** qualification-CLI väljer operativ funktion endast när
+trialfilen deklarerar exakt läge. `adoption_payload` kräver då exakt mode,
+claim boundary och fyra försök. `adopted_catalog_config` återverifierar samma
+fält från den länkade rapporten.
+
+- [x] Skriv RED-tester för saknat mode, fel claim boundary, tre försök,
+  manipulerad trials-digest och korrekt operativ kedja.
+- [x] Kör testnoderna och verifiera avvisningarna.
+- [x] Implementera minimal mode-dispatch och fail-closed-verifiering utan att
+  ändra gamla schema-3-adoptioners läsbarhet.
+- [x] Kör `tests/test_catalog_qualification.py`, `tests/test_route_catalog.py`
+  och `tests/test_catalog_revalidation.py` grönt.
+
+#### Uppgift 4: Verklig kvalificering och atomisk aktivering
+
+**Filer/evidens:**
+`validation/route_catalog_suite_gates_q50_operational_20260920-v3.json`,
+`validation/route_catalog_trials_q50_operational_20260920-v1.json`,
+`validation/route_catalog_qualification_q50_operational_20260920-v3.json`,
+den befintliga `validation/route_catalog_build_q50_operational_20260920-v1.json`
+och `sumo/route_catalog_adoption.json`.
+
+- [x] Kör fokuserade suite-gate-tester och skriv en ny käll-/testbunden
+  suite-evidensfil utan att återanvända en gammal PASS-flagga.
+- [x] Kontrollera fria lås, frånvaro av demand/SUMO-processer och att alla tre
+  outputfiler är nya innan kampanjen startar.
+- [x] Kör fyra kalla parade fall med `/usr/bin/python3`, kandidatantal 6 000,
+  q50 och den befintliga nya buildrapportens katalogrot.
+- [x] Kör qualification-CLI och stoppa utan adoption om verdict inte är
+  `adopt` eller någon gate inte är exakt `true`.
+- [x] Kör adoption först i preview, kontrollera länkar/digests, kör sedan med
+  `--execute` och återläs genom `adopted_catalog_config()`.
+- [x] Verifiera att aktiva nycklar är exakt `fbb84089cf34abb8cf9fcdce02fbca9d`
+  och `1c8248d388fec388dd82749b4beca1d9`; annars återställs föregående adoption.
+- [x] Kör katalogsviten, `git diff --check` och en implicit
+  `configured_candidate_source()=="catalog"`-kontroll. Rapportera faktisk tid,
+  armresultat, digests och rollbackväg.
+
+## Aktuellt beslut: q50-only för månadskörningar — 2026-09-20
+
+Användaren har uttryckligen valt att slopa q10/q90 i den aktuella månadsanalysen.
+Detta ersätter tidigare krav på tre varianter för denna väg, men är en ändrad
+analysomfattning, inte resultatneutral optimering. q50:s kalibrering, exakta
+sensorvillkor, verifieringsseeds, repetitionsantal och hälsogrindar behålls.
+Demandnycklar och WCI-format skiljer q50 från äldre trevariantsartefakter.
+Resultat ska uttryckligen ange att riktningskänslighet inte har utvärderats.
+
+Implementation finns på `codex/q50-monthly` i separat arbetskopia.
+Efter teststädning passerar hela sviten: 6 790 godkända, 43 explicit motiverade
+skips och noll fel på 832,72 s. Ändringen är fortfarande inte releasekvalificerad
+eller införd i originalträdet.
+En kall oktoberkörning byggde 31 q50-demandarkiv men stoppade i första SUMO-piloten:
+den avkortade observationen matades felaktigt med hela tredagarsruttfilen. Baseline
+och kandidat materialiserar nu exakt `[begin_s, duration_s)` före SUMO. En verklig
+canary på det felande arkivet gav loaded=inserted=trip_count=34 604, noll väntande,
+noll teleporter och noll stängd-kant-trafik. Ingen full kall månad är ännu slutförd
+och ingen förbättringsfaktor utlovas.
+Katalogens verkliga indatadrift och dess fulla kvalificering är separat arbete.
+Nästa dyra steg kräver ett uttryckligt beslut om att återuppta den bevarade kalla
+oktoberkörningen; demandarkiven ska återanvändas och SUMO-fixen verifieras före
+resultatpåstående. Äldre instruktioner nedan är historik där de konflikterar med
+detta uttryckliga q50-beslut.
+
 ## Körinstruktion för hastighetsarbetet — 2026-09-12
 
 Detta är den aktuella instruktionen för en implementerande modell. Den ersätter
@@ -3526,10 +3762,10 @@ the declared 60 s guard and spacing constraints. It does not prove that other
 joint route/time calibration is infeasible. No production integration or new
 predictive-accuracy claim is justified by this experiment.
 
-Run again with a fresh output directory:
-`python3 -m tools.trial_passage_reconciliation --demand-dir sumo --out runs/<new-trial>`.
-No catalog sources or route policy were changed, so no catalog rebuild is
-required. Next work is a joint route/departure assignment contract, including
+The historical one-off trial driver is not part of the current source tree, so
+the archived result cannot be rerun through a supported command. No catalog
+sources or route policy were changed, so no catalog rebuild is required. Next
+work is a joint route/departure assignment contract, including
 integer publication, driver identity and boundary handling, evaluated on frozen
 held dates before adoption. Do not manufacture exact counts through convoys.
 

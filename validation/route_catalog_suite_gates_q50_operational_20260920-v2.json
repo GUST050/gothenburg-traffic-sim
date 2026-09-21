@@ -1,0 +1,75 @@
+{
+ "environment": {
+  "date": "2026-09-20",
+  "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+  "python": "/usr/bin/python3",
+  "sumo_version": "1.27.1"
+ },
+ "gates": {
+  "day_library_restore": {
+   "status": "pass",
+   "tests": ["tests/test_day_library.py"]
+  },
+  "deterministic_repeat": {
+   "status": "pass",
+   "tests": [
+    "tests/test_route_catalog.py::test_catalog_identity_excludes_date_but_keeps_structure",
+    "tests/test_route_catalog.py::TestCatalogSourceContract"
+   ]
+  },
+  "malformed_catalog_rejected": {
+   "status": "pass",
+   "tests": [
+    "tests/test_route_catalog.py::test_ensure_catalog_is_single_complete_manifest",
+    "tests/test_route_catalog.py::test_adoption_default_is_fail_safe_and_explicit",
+    "tests/test_route_catalog.py::test_operational_adoption_is_verified_again_at_runtime"
+   ]
+  },
+  "purpose_route_compatibility": {
+   "status": "pass",
+   "tests": [
+    "tests/test_pfe.py::TestPurposeStratifiedCalibration",
+    "tests/test_demand_provenance.py"
+   ]
+  },
+  "singleflight_recovery": {
+   "status": "pass",
+   "tests": ["tests/test_singleflight.py"]
+  },
+  "sumo_runtime_no_regression": {
+   "status": "pass",
+   "tests": ["tests/test_warm_state_sumo_equivalence.py"]
+  },
+  "warm_state_identity": {
+   "status": "pass",
+   "tests": [
+    "tests/test_warm_state_cache.py",
+    "tests/test_q50_subset_identity.py"
+   ]
+  }
+ },
+ "kind": "route_catalog_suite_gate_evidence",
+ "note": "Fresh focused evidence after independent review. Every cited test file and every operational validation/adoption source is content-bound. This is not a statistical performance campaign.",
+ "schema_version": 2,
+ "source_sha256": {
+  "tests/test_catalog_qualification.py": "ce43006833107103a3a02f5faa9ff342195038984cb83b8e668c25b4dfe07726",
+  "tests/test_day_library.py": "eab0b428b019f18fad05ac5064384dc53dacd194ab9f63b3af5d1210309103a8",
+  "tests/test_demand_provenance.py": "d1e59ca1efb81fc1843945678a537ff62a24f384652d9351aaf156bbf4cccf0f",
+  "tests/test_pfe.py": "46f2ec6fbd81e7549a24fa6816e3191a707948b8a06c2214c59901d5925718ab",
+  "tests/test_q50_subset_identity.py": "68abc9bbb7bd9d5fcad8cdeaee4dca5195c7a9cea43cd76636847ec3edf082f9",
+  "tests/test_route_catalog.py": "95e1b30f0a1e6d81932dfe8903c3096e625d982a33f3c605fd6d0c851261d79c",
+  "tests/test_singleflight.py": "656e487c9d1417b4aeaf51751cb3ce83128126d516013e4972dcb9809798aab1",
+  "tests/test_warm_state_cache.py": "414b33adc68922e52f023a3b272dedcda5c820f6fe7a3f8b7ce2f78314cb1378",
+  "tests/test_warm_state_sumo_equivalence.py": "2d1a82e585f95888e7f097fb62ede0bf38433048b618f4f4de38e08a255d2a64",
+  "tools/adopt_route_catalog.py": "507880e6deebdcdd207d46abbf86978b0c14aa0efac4f507830647fe821eaae9",
+  "tools/benchmark_route_catalog.py": "bc6da449936ae23b55f0892a0326b33eac952309b94bcd745e3525c90f0fd656",
+  "tools/qualify_route_catalog.py": "00353b9f5b587bd762a174ca4f760d9457c526d97ae7f3d42d1165d3f816b500",
+  "traffic_sim/demand/catalog_qualification.py": "a05edbe541f19e62af5c12b00788eaf9676491fa328baceb65e8c06bbb17cbf5",
+  "traffic_sim/demand/route_catalog.py": "96b47fd21f724633c8e89975c7f2c0501e2cf5fee461cabece6d7ae7e267da75"
+ },
+ "verification": {
+  "catalog_contract_result": "57 passed, 1 environment warning, 0 failed in 3.89 s",
+  "command_scope": "operational qualification plus day library, catalog identity/source closure, malformed and operational adoption rejection, purpose/provenance, singleflight, warm-state identity and SUMO equivalence",
+  "result": "132 passed, 1 environment warning, 0 failed in 5.49 s on 2026-09-20"
+ }
+}

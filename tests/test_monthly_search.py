@@ -67,12 +67,14 @@ def _policy(status="provisional"):
         benchmark_id="golden-monthly-smoke-v1",
         status=status,
         pilot=PilotPolicy(
+            variants=("q10", "q50", "q90"),
             retention_band_s=1000.0,
             repetitions_per_variant=1,
             minimum_finalists=2,
             maximum_finalists=4,
         ),
         finalist=FinalistPolicy(
+            variants=("q10", "q50", "q90"),
             absolute_precision_floor_s=10.0,
             practical_equivalence_s=5.0,
             initial_repetitions=4,
@@ -328,7 +330,7 @@ class FakeRunner:
         baseline = 1000.0 + day_number
         baseline_id = f"baseline-{schedule.first_work_date}"
         observations = []
-        for variant in ("q10", "q50", "q90"):
+        for variant in target_repetitions:
             for repetition in range(target_repetitions[variant]):
                 seed = canonical_seed(variant, repetition)
                 if self.noncanonical and not observations:
@@ -428,6 +430,72 @@ def test_policy_round_trips_with_stable_content_key():
     assert loaded.content_key == policy.content_key
     assert loaded.pilot.variants == ("q10", "q50", "q90")
     assert loaded.finalist.variants == ("q10", "q50", "q90")
+
+
+def test_cold_q50_search_and_resume_keep_seed_repetitions_and_scope(
+        tmp_path, monkeypatch):
+    """Run real orchestration/persistence with synthetic paired observations."""
+    import subprocess
+    import traffic_sim.simulation.monthly_search as monthly_search
+
+    def forbidden_process(*_args, **_kwargs):
+        pytest.fail("synthetic search must not launch SUMO or another process")
+
+    monkeypatch.setattr(subprocess, "Popen", forbidden_process)
+    monkeypatch.setattr("traffic_sim.simulation.search_workspace.git_commit",
+                        lambda: "synthetic-no-process")
+    monkeypatch.setattr(monthly_search, "load_passing_heldout_gate", lambda: None)
+    base = _policy()
+    policy = dataclasses.replace(
+        base, policy_id="synthetic-q50-only",
+        pilot=dataclasses.replace(base.pilot, variants=("q50",)),
+        finalist=dataclasses.replace(base.finalist, variants=("q50",)))
+    runner = FakeRunner(identity="synthetic-q50-only")
+    spec = _spec("cold-q50-search")
+    result = run_monthly_search(
+        spec, policy, runner=runner, screen_builder=_screen_builder,
+        root=tmp_path)
+    assert result["status"] == "unique_winner"
+    assert result["demand_variants"] == ["q50"]
+    assert result["direction_sensitivity_evaluated"] is False
+    assert result["claim_boundary"]["global_best_claim_allowed"] is False
+    assert all(set(targets) == {"q50"} for _, _, targets in runner.calls)
+    assert any(targets["q50"] == 4 for _, _, targets in runner.calls)
+    evidence_files = list((tmp_path / spec.search_id).rglob("*.json"))
+    persisted = [json.loads(path.read_text()) for path in evidence_files]
+    final_records = [item for item in persisted
+                     if item.get("kind") == "monthly_closure_candidate_evidence"
+                     and item.get("target_repetitions") == {"q50": 4}]
+    assert final_records
+    for item in final_records:
+        assert [obs["seed"] for obs in item["observations"]] == [1001, 1004, 1007, 1010]
+        assert {obs["demand_variant"] for obs in item["observations"]} == {"q50"}
+    calls_before = list(runner.calls)
+    assert run_monthly_search(
+        spec, policy, runner=runner, screen_builder=_screen_builder,
+        root=tmp_path) == result
+    assert runner.calls == calls_before
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_tri_policy_refused_before_q50_resolver_can_build(tmp_path, wrapped):
+    class Q50OnlyRunner(PreparingRunner):
+        supported_demand_variants = ("q50",)
+
+    runner = Q50OnlyRunner()
+    searched_runner = runner
+    if wrapped:
+        from traffic_sim.simulation.independent_daily import (
+            IndependentDailyRunner, IsolatedDailySumoRunner)
+        isolated = object.__new__(IsolatedDailySumoRunner)
+        isolated.delegate = runner
+        searched_runner = object.__new__(IndependentDailyRunner)
+        searched_runner.daily_runner = isolated
+    with pytest.raises(ValueError, match="variant.*scope"):
+        run_monthly_search(_spec("mismatch"), _policy(), runner=searched_runner,
+                           screen_builder=_screen_builder, root=tmp_path)
+    assert runner.prepared is None
+    assert not (tmp_path / "mismatch").exists()
 
 
 def test_backend_prepares_only_screened_shortlist_before_provenance(tmp_path):

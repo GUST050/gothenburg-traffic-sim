@@ -165,23 +165,11 @@ def active_closure_throughput(flows: Mapping[str, Sequence[float]],
     closure flow a hard integrity signal.
 
     ``closures[*].begin_s``/``end_s`` are absolute seconds from the run's
-    shared epoch (see ``monthly_sumo._closure_seconds``), but ``flows``
-    (from ``parse_edgedata``) is indexed from 0 at whatever wall-clock second
-    the SUMO run itself was started with ``--begin`` — array index 0 is the
-    first *measured* interval, not necessarily second 0 of the epoch. A
-    trimmed observation window (independent-daily cold windows start at the
-    work day's own midnight, not the archive epoch) therefore starts SUMO at
-    a nonzero ``begin_s``, and the array must be indexed relative to THAT,
-    not to the closure's absolute time. Without ``window_begin_s`` a trimmed
-    window's closure quarters index past the end of ``series`` (or land on
-    the wrong quarter entirely), so ``measured`` never turns True and a
-    genuinely clean closure is indistinguishable from "never measured" —
-    found 2026-08-30 replaying real frozen units through the actual
-    independent-daily cold window (`active_closed_edge_throughput` reported
-    null on every variant despite `measured_empty_edges` forcing a zero-
-    filled series to exist).  Pass the same ``begin_s`` the run itself used
-    to align them; the default of 0 preserves every existing caller that
-    runs from epoch zero (e.g. run_scenario.py's whole-day scenarios).
+    shared epoch (see ``monthly_sumo._closure_seconds``), while ``flows`` is
+    indexed from ``window_begin_s``. This argument is for callers
+    that already built a relative in-memory series; production edgeData files
+    should use ``read_active_closure_throughput`` so their absolute SUMO
+    timestamps are never converted twice.
     """
     total = 0.0
     measured = False
@@ -206,6 +194,62 @@ def active_closure_throughput(flows: Mapping[str, Sequence[float]],
                 seen.add((edge, quarter))
                 total += float(series[quarter])
                 measured = True
+    return int(round(total)) if measured else None
+
+
+def read_active_closure_throughput(
+    path: Path,
+    closures: Sequence[Mapping[str, object]],
+    measured_empty_edges: Sequence[str] = (),
+) -> int | None:
+    """Read active closed-edge entries on SUMO's absolute time axis.
+
+    edgeData interval timestamps and closure timestamps are both absolute
+    simulation seconds. Comparing those values directly avoids the ambiguous
+    array origin that previously shifted trimmed and resumed runs twice.
+    ``measured_empty_edges`` records edges covered by ``excludeEmpty=true``;
+    their absence from an otherwise present interval is a measured zero.
+    """
+    normalized = []
+    for closure in closures:
+        edge = closure.get("edge_id")
+        begin = closure.get("begin_s")
+        end = closure.get("end_s")
+        if (not isinstance(edge, str)
+                or not isinstance(begin, (int, float))
+                or not isinstance(end, (int, float))
+                or end <= begin):
+            raise ValueError(
+                "closures require edge_id and increasing begin_s/end_s"
+            )
+        normalized.append((edge, float(begin), float(end)))
+
+    declared_measured = set(measured_empty_edges)
+    target_edges = {edge for edge, _, _ in normalized}
+    total = 0.0
+    measured = False
+    seen: set[tuple[str, float, float]] = set()
+    for _, interval in ET.iterparse(path, events=("end",)):
+        if interval.tag != "interval":
+            continue
+        interval_begin = float(interval.get("begin"))
+        interval_end = float(interval.get("end"))
+        entered = {
+            edge.get("id"): float(edge.get("entered") or 0)
+            for edge in interval.findall("edge")
+            if edge.get("id") in target_edges
+        }
+        for edge, closure_begin, closure_end in normalized:
+            key = (edge, interval_begin, interval_end)
+            if (key in seen
+                    or interval_begin < closure_begin
+                    or interval_end > closure_end):
+                continue
+            seen.add(key)
+            if edge in entered or edge in declared_measured:
+                total += entered.get(edge, 0.0)
+                measured = True
+        interval.clear()
     return int(round(total)) if measured else None
 
 

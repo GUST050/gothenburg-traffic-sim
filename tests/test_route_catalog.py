@@ -5,6 +5,12 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from traffic_sim.demand import route_catalog
+from traffic_sim.demand.catalog_qualification import (
+    OPERATIONAL_REQUIRED_SOURCE_PATHS,
+    PER_TRIAL_HARD_GATES,
+    SUITE_HARD_GATES,
+    qualify_operational_catalog_trials,
+)
 from traffic_sim.demand.sensor_route_contract import (
     ABS_TOLERANCE_S, POLICY_VERSION, REL_TOLERANCE, route_digest)
 
@@ -176,6 +182,132 @@ def test_adoption_default_is_fail_safe_and_explicit(tmp_path, monkeypatch):
     }))
     assert route_catalog.configured_candidate_source(config) == "catalog"
     suite.write_text("{}")
+    assert route_catalog.configured_candidate_source(config) == "legacy"
+
+
+def test_operational_adoption_is_verified_again_at_runtime(tmp_path, monkeypatch):
+    monkeypatch.setattr(route_catalog, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(
+        route_catalog, "catalog_entry_matches", lambda *args, **kwargs: True)
+    validation = tmp_path / "validation"
+    validation.mkdir()
+    keys = {"weekday": "b" * 32, "weekend": "c" * 32}
+    sizes = {"weekday": 6000, "weekend": 6000}
+    build = validation / "build.json"
+    build.write_text(json.dumps({"elapsed_s": 8.0, "results": {
+        pool: {"key": keys[pool], "n_total": sizes[pool]} for pool in keys
+    }}))
+    trials = validation / "trials.json"
+    suite = validation / "suite.json"
+    source_sha256 = {}
+    for relative in OPERATIONAL_REQUIRED_SOURCE_PATHS | {"tests/test_pfe.py"}:
+        evidence_source = tmp_path / relative
+        evidence_source.parent.mkdir(parents=True, exist_ok=True)
+        evidence_source.write_text(f"# focused suite evidence: {relative}\n")
+        source_sha256[relative] = route_catalog.sha256_file(evidence_source)
+    suite.write_text(json.dumps({
+        "kind": "route_catalog_suite_gate_evidence",
+        "schema_version": 2,
+        "gates": {
+            gate: {"status": "pass", "tests": ["tests/test_pfe.py"]}
+            for gate in SUITE_HARD_GATES
+        },
+        "source_sha256": source_sha256,
+    }))
+    fixtures = (
+        ("weekday", "2027-09-08", 1, {"weekday"}),
+        ("weekend", "2027-09-11", 1, {"weekend"}),
+        ("holiday", "2027-05-13", 1, {"weekday"}),
+        ("mixed", "2027-09-10", 2, {"weekday", "weekend"}),
+    )
+    trial_records = []
+    for index, (day_class, date, days, pools) in enumerate(fixtures):
+        legacy = {
+            "wall_s": 10.0, "adapter_s": 0.0, "pfe_s": 4.0,
+            "peak_rss_bytes": 1_000_000, "vehicles": 10_000,
+            "pfe_shape_variables": 100,
+            "hard_gates": {gate: True for gate in PER_TRIAL_HARD_GATES},
+            "variant_mode": "q50_only", "candidate_n_total": 6000,
+            "candidate_source": "legacy", "catalog_keys": {},
+            "catalog_selected_n_total": {},
+        }
+        catalog = {
+            **legacy, "wall_s": 5.0, "candidate_source": "catalog",
+            "hard_gates": dict(legacy["hard_gates"]),
+            "catalog_keys": {pool: keys[pool] for pool in pools},
+            "catalog_selected_n_total": {
+                pool: sizes[pool] for pool in pools
+            },
+        }
+        trial_records.append({
+            "trial_id": index + 1,
+            "order": "legacy_first" if index % 2 == 0 else "catalog_first",
+            "day_class": day_class, "date": date, "days": days,
+            "legacy": legacy, "catalog": catalog,
+        })
+    trials_payload = {
+        "schema_version": 3,
+        "kind": "route_catalog_paired_trials",
+        "qualification_mode": "operational_four_class_q50_v1",
+        "variant_mode": "q50_only",
+        "requested_pairs": 4,
+        "candidate_n_total": 6000,
+        "execute": True,
+        "catalog_build_evidence": {
+            "sha256": route_catalog.sha256_file(build),
+        },
+        "suite_gate_evidence": {
+            "sha256": route_catalog.sha256_file(suite),
+        },
+        "trials": trial_records,
+    }
+    trials.write_text(json.dumps(trials_payload))
+    qualification = validation / "qualification.json"
+    report = qualify_operational_catalog_trials(
+        trial_records, catalog_build_s=8.0,
+        suite_gates={gate: True for gate in SUITE_HARD_GATES})
+    report["evidence_binding"] = {
+        "candidate_n_total": 6000,
+        "catalog_build_sha256": route_catalog.sha256_file(build),
+        "catalog_keys": keys,
+        "catalog_selected_n_total": sizes,
+        "trials_path": "validation/trials.json",
+        "trials_sha256": route_catalog.sha256_file(trials),
+        "suite_gates_path": "validation/suite.json",
+        "suite_gates_sha256": route_catalog.sha256_file(suite),
+    }
+
+    def write_config():
+        qualification.write_text(json.dumps(report))
+        qualification_sha256 = route_catalog.sha256_file(qualification)
+        config.write_text(json.dumps({
+            "schema_version": 3,
+            "status": "adopt",
+            "qualification_sha256": qualification_sha256,
+            "catalog_build_sha256": route_catalog.sha256_file(build),
+            "evidence": {
+                "qualification": {
+                    "path": "validation/qualification.json",
+                    "sha256": qualification_sha256,
+                },
+                "catalog_build": {
+                    "path": "validation/build.json",
+                    "sha256": route_catalog.sha256_file(build),
+                },
+            },
+            "catalog_keys": keys,
+            "catalog_selected_n_total": sizes,
+        }))
+
+    config = tmp_path / "adoption.json"
+    write_config()
+    assert route_catalog.configured_candidate_source(config) == "catalog"
+
+    trials_payload["trials"][0]["catalog"]["wall_s"] = 11.0
+    trials.write_text(json.dumps(trials_payload))
+    report["evidence_binding"]["trials_sha256"] = (
+        route_catalog.sha256_file(trials))
+    write_config()
     assert route_catalog.configured_candidate_source(config) == "legacy"
 
 

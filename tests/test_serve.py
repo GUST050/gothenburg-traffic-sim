@@ -1338,6 +1338,7 @@ class TestJobAdmissionFailure:
         ("/api/monthly_search",
          {"closure_search_spec": _closure_search_spec("write-failure")}),
     ])
+    @pytest.mark.usefixtures("golden_monthly_policy")
     def test_job_record_write_failure_releases_simulation_slot(
             self, base_url, monkeypatch, path, payload):
         def disk_full(*_args, **_kwargs):
@@ -1579,6 +1580,13 @@ class TestMonthlySearchPreflight:
             f"{base_url}/api/monthly_search/preflight")[0] == 405
 
 
+@pytest.fixture
+def golden_monthly_policy(monkeypatch):
+    """Lifecycle replay explicitly uses the historical qualified policy."""
+    monkeypatch.setattr(serve, "MONTHLY_POLICY_PATH", serve.ROOT /
+                        "validation" / "monthly_search_policy_v1.json")
+
+
 class TestMonthlySearch:
     """Phase 4 step 6: async monthly closure search. Same lifecycle contract
     as the other four jobs, plus two properties of its own: live progress is
@@ -1606,6 +1614,7 @@ class TestMonthlySearch:
             payload={"closure_search_spec": {"search_id": "x"}})
         assert status == 400
 
+    @pytest.mark.usefixtures("golden_monthly_policy")
     def test_busy_lock_returns_409(self, base_url):
         serve._sim_lock.acquire()
         try:
@@ -1692,11 +1701,32 @@ class TestMonthlySearch:
         assert status == 500
         assert not serve._sim_lock.locked()
 
-    def test_frozen_policy_artifact_is_valid_and_golden(self):
+    def test_default_monthly_policy_is_explicit_q50_analysis(self):
         from traffic_sim.simulation.monthly_search import MonthlySearchPolicy
         policy = MonthlySearchPolicy.from_dict(
             json.loads(serve.MONTHLY_POLICY_PATH.read_text()))
-        assert policy.status == "golden_frozen"
+        assert policy.status == "provisional"
+        assert policy.pilot.variants == ("q50",)
+        assert policy.finalist.variants == ("q50",)
+        assert policy.finalist.initial_repetitions == 4
+        assert policy.finalist.max_repetitions == 12
+        assert serve.MONTHLY_POLICY_PATH == serve.MONTHLY_PERIOD_ANALYSIS_POLICY_PATH
+
+    def test_q50_default_does_not_bypass_ordinary_release_gate(self, base_url):
+        status, body = post_json_or_error(
+            f"{base_url}/api/monthly_search",
+            payload={"closure_search_spec": _closure_search_spec()})
+        assert status == 500
+        assert "golden_frozen" in body["error"]
+        assert not serve._sim_lock.locked()
+
+    def test_q50_scope_survives_ui_summary(self):
+        result = _monthly_result("q50-scope")
+        result.update(demand_variants=["q50"],
+                      direction_sensitivity_evaluated=False)
+        summary = serve.summarize_monthly_search(result)
+        assert summary["demand_variants"] == ["q50"]
+        assert summary["direction_sensitivity_evaluated"] is False
 
     def test_rolling_period_mode_uses_provisional_closure_cost_policy(
             self, base_url, monkeypatch):
@@ -1806,6 +1836,7 @@ class TestMonthlySearch:
         assert calls["count"] == 2
         assert not serve._sim_lock.locked()
 
+    @pytest.mark.usefixtures("golden_monthly_policy")
     def test_lifecycle_progress_then_curated_result(self, base_url, monkeypatch):
         sid = "monthly-api-test"
         expected_spec = serve.ClosureSearchSpec.from_dict(
@@ -1867,6 +1898,7 @@ class TestMonthlySearch:
         assert "source_files" not in result["simulation_backend"]
         assert not serve._sim_lock.locked()
 
+    @pytest.mark.usefixtures("golden_monthly_policy")
     def test_no_heldout_gate_falls_back_to_bounded_exhaustive(
             self, base_url, monkeypatch):
         # Without a passing held-out record the proxy is not validated, so
@@ -1890,6 +1922,7 @@ class TestMonthlySearch:
         assert str(serve.MONTHLY_BOUNDED_EXHAUSTIVE_CAP) in cmd
         assert not serve._sim_lock.locked()
 
+    @pytest.mark.usefixtures("golden_monthly_policy")
     def test_cli_error_last_line_is_surfaced(self, base_url, monkeypatch):
         def fake_run(cmd, **kw):
             return FakeCompletedProcess(
@@ -1907,6 +1940,7 @@ class TestMonthlySearch:
         assert "above the explicit cap 12" in state["error"]
         assert not serve._sim_lock.locked()
 
+    @pytest.mark.usefixtures("golden_monthly_policy")
     def test_cancel_reports_resumable_workspace(self, base_url, monkeypatch):
         release = threading.Event()
 

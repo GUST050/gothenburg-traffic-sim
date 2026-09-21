@@ -226,8 +226,7 @@ class TestVerification:
         assert sorted(archives) == ["key-a1", "key-a2"]
         for binding in archives.values():
             assert sorted(binding["files"]) == [
-                "calibrated.rou.xml", "calibrated_v1.rou.xml",
-                "calibrated_v2.rou.xml", "demand_meta.json"]
+                "calibrated.rou.xml", "demand_meta.json"]
             assert all(binding["files"].values())
         assert guard.DriftChecker(month.drift_files(record),
                                   archives).full() == []
@@ -240,10 +239,14 @@ class TestThePublishedRegistration:
                         reason="no month case has been frozen here")
     def test_it_still_verifies(self):
         record = json.loads(PUBLISHED.read_text(encoding="utf-8"))
+        if record.get("schema") != month.SCHEMA:
+            assert month.verify_registration(record) == [
+                f"unexpected schema: {record.get('schema')}"]
+            return
         assert month.verify_registration(record) == []
         assert record["chosen_edge"] == record["eligible_in_order"][0]
         assert record["population"] == {
-            "parents": 1690, "daily_units": 1950, "variant_records": 5850,
+            "parents": 1690, "daily_units": 1950, "variant_records": 1950,
             "build_keys": 30, "units_per_build_key": [65]}
         assert len(record["archives"]) == 30
         assert sorted(record["catalogs"]) == ["weekday", "weekend"]

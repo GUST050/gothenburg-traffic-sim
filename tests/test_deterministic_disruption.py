@@ -538,6 +538,7 @@ class TestAggregationOrder:
         with pytest.raises(dd.DisruptionUnavailable, match="q10/q50/q90"):
             dd.sum_daily_disruption([[
                 {"demand_variant": "q50", **_record()},
+                {"demand_variant": "q90", **_record()},
             ]])
 
     def test_no_daily_units_fails_closed(self):
@@ -750,7 +751,7 @@ class TestDailyCostCache:
         payload["disruption"] = payload["disruption"][:2]
         path.write_text(json.dumps(payload), encoding="utf-8")
 
-        with pytest.raises(dd.DailyCostCacheCorrupt, match="q10/q50/q90"):
+        with pytest.raises(dd.DailyCostCacheCorrupt, match="scope"):
             cache.load(identity)
 
     def test_storing_leaves_no_partial_file(self, tmp_path, monkeypatch):

@@ -383,6 +383,10 @@ class TestLegacyBehaviourIsUnchanged:
 class TestAgainstTheRealFrozenArtifacts:
     """The only tests that touch the real archive; they read five files."""
 
+    @pytest.mark.skipif(
+        not Path("runs/demand-20260721-222017-41bc682a-bbe1").is_dir(),
+        reason="the exact frozen v6 demand archive is absent",
+    )
     def test_the_real_v6_selection_binds_its_real_archive(self):
         runner = _runner()
         manifest = _load(MANIFEST)
@@ -390,6 +394,10 @@ class TestAgainstTheRealFrozenArtifacts:
         assert key == "2ac04275daabe93c"
         assert path == Path("runs/demand-20260721-222017-41bc682a-bbe1").resolve()
 
+    @pytest.mark.skipif(
+        not Path("runs/demand-20260721-222017-41bc682a-bbe1").is_dir(),
+        reason="the exact frozen v6 demand archive is absent",
+    )
     def test_binding_reads_only_the_five_canonical_files(self):
         """Discovery guard: no sibling archive, no outcome, no campaign root."""
         opened = []

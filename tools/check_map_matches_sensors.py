@@ -56,6 +56,21 @@ def aggregate(series: list[float], per_bin: int) -> list[float]:
             for i in range(0, len(series) - len(series) % per_bin, per_bin)]
 
 
+def comparable_pairs(
+        simulated: Sequence[float], targets: Sequence[float | None]
+) -> list[tuple[float, float]] | None:
+    """Return aligned observed pairs, or ``None`` for incompatible horizons.
+
+    A stale publication can legitimately have a different number of quarters
+    than the current demand metadata. That is a failed coherence check, not an
+    invitation to index past the shorter series and crash the validator.
+    """
+    if len(simulated) != len(targets):
+        return None
+    return [(float(simulated[i]), float(target))
+            for i, target in enumerate(targets) if target is not None]
+
+
 def summarize(pairs: list[tuple[float, float]], geh_max: float) -> dict:
     """GEH profile of (simulated, target) pairs."""
     if not pairs:
@@ -202,8 +217,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if simulated is None:
             failures.append(f"sensor edge {edge} is missing from the map")
             continue
-        pairs = [(float(simulated[i]), float(target))
-                 for i, target in enumerate(targets) if target is not None]
+        pairs = comparable_pairs(simulated, targets)
+        if pairs is None:
+            failures.append(
+                f"sensor edge {edge} has {len(simulated)} map quarters but "
+                f"the demand has {len(targets)}")
+            continue
         quarter_pairs.extend(pairs)
         per_edge[edge] = summarize(pairs, args.geh_max)
         if all(target is not None for target in targets):
@@ -230,6 +249,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     for sensor_id, edges in sorted(sensor_edges.items()):
         raw = observations.get(edges[0])
         if raw is None:
+            continue
+        if any(edge not in drawn or len(drawn[edge]) != len(raw)
+               for edge in edges):
+            # Missing and mismatched directed series were already named above.
+            # Do not turn that coherence failure into an IndexError here.
             continue
         # A two-way total is delivered under both directed edges; the station
         # count is that value, not the sum of the two copies of it.

@@ -547,8 +547,13 @@ def validate_qualified_demand_manifest_shape(manifest: Mapping[str, Any]) -> Non
         if not _valid_hex_digest(entry.get("archive_content_key")):
             raise ValueError("qualified-demand manifest archive content key is invalid")
         variants = entry.get("variants")
-        if not isinstance(variants, Mapping) or set(variants) != set(_PHASE_D_VARIANT_FILES):
-            raise ValueError("qualified-demand manifest archive lacks q10/q50/q90")
+        spec = entry.get("demand_build_spec", {})
+        if not isinstance(spec, Mapping):
+            raise ValueError("qualified-demand manifest archive build spec is invalid")
+        expected_variants = ({"q50"} if spec.get("variant_mode") == "q50_only"
+                             else set(_PHASE_D_VARIANT_FILES))
+        if not isinstance(variants, Mapping) or set(variants) != expected_variants:
+            raise ValueError("qualified-demand manifest archive lacks required variants")
     if not isinstance(manifest.get("network_sha256"), str) or not manifest["network_sha256"]:
         raise ValueError("qualified-demand manifest lacks a network identity")
 
@@ -594,7 +599,13 @@ def qualified_manifest_archive_mismatch(
         if isinstance(item, Mapping)
     }
     variants = archive_entry["variants"]
-    for variant, (route_file, agents_file) in sorted(_PHASE_D_VARIANT_FILES.items()):
+    recorded_spec = record.get("demand_build_spec", {})
+    expected_variants = ({"q50"} if recorded_spec.get("variant_mode") == "q50_only"
+                         else set(_PHASE_D_VARIANT_FILES))
+    if set(variants) != expected_variants:
+        return "qualified-demand manifest variants do not match the archive contract"
+    for variant in sorted(variants):
+        route_file, agents_file = _PHASE_D_VARIANT_FILES[variant]
         entry = variants.get(variant)
         if not isinstance(entry, Mapping):
             return f"qualified-demand manifest is missing variant {variant}"
@@ -682,12 +693,28 @@ def validate_demand_archive(
         raise ValueError(f"demand archive epoch does not match envelope: {archive}")
     if int(metadata.get("n_intervals", -1)) != required.days * 96:
         raise ValueError(f"demand archive duration does not match envelope: {archive}")
-    if int(metadata.get("n_variants", 0)) != 3:
-        raise ValueError(f"demand archive lacks q10/q50/q90 variants: {archive}")
+    expected_count = 1 if required.variant_mode == "q50_only" else 3
+    if type(metadata.get("n_variants")) is not int or metadata["n_variants"] != expected_count:
+        raise ValueError(f"demand archive lacks required variants: {archive}")
+    if required.variant_mode is not None:
+        contract = metadata.get("demand_variant_contract", {})
+        expected = [{"name": "q50", "target_key": "edge_shares",
+                     "route_file": "calibrated.rou.xml"}]
+        if expected_count == 3:
+            expected.extend([
+                {"name": "q10", "target_key": "edge_shares_q10",
+                 "route_file": "calibrated_v1.rou.xml"},
+                {"name": "q90", "target_key": "edge_shares_q90",
+                 "route_file": "calibrated_v2.rou.xml"}])
+        if not isinstance(contract, Mapping) or contract.get("mode") != required.variant_mode \
+                or contract.get("variants") != expected:
+            raise ValueError(f"demand archive variant contract does not match spec: {archive}")
 
     outputs = _manifest_outputs(manifest)
     records = []
-    for name in _REQUIRED_ARCHIVE_FILES:
+    required_files = (_REQUIRED_ARCHIVE_FILES[:6] if expected_count == 1
+                      else _REQUIRED_ARCHIVE_FILES)
+    for name in required_files:
         path = archive / name
         expected = outputs.get(name)
         with io_phases.phase("archive_sha256"):
@@ -735,6 +762,8 @@ def validate_demand_archive(
         "edge_shares_q10": archive / "calibrated_v1.rou.xml",
         "edge_shares_q90": archive / "calibrated_v2.rou.xml",
     }
+    if expected_count == 1:
+        variant_routes = {"edge_shares": variant_routes["edge_shares"]}
     support_status = augmentation.get("status")
     if support_status == "pass":
         # Pre-baseline-rule archives, where synthetic support vehicles were
@@ -825,6 +854,8 @@ def validate_demand_archive(
     }
     by_name = {record["name"]: record for record in records}
     for filename, label in artifact_names.items():
+        if filename not in required_files:
+            continue
         expected = fingerprints.get(label)
         actual = by_name[filename]
         if not isinstance(expected, Mapping) or (
@@ -1060,7 +1091,8 @@ def build_demand_archive(required: DemandBuildSpec, *, runs_root: Path | None = 
                     str(spec_path),
                     "--keep-scenarios",
                     *extra_args,
-                    "--direction-stress-variants",
+                    *([] if required.variant_mode == "q50_only"
+                      else ["--direction-stress-variants"]),
                 ],
                 check=False,
                 cwd=_PROJECT_ROOT,
@@ -1079,6 +1111,8 @@ DemandBuilder = Callable[[DemandBuildSpec], None]
 
 class MonthlyDemandResolverRunner:
     """Candidate runner spanning several frozen calendar-envelope archives."""
+
+    supported_demand_variants = ("q50",)
 
     def __init__(
         self,

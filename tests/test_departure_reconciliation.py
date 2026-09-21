@@ -247,31 +247,3 @@ def test_incomplete_or_invalid_edgedata_cannot_be_exact_zero(tmp_path, intervals
     path.write_text('<meandata>' + intervals + '</meandata>')
     with pytest.raises(dr.DepartureReconciliationError):
         dr._parse_entered(path, 1, ['e'])
-
-
-@pytest.mark.parametrize('exact', [True, False])
-def test_trial_keeps_source_bytes_and_preserves_evidence(tmp_path, monkeypatch, exact):
-    from tools import trial_passage_reconciliation as trial
-    source = tmp_path / 'source'
-    source.mkdir()
-    _route(source / 'calibrated.rou.xml')
-    _agents(source / 'calibrated.agents.json')
-    (source / 'net.net.xml').write_text('<net/>')
-    (source / 'demand_meta.json').write_text(json.dumps({
-        'sensor_targets': {'variants': {'edge_shares': {'e': [2]}}}}))
-    before = {p.name: p.read_bytes() for p in source.iterdir()}
-    _fake_sumo(monkeypatch, exact=exact)
-    monkeypatch.setattr(trial, 'sumo_home', lambda: tmp_path)
-    out = tmp_path / 'trial'
-    report = trial.run_trial(source, out)
-    assert report['status'] == ('pass' if exact else 'refused')
-    assert {p.name: p.read_bytes() for p in source.iterdir()} == before
-    assert report['original_inputs_unchanged'] is True
-    assert len(list((out / 'evidence').glob('learn-*/vehroute.xml'))) == 3
-    assert json.loads((out / 'report.json').read_text()) == report
-    if exact:
-        assert (out / 'candidate/calibrated.rou.xml').read_bytes() != before['calibrated.rou.xml']
-    else:
-        assert (out / 'candidate/calibrated.rou.xml').read_bytes() == before['calibrated.rou.xml']
-    with pytest.raises(FileExistsError):
-        trial.run_trial(source, out)

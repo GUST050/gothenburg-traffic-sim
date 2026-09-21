@@ -37,7 +37,7 @@ for entry in (str(ROOT), str(HERE)):
 import wci_diag_common as common  # noqa: E402
 from wci_closure_edge_census_v1 import _network_contract  # noqa: E402
 
-SCHEMA = "closure_effect_inventory_evidence_v1"
+SCHEMA = "closure_effect_inventory_evidence_q50_v2"
 SPEC_SCHEMA = "wci_effect_canary_spec_v2"
 PROFILE_SPEC = "validation/subhour_monthly_search_profile_spec_v1.json"
 PRODUCTION_SOURCES = (
@@ -243,7 +243,7 @@ def main() -> int:
     sampler.sample("inventory")
     inventory_record = inventory.to_dict()
     if set(inventory.parses.values()) != {1} or len(inventory.parses) != (
-            3 * len(resolved) + len(inventory.catalogs)):
+            len(cee.REQUIRED_VARIANTS) * len(resolved) + len(inventory.catalogs)):
         raise SystemExit(f"a file was not parsed exactly once: "
                          f"{inventory.parses}")
     if cee.verify_inventory(inventory_record):

@@ -9,6 +9,7 @@ proxy ranking, candidate selection, and cross-seed metric aggregation.
 
 import json
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
@@ -392,6 +393,56 @@ def _write_tiny_metrics_fixtures(sumo_dir, stem):
     statistics.write_text("<statistics></statistics>")
     summary.write_text("<summary></summary>")
     return {"tripinfo": tripinfo, "statistics": statistics, "summary": summary}
+
+
+def test_simulate_closure_materializes_only_the_declared_departure_window(
+        tmp_path, monkeypatch):
+    """A trimmed SUMO run must not preload vehicles from adjacent days."""
+    route = tmp_path / "three-day.rou.xml"
+    route.write_text(
+        "<routes><vType id='car'/>"
+        "<vehicle id='before' type='car' depart='899.9'><route edges='a b'/></vehicle>"
+        "<vehicle id='first' type='car' depart='900'><route edges='a b'/></vehicle>"
+        "<vehicle id='middle' type='car' depart='1799.9'><route edges='a b'/></vehicle>"
+        "<vehicle id='last' type='car' depart='1800'><route edges='a b'/></vehicle>"
+        "<vehicle id='edge' type='car' depart='2699.9'><route edges='a b'/></vehicle>"
+        "<vehicle id='after' type='car' depart='2700'><route edges='a b'/></vehicle>"
+        "</routes>",
+        encoding="utf-8",
+    )
+    observed_ids = []
+
+    def fake_run_sumo(seed, route_path, add_paths, duration_s, home, **kwargs):
+        observed_ids.extend(
+            item.get("id")
+            for item in ET.parse(route_path).getroot().findall("vehicle")
+        )
+        return _write_tiny_metrics_fixtures(tmp_path, f"window-{seed}")
+
+    monkeypatch.setattr(sct.rs, "run_sumo", fake_run_sumo)
+    try:
+        sct.simulate_closure(
+            name="trimmed",
+            closures=None,
+            close_edges=[],
+            variants=[route],
+            seeds=1,
+            n_intervals=2,
+            duration_s=2700,
+            begin_s=900,
+            flush_s=3600,
+            home=tmp_path,
+            micro=True,
+            adj=None,
+            freeflow=None,
+            scratch=[],
+            work_dir=tmp_path / "work",
+            route_window=(900, 2700),
+        )
+    except TypeError as error:
+        pytest.fail(f"simulate_closure lacks exact route-window support: {error}")
+
+    assert observed_ids == ["first", "middle", "last", "edge"]
 
 
 class TestSimulateClosureVariantAttribution:

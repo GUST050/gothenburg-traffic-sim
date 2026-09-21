@@ -184,6 +184,16 @@ def adopted_catalog_config(
         return None
     qualification = loaded["qualification"]
     build = loaded["catalog_build"]
+    from traffic_sim.demand.catalog_qualification import (
+        OPERATIONAL_QUALIFICATION_MODE,
+        validate_operational_qualification_evidence,
+        validate_operational_qualification_record,
+        validate_suite_gate_evidence,
+    )
+    try:
+        validate_operational_qualification_record(qualification)
+    except ValueError:
+        return None
     gates = qualification.get("gates") if isinstance(qualification, dict) else None
     binding = (qualification.get("evidence_binding")
                if isinstance(qualification, dict) else None)
@@ -234,6 +244,25 @@ def adopted_catalog_config(
                       != qualified_suite[gate]
                    for gate in qualified_suite)):
         return None
+    if qualification.get("qualification_mode") == (
+            OPERATIONAL_QUALIFICATION_MODE):
+        build_s = build.get("elapsed_s") if isinstance(build, dict) else None
+        if (not isinstance(build_s, (int, float))
+                or isinstance(build_s, bool)):
+            return None
+        try:
+            current_suite_gates = validate_suite_gate_evidence(
+                suite_payload, project_root=PROJECT_ROOT,
+                require_source_hashes=True)
+            if current_suite_gates != qualified_suite:
+                return None
+            validate_operational_qualification_evidence(
+                qualification,
+                trial_payload=linked_payloads["trials_path"],
+                catalog_build_s=float(build_s),
+                suite_gates=current_suite_gates)
+        except (ValueError, TypeError, AttributeError, KeyError):
+            return None
     for pool, record in results.items():
         if (not isinstance(record, dict)
                 or record.get("key") != keys[pool]

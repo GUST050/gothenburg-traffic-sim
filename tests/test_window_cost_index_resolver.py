@@ -28,7 +28,7 @@ def _index(records=None):
         records=records or {
             "unit-a": {"schedule_id": "sched-a",
                       "records": [{"demand_variant": v} for v in
-                                  ("q10", "q50", "q90")]},
+                                  ("q50",)]},
         },
     )
 
@@ -51,7 +51,7 @@ def test_warm_hit_loads_an_already_built_matching_index(tmp_path):
     result = resolver.resolve_window_cost_index(
         profile_path=profile_path, registration_path=registration_path,
         index_root=index_root, expected_identity=None,
-        expected_daily_units=1, expected_variant_records=3,
+        expected_daily_units=1, expected_variant_records=1,
         auto_build=False)
 
     assert result.source == "warm_hit"
@@ -66,7 +66,7 @@ def test_missing_index_without_auto_build_falls_back(tmp_path):
     result = resolver.resolve_window_cost_index(
         profile_path=profile_path, registration_path=registration_path,
         index_root=index_root, expected_identity=None,
-        expected_daily_units=1, expected_variant_records=3,
+        expected_daily_units=1, expected_variant_records=1,
         auto_build=False)
 
     assert result.source == "fallback"
@@ -87,7 +87,7 @@ def test_wrong_population_is_never_a_hit(tmp_path):
         profile_path=profile_path, registration_path=registration_path,
         index_root=index_root, expected_identity=None,
         # Ask for a population the stored index does not have.
-        expected_daily_units=2, expected_variant_records=6,
+        expected_daily_units=2, expected_variant_records=2,
         auto_build=False)
 
     assert result.source == "fallback"
@@ -103,7 +103,7 @@ def test_missing_profile_content_key_falls_back_without_touching_disk(tmp_path):
     result = resolver.resolve_window_cost_index(
         profile_path=profile_path, registration_path=registration_path,
         index_root=tmp_path / "index-root", expected_identity=None,
-        expected_daily_units=1, expected_variant_records=3,
+        expected_daily_units=1, expected_variant_records=1,
         auto_build=False)
 
     assert result.source == "fallback"
@@ -131,7 +131,7 @@ def test_auto_build_invokes_the_guarded_builder_once_and_loads_its_output(
     result = resolver.resolve_window_cost_index(
         profile_path=profile_path, registration_path=registration_path,
         index_root=index_root, expected_identity=None,
-        expected_daily_units=1, expected_variant_records=3,
+        expected_daily_units=1, expected_variant_records=1,
         auto_build=True)
 
     assert result.source == "cold_build"
@@ -159,11 +159,11 @@ def test_a_second_caller_after_a_successful_build_gets_a_warm_hit_not_a_rebuild(
     first = resolver.resolve_window_cost_index(
         profile_path=profile_path, registration_path=registration_path,
         index_root=index_root, expected_identity=None,
-        expected_daily_units=1, expected_variant_records=3, auto_build=True)
+        expected_daily_units=1, expected_variant_records=1, auto_build=True)
     second = resolver.resolve_window_cost_index(
         profile_path=profile_path, registration_path=registration_path,
         index_root=index_root, expected_identity=None,
-        expected_daily_units=1, expected_variant_records=3, auto_build=True)
+        expected_daily_units=1, expected_variant_records=1, auto_build=True)
 
     assert first.source == "cold_build"
     assert second.source == "warm_hit"
@@ -184,7 +184,7 @@ def test_a_failed_build_falls_back_rather_than_raising(tmp_path, monkeypatch):
     result = resolver.resolve_window_cost_index(
         profile_path=profile_path, registration_path=registration_path,
         index_root=index_root, expected_identity=None,
-        expected_daily_units=1, expected_variant_records=3, auto_build=True)
+        expected_daily_units=1, expected_variant_records=1, auto_build=True)
 
     assert result.source == "fallback"
     assert result.index is None
@@ -210,7 +210,7 @@ def test_different_registration_never_reuses_another_edges_index(tmp_path):
     result_for_b = resolver.resolve_window_cost_index(
         profile_path=profile_path, registration_path=reg_b,
         index_root=index_root, expected_identity=None,
-        expected_daily_units=1, expected_variant_records=3, auto_build=False)
+        expected_daily_units=1, expected_variant_records=1, auto_build=False)
 
     assert result_for_b.source == "fallback"
     assert result_for_b.index is None

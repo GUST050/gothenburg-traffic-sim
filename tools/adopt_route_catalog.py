@@ -12,6 +12,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.demand import route_catalog
+from traffic_sim.demand.catalog_qualification import (
+    OPERATIONAL_QUALIFICATION_MODE,
+    validate_operational_qualification_evidence,
+    validate_operational_qualification_record,
+    validate_suite_gate_evidence,
+)
 
 
 def adoption_payload(qualification: object, build: object, *,
@@ -19,8 +25,23 @@ def adoption_payload(qualification: object, build: object, *,
                      catalog_build_sha256: str | None,
                      qualification_path: str,
                      catalog_build_path: str,
-                     catalog_root: Path) -> dict:
+                     catalog_root: Path,
+                     trial_payload: object | None = None,
+                     suite_gates: dict[str, bool] | None = None) -> dict:
     """Cross-bind passing evidence, build report and stored catalog bytes."""
+    if isinstance(qualification, dict):
+        validate_operational_qualification_record(qualification)
+        if qualification.get("qualification_mode") == (
+                OPERATIONAL_QUALIFICATION_MODE):
+            build_s = build.get("elapsed_s") if isinstance(build, dict) else None
+            if (not isinstance(build_s, (int, float))
+                    or isinstance(build_s, bool)
+                    or trial_payload is None or suite_gates is None):
+                raise ValueError(
+                    "operational adoption requires linked trial evidence")
+            validate_operational_qualification_evidence(
+                qualification, trial_payload=trial_payload,
+                catalog_build_s=float(build_s), suite_gates=suite_gates)
     if (not isinstance(qualification, dict)
             or qualification.get("verdict") != "adopt"
             or not isinstance(qualification.get("gates"), dict)
@@ -115,6 +136,7 @@ def main() -> int:
         catalog_build_path = str(args.catalog_build.resolve().relative_to(
             project_root))
         binding = qualification.get("evidence_binding")
+        linked_payloads = {}
         for path_key, digest_key in (
                 ("trials_path", "trials_sha256"),
                 ("suite_gates_path", "suite_gates_sha256")):
@@ -127,14 +149,24 @@ def main() -> int:
                     or sha256_file(linked) != expected):
                 raise ValueError(
                     f"qualification linked evidence does not match {path_key}")
+            linked_payloads[path_key] = json.loads(linked.read_text())
+        suite_payload = linked_payloads["suite_gates_path"]
+        suite_gates = validate_suite_gate_evidence(
+            suite_payload, project_root=project_root,
+            require_source_hashes=(
+                qualification.get("qualification_mode")
+                == OPERATIONAL_QUALIFICATION_MODE))
         payload = adoption_payload(
             qualification, build,
             qualification_sha256=sha256_file(args.qualification),
             catalog_build_sha256=sha256_file(args.catalog_build),
             qualification_path=qualification_path,
             catalog_build_path=catalog_build_path,
-            catalog_root=catalog_root)
-    except (ValueError, OSError) as exc:
+            catalog_root=catalog_root,
+            trial_payload=linked_payloads["trials_path"],
+            suite_gates=suite_gates)
+    except (ValueError, TypeError, AttributeError, KeyError, OSError,
+            json.JSONDecodeError) as exc:
         parser.error(str(exc))
     if not args.execute:
         print(json.dumps(payload, indent=1, sort_keys=True))

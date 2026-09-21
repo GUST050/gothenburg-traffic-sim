@@ -186,9 +186,12 @@ class DemandBuildSpec:
     end: str = "24:00"
     structural_reference_date: str = STRUCTURAL_REFERENCE_DATE
     purpose: str = "standard"
+    variant_mode: str | None = None
 
     def __post_init__(self) -> None:
         _date(self.start_date, "demand.start_date")
+        if self.variant_mode not in {None, "q50_only", "direction_stress"}:
+            raise ValueError("demand.variant_mode must be q50_only or direction_stress")
         _date(self.structural_reference_date,
               "demand.structural_reference_date")
         if self.source not in {"historical", "forecast"}:
@@ -226,6 +229,8 @@ class DemandBuildSpec:
         # Keep every existing standard build key byte-for-byte stable.
         if self.purpose != "standard":
             payload["purpose"] = self.purpose
+        if self.variant_mode is not None:
+            payload["variant_mode"] = self.variant_mode
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha1(canonical.encode("utf-8")).hexdigest()[:16]
 
@@ -254,6 +259,7 @@ class DemandBuildSpec:
                 raw.get("structural_reference_date",
                         STRUCTURAL_REFERENCE_DATE)),
             purpose=str(raw.get("purpose", "standard")),
+            variant_mode=raw.get("variant_mode"),
         )
         supplied_key = raw.get("build_key")
         if supplied_key is not None and str(supplied_key) != spec.build_key:
@@ -261,7 +267,7 @@ class DemandBuildSpec:
         return spec
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "schema_version": SCHEMA_VERSION,
             "kind": "demand_build",
             "start_date": self.start_date,
@@ -273,6 +279,9 @@ class DemandBuildSpec:
             "purpose": self.purpose,
             "build_key": self.build_key,
         }
+        if self.variant_mode is not None:
+            result["variant_mode"] = self.variant_mode
+        return result
 
 
 @dataclass(frozen=True)

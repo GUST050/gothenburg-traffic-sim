@@ -65,6 +65,8 @@ pytestmark = pytest.mark.skipif(
     not OLD_ARCHIVE_ROOT.is_dir(),
     reason="real qualified demand archives not present in this environment")
 
+_MATCHING_DAILY_UNITS: dict[str, tuple[Any, ...]] = {}
+
 
 def _frozen_spec() -> ClosureSearchSpec:
     return ClosureSearchSpec.from_dict(
@@ -84,17 +86,43 @@ def _daily_units(spec: ClosureSearchSpec, count: int = 1):
     yields. Reuses daily_unit_records, the one canonical decomposition
     (see its own docstring), rather than inventing a second one here.
     """
+    cached = _MATCHING_DAILY_UNITS.get(spec.content_key)
+    if cached is not None:
+        if len(cached) < count:
+            pytest.skip(
+                "real qualified demand archives do not match the current "
+                "demand identity; resolver tests must never rebuild them "
+                "implicitly")
+        return list(cached[:count])
+
+    archive_keys = {
+        json.loads(path.read_text(encoding="utf-8"))["build_key"]
+        for path in OLD_ARCHIVE_ROOT.glob("*/demand_build_spec.json")
+    }
+    key_resolver = MonthlyDemandResolverRunner(
+        spec, baseline_trip_duration_p99_s=3600,
+        study_provenance_key="shared-context-fixture-selection",
+        runs_root=OLD_ARCHIVE_ROOT, build_missing=False)
     units = []
     seen = set()
     for parent in iter_closure_schedules(spec):
         for unit_id, _identity, build in daily_unit_records(spec, parent):
             if unit_id in seen:
                 continue
+            candidate = build()
+            if key_resolver._required(candidate).build_key not in archive_keys:
+                continue
             seen.add(unit_id)
-            units.append(build())
-            if len(units) >= count:
-                return units
-    return units
+            units.append(candidate)
+            if len(units) >= 3:
+                _MATCHING_DAILY_UNITS[spec.content_key] = tuple(units)
+                return units[:count]
+    _MATCHING_DAILY_UNITS[spec.content_key] = tuple(units)
+    if len(units) >= count:
+        return units[:count]
+    pytest.skip(
+        "real qualified demand archives do not match the current demand "
+        "identity; resolver tests must never rebuild them implicitly")
 
 
 def _demand_spec_for(archive: Path) -> DemandBuildSpec:
@@ -166,6 +194,7 @@ def test_a_resolver_prepared_over_real_archives_shares_one_context(
         study_provenance_key="e2e-shared-context",
         runs_root=OLD_ARCHIVE_ROOT, release_root=tmp_path / "release",
         cache_root=tmp_path / "cache", include_disruption=True,
+        build_missing=False,
         ranking_objective_evidence="closure_cost_v1")
     resolver.prepare([parent])
     assert resolver._shared_context is not None
@@ -350,6 +379,7 @@ def test_resolver_provenance_is_byte_identical_with_and_without_sharing(
     # both resolvers: only the sharing behaviour must differ, not a path.
     common = dict(runs_root=OLD_ARCHIVE_ROOT, release_root=tmp_path / "release",
                   cache_root=tmp_path / "cache", include_disruption=True,
+                  build_missing=False,
                   ranking_objective_evidence="closure_cost_v1",
                   baseline_trip_duration_p99_s=3600,
                   study_provenance_key="provenance-compare")
@@ -379,6 +409,7 @@ def test_candidate_provenance_is_byte_identical_per_build_key(spec, tmp_path):
         study_provenance_key="candidate-provenance",
         runs_root=OLD_ARCHIVE_ROOT, release_root=tmp_path / "release",
         cache_root=tmp_path / "cache", include_disruption=True,
+        build_missing=False,
         ranking_objective_evidence="closure_cost_v1")
     resolver.prepare(parents)
     reference = _runner(spec, SMALL, cache_root=tmp_path / "ref-cache")
@@ -409,6 +440,7 @@ def test_candidate_execution_contract_is_byte_identical(spec, tmp_path):
     parent = _daily_units(spec)[0]
     common = dict(runs_root=OLD_ARCHIVE_ROOT, release_root=tmp_path / "release",
                   cache_root=tmp_path / "cache", include_disruption=True,
+                  build_missing=False,
                   ranking_objective_evidence="closure_cost_v1",
                   baseline_trip_duration_p99_s=3600,
                   study_provenance_key="exec-contract-a")
@@ -443,6 +475,7 @@ def test_archive_for_and_deterministic_provider_agree_on_the_archive(
         study_provenance_key="archive-for-check",
         runs_root=OLD_ARCHIVE_ROOT, release_root=tmp_path / "release",
         cache_root=tmp_path / "cache", include_disruption=True,
+        build_missing=False,
         ranking_objective_evidence="closure_cost_v1")
     resolver.prepare([parent])
     archive = resolver.archive_for(parent)
@@ -488,6 +521,7 @@ def test_cleanup_reaches_every_prepared_child_exactly_once(spec, tmp_path):
         study_provenance_key="cleanup-check",
         runs_root=OLD_ARCHIVE_ROOT, release_root=tmp_path / "release",
         cache_root=tmp_path / "cache", include_disruption=True,
+        build_missing=False,
         ranking_objective_evidence="closure_cost_v1")
     resolver.prepare(parents)
     calls = []
@@ -568,6 +602,7 @@ def test_a_failed_prepare_leaves_no_partial_resolver_state(spec, tmp_path):
         study_provenance_key="partial-prepare-check",
         runs_root=OLD_ARCHIVE_ROOT, release_root=tmp_path / "release",
         cache_root=tmp_path / "cache", include_disruption=True,
+        build_missing=False,
         ranking_objective_evidence="closure_cost_v1",
         runner_factory=flaky_factory)
 
@@ -603,6 +638,7 @@ def test_preparing_from_real_archives_starts_no_sumo_simulation(spec, tmp_path):
         study_provenance_key="no-sumo-check",
         runs_root=OLD_ARCHIVE_ROOT, release_root=tmp_path / "release",
         cache_root=tmp_path / "cache", include_disruption=True,
+        build_missing=False,
         ranking_objective_evidence="closure_cost_v1")
     resolver.prepare([parent])
     after = subprocess.run(["pgrep", "-c", "-f", "sumo"],

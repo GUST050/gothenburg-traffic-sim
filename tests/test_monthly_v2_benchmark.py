@@ -2,12 +2,22 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from tools import run_monthly_v2_benchmark as benchmark
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PLAN = ROOT / "validation" / "monthly_search_v2_benchmark_plan_v1.json"
 RECORD = ROOT / "validation" / "monthly_search_v2_benchmark_v1.json"
+ARCHIVE_MANIFEST = (
+    ROOT / "runs" / "releases" / "golden-2025-09-16-v1" / "normal" /
+    "manifest.json"
+)
+RESULT = (
+    ROOT / "runs" / "closure-objective-v2-benchmark-v1" / "search" /
+    "golden-monthly-search-2025-09-16-v6" / "artifacts" / "result.json"
+)
 
 
 def _read(path):
@@ -18,6 +28,10 @@ def _sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+@pytest.mark.skipif(
+    not ARCHIVE_MANIFEST.is_file(),
+    reason="the exact historical golden demand archive is absent",
+)
 def test_benchmark_plan_binds_immutable_inputs_and_isolated_outputs():
     plan = _read(PLAN)
     paths = benchmark.validate_plan(plan)
@@ -36,17 +50,13 @@ def test_benchmark_plan_binds_immutable_inputs_and_isolated_outputs():
     }
 
 
+@pytest.mark.skipif(
+    not RESULT.is_file(),
+    reason="the exact historical monthly-v2 benchmark result is absent",
+)
 def test_benchmark_record_matches_persisted_result_and_keeps_gate_closed():
     record = _read(RECORD)
-    result_path = (
-        ROOT
-        / "runs"
-        / "closure-objective-v2-benchmark-v1"
-        / "search"
-        / "golden-monthly-search-2025-09-16-v6"
-        / "artifacts"
-        / "result.json"
-    )
+    result_path = RESULT
     result = _read(result_path)
 
     assert record["status"] == "passing_diagnostic"

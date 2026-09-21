@@ -11,8 +11,25 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from traffic_sim.core.fingerprint import sha256_file
-from traffic_sim.demand.catalog_qualification import qualify_catalog_trials
+from traffic_sim.demand.catalog_qualification import (
+    OPERATIONAL_QUALIFICATION_MODE,
+    qualify_catalog_trials,
+    qualify_operational_catalog_trials,
+    validate_operational_trial_binding,
+)
 from tools.benchmark_route_catalog import load_suite_gate_record
+
+
+def qualification_function_for_payload(payload: object):
+    """Select an explicit evidence contract without guessing from trial count."""
+    mode = payload.get("qualification_mode") if isinstance(payload, dict) else None
+    if mode is None:
+        return qualify_catalog_trials
+    if (mode == OPERATIONAL_QUALIFICATION_MODE
+            and payload.get("schema_version") == 3
+            and payload.get("variant_mode") == "q50_only"):
+        return qualify_operational_catalog_trials
+    raise ValueError("qualification mode is unsupported or malformed")
 
 
 def _build_contract(build: object) -> tuple[dict[str, str], dict[str, int]]:
@@ -97,12 +114,27 @@ def main() -> int:
     if not isinstance(build_s, (int, float)) or build_s < 0:
         parser.error("--catalog-build has no valid elapsed_s")
     try:
+        qualify = qualification_function_for_payload(trial_payload)
+        if qualify is qualify_operational_catalog_trials:
+            suite_gates = load_suite_gate_record(
+                args.suite_gates, require_source_hashes=True)
+            build_evidence = trial_payload.get("catalog_build_evidence")
+            if (not isinstance(build_evidence, dict)
+                    or build_evidence.get("sha256") != sha256_file(
+                        args.catalog_build)):
+                raise ValueError(
+                    "operational trials are not bound to this catalog build")
         catalog_keys, catalog_sizes = _build_contract(build)
         candidate_n_total = _validate_trial_binding(
             trials, catalog_keys, catalog_sizes)
+        if qualify is qualify_operational_catalog_trials:
+            validate_operational_trial_binding(
+                trials, catalog_keys=catalog_keys,
+                catalog_sizes=catalog_sizes,
+                candidate_n_total=candidate_n_total)
     except ValueError as exc:
         parser.error(str(exc))
-    report = qualify_catalog_trials(
+    report = qualify(
         trials, catalog_build_s=float(build_s), suite_gates=suite_gates)
     report["evidence_binding"] = {
         "trials_path": str(args.trials),

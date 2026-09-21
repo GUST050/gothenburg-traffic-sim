@@ -70,7 +70,7 @@ class FakeDailyRunner:
         observations = []
         date_number = int(schedule.first_work_date[-2:])
         duration = schedule.actual_closed_minutes
-        for variant in ("q10", "q50", "q90"):
+        for variant in target_repetitions:
             for repetition in range(target_repetitions[variant]):
                 seed = canonical_seed(variant, repetition)
                 baseline = 1000.0 + date_number
@@ -87,6 +87,19 @@ class FakeDailyRunner:
             candidate_id=schedule.schedule_id,
             observations=tuple(observations),
         )
+
+
+def test_independent_daily_q50_only_keeps_multiple_verification_seeds(tmp_path):
+    spec = _spec()
+    schedule = generate_closure_schedules(spec)[0]
+    runner = IndependentDailyRunner(
+        spec, daily_runner=FakeDailyRunner(), cache_root=tmp_path / "daily-cache")
+    runner.prepare((schedule,))
+    evidence = runner.run_candidate(
+        schedule, target_repetitions={"q50": 3}, existing=None, stage="pilot")
+    assert len(evidence.observations) == 3
+    assert {item.demand_variant for item in evidence.observations} == {"q50"}
+    assert len({item.seed for item in evidence.observations}) == 3
 
 
 def test_compatible_recovery_imports_completed_units_and_resumes_timeout(

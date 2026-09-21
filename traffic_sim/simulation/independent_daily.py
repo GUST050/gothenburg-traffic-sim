@@ -577,7 +577,7 @@ def population_of(spec: ClosureSearchSpec) -> dict[str, int]:
         for unit_id, _identity, _build in daily_unit_records(spec, parent):
             units.add(str(unit_id))
     return {"parents": parents, "daily_units": len(units),
-            "variant_records": 3 * len(units)}
+            "variant_records": len(units)}
 
 
 def decompose_schedules(
@@ -722,7 +722,7 @@ def aggregate_daily_evidence(
                     "for each q10/q50/q90 variant"
                 )
             indexed_records[variant] = record
-        if records and set(indexed_records) != set(DEMAND_VARIANTS):
+        if records and set(indexed_records) not in ({"q50"}, set(DEMAND_VARIANTS)):
             raise ValueError(
                 "daily disruption evidence lacks q10/q50/q90 coverage"
             )
@@ -734,7 +734,11 @@ def aggregate_daily_evidence(
 
     combined_disruption: list[Mapping[str, Any]] = []
     if disruption_presence == {True}:
+        if any(set(item) != set(disruption_by_unit[0]) for item in disruption_by_unit):
+            raise ValueError("daily disruption evidence mixes variant scopes")
         for variant in DEMAND_VARIANTS:
+            if variant not in disruption_by_unit[0]:
+                continue
             records = [item[variant] for item in disruption_by_unit]
             combined_disruption.append({
                 "demand_variant": variant,
@@ -1045,6 +1049,11 @@ class IsolatedDailySumoRunner:
     def prepare(self, schedules: Sequence[ClosureSchedule]) -> None:
         self.delegate.prepare(schedules)
 
+    @property
+    def supported_demand_variants(self):
+        """Preserve the resolver's scope before any child process is started."""
+        return getattr(self.delegate, "supported_demand_variants", None)
+
     def cleanup(self) -> None:
         cleanup = getattr(self.delegate, "cleanup", None)
         if callable(cleanup):
@@ -1098,7 +1107,7 @@ class IsolatedDailySumoRunner:
             "schedule": schedule.to_dict(),
             "target_repetitions": {
                 variant: int(target_repetitions[variant])
-                for variant in DEMAND_VARIANTS
+                for variant in target_repetitions
             },
             "existing": (
                 None if existing is None else _evidence_to_dict(existing)
@@ -1741,6 +1750,11 @@ class IndependentDailyRunner:
         ))
         return self._stable_backend_identity(checked)
 
+    @property
+    def supported_demand_variants(self):
+        """Forward capability without preparing demand archives."""
+        return getattr(self.daily_runner, "supported_demand_variants", None)
+
     def prepare(self, schedules: Sequence[ClosureSchedule]) -> None:
         schedules = tuple(schedules)
         parent_ids = tuple(item.schedule_id for item in schedules)
@@ -2355,7 +2369,7 @@ class IndependentDailyRunner:
             return True
         coverage = self._coverage(evidence)
         return all(
-            coverage[variant] >= targets[variant] for variant in DEMAND_VARIANTS
+            coverage[variant] >= targets[variant] for variant in targets
         )
 
     def _cache_key(self, unit: DailyClosureUnit) -> str:
@@ -2449,7 +2463,7 @@ class IndependentDailyRunner:
         """
         signature = (
             str(stage),
-            tuple((variant, int(targets[variant])) for variant in DEMAND_VARIANTS),
+            tuple((variant, int(targets[variant])) for variant in sorted(targets)),
             scope is None,
         )
         # Lock ORDER is always _queue_build_lock -> _state_lock, and puller
@@ -2507,7 +2521,7 @@ class IndependentDailyRunner:
         targets: Mapping[str, int],
     ) -> CandidateEvidence:
         selected: list[PairedObservation] = []
-        for variant in DEMAND_VARIANTS:
+        for variant in targets:
             observations = sorted(
                 (
                     item for item in evidence.observations
@@ -2554,7 +2568,7 @@ class IndependentDailyRunner:
             or all(
                 self._coverage(existing)[variant]
                 >= target_repetitions[variant]
-                for variant in DEMAND_VARIANTS
+                for variant in target_repetitions
             )
         ):
             return existing
@@ -2605,7 +2619,7 @@ class IndependentDailyRunner:
                 or cached.timeout_undecided
                 or all(
                     coverage[variant] >= target_repetitions[variant]
-                    for variant in DEMAND_VARIANTS
+                    for variant in target_repetitions
                 )
             ):
                 cached_by_schedule[unit.schedule.schedule_id] = cached

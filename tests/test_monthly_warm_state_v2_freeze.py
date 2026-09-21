@@ -401,6 +401,8 @@ class TestFrozenV2Contract:
         assert "traffic_sim/simulation/monthly_warm_state.py" in drifted
 
     def test_the_five_approved_archive_files_are_bound(self):
+        if not ARCHIVE.is_dir():
+            pytest.skip("the exact frozen v2 demand archive is absent")
         bound = _load()["archive_files_sha256"]
         assert set(bound) == {"demand_meta.json", "manifest.json",
                               "calibrated.rou.xml", "calibrated_v1.rou.xml",
@@ -473,6 +475,8 @@ class TestFrozenV2Contract:
 
     def test_the_spent_v2_package_no_longer_recomposes(self):
         """Same invariant v1 carries once spent: drift without byte mutation."""
+        if not ARCHIVE.is_dir():
+            pytest.skip("the exact frozen v2 demand archive is absent")
         sys.path.insert(0, "tools")
         from freeze_monthly_warm_state_v2 import build_artifacts
         before = MANIFEST.read_bytes()

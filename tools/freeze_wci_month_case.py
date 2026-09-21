@@ -2,7 +2,7 @@
 """Freeze one effect-eligible month case, and prove it again later.
 
 This is a registration and preflight, never a build. It takes the census
-evidence of ``closure_effect_eligibility_v1`` (which parses every qualified
+evidence of ``closure_effect_eligibility_q50_v2`` (which parses every qualified
 archive variant and catalog pool once), re-derives the verdict of every
 candidate from that inventory rather than trusting the census rows, applies
 the unchanged structural order to the eligible candidates and freezes the
@@ -43,8 +43,8 @@ from traffic_sim.simulation.window_cost_index import (  # noqa: E402
     publish_new_file,
 )
 
-SCHEMA = "wci_month_case_registration_v1"
-CENSUS_SCHEMA = "closure_effect_inventory_evidence_v1"
+SCHEMA = "wci_month_case_registration_q50_v2"
+CENSUS_SCHEMA = "closure_effect_inventory_evidence_q50_v2"
 SPEC_SCHEMA = "wci_effect_canary_spec_v2"
 FROZEN_ZERO_SPEC = "validation/subhour_monthly_search_profile_spec_v1.json"
 ORDER_RULE = ("effect-eligible candidates only, then the unchanged "
@@ -67,6 +67,7 @@ SOURCE_BINDINGS = (
 )
 VARIANT_FILE = {"q50": "calibrated.rou.xml", "q10": "calibrated_v1.rou.xml",
                 "q90": "calibrated_v2.rou.xml"}
+REQUIRED_VARIANTS = ("q50",)
 
 
 def _digest(payload: Any) -> str:
@@ -146,7 +147,7 @@ def _chosen_requirements(chosen: Mapping[str, Any]) -> List[str]:
     if not pools or any(count <= 0 for count in pools.values()):
         problems.append(f"a catalog pool has no route support: {pools}")
     crossings = summary.get("crossings") or {}
-    if sorted(crossings) != ["q10", "q50", "q90"] or any(
+    if sorted(crossings) != sorted(REQUIRED_VARIANTS) or any(
             count <= 0 for count in crossings.values()):
         problems.append(f"a variant has no crossing vehicle: {crossings}")
     if summary.get("archives_with_crossings") != summary.get("archives"):
@@ -165,7 +166,7 @@ def _archive_bindings(inventory: cee.Inventory) -> Dict[str, Any]:
             "archive_content_key": record["content_key"],
             "demand_meta_sha256": record["demand_meta_sha256"],
             "variants": {variant: variants[variant]["validated_sha256"]
-                         for variant in ("q10", "q50", "q90")},
+                         for variant in REQUIRED_VARIANTS},
         }
     return archives
 

@@ -562,6 +562,31 @@ class TestClosureIntegrityStatus:
                 [active], closures),
             closures) == "verified_clean"
 
+    def test_trimmed_edgedata_uses_one_shared_time_origin(self, tmp_path):
+        edge_data = tmp_path / "edge.xml"
+        edge_data.write_text(
+            '<meandata>'
+            '<interval begin="81900" end="82800">'
+            '<edge id="closed" entered="11"/>'
+            '</interval>'
+            '<interval begin="86400" end="87300">'
+            '<edge id="closed" entered="2"/>'
+            '</interval>'
+            '</meandata>',
+            encoding="utf-8",
+        )
+        closures = [{
+            "edge_id": "closed", "begin_s": 86400, "end_s": 87300,
+        }]
+
+        active = run_scenario.cm.read_active_closure_throughput(
+            edge_data,
+            closures=closures,
+            measured_empty_edges=("closed",),
+        )
+
+        assert active == 2
+
 
 class TestBaselineOutputFitGate:
     @staticmethod

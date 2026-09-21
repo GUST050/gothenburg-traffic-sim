@@ -1,5 +1,28 @@
 # Architecture — structure locked 2026-07-05, status corrected 2026-08-21
 
+## Monthly q50 scope — 2026-09-20
+
+Current monthly envelopes explicitly bind `DemandBuildSpec.variant_mode=q50_only`.
+Their archive contract requires one calibrated q50 variant. Historical unspecified
+build contracts retain their original identity and three-variant interpretation.
+Current entrypoints select an explicit q50 policy without changing canonical seed
+sequence (1001, 1004, ...) or verification repetitions. Results declare variants
+and whether directional sensitivity was evaluated; q50 alone is not a robustness
+test across direction splits.
+
+Current WCI, registration and census schemas reject historical three-variant
+evidence. Cached records must match their bound archive scope. Generic historical
+policy defaults remain unchanged, while the monthly resolver rejects incompatible
+policy scope before demand preparation. Current q50 policy is provisional; existing
+golden/release gates remain effective. This does not renew a stale route catalog.
+
+Independent-daily SUMO observations may use a shorter horizon than their immutable
+multi-day demand archive. Both matched baseline and candidate first materialize the
+same half-open departure population `[begin_s, duration_s)` and only then simulate
+or apply closure routing. The later flush drains that frozen population; it must not
+admit departures from the archive tail. Population identity remains strict:
+transformed, loaded, inserted and tripinfo counts must agree.
+
 **Product contract:** the city drops 15-minute count data (any number of
 stations, directional or two-way) into the program and gets back (1) a
 simulation of the measured period, (2) a simulation of any future date, and
@@ -32,9 +55,10 @@ exit time. A vehicle emitted on the target edge is excluded because SUMO
 edgeData classifies that event as `departed`, not `entered`. The diagnostic and
 its sparse lag projection do not alter PFE targets or production calibration.
 
-The isolated `tools.trial_passage_reconciliation --method quarter-assignment`
-path can preserve each route's source quarter, assign distinct explicit driver
-profiles, and validate unseen profiles with retained raw evidence. It is not
+The archived quarter-assignment passage-reconciliation trial preserved each
+route's source quarter, assigned distinct explicit driver profiles, and retained
+raw evidence. Its one-off driver is not present in the current source tree and
+must not be presented as a runnable command. The result was diagnostic, not
 production calibration: the user rejected post-picker reordering as unnatural.
 The optional minimum-shift variant failed unseen profiles. Further calibration
 work must permit cross-quarter travel and associate counts with each sensor's

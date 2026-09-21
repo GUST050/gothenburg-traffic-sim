@@ -352,21 +352,22 @@ class TestAssemble:
     def _exact_baseline(raw):
         from traffic_sim.simulation.sensor_fit import build_exact_output_fit
 
+        target = [10.0, 11.0, 12.0, 13.0]
         row = {
             "sensor_id": "s", "edge_id": "e",
-            "target_mean": [10.0, 11.0],
+            "target_mean": target,
             "simulated_mean_raw": list(raw),
-            "target_representative": [10.0, 11.0],
+            "target_representative": target,
             "simulated_representative_raw": list(raw),
             "seed_runs": [{
                 "seed": 1000, "variant": "edge_shares",
-                "target": [10.0, 11.0], "simulated_raw": list(raw),
+                "target": target, "simulated_raw": list(raw),
             }],
         }
         audit = {"directions": [row]}
         audit["exact_output_fit"] = build_exact_output_fit(
-            [row], n_intervals=2, uses_raw_ensemble_mean=True)
-        return {"n_quarters": 2, "sensor_audit": audit}
+            [row], n_intervals=4, uses_raw_ensemble_mean=True)
+        return {"n_quarters": 4, "sensor_audit": audit}
 
     def test_passage_section_is_judged_on_accuracy_not_exactness(self):
         """A one-vehicle miss is no longer reported as a failed test.
@@ -379,22 +380,22 @@ class TestAssemble:
         information.
         """
         exact = vr._exact_sensor_output_section(
-            self._exact_baseline([10.0, 11.0]))
+            self._exact_baseline([10.0, 11.0, 12.0, 13.0]))
         inexact = vr._exact_sensor_output_section(
-            self._exact_baseline([10.0, 12.0]))
+            self._exact_baseline([10.0, 12.0, 12.0, 13.0]))
 
         assert exact["status"] == "pass"
-        assert exact["exact"] == exact["constraints"] == 2
+        assert exact["exact"] == exact["constraints"] == 4
         # One vehicle out of eleven: inside TAG, outside exactness.
         assert inexact["status"] == "pass"
         assert inexact["mismatch_count"] == 1
-        assert inexact["exact"] == 1
+        assert inexact["exact"] == 3
         assert inexact["geh_max"] < inexact["geh_limit"]
 
     def test_passage_section_still_warns_when_the_volume_is_wrong(self):
         """The gate has to be able to fail, or it is not a gate."""
         leaked = vr._exact_sensor_output_section(
-            self._exact_baseline([10.0, 1.0]))
+            self._exact_baseline([10.0, 1.0, 1.0, 1.0]))
 
         assert leaked["status"] == "warn"
         assert leaked["volume_max_abs_pct"] > leaked["volume_limit_pct"]

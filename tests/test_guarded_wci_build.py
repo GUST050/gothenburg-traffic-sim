@@ -20,7 +20,7 @@ import pytest
 from tools import guarded_wci_build as guard
 
 ROOT = Path(__file__).resolve().parents[1]
-UNITS, VARIANTS, PARENTS = 1950, 5850, 1690
+UNITS, VARIANTS, PARENTS = 1950, 1950, 1690
 
 
 def telemetry(**overrides: Any) -> Dict[str, Any]:
@@ -30,7 +30,7 @@ def telemetry(**overrides: Any) -> Dict[str, Any]:
         "sequence": 7, "phase": "done", "error": None,
         "counters": {"archive_index_build": 1,
                      "archive_validate": {f"key-{n}": 1 for n in range(30)},
-                     "variant_parses": {f"file-{n}": 1 for n in range(90)}},
+                     "variant_parses": {f"file-{n}": 1 for n in range(30)}},
         "population": {"daily_units": UNITS, "variant_records": VARIANTS,
                        "parents": PARENTS},
         "affected_vehicles_total": 866217,

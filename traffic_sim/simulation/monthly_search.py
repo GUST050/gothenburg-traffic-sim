@@ -620,7 +620,7 @@ def evidence_to_dict(
         "candidate_id": evidence.candidate_id,
         "target_repetitions": {
             variant: int(target_repetitions[variant])
-            for variant in DEMAND_VARIANTS
+            for variant in target_repetitions
         },
         "hard_failures": list(evidence.hard_failures),
         "observations": [asdict(item) for item in evidence.observations],
@@ -729,7 +729,7 @@ def evidence_from_dict(
         raise ValueError("candidate evidence candidate_id must be a string")
     if not isinstance(raw["target_repetitions"], Mapping):
         raise ValueError("candidate evidence target_repetitions is invalid")
-    if set(raw["target_repetitions"]) != set(DEMAND_VARIANTS):
+    if set(raw["target_repetitions"]) not in ({"q50"}, set(DEMAND_VARIANTS)):
         raise ValueError("candidate evidence target_repetitions is incomplete")
     for value in raw["target_repetitions"].values():
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -784,9 +784,9 @@ def evidence_from_dict(
     if not evidence.hard_failures and not evidence.timeout_undecided:
         expected_counts = {
             variant: int(raw["target_repetitions"][variant])
-            for variant in DEMAND_VARIANTS
+            for variant in raw["target_repetitions"]
         }
-        if _counts(evidence) != expected_counts:
+        if _counts(evidence, expected_counts) != expected_counts:
             raise ValueError(
                 "successful candidate evidence does not match target repetitions")
     return evidence
@@ -1239,14 +1239,18 @@ def _evidence_records(
     return grouped
 
 
-def _counts(evidence: CandidateEvidence) -> dict[str, int]:
-    counts = {variant: 0 for variant in DEMAND_VARIANTS}
+def _counts(evidence: CandidateEvidence, variants=None) -> dict[str, int]:
+    if variants is None:
+        variants = {item.demand_variant for item in evidence.observations} or {"q50"}
+    counts = {variant: 0 for variant in variants}
     seen: set[tuple[str, int]] = set()
     for observation in evidence.observations:
         identity = (observation.demand_variant, observation.seed)
         if identity in seen:
             raise ValueError("candidate evidence has duplicate variant/seed pair")
         seen.add(identity)
+        if observation.demand_variant not in counts:
+            raise ValueError("candidate evidence contains an unrequested variant")
         counts[observation.demand_variant] += 1
     return counts
 
@@ -1261,8 +1265,8 @@ def _validate_evidence_target(
         raise ValueError("simulation backend returned another candidate")
     if evidence.hard_failures or evidence.timeout_undecided:
         return
-    counts = _counts(evidence)
-    expected = {variant: int(targets[variant]) for variant in DEMAND_VARIANTS}
+    counts = _counts(evidence, targets)
+    expected = {variant: int(targets[variant]) for variant in targets}
     if counts != expected:
         raise ValueError(
             f"simulation backend returned {counts}, expected {expected}"
@@ -1494,6 +1498,8 @@ def _final_result(
         "search_content_key": spec.content_key,
         "closure_search_spec": spec.to_dict(),
         "policy": policy.to_dict(),
+        "demand_variants": list(policy.finalist.variants),
+        "direction_sensitivity_evaluated": set(policy.finalist.variants) == set(DEMAND_VARIANTS),
         "simulation_backend": dict(backend_provenance),
         "day_library_accounting": (
             dict(backend_provenance["day_library_accounting"])
@@ -2101,6 +2107,9 @@ def run_monthly_search(
             "for a cost-ordered execution")
     spec = ClosureSearchSpec.from_dict(spec.to_dict())
     policy = MonthlySearchPolicy.from_dict(policy.to_dict())
+    supported = getattr(runner, "supported_demand_variants", None)
+    if supported is not None and set(policy.pilot.variants) != set(supported):
+        raise ValueError("monthly policy variant scope does not match runner scope")
     workspace, _ = open_search_workspace(spec, root=root)
 
     def check_active(phase: str, *, publication: bool = False,
@@ -2252,7 +2261,7 @@ def run_monthly_search(
         pilot_evidence: list[CandidateEvidence] = []
         pilot_targets = {
             variant: policy.pilot.repetitions_per_variant
-            for variant in DEMAND_VARIANTS
+            for variant in policy.pilot.variants
         }
         cost_ordered_result: Any = None
         deterministic_costs: list[dict[str, Any]] | None = None
@@ -2343,7 +2352,7 @@ def run_monthly_search(
             round_by_candidate: dict[str, int] = {}
             initial_targets = {
                 variant: policy.finalist.initial_repetitions
-                for variant in DEMAND_VARIANTS
+                for variant in policy.finalist.variants
             }
             pilot_by_id = {
                 item.candidate_id: item for item in pilot_evidence

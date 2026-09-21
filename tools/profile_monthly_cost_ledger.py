@@ -2,7 +2,7 @@
 
 The profiler measures only deterministic pricing.  It never starts SUMO and
 refuses to claim a full-month profile unless the registered population is
-exactly 1,950 daily units x 3 variants and 1,690 parent candidates.
+exactly 1,950 daily units x q50 only and 1,690 parent candidates.
 """
 
 from __future__ import annotations
@@ -41,9 +41,9 @@ from traffic_sim.simulation.monthly_search import (
 from tools.product_arm import ProcessCensusUnavailable, ProcessTreeRSSSampler
 
 EXPECTED_DAILY_UNITS = 1950
-EXPECTED_VARIANTS = 3
+EXPECTED_VARIANTS = 1
 EXPECTED_PARENTS = 1690
-PROFILE_SCHEMA = "monthly_cost_ledger_profile_v1"
+PROFILE_SCHEMA = "monthly_cost_ledger_profile_q50_v2"
 _RESOLVER_PATCH_LOCK = threading.RLock()
 
 #: Where a profile keeps the enumeration it prepares from.
@@ -503,8 +503,8 @@ def profile_ledger(
             # inherited baseline as contaminated too; otherwise preparation
             # could have launched SUMO before the profiler started measuring.
             sumo_started = sumo_before > 0 or (sumo_after - sumo_before) > 0
-    if expected_variants != 3:
-        raise ValueError("the exact profile contract requires three variants")
+    if expected_variants != EXPECTED_VARIANTS:
+        raise ValueError("the exact profile contract requires only q50")
     ledger_path = output_root / "cost-ledger.json"
     ledger_path.write_text(json.dumps(ledger.to_dict(), indent=2, sort_keys=True)
                            + "\n", encoding="utf-8")
@@ -710,7 +710,7 @@ def profile_ledger(
         "reason": (None if (population_complete and phase_timing_complete
                             and cache_accounting_complete
                             and resource_complete and sumo_observation_complete)
-                   else "complete 1950/5850/1690 actual population, exclusive "
+                   else "complete 1950/1950/1690 q50 population, exclusive "
                    "phase telemetry, measured no-SUMO evidence and a trusted "
                    "process-tree RSS census are required before the Phase 5 "
                    "trigger"),

@@ -758,7 +758,7 @@ def shadow_from_pilot_selection(
             "vehicles_no_detour": cost.vehicles_no_detour,
             "added_vehicle_hours": cost.added_vehicle_hours,
             "added_metres_total": cost.added_metres_total,
-        } for variant in ("q10", "q50", "q90"))
+        } for variant in policy.variants)
         candidates.append(CostOrderedCandidate(
             candidate_id=candidate_id, cost=cost, disruption=records))
 
@@ -771,14 +771,14 @@ def shadow_from_pilot_selection(
                 PairedObservation(
                     candidate_id=candidate_id,
                     demand_variant=variant,
-                    seed=1000 + repetition * 3 + index,
+                    seed=1000 + repetition * 3 + ("q10", "q50", "q90").index(variant),
                     baseline_time_loss_s=0.0,
                     candidate_time_loss_s=float(delta or 0.0),
                     matched_baseline_id="replayed-baseline",
                     provenance_key="replayed-provenance",
                 )
                 for repetition in range(policy.repetitions_per_variant)
-                for index, variant in enumerate(policy.variants)
+                for variant in policy.variants
             )
         evidence[candidate_id] = CandidateEvidence(
             candidate_id=candidate_id,

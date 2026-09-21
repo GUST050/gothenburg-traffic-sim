@@ -1312,10 +1312,20 @@ class TestDefaultProductionPathEndToEnd:
                     for vid, loss in trips) + "\n</tripinfos>\n")
             for add in add_paths:
                 text = Path(add).read_text() if Path(add).is_file() else ""
-                for token in text.split('file="')[1:]:
-                    target = work / token.split('"')[0]
+                import xml.etree.ElementTree as element_tree
+                for edge_data in element_tree.fromstring(text).iter("edgeData"):
+                    target = work / edge_data.get("file")
                     target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_text("<meandata/>")
+                    begin = int(float(edge_data.get("begin", "0")))
+                    end = int(float(edge_data.get("end")))
+                    intervals = "".join(
+                        f'<interval begin="{interval_begin}" '
+                        f'end="{min(interval_begin + 900, end)}"/>'
+                        for interval_begin in range(begin, end, 900)
+                    )
+                    target.write_text(
+                        f"<meandata>{intervals}</meandata>"
+                    )
 
         class FakeController:
             """Stands in for the real one: no traci, no socket, no process.

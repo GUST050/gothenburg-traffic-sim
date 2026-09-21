@@ -1,0 +1,67 @@
+{
+ "environment": {
+  "date": "2026-09-20",
+  "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+  "python": "/usr/bin/python3",
+  "sumo_version": "1.27.1"
+ },
+ "gates": {
+  "day_library_restore": {
+   "status": "pass",
+   "tests": ["tests/test_day_library.py"]
+  },
+  "deterministic_repeat": {
+   "status": "pass",
+   "tests": [
+    "tests/test_route_catalog.py::test_catalog_identity_excludes_date_but_keeps_structure",
+    "tests/test_route_catalog.py::TestCatalogSourceContract"
+   ]
+  },
+  "malformed_catalog_rejected": {
+   "status": "pass",
+   "tests": [
+    "tests/test_route_catalog.py::test_ensure_catalog_is_single_complete_manifest",
+    "tests/test_route_catalog.py::test_adoption_default_is_fail_safe_and_explicit",
+    "tests/test_route_catalog.py::test_operational_adoption_is_verified_again_at_runtime"
+   ]
+  },
+  "purpose_route_compatibility": {
+   "status": "pass",
+   "tests": [
+    "tests/test_pfe.py::TestPurposeStratifiedCalibration",
+    "tests/test_demand_provenance.py"
+   ]
+  },
+  "singleflight_recovery": {
+   "status": "pass",
+   "tests": ["tests/test_singleflight.py"]
+  },
+  "sumo_runtime_no_regression": {
+   "status": "pass",
+   "tests": ["tests/test_warm_state_sumo_equivalence.py"]
+  },
+  "warm_state_identity": {
+   "status": "pass",
+   "tests": [
+    "tests/test_warm_state_cache.py",
+    "tests/test_q50_subset_identity.py"
+   ]
+  }
+ },
+ "kind": "route_catalog_suite_gate_evidence",
+ "note": "Fresh focused evidence for the q50 operational four-class qualification. This record is not a statistical performance campaign.",
+ "schema_version": 2,
+ "source_sha256": {
+  "tests/test_catalog_qualification.py": "b0ca8d470656f7030edf7cbdf07959264e2b613aec8a023e4febad265743dc29",
+  "tests/test_route_catalog.py": "986f36945d4c8512e94d20a83542fe2b806b64834e477af14033e5c5c80863da",
+  "tools/adopt_route_catalog.py": "9653577ce2ed5962dc20046ca554f27d6f9ebd0897154c78ae46a7a34a108ee5",
+  "tools/benchmark_route_catalog.py": "e4e55b309560517afa8331949f0620c3380767596a06fb62a19232567bf9a440",
+  "tools/qualify_route_catalog.py": "0246ca56500c1b1d884b12cc41397280e0375936e85d4c7ccd10e811f8c35b0b",
+  "traffic_sim/demand/catalog_qualification.py": "3354b0e56985ecc576596947398722073e7608c3306ad6b53e7def35f780c522",
+  "traffic_sim/demand/route_catalog.py": "5825e1643afd21983755ba1bc0aaf5b246adb89cd899c68c47e31ba1b477efa5"
+ },
+ "verification": {
+  "command_scope": "day library, catalog identity/source closure, malformed and operational adoption rejection, purpose/provenance, singleflight, warm-state identity and SUMO equivalence",
+  "result": "132 passed, 1 environment warning, 0 failed in 10.08 s on 2026-09-20"
+ }
+}

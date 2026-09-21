@@ -17,8 +17,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-VARIANTS = ("q10", "q50", "q90")
-SCHEMA = "window_cost_index_v1"
+VARIANTS = ("q50",)
+SCHEMA = "window_cost_index_q50_v2"
 
 
 def _canonical(value: Any) -> str:
@@ -54,7 +54,7 @@ def _normalise_records(
                 or isinstance(raw_records, (str, bytes)) \
                 or len(raw_records) != len(VARIANTS):
             raise WindowCostIndexError(
-                f"window cost index unit {unit_id!r} lacks q10/q50/q90")
+                f"window cost index unit {unit_id!r} requires exactly q50")
         variants = []
         for expected, raw_record in zip(VARIANTS, raw_records):
             if not isinstance(raw_record, Mapping):

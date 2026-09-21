@@ -99,8 +99,10 @@ Endpoints:
                               — Phase 4 step 6: runs the resumable robust
                                 recurring closure search
                                 (run_monthly_closure_search.py) against the
-                                server's FROZEN policy
-                                (validation/monthly_search_policy_v1.json).
+                                server's q50-only policy
+                                (validation/monthly_search_policy_v5_q50_only.json).
+                                Provisional policy permits period analysis;
+                                ordinary search requires golden qualification.
                                 Screening mode follows the held-out gate:
                                 with a passing v2 record the validated proxy
                                 screens a large candidate set down to a
@@ -248,13 +250,12 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-# Monthly closure search (Phase 4 step 6). The policy file is the frozen
-# golden artifact — the API never accepts tolerances from the client, so a
-# browser cannot vary what was frozen against the golden benchmark.
-MONTHLY_POLICY_PATH = ROOT / "validation" / "monthly_search_policy_v1.json"
-MONTHLY_PERIOD_ANALYSIS_POLICY_PATH = (
-    ROOT / "validation" / "monthly_search_policy_v4_q50.json"
-)
+# Monthly q50-only policy. Analysis may use its provisional contract; the
+# ordinary release path still requires golden qualification. The API never
+# accepts tolerances from the client or relabels historical tri-variant evidence.
+MONTHLY_POLICY_PATH = (
+    ROOT / "validation" / "monthly_search_policy_v5_q50_only.json")
+MONTHLY_PERIOD_ANALYSIS_POLICY_PATH = MONTHLY_POLICY_PATH
 MONTHLY_SEARCH_ROOT = ROOT / "runs" / "closure-search"
 CLOSURE_SEARCH_SPEC_DIR = ROOT / "runs" / "closure_search_specs"
 # Frozen with the golden monthly benchmark (its workspace's backend
@@ -1710,6 +1711,9 @@ def summarize_monthly_search(result: dict) -> dict:
         "policy_id": policy.get("policy_id"),
         "policy_benchmark_id": policy.get("benchmark_id"),
         "policy_status": policy.get("status"),
+        "demand_variants": result.get("demand_variants"),
+        "direction_sensitivity_evaluated": result.get(
+            "direction_sensitivity_evaluated"),
         "objective_method": policy.get(
             "objective_method", "legacy_time_loss_v1"
         ),
@@ -2978,6 +2982,10 @@ class Handler(SimpleHTTPRequestHandler):
                                   search_content_key=spec.content_key,
                                   policy_id=policy.policy_id,
                                   policy_status=policy.status,
+                                  demand_variants=list(policy.pilot.variants),
+                                  direction_sensitivity_evaluated=(
+                                      {"q10", "q50", "q90"}.issubset(
+                                          policy.pilot.variants)),
                                   objective_method=policy.objective_method,
                                   resource_policy_version=(
                                       MONTHLY_RESOURCE_POLICY_VERSION),

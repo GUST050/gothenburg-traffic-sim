@@ -99,14 +99,25 @@ def _archive(root, required, name, *, finished_at, generation=None):
         "demand_spec": required.to_dict(),
         "epoch_sim": f"{required.start_date}T00:00:00",
         "n_intervals": required.days * 96,
-        "n_variants": 3,
+        "n_variants": 1 if required.variant_mode == "q50_only" else 3,
+        "demand_variant_contract": {
+            "mode": required.variant_mode or "direction_stress",
+            "variants": [{"name": name, "target_key": target,
+                          "route_file": route}
+                         for name, target, route in (
+                             [("q50", "edge_shares", "calibrated.rou.xml")]
+                             if required.variant_mode == "q50_only" else [
+                                 ("q50", "edge_shares", "calibrated.rou.xml"),
+                                 ("q10", "edge_shares_q10", "calibrated_v1.rou.xml"),
+                                 ("q90", "edge_shares_q90", "calibrated_v2.rou.xml")])]},
         "candidate_provenance": {"schema_version": 1, "status": "pass"},
         "edge_support_augmentation": {
             "schema_version": 1,
             "status": "pass",
             "variants": {
                 key: {"status": "pass", "required_edges": 1}
-                for key in ("edge_shares", "edge_shares_q10", "edge_shares_q90")
+                for key in (("edge_shares",) if required.variant_mode == "q50_only"
+                            else ("edge_shares", "edge_shares_q10", "edge_shares_q90"))
             },
         },
         "build_fingerprint": {
@@ -299,7 +310,7 @@ def test_demand_builder_is_independent_of_process_working_directory(monkeypatch,
     monthly_demand.build_demand_archive(required)
     assert seen["cwd"] == monthly_demand._PROJECT_ROOT
     assert seen["env"]["GS_PROJECT_DEMAND_BUILD_LOCK_HELD_BY_PARENT"] == "1"
-    assert "--direction-stress-variants" in seen["command"]
+    assert "--direction-stress-variants" not in seen["command"]
     assert "--candidate-source" not in seen["command"]
 
 
@@ -321,7 +332,7 @@ def test_archive_validation_checks_contract_and_manifest_hashes(tmp_path):
     assert record["demand_build_spec"]["purpose"] == "closure_envelope"
     assert record["day_library_accounting"]["status"] == "incomplete"
 
-    (archive / "calibrated_v1.rou.xml").write_text("<tampered/>")
+    (archive / "calibrated.rou.xml").write_text("<tampered/>")
     with pytest.raises(ValueError, match="changed"):
         validate_demand_archive(archive, required)
 
@@ -1111,6 +1122,8 @@ def _qualified_manifest_for(record, *, network_sha256,
     variants = {}
     for variant, (route_file, agents_file) in (
             monthly_demand._PHASE_D_VARIANT_FILES.items()):
+        if record["demand_build_spec"].get("variant_mode") == "q50_only" and variant != "q50":
+            continue
         variants[variant] = {
             "route_file": route_file,
             "content_digests": {
@@ -1122,6 +1135,7 @@ def _qualified_manifest_for(record, *, network_sha256,
         }
     archive_entry = {
         "build_key": record["build_key"],
+        "demand_build_spec": record["demand_build_spec"],
         "archive_content_key": record["archive_content_key"],
         "archive_manifest_sha256": record["archive_manifest_sha256"],
         "demand_meta_sha256": next(
@@ -1406,8 +1420,8 @@ def test_qualified_manifest_rejects_a_weekday_only_window_with_a_wrong_key(
     (lambda m: m.update(schema="wrong"), "schema/kind"),
     (lambda m: m.update(status="RUNNING"), "terminal status"),
     (lambda m: m.pop("adopted_catalog_keys"), "adopted weekday/weekend"),
-    (lambda m: next(iter(m["archives"].values()))["variants"].pop("q90"),
-     "archive lacks q10/q50/q90"),
+    (lambda m: next(iter(m["archives"].values()))["variants"].pop("q50"),
+     "archive lacks required variants"),
     (lambda m: m.update(network_sha256=""), "network identity"),
 ])
 def test_malformed_qualified_manifest_fails_closed(

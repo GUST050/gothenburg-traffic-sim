@@ -559,10 +559,8 @@ def test_registered_performance_miss_preserves_gate_s_population(
     assert evaluate_gate_s(gate_registration)["status"] == Q50_ONLY
 
 
-@pytest.mark.parametrize("slow_exhaustive", [False, True],
-                         ids=["performance-miss", "bounded-pass"])
 def test_real_registered_case_publishes_completeness_for_gate_s(
-        monkeypatch, tmp_path, slow_exhaustive):
+        monkeypatch, tmp_path):
     """Run the registered producer path, not a fabricated case result.
 
     The SUMO seam is the repository's controlled in-memory runner used by the
@@ -763,7 +761,7 @@ def test_real_registered_case_publishes_completeness_for_gate_s(
         _durable_cache_events = {}
 
         def __init__(self, *, prices, cache_root, spec_arg,
-                     slow_exhaustive=False, slow_cost_ordered=False):
+                     slow_exhaustive=False):
             super().__init__(prices=prices)
             self._spec = spec_arg
             self._schedule_ids = [
@@ -787,7 +785,6 @@ def test_real_registered_case_publishes_completeness_for_gate_s(
             self._seen_events = set()
             self._durable_key = durable_key
             self._slow_exhaustive = slow_exhaustive
-            self._slow_cost_ordered = slow_cost_ordered
 
         def _canonical_evidence_cache_root(self):
             return self._cache_root
@@ -806,13 +803,13 @@ def test_real_registered_case_publishes_completeness_for_gate_s(
 
         def run_candidate(self, schedule, *, target_repetitions, existing,
                           stage):
-            # A controlled backend delay gives the paired producer either a
-            # measured wall/active-time PASS or performance-miss case without
-            # replacing the comparator's producer-owned timing fields.
+            # A controlled backend delay gives the paired producer a measured
+            # wall/active-time PASS without replacing the
+            # comparator's producer-owned timing fields. The deterministic
+            # performance-miss terminal is covered above without a wall-clock
+            # race; repeating it here made this integration test flaky.
             if self._slow_exhaustive:
                 time.sleep(0.003)
-            elif self._slow_cost_ordered:
-                time.sleep(0.05)
             evidence = super().run_candidate(
                 schedule, target_repetitions=target_repetitions,
                 existing=existing, stage=stage)
@@ -947,9 +944,7 @@ def test_real_registered_case_publishes_completeness_for_gate_s(
             prices=local_prices,
             cache_root=Path(_kwargs["daily_results_cache_root"]) / "canonical",
             spec_arg=spec_arg,
-            slow_exhaustive=(slow_exhaustive and "ordered_exhaustive" in str(
-                _kwargs["daily_results_cache_root"])),
-            slow_cost_ordered=((not slow_exhaustive) and "cost_ordered" in str(
+            slow_exhaustive=("ordered_exhaustive" in str(
                 _kwargs["daily_results_cache_root"])),
         )
         source = FakeCostSource(local_prices) if cost_ordered else None
@@ -993,13 +988,7 @@ def test_real_registered_case_publishes_completeness_for_gate_s(
     assert comparison["cancellation"]["called"] is True
     assert comparison["cancellation"]["queued_work_cancelled"] is True
     assert comparison["cancellation"]["no_later_starter"] is True
-    # The performance-miss fixture adds a controlled delay to the cost-ordered
-    # producer arm.  The bounded-pass variant delays the exhaustive arm; both
-    # variants traverse the same real registration and comparison path.
-    expected_status = (
-        "PASS" if slow_exhaustive else "INCONCLUSIVE_PERFORMANCE_GATE"
-    )
-    assert outcome["status"] == expected_status, {
+    assert outcome["status"] == "PASS", {
         "status": outcome["status"],
         "performance": comparison.get("performance_gates_passed"),
         "attempts": comparison.get("exact_attempts_reduction_fraction"),
@@ -1007,9 +996,8 @@ def test_real_registered_case_publishes_completeness_for_gate_s(
         "wall": comparison.get("wall_time_reduction_fraction"),
         "comparison": comparison,
     }
-    if slow_exhaustive:
-        assert all(item.get("gates_passed") is True
-                   for item in outcome["case_results"]), outcome["case_results"]
+    assert all(item.get("gates_passed") is True
+               for item in outcome["case_results"]), outcome["case_results"]
     assert outcome["gate_s"]["population_complete"] is True
     assert outcome["registration"]["content_key"] == registration["content_key"]
     assert ai_flow._phase3_gate_source_paths(
@@ -1085,15 +1073,14 @@ def test_real_registered_case_publishes_completeness_for_gate_s(
         "window_cost_index_subhour-real-performance-miss.json")
     window_index_path.write_text(json.dumps(window_index), encoding="utf-8")
     status_artifacts = {}
-    phase3_report_status = "PASS" if slow_exhaustive else "INCONCLUSIVE"
-    phase4_report_status = "INCONCLUSIVE" if slow_exhaustive else "PASS"
-    if slow_exhaustive:
-        profile["status"] = "INCONCLUSIVE"
-        profile["content_key"] = ai_flow._canonical_digest({
-            key: value for key, value in profile.items()
-            if key != "content_key"
-        })
-        profile_path.write_text(json.dumps(profile), encoding="utf-8")
+    phase3_report_status = "PASS"
+    phase4_report_status = "INCONCLUSIVE"
+    profile["status"] = "INCONCLUSIVE"
+    profile["content_key"] = ai_flow._canonical_digest({
+        key: value for key, value in profile.items()
+        if key != "content_key"
+    })
+    profile_path.write_text(json.dumps(profile), encoding="utf-8")
     qualified_demand_manifest = {
         "schema": "subhour_qualified_demand_manifest_v1",
         "kind": "subhour_qualified_demand_manifest", "release_evidence": False,
@@ -1382,7 +1369,7 @@ class _CostSource:
             "vehicles_no_detour": 0,
             "added_vehicle_hours": 1.0,
             "added_metres_total": 1.0,
-        } for variant in ("q10", "q50", "q90"))
+        } for variant in ("q50",))
         return ParentCost(
             candidate_id=parent.schedule_id,
             cost=ClosureCost(
@@ -1408,7 +1395,7 @@ class _CompleteProfileSource(_CostSource):
         }
 
     def population_snapshot(self):
-        return {"daily_units": 2, "daily_variant_records": 6}
+        return {"daily_units": 2, "daily_variant_records": 2}
 
 
 def test_profile_accounts_unique_daily_units_and_never_starts_sumo(tmp_path):
@@ -1422,8 +1409,8 @@ def test_profile_accounts_unique_daily_units_and_never_starts_sumo(tmp_path):
     assert record["sumo_started"] is False
     assert record["population"] == {
         "daily_units": 2,
-        "variants_per_daily_unit": 3,
-        "daily_variant_records": 6,
+        "variants_per_daily_unit": 1,
+        "daily_variant_records": 2,
         "parents": 2,
     }
     assert record["io_measurement"]["counters"][

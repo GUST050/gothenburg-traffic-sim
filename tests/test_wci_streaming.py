@@ -76,13 +76,16 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _write_archive(root: Path, work_date: str, scale: int) -> Path:
+def _write_archive(root: Path, work_date: str, scale: int, *, q50_only=False) -> Path:
     archive = root / f"demand-{work_date}"
     archive.mkdir(parents=True)
     (archive / "demand_meta.json").write_text(json.dumps({
-        "epoch_sim": f"{work_date}T00:00:00", "n_intervals": 96}),
+        "epoch_sim": f"{work_date}T00:00:00", "n_intervals": 96,
+        "n_variants": 1 if q50_only else 3}),
         encoding="utf-8")
-    for offset, name in enumerate(sorted(dd.VARIANT_FILENAMES.values())):
+    names = ([dd.VARIANT_FILENAMES["q50"]] if q50_only
+             else sorted(dd.VARIANT_FILENAMES.values()))
+    for offset, name in enumerate(names):
         vehicles = [
             f'<vehicle id="v{n}" depart="{depart + offset}">'
             f'<route edges="{route}"/></vehicle>'
@@ -111,13 +114,14 @@ class _Oracle:
                 inputs.variant_paths[variant], {CLOSED}, closures,
                 self.network.edge_time, self.network.edge_len,
                 adjacency=self.network.adjacency)}
-            for variant in ("q10", "q50", "q90"))
+            for variant in inputs.variant_paths)
 
 
 @pytest.fixture
 def world(tmp_path, monkeypatch):
     spec = _spec()
-    archives = {f"key-{day}": _write_archive(tmp_path / "runs", day, n + 1)
+    archives = {f"key-{day}": _write_archive(tmp_path / "runs", day, n + 1,
+                                             q50_only=True)
                 for n, day in enumerate(DATES)}
     calls = SimpleNamespace(index=0, validate=[], outputs={})
 
@@ -239,7 +243,7 @@ class TestOnePassPerArchive:
 
         monkeypatch.setattr(builder, "parse_route_vehicles", spy)
         _run(world)
-        assert len(parsed) == len(set(parsed)) == 3 * len(world.archives)
+        assert len(parsed) == len(set(parsed)) == len(world.archives)
 
     def test_an_archive_is_released_before_the_next_is_opened(
             self, world, monkeypatch):
@@ -327,7 +331,7 @@ class TestFailClosed:
 
     def test_a_parser_error_names_the_archive(self, world):
         key = sorted(world.archives)[1]
-        (world.archives[key] / dd.VARIANT_FILENAMES["q90"]).write_text(
+        (world.archives[key] / dd.VARIANT_FILENAMES["q50"]).write_text(
             "<routes><vehicle", encoding="utf-8")
         with pytest.raises(WindowCostIndexError) as caught:
             _run(world)
@@ -459,7 +463,7 @@ class TestPublication:
             assert binding["files"] == {
                 name: _sha(archive / name)
                 for name in ["demand_meta.json",
-                             *sorted(dd.VARIANT_FILENAMES.values())]}
+                             dd.VARIANT_FILENAMES["q50"]]}
 
     def test_archive_drift_before_publication_is_refused(self, world):
         measurement = _run(world)[2]

@@ -1,0 +1,68 @@
+{
+ "catalog_root": "sumo/route_catalog",
+ "elapsed_s": 142.337,
+ "environment": {
+  "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+  "python_runtime": {
+   "networkx": "3.2.1",
+   "numpy": "2.0.2",
+   "osmnx": "2.0.7",
+   "platform": "macOS-15.6.1-arm64-arm-64bit",
+   "python": "3.9.6 (default, Apr 30 2025, 02:07:17) \n[Clang 17.0.0 (clang-1700.0.13.5)]",
+   "shapely": "2.0.7"
+  },
+  "route_diversity": 2.0,
+  "sumo_home": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo",
+  "sumo_version": "Eclipse SUMO sumo 1.27.1\n Build features: Darwin-23.6.0 arm64 AppleClang 15.0.0.15000309 Release FMI Proj GUI FMT Intl SWIG Parquet Eigen GDAL GL2PS JuPedSim\n Copyright (C) 2001-2026 German Aerospace Center (DLR) and others; https://sumo.dlr.de\n\nEclipse SUMO sumo 1.27.1 is part of SUMO.\nThis program and the accompanying materials\nare made available under the terms of the Eclipse Public License v2.0\nwhich accompanies this distribution, and is available at\nhttp://www.eclipse.org/legal/epl-v20.html\nThis program may also be made available under the following Secondary\nLicenses when the conditions for such availability set forth in the Eclipse\nPublic License 2.0 are satisfied: GNU General Public License, version 2\nor later which is available at\nhttps://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html\nSPDX-License-Identifier: EPL-2.0 OR GPL-2.0-or-later"
+ },
+ "execute": true,
+ "kind": "route_catalog_build",
+ "min_per_sensor": 50,
+ "pools": [
+  "weekday",
+  "weekend"
+ ],
+ "results": {
+  "weekday": {
+   "artifact_digests": {
+    "catalog.meta.json": "a2603f537eb211b77a022ad822dbde5009b2edb58ffd564d6c6fb0de60fb27de",
+    "catalog.rou.xml": "53ad0e90c0330cca68ffd70d05f42ade52f64e84dff38f21ea543b446dfe5671",
+    "catalog.template.json": "dbeb3b46ce3ddb9eba77fb9549dd7e88230492047421dd22c1614160a25c5cd0",
+    "catalog.validation.json": "0b528c20e222ec3b8027151f010496dd517dfab47047e4bc5b05a8100fea024c"
+   },
+   "attempts": [
+    {
+     "n_total": 6000,
+     "status": "built"
+    }
+   ],
+   "cache_event": "miss",
+   "key": "fbb84089cf34abb8cf9fcdce02fbca9d",
+   "n_total": 6000
+  },
+  "weekend": {
+   "artifact_digests": {
+    "catalog.meta.json": "5f74fa6b161197e8afc665170a3c3c5e58c47b3e1ea4ed69d07cf1209a2adcea",
+    "catalog.rou.xml": "009cdb9fd8f9fd4dd30b139d57faadd83b19fad970286478c77466837d2d5933",
+    "catalog.template.json": "31917e1c48fc8c6394f880a45dbb607fe0b6b8c06e0d36f44408c9a8e69f9289",
+    "catalog.validation.json": "167bd9a3bd98c2f83f68020647d5e4ff492fa11420d953211d9a2e661f376326"
+   },
+   "attempts": [
+    {
+     "n_total": 6000,
+     "status": "built"
+    }
+   ],
+   "cache_event": "miss",
+   "key": "1c8248d388fec388dd82749b4beca1d9",
+   "n_total": 6000
+  }
+ },
+ "schema_version": 1,
+ "size_attempts": [
+  6000,
+  9000,
+  13500
+ ],
+ "status": "succeeded"
+}

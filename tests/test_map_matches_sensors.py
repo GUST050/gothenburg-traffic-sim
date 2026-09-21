@@ -19,6 +19,20 @@ LIVE = (Path("sumo/demand_meta.json"), Path("web/data/scenarios/baseline.json"),
         Path("web/data/scenarios/index.json"))
 
 
+def _live_publication_is_coherent():
+    if not all(path.is_file() for path in LIVE):
+        return False
+    meta = json.loads(LIVE[0].read_text())
+    scenario = json.loads(LIVE[1].read_text())
+    index = json.loads(LIVE[2].read_text())
+    entry = next((item for item in index["scenarios"]
+                  if item["name"] == "baseline"), None)
+    return (
+        (entry or {}).get("demand_signature") == meta.get("build_id")
+        and scenario.get("n_quarters") == meta.get("n_intervals")
+    )
+
+
 class TestTheComparison:
     def test_geh_is_zero_for_an_exact_match(self):
         assert check.geh(100.0, 100.0) == 0.0
@@ -42,6 +56,9 @@ class TestTheComparison:
     def test_an_empty_comparison_reports_nothing_rather_than_success(self):
         # A check with no comparable pairs must not read as 100% agreement.
         assert check.summarize([], 5.0) == {"n": 0}
+
+    def test_mismatched_horizons_are_reported_not_indexed(self):
+        assert check.comparable_pairs([1.0], [1.0, 2.0]) is None
 
     def test_quarters_aggregate_to_whole_hours_only(self):
         assert check.aggregate([1.0] * 10, 4) == [4.0, 4.0]
@@ -102,6 +119,10 @@ class TestTheAnimatedLayer:
 @pytest.mark.skipif(not all(path.is_file() for path in LIVE),
                     reason="nothing published to check")
 class TestTheLivePublication:
+    @pytest.mark.skipif(
+        not _live_publication_is_coherent(),
+        reason="the local live scenario is not from the current demand build",
+    )
     def test_the_published_map_agrees_with_the_sensors(self, capsys):
         # Explicit empty argv: argparse falls back to sys.argv otherwise, and
         # under pytest that is pytest's own command line.

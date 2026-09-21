@@ -69,6 +69,7 @@ from traffic_sim.simulation.pilot_selection import (
     PilotPolicy,
     select_pilot_finalists,
 )
+from traffic_sim.simulation.warm_route_windows import WarmRouteWindowCache
 
 SCT_PREFIX = "sct_"   # every scratch file this tool writes into sumo/
 BASELINE_SCENARIO = rs.OUT_DIR / "baseline.json"
@@ -363,6 +364,7 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
                      time_to_teleport_s: int | None = ct.CLOSURE_ROUTING_TELEPORT_POLICY_S,
                      sumo_timeout_s: float | None = None,
                      routing_identity_extra: Mapping[str, Any] | None = None,
+                     route_window: tuple[int, int] | None = None,
                      ) -> tuple[cm.DisruptionMetrics, int, int, list[float]]:
     """Run `seeds` Monte Carlo replications of one candidate (or the
     baseline, when close_edges is empty) and aggregate their disruption
@@ -444,6 +446,28 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
     base_dir = Path(work_dir) if work_dir is not None else rs.SUMO_DIR
     if work_dir is not None:
         base_dir.mkdir(parents=True, exist_ok=False)
+    if route_window is not None:
+        if route_window != (begin_s, duration_s):
+            raise ValueError(
+                "route_window must match the exact SUMO begin/duration window"
+            )
+        if work_dir is None:
+            raise ValueError("route_window requires an isolated work_dir")
+        windowed = []
+        for index, variant_path in enumerate(variants):
+            window_cache = base_dir / f"route-window-cache-{index}"
+            window_path = base_dir / (
+                f"{variant_path.stem}_{SCT_PREFIX}{name}_window.rou.xml"
+            )
+            try:
+                WarmRouteWindowCache(
+                    variant_path, window_cache, alignment_s=900
+                ).materialize(begin_s, duration_s, window_path)
+            finally:
+                shutil.rmtree(window_cache, ignore_errors=True)
+            windowed.append(window_path)
+            scratch.append(window_path)
+        run_variants = windowed
     if close_edges:
         assert closures is not None and adj is not None and freeflow is not None
         cpath = base_dir / f"{SCT_PREFIX}closure_{name}.add.xml"
@@ -454,7 +478,7 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
         closure_add = [cpath]
         scratch.append(cpath)
         filtered = []
-        for i, vp in enumerate(variants):
+        for i, vp in enumerate(run_variants):
             fp = base_dir / f"{vp.stem}_{SCT_PREFIX}{name}.rou.xml"
             access_impact_fp = base_dir / (
                 f"{vp.stem}_{SCT_PREFIX}{name}.access_impact.json")
@@ -541,27 +565,13 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
             **({"work_dir": job["seed_dir"]} if work_dir is not None else {}))
         active_throughput = None
         if closures and job["ed_file"].exists():
-            # `measured_empty_edges=close_edges` mirrors run_scenario.py's own
-            # cold-path parse (run_scenario.py:2800-2802): without it, a
-            # closed edge with genuinely zero entries during the active
-            # window is absent from the edgeData XML entirely (SUMO omits
-            # empty-interval entries), so `flows.get(edge)` returns None and
-            # `active_closure_throughput` reports `measured=False` ->
-            # `active_closed_edge_throughput: null` -- indistinguishable from
-            # "never measured" when it should read a proven, numeric zero.
-            # Declaring the closed edges here forces a zero-filled series to
-            # exist even when SUMO wrote nothing, so a genuinely clean
-            # closure asserts 0, not None.
-            seed_flows = rs.parse_edgedata(
-                job["ed_file"], n_intervals,
+            # SUMO omits empty edge records under `excludeEmpty=true`, so the
+            # declared closed-edge set distinguishes a measured zero from an
+            # unmeasured file. The reader compares XML interval and closure
+            # timestamps directly on SUMO's absolute clock.
+            active_throughput = cm.read_active_closure_throughput(
+                job["ed_file"], closures,
                 measured_empty_edges=tuple(close_edges))
-            # `begin_s` is this call's own trimmed-window start (0 for a
-            # whole-day search, nonzero for an independent-daily cold
-            # window) -- see active_closure_throughput's docstring for why
-            # the flows array must be indexed relative to it, not to the
-            # closures' absolute epoch time.
-            active_throughput = cm.active_closure_throughput(
-                seed_flows, closures, window_begin_s=begin_s)
         # `seed_truncated` is always 0 under the closure-origin-routing
         # policy; `seed_dropped` is the real denied-departure count. The
         # successful reroute count (`seed_rerouted`) is completed traffic

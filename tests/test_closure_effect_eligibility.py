@@ -99,7 +99,7 @@ def world(tmp_path):
              "weekend": _pool(catalog_root, "pool-we", ["A X"])}
     refs = [
         _archive(tmp_path, "a1", variants=ALL_X, pools=pools),
-        _archive(tmp_path, "a2", variants={"q10": ["A Y"], "q50": ["A"],
+        _archive(tmp_path, "a2", variants={"q10": ["A Y"], "q50": ["A X", "A X"],
                                            "q90": ["A X", "A X"]},
                  pools={"weekday": pools["weekday"]}),
     ]
@@ -137,7 +137,7 @@ class TestThePredicate:
         assert verdict.reason_codes == (cee.ELIGIBLE,)
         assert verdict.summary["catalog_routes"] == {"weekday": 1,
                                                      "weekend": 1}
-        assert verdict.summary["crossings"] == {"q10": 1, "q50": 1, "q90": 3}
+        assert verdict.summary["crossings"] == {"q50": 3}
         assert verdict.summary["archives_with_crossings"] == 2
         assert verdict.summary["daily_units_with_crossings"] == 130
 
@@ -148,22 +148,21 @@ class TestThePredicate:
                                         cee.NO_OBSERVED_ARCHIVE_CROSSINGS)
         details = {(r["code"], r["detail"]) for r in verdict.reasons}
         assert (cee.NO_CATALOG_ROUTE_SUPPORT, "weekend") in details
-        assert (cee.NO_OBSERVED_ARCHIVE_CROSSINGS, "q10") in details
+        assert (cee.NO_OBSERVED_ARCHIVE_CROSSINGS, "q50") in details
 
     def test_every_variant_needs_an_observed_crossing(self, world):
         verdict = _verdict(world, "Y")
         assert cee.NO_OBSERVED_ARCHIVE_CROSSINGS in verdict.reason_codes
         assert {r["detail"] for r in verdict.reasons
                 if r["code"] == cee.NO_OBSERVED_ARCHIVE_CROSSINGS} == {
-            "q50", "q90"}
+            "q50", "daily_units"}
 
     def test_a_missing_network_edge_is_named(self, world):
         verdict = _verdict(world, "X", network={"A"})
         assert verdict.reason_codes == (cee.MISSING_NETWORK_EDGE,)
 
     def test_a_missing_variant_is_a_rejection_not_a_zero(self, world):
-        ref = _archive(world.root, "a3", variants={"q10": ["A X"],
-                                                   "q50": ["A X"]},
+        ref = _archive(world.root, "a3", variants={"q10": ["A X"]},
                        pools={"weekday": world.pools["weekday"]})
         verdict = _verdict(world, "X", refs=[ref])
         assert cee.MISSING_REQUIRED_VARIANT in verdict.reason_codes
@@ -202,13 +201,13 @@ class TestThePredicate:
         candidates = [f"E{n}" for n in range(6)] + ["X", "Y"]
         inventory = cee.build_inventory(candidates, world.refs,
                                         catalog_root=world.catalog_root)
-        assert len(calls) == len(set(calls)) == 3 * 2 + 2
-        assert inventory.crossings["X"]["q90"] == {"key-a1": 1, "key-a2": 2}
+        assert len(calls) == len(set(calls)) == 1 * 2 + 2
+        assert inventory.crossings["X"]["q50"] == {"key-a1": 1, "key-a2": 2}
         for edge in candidates:
             cee.assess(edge, inventory, network_edges=set(candidates),
                        required_build_keys=["key-a1", "key-a2"],
                        daily_units={"key-a1": 1, "key-a2": 1})
-        assert len(calls) == 8, "assessment must not reread any file"
+        assert len(calls) == 4, "assessment must not reread any file"
 
     def test_named_routes_count_exactly_as_the_production_parser(
             self, world):
@@ -260,7 +259,7 @@ class TestInventoryEvidence:
     def test_archive_drift_invalidates_evidence(self, world):
         record = cee.build_inventory(
             ["X"], world.refs, catalog_root=world.catalog_root).to_dict()
-        path = world.refs[1].archive / VARIANT_FILENAMES["q90"]
+        path = world.refs[1].archive / VARIANT_FILENAMES["q50"]
         path.write_text(_vehicles_xml(["A"]), encoding="utf-8")
         assert any("key-a2" in problem
                    for problem in cee.verify_inventory(record))
@@ -268,7 +267,7 @@ class TestInventoryEvidence:
     def test_a_tampered_record_is_refused(self, world):
         record = cee.build_inventory(
             ["X"], world.refs, catalog_root=world.catalog_root).to_dict()
-        record["crossings"]["X"]["q10"]["key-a1"] = 99
+        record["crossings"]["X"]["q50"]["key-a1"] = 99
         assert "inventory content key mismatch" in cee.verify_inventory(record)
 
 
@@ -606,7 +605,7 @@ class TestOneLargeVariantInMemory:
         monkeypatch.setattr(cee, "parse_route_vehicles", parser)
         cee.build_inventory(["X"], world.refs,
                             catalog_root=world.catalog_root)
-        assert len(alive) == 8
+        assert len(alive) == 4
 
 
 class TestFixedCasesAreNotLabelledEffectGated:

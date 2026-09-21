@@ -5,7 +5,7 @@ deterministic-cost cache.  The cache is opened only afterwards as an
 independent exact oracle.  This distinction is material: copying cached
 answers and comparing them with themselves is not an indexed computation.
 The command never opens SUMO outcomes, and adoption is reported only after
-all three variants for all 1,950 daily units compare field-for-field.
+q50 for all 1,950 daily units compares field-for-field.
 """
 
 from __future__ import annotations
@@ -52,6 +52,7 @@ from traffic_sim.simulation.monthly_demand import (
 from traffic_sim.simulation.window_cost_index import (
     WindowCostIndex,
     WindowCostIndexError,
+    VARIANTS,
     load_index,
     publish_new_file,
     write_index,
@@ -65,12 +66,13 @@ from traffic_sim.simulation.deterministic_disruption import (
     sum_daily_disruption,
 )
 from tools.profile_monthly_cost_ledger import (
+    PROFILE_SCHEMA,
     producer_runtime_manifest,
     producer_source_manifest,
 )
 
 EXPECTED_DAILY_UNITS = 1950
-EXPECTED_VARIANT_RECORDS = 5850
+EXPECTED_VARIANT_RECORDS = EXPECTED_DAILY_UNITS * len(VARIANTS)
 EXPECTED_PARENTS = 1690
 
 
@@ -151,7 +153,9 @@ def _validate_profile_binding(profile: Mapping[str, Any],
     bound spec digest are therefore checked before any cache or route input is
     opened.
     """
-    if not isinstance(profile, Mapping) or profile.get("content_key") != _digest(
+    if not isinstance(profile, Mapping) or profile.get("schema") != PROFILE_SCHEMA:
+        raise WindowCostIndexError("unsupported q50 profile schema")
+    if profile.get("content_key") != _digest(
             {key: value for key, value in profile.items()
              if key != "content_key"}):
         raise WindowCostIndexError(
@@ -315,7 +319,7 @@ def _measurement(indexed, provider_identities, timings, *, loop,
     return {
         **(bindings or {}),
         "daily_units": len(indexed),
-        "daily_variant_records": len(indexed) * 3,
+        "daily_variant_records": len(indexed) * len(VARIANTS),
         "timings": timings,
         "raw_input_algorithm": "ArchiveDisruptionProvider(cache=None)",
         "raw_input_strategy": (
@@ -324,7 +328,7 @@ def _measurement(indexed, provider_identities, timings, *, loop,
         "raw_loop": loop,
         "structural_reuse": {
             "archive_variant_indexes": variant_indexes,
-            "window_queries": len(indexed) * 3,
+            "window_queries": len(indexed) * len(VARIANTS),
             "reused_route_vehicle_grouping": True,
             "reused_unique_route_detours": True,
         },
@@ -333,7 +337,7 @@ def _measurement(indexed, provider_identities, timings, *, loop,
 
 
 def _unit_records(spec, provider, indexes, schedule, timings):
-    """One daily unit's three variant records, from the archive's indexes."""
+    """One daily unit's q50 record, from the archive's index."""
     if indexes is None:
         # Compatibility branch for the deliberately tiny provider test
         # doubles.  It is not reachable for the real CLI.
@@ -348,7 +352,7 @@ def _unit_records(spec, provider, indexes, schedule, timings):
             timing=lambda phase, elapsed: timings.__setitem__(
                 phase, timings.get(phase, 0.0) + float(elapsed)),
         )
-    } for variant in ("q10", "q50", "q90"))
+    } for variant in VARIANTS)
 
 
 def _oracle_record(oracle_cache, provider, schedule, unit_id):
@@ -360,7 +364,7 @@ def _oracle_record(oracle_cache, provider, schedule, unit_id):
             "records": [dict(item) for item in expected]}
 
 
-RAW_INPUT_FILES = ("demand_meta.json", *sorted(VARIANT_FILENAMES.values()))
+RAW_INPUT_FILES = ("demand_meta.json", *(VARIANT_FILENAMES[v] for v in VARIANTS))
 
 
 def _archive_binding(descriptor: _ArchiveDescriptor) -> dict[str, Any]:
@@ -443,7 +447,7 @@ def _verify_opened(descriptor: _ArchiveDescriptor, provider,
 def _archive_indexes(spec, provider, network, timings):
     """Parse each variant once and keep only its window-cost index."""
     indexes = {}
-    for variant in ("q10", "q50", "q90"):
+    for variant in VARIANTS:
         parsed = parse_route_vehicles(
             provider.inputs.variant_paths[variant],
             timing=lambda phase, elapsed: timings.__setitem__(
@@ -513,7 +517,7 @@ def _raw_index_records(
 
     Streams one archive at a time. Every build key is resolved and fully
     validated once into a small descriptor first; then each archive is
-    opened, its three variants parsed once, all of its daily units priced,
+    opened, its q50 variant parsed once, all of its daily units priced,
     and the archive released before the next one is opened. Only the final
     records, oracle rows and provider identities are kept, and they are
     returned in unit-id order, so the result never depends on how build keys
@@ -605,7 +609,7 @@ def _retain_index_records(
                 timing=lambda phase, elapsed: timings.__setitem__(
                     phase, timings.get(phase, 0.0) + float(elapsed)),
             )
-            for variant in ("q10", "q50", "q90")
+            for variant in VARIANTS
         }
     for unit_id in sorted(units):
         _identity, schedule, archive = units[unit_id]
@@ -864,7 +868,7 @@ def build_from_profile(
         "oracle_source": "bound deterministic daily-cost cache, read after raw computation",
         "population": {
             "daily_units": len(records),
-            "daily_variant_records": len(records) * 3,
+            "daily_variant_records": len(records) * len(VARIANTS),
             "parent_schedules": len(indexed_ledger.costs),
         },
         "oracle": oracle,
@@ -1175,7 +1179,7 @@ def prove_existing_index(
         "builder_source_drift": builder_source_drift,
         "population": {
             "daily_units": len(persisted.records),
-            "daily_variant_records": len(persisted.records) * 3,
+            "daily_variant_records": len(persisted.records) * len(VARIANTS),
             "parent_schedules": len(indexed_ledger.costs),
         },
         "adoption": {
