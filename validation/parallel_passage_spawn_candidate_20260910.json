@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-09-10T08:21:07.865467+00:00",
+  "status": "candidate_prepared_not_activated",
+  "existing_failed_trial": "runs/demand-20260909-212932-9faee4e5-b179/manifest.json",
+  "verified_failure": "PicklingError: Can't pickle <function worker>: attribute lookup worker on __main__ failed",
+  "fix": "Top-level importable worker; spawn context; all child results collected before route replacement. Explicit opt-in variant_workers=3; default serial. At most6 SUMO slots split across children.",
+  "tests": {
+    "spawn_budget_and_failure_atomicity": "3 passed in1.01s",
+    "existing_automatic_passage_and_retention_tests_with_candidate_injected": "31 passed in1.07s",
+    "small_real_sumo_integration": "runs/passage-parallel-preparation-20260910/small-real-sumo/result.json",
+    "combined_source_reuse_integration": "runs/passage-parallel-preparation-20260910/small-real-sumo-combined/result.json",
+    "source_integrity_regressions": "5 passed in0.08s"
+  },
+  "live_source_sha256": "38b9429a61c5c68ac311d83ab08c73c41a0492a6831e559262b951bd77846d98",
+  "live_source_unchanged": true,
+  "active_run_stopped": false,
+  "candidate_patch": "validation/parallel_passage_spawn_candidate_20260910.patch",
+  "staging_directory": "runs/passage-parallel-preparation-20260910",
+  "remaining": [
+    "Full-population performance, peak resources and cancellation validation remain before parallel activation; tiny-population real SUMO integration passed.",
+    "No new full-day speedup claim for variant parallelism; the prior attempt failed before computation.",
+    "Do not apply this patch to the active checkout during the current search."
+  ]
+}

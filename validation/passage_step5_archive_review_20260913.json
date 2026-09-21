@@ -1,0 +1,76 @@
+{
+  "base_revision": "294c75a915c6ea64960496e86db363de62df3f7c",
+  "checks": {
+    "dependent_green": {
+      "failed": 0,
+      "passed": 537
+    },
+    "focused_green": {
+      "failed": 0,
+      "passed": 59
+    },
+    "git_diff_check": "passed",
+    "red": {
+      "failed_for_intended_bug": true,
+      "tests": 2
+    }
+  },
+  "date": "2026-09-13",
+  "findings": [
+    {
+      "component": "monthly_demand._VALIDATED_ARCHIVE_CACHE",
+      "problem": "a same-size route edit with exactly restored st_mtime_ns is served from the successful-validation cache without reading changed bytes",
+      "red_evidence": "the corrected exact-nanosecond regression test returns the tampered archive",
+      "severity": "high"
+    },
+    {
+      "component": "monthly_demand._ARCHIVE_METADATA_INDEX",
+      "problem": "a same-size demand_meta build-key edit with exactly restored st_mtime_ns remains indexed under the old key",
+      "red_evidence": "the corrected exact-nanosecond regression test returns the old build-key mapping",
+      "severity": "medium"
+    },
+    {
+      "component": "Step 5 completion claim",
+      "effect": "Step 5 acceptance criteria cannot be evaluated and no optimization may be selected",
+      "problem": "assemble_window, costing, ClosureRouteResolver and combined decision identity measurements were explicitly omitted",
+      "severity": "high"
+    }
+  ],
+  "hermetic_counts_after_repair": {
+    "cold_three_archives": {
+      "digests": 30,
+      "json_reads": 12,
+      "validations": 3
+    },
+    "production_timing": null,
+    "three_lookups_one_local_index": {
+      "digests": 90,
+      "json_reads": 27,
+      "validations": 9
+    },
+    "three_new_disk_entries": {
+      "digests": 90,
+      "json_reads": 36,
+      "validations": 9
+    }
+  },
+  "performance_limit": "removing unsafe validation reuse can cost time; no current-source archive exists, so the production delta is unmeasured and must not be estimated from fixtures",
+  "release_evidence": false,
+  "remaining_step5_work": [
+    "assemble_window days, rows, agents, bytes and exclusive time",
+    "cost ledger and ClosureRouteResolver counts, unique routes and exclusive time",
+    "plain-versus-observed exact ledger, winner, disqualifications and stop-proof digests",
+    "production measurement when a current-source qualified archive exists"
+  ],
+  "repair": {
+    "global_metadata_index_cache_removed": true,
+    "global_validated_archive_cache_removed": true,
+    "new_disk_entry": "rebuild metadata index from demand_meta content and fully validate every candidate",
+    "operation_local_reuse": "share only the metadata index inside _resolve_new_release and refresh it after a demand builder call",
+    "validated_records_reused_across_read_boundaries": false
+  },
+  "root_cause": "tests restored float st_mtime but cache keys used st_mtime_ns; the supposed preserved-stat tests actually caused cache misses",
+  "schema_version": 1,
+  "scope": "Codex review of Step 5 commit 294c75a",
+  "verdict": "rejected_as_complete_repair_prepared"
+}

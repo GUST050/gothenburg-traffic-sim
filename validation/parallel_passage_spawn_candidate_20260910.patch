@@ -1,0 +1,106 @@
+--- a/traffic_sim/demand/automatic_passage.py
++++ b/traffic_sim/demand/automatic_passage.py
+@@ -10,7 +10,8 @@
+ import gzip
+ import hashlib
+ from contextlib import contextmanager
+-from concurrent.futures import ThreadPoolExecutor
++from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
++import multiprocessing
+ import copy
+ import json
+ import os
+@@ -95,11 +96,11 @@
+     return passage._parse_entered(directory / 'edge.xml', quarters, sorted(targets))
+ 
+ 
+-def _measure_batch(jobs):
++def _measure_batch(jobs, *, max_workers=6):
+     """Independent SUMO processes, bounded by CPU count/six and returned in seed order."""
+     if not jobs:
+         return []
+-    with ThreadPoolExecutor(max_workers=min(6, len(jobs), os.cpu_count() or 1)) as pool:
++    with ThreadPoolExecutor(max_workers=min(max_workers, len(jobs), os.cpu_count() or 1)) as pool:
+         return list(pool.map(lambda arguments: _measure(*arguments), jobs))
+ 
+ 
+@@ -209,7 +210,7 @@
+     return result
+ 
+ 
+-def _refine(data, source_report, network, work, candidate_pool):
++def _refine(data, source_report, network, work, candidate_pool, *, measurement_workers=6):
+     quarters = len(data['targets'])
+     edges = sorted({edge for row in data['targets'] for edge in row})
+     if not quarters or not edges or any(set(row) != set(edges) for row in data['targets']):
+@@ -233,7 +234,7 @@
+     (work / 'evidence').mkdir()
+     _measure_batch([(inputs / 'calibrated.rou.xml', network,
+                      work / 'evidence' / f'learning-0-arm-{seed}',
+-                     seed, targets, quarters, vehicles) for seed in trial.LEARNING_ARMS])
++                     seed, targets, quarters, vehicles) for seed in trial.LEARNING_ARMS], max_workers=measurement_workers)
+     for seed in trial.LEARNING_ARMS:
+         directory = work / 'evidence' / f'learning-0-arm-{seed}'
+         for name in ('edge.xml', 'vehroute.xml'):
+@@ -349,7 +350,7 @@
+     jobs = [(source, network, work / f'{label}-{seed}', seed, targets, quarters, vehicles)
+             for seed in trial.VALIDATION_ARMS for label, source in (
+                 ('before', inputs / 'calibrated.rou.xml'), ('after', candidate))]
+-    measured = _measure_batch(jobs)
++    measured = _measure_batch(jobs, max_workers=measurement_workers)
+     for index, seed in enumerate(trial.VALIDATION_ARMS):
+         before[seed], after[seed] = measured[2*index:2*index+2]
+         if _error(after[seed], targets) > _error(before[seed], targets):
+@@ -464,8 +465,31 @@
+         backup.unlink(missing_ok=True)
+ 
+ 
++def _refine_worker(task):
++    """Importable spawn target; no callback in __main__ or forked native state."""
++    arguments, measurement_workers = task
++    began = time.perf_counter()
++    value = _refine(*arguments, measurement_workers=measurement_workers)
++    return value, time.perf_counter() - began
++
++
++def _refine_tasks(tasks, variant_workers):
++    if isinstance(variant_workers, bool) or not isinstance(variant_workers, int) or variant_workers < 1:
++        raise ValueError('variant_workers must be a positive integer')
++    slots = min(6, os.cpu_count() or 1)
++    workers = min(variant_workers, len(tasks), slots)
++    if workers <= 1:
++        return [_refine_worker((task, slots)) for task in tasks]
++    # Each child owns a disjoint stage. Sum of child SUMO limits <= six.
++    # The parent receives every successful result before replacing any route.
++    with ProcessPoolExecutor(max_workers=workers,
++                             mp_context=multiprocessing.get_context('spawn')) as pool:
++        return list(pool.map(_refine_worker, [(task, slots // workers) for task in tasks]))
++
++
+ def refine_variants(variant_inputs: dict, reports: dict, network: Path,
+-                    evidence_root: Path, *, candidate_pool: Path | None = None) -> dict:
++                    evidence_root: Path, *, candidate_pool: Path | None = None,
++                    variant_workers: int = 1) -> dict:
+     """Stage every arm, validate against fresh SUMO, then replace route pairs.
+ 
+     Each arm conserves its own PFE OD/purpose population. Direction stress
+@@ -480,12 +504,13 @@
+     evidence_root.mkdir(parents=True, exist_ok=False)
+     (evidence_root / 'source_reports.json').write_text(json.dumps(reports, indent=2))
+     result, staged = {}, []
+-    for suffix in sorted(variant_inputs, key=lambda value: (value != '', value)):
+-        variant_started = time.perf_counter()
+-        report, stage, _population = _refine(
+-            variant_inputs[suffix], reports[suffix], network,
+-            evidence_root / ('q50' if not suffix else suffix), candidate_pool)
+-        timings['variant_s'][suffix or 'q50'] = time.perf_counter() - variant_started
++    suffixes = sorted(variant_inputs, key=lambda value: (value != '', value))
++    tasks = [(variant_inputs[suffix], reports[suffix], network,
++              evidence_root / (suffix or 'q50'), candidate_pool) for suffix in suffixes]
++    fitted = _refine_tasks(tasks, variant_workers)
++    for suffix, (value, elapsed) in zip(suffixes, fitted):
++        report, stage, _population = value
++        timings['variant_s'][suffix or 'q50'] = elapsed
+         result[suffix] = report
+         target = Path(variant_inputs[suffix]['out_path'])
+         staged.extend([(stage / 'calibrated.rou.xml', target),

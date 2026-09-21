@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "reviewed_revision": "90c0675",
+  "verdict": "REPAIR_REQUIRED_BEFORE_STEP4_CAN_CLOSE",
+  "release_evidence": false,
+  "accepted_measurement": {
+    "scope": "sequential phases reached by the single-variant q50 replay",
+    "source_trace_xml_warm_median_s": 0.914616,
+    "source_trace_xml_ranked_share_percent": 47.02,
+    "selection_routes_agents_identical": true,
+    "gzip_claim_scope": "single copied route file only; not full retention"
+  },
+  "findings": [
+    {
+      "severity": "H1",
+      "title": "Concurrent retention is double-counted in the global ranking",
+      "evidence": "three concurrent 50 ms children produced 0.220297 s ranked wall for a parent whose measured inclusive wall was 0.055364 s",
+      "repair": "rank the directly measured concurrent boundary wall once; retain descendants as diagnostic detail with zero additional wall contribution"
+    },
+    {
+      "severity": "H2",
+      "title": "The largest named Step 4 production phase remains unmeasured",
+      "evidence": "the replay calls _gzip_verified on one copied file and never invokes prune_evidence; an existing complete raw three-variant root contains 118 XML files and 877.5 MB of raw XML",
+      "repair": "profile prune_evidence on isolated copies of the existing complete q50/_v1/_v2 evidence root; do not launch SUMO or a new demand build"
+    },
+    {
+      "severity": "H2",
+      "title": "_tracked_main was not instrumented as claimed",
+      "evidence": "commit 90c0675 does not modify build_sumo_demand.py and that file contains no io_phases use",
+      "repair": "instrument and test build, archive loop, metadata parse, validation report and finish as diagnostic phases; keep production timing explicitly unmeasured until a bounded real build is authorized"
+    },
+    {
+      "severity": "H2",
+      "title": "The proposed process parse cache has no demonstrated production hit",
+      "evidence": "the three measured learning traces have distinct SHA-256 values and load_verified_source is called once per normal _refine invocation",
+      "repair": "do not implement the cache from replay repeats; first show repeated identical trace digests on the real build path or choose an optimization that improves a single parse"
+    }
+  ],
+  "local_review_fix": "validation/claude_step4_measurement_review_fix_20260913.patch",
+  "verification": {
+    "focused_tests_passed": 160,
+    "broader_tests_passed": 574,
+    "failed": 0,
+    "warning": "pre-existing urllib3 LibreSSL warning",
+    "git_diff_check": "passed"
+  },
+  "safe_retention_source": {
+    "path": "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a",
+    "variants": ["q50", "_v1", "_v2"],
+    "raw_xml_files": 118,
+    "raw_xml_bytes": 877499944,
+    "rule": "copy before pruning; never modify the source root"
+  },
+  "plan_position": "Step 3 complete; Step 4 replay baseline complete but Step 4 remains open"
+}

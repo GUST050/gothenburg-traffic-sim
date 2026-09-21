@@ -1,0 +1,156 @@
+{
+  "diagnostic_only": true,
+  "description": "Unique geometry incidence, with all other registered sensor edges and total flow assumed known; no counts fitted or SUMO run. Rank considers equalities only, not full feasible bounds.",
+  "input_sha256": {
+    "sumo/candidates.rou.xml": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+    "sumo/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "data_in/sensors.json": "41db5d452cb104405d8bd6ac6b78e2c7748dcfe641a9266c7229a4fc7edf1f20",
+    "traffic_sim/demand/pfe.py": "5982fcbeaad3693060be7ef7e479d11e8c9eb3c3fdb541453bcfa126b9410fdb"
+  },
+  "stations": {
+    "134": {
+      "status": "underidentified",
+      "onboarding_ready": false,
+      "component_edges": [
+        "26355153_96523321_0"
+      ],
+      "route_variables": 416,
+      "support_variables": 56,
+      "support_shared_with_active_sensor": 6,
+      "support_exclusive_of_active_sensors": 50,
+      "active_measurement_edges": [
+        "1455801464_18241874_0",
+        "26355153_91615277_0",
+        "26842525_26355153_0",
+        "30420757_30421744_0",
+        "60786979_3575001205_0",
+        "60790252_60790253_0"
+      ],
+      "base_rank": 7,
+      "rank_with_sensor": 8,
+      "rank_gain": 1,
+      "normalized_row_span_residual": 0.675791664986,
+      "reason": "active margins permit route reallocations that change the held station total"
+    },
+    "2276": {
+      "status": "underidentified",
+      "onboarding_ready": false,
+      "component_edges": [
+        "26355153_91615277_0"
+      ],
+      "route_variables": 416,
+      "support_variables": 93,
+      "support_shared_with_active_sensor": 43,
+      "support_exclusive_of_active_sensors": 50,
+      "active_measurement_edges": [
+        "1455801464_18241874_0",
+        "26355153_96523321_0",
+        "26842525_26355153_0",
+        "30420757_30421744_0",
+        "60786979_3575001205_0",
+        "60790252_60790253_0"
+      ],
+      "base_rank": 7,
+      "rank_with_sensor": 8,
+      "rank_gain": 1,
+      "normalized_row_span_residual": 0.677659989654,
+      "reason": "active margins permit route reallocations that change the held station total"
+    },
+    "133": {
+      "status": "underidentified",
+      "onboarding_ready": false,
+      "component_edges": [
+        "26842525_26355153_0"
+      ],
+      "route_variables": 416,
+      "support_variables": 99,
+      "support_shared_with_active_sensor": 49,
+      "support_exclusive_of_active_sensors": 50,
+      "active_measurement_edges": [
+        "1455801464_18241874_0",
+        "26355153_91615277_0",
+        "26355153_96523321_0",
+        "30420757_30421744_0",
+        "60786979_3575001205_0",
+        "60790252_60790253_0"
+      ],
+      "base_rank": 7,
+      "rank_with_sensor": 8,
+      "rank_gain": 1,
+      "normalized_row_span_residual": 0.696023996194,
+      "reason": "active margins permit route reallocations that change the held station total"
+    },
+    "1076": {
+      "status": "underidentified",
+      "onboarding_ready": false,
+      "component_edges": [
+        "30420757_30421744_0"
+      ],
+      "route_variables": 416,
+      "support_variables": 67,
+      "support_shared_with_active_sensor": 17,
+      "support_exclusive_of_active_sensors": 50,
+      "active_measurement_edges": [
+        "1455801464_18241874_0",
+        "26355153_91615277_0",
+        "26355153_96523321_0",
+        "26842525_26355153_0",
+        "60786979_3575001205_0",
+        "60790252_60790253_0"
+      ],
+      "base_rank": 7,
+      "rank_with_sensor": 8,
+      "rank_gain": 1,
+      "normalized_row_span_residual": 0.694320853797,
+      "reason": "active margins permit route reallocations that change the held station total"
+    },
+    "107": {
+      "status": "underidentified",
+      "onboarding_ready": false,
+      "component_edges": [
+        "1455801464_18241874_0",
+        "60786979_3575001205_0"
+      ],
+      "route_variables": 416,
+      "support_variables": 119,
+      "support_shared_with_active_sensor": 19,
+      "support_exclusive_of_active_sensors": 100,
+      "active_measurement_edges": [
+        "26355153_91615277_0",
+        "26355153_96523321_0",
+        "26842525_26355153_0",
+        "30420757_30421744_0",
+        "60790252_60790253_0"
+      ],
+      "base_rank": 6,
+      "rank_with_sensor": 7,
+      "rank_gain": 1,
+      "normalized_row_span_residual": 0.580143074803,
+      "reason": "active margins permit route reallocations that change the held station total"
+    },
+    "1074": {
+      "status": "underidentified",
+      "onboarding_ready": false,
+      "component_edges": [
+        "60790252_60790253_0"
+      ],
+      "route_variables": 416,
+      "support_variables": 59,
+      "support_shared_with_active_sensor": 9,
+      "support_exclusive_of_active_sensors": 50,
+      "active_measurement_edges": [
+        "1455801464_18241874_0",
+        "26355153_91615277_0",
+        "26355153_96523321_0",
+        "26842525_26355153_0",
+        "30420757_30421744_0",
+        "60786979_3575001205_0"
+      ],
+      "base_rank": 7,
+      "rank_with_sensor": 8,
+      "rank_gain": 1,
+      "normalized_row_span_residual": 0.698566494039,
+      "reason": "active margins permit route reallocations that change the held station total"
+    }
+  }
+}

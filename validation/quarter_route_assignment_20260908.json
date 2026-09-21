@@ -1,0 +1,294 @@
+{
+  "diagnostic_only": true,
+  "production_policy_changed": false,
+  "method": "quarter-assignment",
+  "input_sha256": {
+    "calibrated.rou.xml": "1d52738ec84c98d1c4576e47fafc1009a2564ba3954e86f00045cf0df63becea",
+    "calibrated.agents.json": "3f39505e47521f672d19dd27f36b4edf743ba52261be45ae47e69efe9bd9c0f8",
+    "demand_meta.json": "f0a6660e105c9e4b71b6d27f27ba48e8478d22dd0367a7504105d2d617e0f69f",
+    "net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+  },
+  "source_sha256": "3017948d9ed3cd6e39f87bbb594efd2843827058ab3867602836942dd0f9aa2a",
+  "runner_sha256": "45d77eb5cd5b8de1ba1eac6eb022cc2dc6ef763e5e2c1ae0e133057a5a2ee8e6",
+  "sumo_binary_sha256": "adf7bb8425eca761980ea2a2b43e9761c5b464b046ce3b5ed038ff16e300489a",
+  "seeds": [
+    1000,
+    1001,
+    1002,
+    2000,
+    2001,
+    2002
+  ],
+  "duration_s": 86400,
+  "workspace": "/Users/gt/Documents/gs-project/runs/quarter-assignment-final-20260908",
+  "result": {
+    "status": "verified_exact_isolated",
+    "diagnostic_only": true,
+    "active_production": false,
+    "identity": {
+      "schema_version": 1,
+      "kind": "day_specific_standard_driver_pool",
+      "date": "2027-08-12",
+      "source": "forecast",
+      "days": 1,
+      "demand_build_id": "b6d434169339cab301a5",
+      "demand_build_key": "3fe855dd2c5d0125",
+      "route_sha256": "1d52738ec84c98d1c4576e47fafc1009a2564ba3954e86f00045cf0df63becea",
+      "arms": [
+        1000,
+        1001,
+        1002,
+        2000,
+        2001,
+        2002
+      ],
+      "speed_factor_distribution": {
+        "name": "truncated_normal",
+        "mean": 1.0,
+        "deviation": 0.1,
+        "minimum": 0.2,
+        "maximum": 2.0
+      },
+      "profile_key": "e833a6ff032c4a085c3207f49ff1cd6c",
+      "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+      "sensor_targets_sha256": "afb1751aebc8ce02c5f71baa61cb8979e283c283a7b99ff8e1030ff6cb845776",
+      "guard_s": 60,
+      "construction_algorithm": "source-quarter-route-time-assignment-v1",
+      "max_iterations": 3,
+      "source_sha256": "3017948d9ed3cd6e39f87bbb594efd2843827058ab3867602836942dd0f9aa2a",
+      "passage_source_sha256": "9abd801d4ac6b786e173d4eb09e9b42877f0f27e17a0d5efe7cc27020f696437",
+      "agents_sha256": "3f39505e47521f672d19dd27f36b4edf743ba52261be45ae47e69efe9bd9c0f8",
+      "pool_key": "854b411eb96b99b19090e0d2761e8961f0e70f19fc222091e2e515d21bb24d6a"
+    },
+    "profile_summaries": {
+      "1000": {
+        "vehicles": 19697,
+        "mean": 0.999704,
+        "deviation": 0.100896,
+        "minimum": 0.568756,
+        "maximum": 1.397585
+      },
+      "1001": {
+        "vehicles": 19697,
+        "mean": 0.999442,
+        "deviation": 0.099298,
+        "minimum": 0.617653,
+        "maximum": 1.414833
+      },
+      "1002": {
+        "vehicles": 19697,
+        "mean": 1.000025,
+        "deviation": 0.100665,
+        "minimum": 0.55214,
+        "maximum": 1.395313
+      },
+      "2000": {
+        "vehicles": 19697,
+        "mean": 0.999483,
+        "deviation": 0.100146,
+        "minimum": 0.589648,
+        "maximum": 1.404995
+      },
+      "2001": {
+        "vehicles": 19697,
+        "mean": 0.998601,
+        "deviation": 0.099489,
+        "minimum": 0.596713,
+        "maximum": 1.385263
+      },
+      "2002": {
+        "vehicles": 19697,
+        "mean": 1.00078,
+        "deviation": 0.099133,
+        "minimum": 0.61607,
+        "maximum": 1.383175
+      }
+    },
+    "learning_arms": [
+      1000,
+      1001,
+      1002
+    ],
+    "held_out_arms": [
+      2000,
+      2001,
+      2002
+    ],
+    "vehicles": 19697,
+    "routes_changed": 0,
+    "source_quarters_preserved": true,
+    "iterations": [
+      [
+        {
+          "arm": 1000,
+          "exact": false,
+          "exact_cells": 127,
+          "cells": 672,
+          "absolute_integer_error": 1575,
+          "profile_digest": "7bbadd3603b1f2cde5f9c0451e67c2ce6f4328524e4c351bad0b075048114c89",
+          "sumo_wall_s": 1.560897,
+          "route": "learning-0-arm-1000.rou.xml"
+        },
+        {
+          "arm": 1001,
+          "exact": false,
+          "exact_cells": 122,
+          "cells": 672,
+          "absolute_integer_error": 1585,
+          "profile_digest": "68d3d74a52b262fc3ab5fed644d6ab6e2e2396fcc3d3ae03546ce5468da1d785",
+          "sumo_wall_s": 1.536382,
+          "route": "learning-0-arm-1001.rou.xml"
+        },
+        {
+          "arm": 1002,
+          "exact": false,
+          "exact_cells": 122,
+          "cells": 672,
+          "absolute_integer_error": 1529,
+          "profile_digest": "e71977683ca5fb7276382992032d3ba27167bb876e2ec52353ab0c434af5f012",
+          "sumo_wall_s": 1.535483,
+          "route": "learning-0-arm-1002.rou.xml"
+        }
+      ],
+      [
+        {
+          "arm": 1000,
+          "exact": true,
+          "exact_cells": 672,
+          "cells": 672,
+          "absolute_integer_error": 0,
+          "profile_digest": "af3af3cfdb3bdec5ccd17fd088ea6963f9e4f2eb02bc95a3ca71012794b24207",
+          "sumo_wall_s": 1.566326,
+          "route": "learning-1-arm-1000.rou.xml"
+        },
+        {
+          "arm": 1001,
+          "exact": true,
+          "exact_cells": 672,
+          "cells": 672,
+          "absolute_integer_error": 0,
+          "profile_digest": "2927d77e50afed4c514aaac94e14aa6399c4939730b04b96408887d68f2f682b",
+          "sumo_wall_s": 1.584354,
+          "route": "learning-1-arm-1001.rou.xml"
+        },
+        {
+          "arm": 1002,
+          "exact": true,
+          "exact_cells": 672,
+          "cells": 672,
+          "absolute_integer_error": 0,
+          "profile_digest": "eeb2d700a5501155d72aba100458f28e7521ee72953c7a10e26a4ae8c932719d",
+          "sumo_wall_s": 1.624186,
+          "route": "learning-1-arm-1002.rou.xml"
+        }
+      ]
+    ],
+    "target_semantics": "round each supplied target to nearest integer",
+    "source_departure_spacing": {
+      "vehicles": 19697,
+      "minimum_gap_s": 2.4,
+      "median_gap_s": 2.9,
+      "gaps_at_minimum": 0,
+      "maximum_departures_per_second": 1
+    },
+    "held_out": [
+      {
+        "arm": 2000,
+        "exact": true,
+        "exact_cells": 672,
+        "cells": 672,
+        "absolute_integer_error": 0,
+        "profile_digest": "8a02b776d130684e0920000663cb221f390c1fb62347edb3ae83a0fb798eb3b0",
+        "sumo_wall_s": 1.57273,
+        "route": "held-out-arm-2000.rou.xml"
+      },
+      {
+        "arm": 2001,
+        "exact": true,
+        "exact_cells": 672,
+        "cells": 672,
+        "absolute_integer_error": 0,
+        "profile_digest": "56a679c7b171e00ca3ad60ac9a14cb5e958f57c2deb810840485ff4767a86599",
+        "sumo_wall_s": 1.604672,
+        "route": "held-out-arm-2001.rou.xml"
+      },
+      {
+        "arm": 2002,
+        "exact": true,
+        "exact_cells": 672,
+        "cells": 672,
+        "absolute_integer_error": 0,
+        "profile_digest": "7a79044879b1666b5aa676bf1186fb3bb739070dde8856d082d77daa13769ab7",
+        "sumo_wall_s": 1.57468,
+        "route": "held-out-arm-2002.rou.xml"
+      }
+    ],
+    "candidate_departure_spacing": {
+      "vehicles": 19697,
+      "minimum_gap_s": 2.2,
+      "median_gap_s": 2.8,
+      "gaps_at_minimum": 0,
+      "maximum_departures_per_second": 1
+    },
+    "shifted_vehicles": 19622,
+    "max_absolute_shift_s": 892.4,
+    "median_absolute_shift_s": 253.0,
+    "remaining_evidence": [
+      "other demand dates and sensor layouts",
+      "paired production baseline and closure latency"
+    ]
+  },
+  "status": "pass",
+  "elapsed_s": 24.109,
+  "original_inputs_unchanged": true,
+  "evidence_sha256": {
+    "evidence/held-out-arm-2000/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "evidence/held-out-arm-2000/edge.xml": "d8d2fd2981da1d915823aaa3cb7d450deb840fbb04f7631d3c5006faa5854f9d",
+    "evidence/held-out-arm-2000/stats.xml": "bfb31601780ed62699a10a7fb2ddffd400e764cf6902e699ddc9f9b4594a6e2b",
+    "evidence/held-out-arm-2000/vehroute.xml": "c42aa4a0d7d42b23995d84231df15c0de52b74d23a036a4202c1bb51fc539d0f",
+    "evidence/held-out-arm-2000.rou.xml": "ea0d5da454665ff1e5a2a8c5db0d926535cb018c06e6af0bb850ce8a2b9fad4d",
+    "evidence/held-out-arm-2001/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "evidence/held-out-arm-2001/edge.xml": "9bc34de3fcdf03d4f5fd9870654f1b06fc2bb5d5ad5d11361efc65778c5cdc02",
+    "evidence/held-out-arm-2001/stats.xml": "d4af84c4368b27a0f145baf59de54e39dd6ea458e716eba8f99958dfa20cc525",
+    "evidence/held-out-arm-2001/vehroute.xml": "6fe227a17f05a803b5b4b2a698b8cb310f9914aba25c9d94e2a390e631eeed59",
+    "evidence/held-out-arm-2001.rou.xml": "9b5c15645c2256e60157a38852e966141ad65a73af50616e6542bcfe6a144815",
+    "evidence/held-out-arm-2002/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "evidence/held-out-arm-2002/edge.xml": "b88cf09f3b000109c3512be51fcb26af7af797db8eed8732b75f17ca00248c0d",
+    "evidence/held-out-arm-2002/stats.xml": "327cfba1fe2300854ef25fa5316247589ef78cc5844f401ca6d5a91e3f8b404b",
+    "evidence/held-out-arm-2002/vehroute.xml": "5b7326c26bc5fcb0d9c296c040343dd3e3b7a1d1fc3c8a8a4e647678283eab22",
+    "evidence/held-out-arm-2002.rou.xml": "b7bb4d06dfc7346f935faf9ad437706cb1def92b4496721bfaa61d97a4d38407",
+    "evidence/learning-0-arm-1000/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "evidence/learning-0-arm-1000/edge.xml": "95129db279f19eee82e33e95c0a8d6adeb34cde601ff27bdf5de5f2d6f44dbc2",
+    "evidence/learning-0-arm-1000/stats.xml": "1695700ab8d7c4a3efdaa709c713bbcb1d255ed7f3994217ae7afd61466c173b",
+    "evidence/learning-0-arm-1000/vehroute.xml": "acef6835f9ef2d48fcbb37d4c07c5491122e1fbe3c765c499b7d6e520e8ec5a3",
+    "evidence/learning-0-arm-1000.rou.xml": "70046353aa71332d3a16976919b419d6d480d434f161676c52bfa537fe3b715e",
+    "evidence/learning-0-arm-1001/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "evidence/learning-0-arm-1001/edge.xml": "d471364a82b8659a67b0c73cb556b6c7a20137f3f198252418faecc092494d3d",
+    "evidence/learning-0-arm-1001/stats.xml": "8d17e3bf7992d457200ca907f9f7b6a64fabadb2d7558ae8b071501541179e68",
+    "evidence/learning-0-arm-1001/vehroute.xml": "0a85529828790a5b177f243a8a855a785c63c581c0a9aa9088aa96c7c189a16c",
+    "evidence/learning-0-arm-1001.rou.xml": "9f58d80d6417246608844950ec1a92888ea6ee77c3f40a8fbee73460d6383199",
+    "evidence/learning-0-arm-1002/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "evidence/learning-0-arm-1002/edge.xml": "d41149f6a87a7930e75dcbfe4631dbb25a79407fa139aaf7c5c74d2020d4aa0a",
+    "evidence/learning-0-arm-1002/stats.xml": "a88535e6447b6d9afaee795d699ad69bdb0f83e57f21ece1b471c81187d26b65",
+    "evidence/learning-0-arm-1002/vehroute.xml": "6345c7f8767a6b24835cda409506581eaac3e062d89977df04bcaaa144378d3e",
+    "evidence/learning-0-arm-1002.rou.xml": "de75a87d23336fb69204a3bd041514011c366635029447c3d17d9eb7f2f764f7",
+    "evidence/learning-1-arm-1000/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "evidence/learning-1-arm-1000/edge.xml": "25825d29c2d5931c57c033ea5c9c5fcdc40908f5306c826468139da4dc5c1c5b",
+    "evidence/learning-1-arm-1000/stats.xml": "a1f6701dfa447d2bfebb4f13456331143ccc823a24371a7090576f079dade33c",
+    "evidence/learning-1-arm-1000/vehroute.xml": "8d345bbb133ef922158573e0fc55e03aaba5e2954675436b403c980bf06919da",
+    "evidence/learning-1-arm-1000.rou.xml": "3da5d3af7850dca77ba6ae94b66b23112fee6dd711ebbc7d7c728c39bdf13891",
+    "evidence/learning-1-arm-1001/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "evidence/learning-1-arm-1001/edge.xml": "6bdb0b59ac78380ff54756a7e8e4b0eccf470ddbe8af2c69093b3ec8cea4b8e9",
+    "evidence/learning-1-arm-1001/stats.xml": "93beeebce6c4025b1861bcf058c086ddd0dc912747cbf50c081c8449c1c8267e",
+    "evidence/learning-1-arm-1001/vehroute.xml": "54478f4c7b58255a398c9a3fe7971bcd13f58a0be7a20c817348f81f009adc32",
+    "evidence/learning-1-arm-1001.rou.xml": "979c9bc68cec4555aa3a5158e818cbbae041569c5514a5d09ff2210137ca452e",
+    "evidence/learning-1-arm-1002/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "evidence/learning-1-arm-1002/edge.xml": "81bf62ddc6f532d75223f1c38eecae49cbab148aafacf3c73f3a24f32cfad357",
+    "evidence/learning-1-arm-1002/stats.xml": "273db47654914cacc14ab8c5aa6fca2a08beb5e62533173d18b5d5672b0e9bd2",
+    "evidence/learning-1-arm-1002/vehroute.xml": "f885dfd9870a15b3cfd96fa1bbda1442d0f826e8dff6f189102d72e20b863415",
+    "evidence/learning-1-arm-1002.rou.xml": "f8ba29b55d228fa915eb7b1a79a58a1646515c85adbaf3cc9c9c5358f82fe5e2"
+  },
+  "decision": "not_adopted_user_rejected_route_time_reordering_as_unnatural",
+  "interpretation": "Exactness on one date and unseen driver profiles does not validate departure behavior or unseen sensors. Prefer dynamic route/departure-to-passage calibration.",
+  "minimum_shift_counterexample": "runs/quarter-minimum-shift-20260908/report.json"
+}

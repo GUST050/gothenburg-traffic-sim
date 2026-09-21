@@ -2091,7 +2091,7 @@ class IndependentDailyRunner:
     def provenance(self) -> Mapping[str, Any]:
         if self._backend_digest is None:
             raise RuntimeError("independent daily runner must be prepared")
-        return {
+        result = {
             "schema_version": 1,
             "kind": BACKEND_KIND,
             "simulation_mode": "meso",
@@ -2103,6 +2103,19 @@ class IndependentDailyRunner:
                 self._unit_backend_digests.items()
             )),
         }
+        # Demand resolution happens below this daily adapter (and, with more
+        # than one daily worker, below the process-isolation adapter too).
+        # Preserve its validated operational accounting in the job-facing
+        # provenance without putting wall-clock diagnostics into the daily
+        # backend digest or reusable SUMO evidence identity.
+        child = self.daily_runner.provenance()
+        while isinstance(child, Mapping):
+            accounting = child.get("day_library_accounting")
+            if isinstance(accounting, Mapping):
+                result["day_library_accounting"] = dict(accounting)
+                break
+            child = child.get("child")
+        return result
 
     def _cache_path(self, unit: DailyClosureUnit) -> Path:
         if self._backend_digest is None:

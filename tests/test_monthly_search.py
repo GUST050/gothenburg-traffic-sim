@@ -30,7 +30,10 @@ from traffic_sim.simulation.monthly_search import (
     run_monthly_search,
 )
 from traffic_sim.simulation.pilot_selection import PilotPolicy
-from traffic_sim.simulation.search_workspace import load_search_workspace
+from traffic_sim.simulation.search_workspace import (
+    SearchWorkspace,
+    load_search_workspace,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -516,6 +519,40 @@ def test_backend_prepares_only_screened_shortlist_before_provenance(tmp_path):
     workspace = load_search_workspace(tmp_path / "monthly-prepare-order")
     assert workspace.manifest["progress"]["detail"][
         "day_library_accounting"]["misses"] == 1
+
+
+def test_accounting_remains_in_every_progress_phase_after_preparation(
+        tmp_path, monkeypatch):
+    updates = []
+    real_update = SearchWorkspace.update_progress
+
+    def record_update(self, phase, **kwargs):
+        real_update(self, phase, **kwargs)
+        updates.append(json.loads(json.dumps(self.manifest["progress"])))
+
+    monkeypatch.setattr(SearchWorkspace, "update_progress", record_update)
+    runner = PreparingRunner()
+    result = run_monthly_search(
+        _spec("monthly-accounting-progress"),
+        _policy(),
+        runner=runner,
+        screen_builder=_screen_builder,
+        root=tmp_path,
+    )
+    accounting = result["day_library_accounting"]
+    observed = {
+        update["phase"]
+        for update in updates
+        if update["phase"] in {
+            "pilot", "finalists", "decide", "adaptive_finalists", "publish"
+        }
+    }
+
+    assert {"pilot", "finalists", "decide", "publish"} <= observed
+    for update in updates:
+        if update["phase"] in observed:
+            assert update.get("detail", {}).get(
+                "day_library_accounting") == accounting
 
 
 def test_exhaustive_search_stops_after_first_unresolved_no_retry_timeout(

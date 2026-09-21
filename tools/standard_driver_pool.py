@@ -306,6 +306,7 @@ def _departure_windows(
     *,
     duration_s: int,
     guard_s: int,
+    preserve_source_quarter: bool = False,
 ) -> list[DepartureWindow]:
     if guard_s < 0 or guard_s * 2 >= passage.INTERVAL_S:
         raise StandardDriverPoolError("guard must be in [0, 450) seconds")
@@ -338,6 +339,10 @@ def _departure_windows(
             raw_low = max(0.0, vehicle.depart_s - passage.INTERVAL_S)
             raw_high = min(float(duration_s),
                            vehicle.depart_s + passage.INTERVAL_S)
+        if preserve_source_quarter:
+            quarter_start = int(vehicle.depart_s // passage.INTERVAL_S) * passage.INTERVAL_S
+            raw_low = max(raw_low, float(quarter_start))
+            raw_high = min(raw_high, quarter_start + passage.INTERVAL_S - 0.1)
         lower = math.ceil((raw_low - 1e-9) * TICK_SCALE)
         upper = math.floor((raw_high + 1e-9) * TICK_SCALE)
         if lower > upper:
@@ -411,12 +416,58 @@ def _schedule_with_gap(
     }
 
 
+def minimize_quarter_shifts(
+    windows: Sequence[DepartureWindow],
+    feasible_schedule: Mapping[str, float],
+) -> dict[str, float]:
+    """Minimize total absolute shift while retaining every feasible time slot.
+
+    Each quarter is an independent minimum-cost bipartite assignment: rows
+    are the picker's fixed routes/vehicles, columns are already feasible
+    departure slots. Forbidden passage windows have infinite cost. This is
+    optimal for these slots, not a global route-geometry or traffic optimum.
+    """
+    import numpy as np
+    from scipy.optimize import linear_sum_assignment
+
+    if len({w.vehicle_id for w in windows}) != len(windows) or set(feasible_schedule) != {
+            w.vehicle_id for w in windows}:
+        raise StandardDriverPoolError("assignment population differs")
+    groups: dict[int, list[DepartureWindow]] = defaultdict(list)
+    quarter_ticks = passage.INTERVAL_S * TICK_SCALE
+    for window in windows:
+        value = float(feasible_schedule[window.vehicle_id])
+        if not math.isfinite(value):
+            raise StandardDriverPoolError("assignment departure is non-finite")
+        tick = round(value * TICK_SCALE)
+        quarter = window.preferred // quarter_ticks
+        if not window.lower <= tick <= window.upper or tick // quarter_ticks != quarter:
+            raise StandardDriverPoolError("assignment violates source quarter or window")
+        groups[quarter].append(window)
+    result: dict[str, float] = {}
+    for quarter in sorted(groups):
+        group = sorted(groups[quarter], key=lambda w: w.vehicle_id)
+        slots = np.array(sorted(round(feasible_schedule[w.vehicle_id] * TICK_SCALE)
+                                for w in group), dtype=np.int64)
+        preferred = np.array([w.preferred for w in group], dtype=np.int64)
+        lower = np.array([w.lower for w in group], dtype=np.int64)
+        upper = np.array([w.upper for w in group], dtype=np.int64)
+        costs = np.abs(preferred[:, None] - slots).astype(float)
+        costs[(slots < lower[:, None]) | (slots > upper[:, None])] = np.inf
+        rows, columns = linear_sum_assignment(costs)
+        for row, column in zip(rows, columns):
+            result[group[row].vehicle_id] = int(slots[column]) / TICK_SCALE
+    return result
+
+
 def derive_distributed_departures(
     original: Sequence[passage.RouteVehicle],
     offsets: Mapping[str, Sequence[float]],
     *,
     duration_s: int,
     guard_s: int = DEFAULT_GUARD_S,
+    preserve_source_quarter: bool = False,
+    minimize_shifts: bool = False,
 ) -> dict[str, float]:
     """Assign the picker's original time slots to feasible vehicles.
 
@@ -426,7 +477,8 @@ def derive_distributed_departures(
     Fixed speed factors make it safe to change which vehicle owns a slot.
     """
     windows = _departure_windows(
-        original, offsets, duration_s=duration_s, guard_s=guard_s)
+        original, offsets, duration_s=duration_s, guard_s=guard_s,
+        preserve_source_quarter=preserve_source_quarter)
     source = passage.departure_spacing_summary(
         sorted(vehicle.depart_s for vehicle in original))
     slots = sorted(round(vehicle.depart_s * TICK_SCALE) for vehicle in original)
@@ -462,7 +514,8 @@ def derive_distributed_departures(
             raise StandardDriverPoolError(
                 "departure-slot assignment changed the picker's loading pattern")
         passage.validate_departure_dispersion(source, candidate_summary)
-        return best
+        return (minimize_quarter_shifts(windows, best)
+                if preserve_source_quarter and minimize_shifts else best)
 
     # The first observed interval has no previous-day warm-up in a one-day
     # file, so an early passage deadline can precede the next existing slot.
@@ -486,7 +539,8 @@ def derive_distributed_departures(
         except (StandardDriverPoolError,
                 passage.DepartureReconciliationError):
             continue
-        return candidate
+        return (minimize_quarter_shifts(windows, candidate)
+                if preserve_source_quarter and minimize_shifts else candidate)
     raise StandardDriverPoolError(
         "original departure slots and bounded minimal shifts both failed: "
         + (slot_failure or "incomplete slot assignment"))
@@ -724,6 +778,122 @@ def build_standard_driver_pool(
         _publish_manifest(staging, manifest)
         os.replace(staging, final_dir)
     return final_dir
+
+
+def reconcile_quarter_departures(
+    route_path: Path,
+    agent_path: Path,
+    metadata: Mapping[str, Any],
+    net_path: Path,
+    output_dir: Path,
+    *,
+    home: Path | None = None,
+    max_iterations: int = 3,
+    minimize_shifts: bool = False,
+) -> dict[str, Any]:
+    """Reassign route departure times within source quarters, then test new arms.
+
+    This is a bounded, isolated post-picker treatment. Route geometries and
+    route counts per quarter remain fixed, preserving OD/purpose constraints.
+    Explicit driver factors prevent reordering from reassigning random draws.
+    Held-out arms never contribute travel times to the fitted schedule.
+    All raw SUMO files survive either acceptance or refusal.
+    """
+    if not 1 <= max_iterations <= 3:
+        raise StandardDriverPoolError("max_iterations must be between 1 and 3")
+    learning_arms = (1000, 1001, 1002)
+    held_out_arms = (2000, 2001, 2002)
+    arms = learning_arms + held_out_arms
+    original = passage.read_route_vehicles(route_path)
+    targets, duration_s = load_sensor_targets(metadata)
+    passage.validate_route_targets(original, targets, n_intervals=duration_s // 900)
+    identity = pool_identity(route_path, metadata, arms, network_path=net_path)
+    identity["construction_algorithm"] = (
+        "source-quarter-minimum-shift-assignment-v1" if minimize_shifts
+        else "source-quarter-route-time-assignment-v1")
+    identity["max_iterations"] = max_iterations
+    identity["source_sha256"] = _sha256(Path(__file__))
+    identity["passage_source_sha256"] = _sha256(Path(passage.__file__))
+    identity["agents_sha256"] = _sha256(agent_path)
+    identity.pop("pool_key")
+    identity["pool_key"] = hashlib.sha256(json.dumps(
+        identity, sort_keys=True, allow_nan=False).encode()).hexdigest()
+    profiles = build_driver_profiles(original, pool_key=identity["profile_key"], arms=arms)
+    summaries = {str(arm): profile_summary(profile) for arm, profile in profiles.items()}
+    for summary in summaries.values():
+        validate_profile_distribution(summary)
+    output_dir.mkdir(parents=True, exist_ok=False)
+    home = Path(home) if home is not None else Path(sumo_home())
+    departures = {v.vehicle_id: v.depart_s for v in original}
+    source_spacing = passage.departure_spacing_summary(sorted(departures.values()))
+    report: dict[str, Any] = {
+        "status": "refused", "diagnostic_only": True, "active_production": False,
+        "identity": identity, "profile_summaries": summaries,
+        "learning_arms": list(learning_arms), "held_out_arms": list(held_out_arms),
+        "vehicles": len(original), "routes_changed": 0,
+        "source_quarters_preserved": True, "iterations": [],
+        "target_semantics": "round each supplied target to nearest integer",
+        "source_departure_spacing": source_spacing,
+    }
+
+    def run(arm: int, label: str) -> tuple[dict[str, list[float]], dict[str, Any]]:
+        route = output_dir / f"{label}-arm-{arm}.rou.xml"
+        write_profile_route(route_path, route, profiles[arm], departures)
+        validate_profile_route(original, route, profiles[arm], departures)
+        candidate = passage.read_route_vehicles(route)
+        if any(int(v.depart_s // 900) != int(departures_by_id[v.vehicle_id] // 900)
+               for v in candidate):
+            raise StandardDriverPoolError("source quarter changed")
+        passage.validate_route_targets(candidate, targets, n_intervals=duration_s // 900)
+        offsets, entered, digest, wall = _run_arm(
+            arm=arm, route_path=route, run_dir=output_dir / f"{label}-arm-{arm}",
+            net_path=net_path.resolve(), home=home, duration_s=duration_s,
+            measured_edges=sorted(targets), expected_vehicles=len(original))
+        errors = [abs(entered[edge][q] - int(round(float(target))))
+                  for edge, values in targets.items() for q, target in enumerate(values)]
+        return offsets, {"arm": arm, "exact": all(value == 0 for value in errors),
+                         "exact_cells": sum(value == 0 for value in errors),
+                         "cells": len(errors), "absolute_integer_error": sum(errors),
+                         "profile_digest": digest, "sumo_wall_s": round(wall, 6),
+                         "route": route.name}
+
+    departures_by_id = dict(departures)
+    try:
+        for iteration in range(max_iterations):
+            combined: dict[str, list[float]] = defaultdict(list)
+            results = []
+            for arm in learning_arms:
+                offsets, outcome = run(arm, f"learning-{iteration}")
+                results.append(outcome)
+                for vehicle_id, values in offsets.items():
+                    combined[vehicle_id].extend(values)
+            report["iterations"].append(results)
+            if all(result["exact"] for result in results):
+                break
+            if iteration + 1 == max_iterations:
+                raise StandardDriverPoolError("learning iteration limit reached")
+            departures = derive_distributed_departures(
+                original, combined, duration_s=duration_s, preserve_source_quarter=True,
+                minimize_shifts=minimize_shifts)
+        report["held_out"] = [run(arm, "held-out")[1] for arm in held_out_arms]
+        if not all(result["exact"] for result in report["held_out"]):
+            raise StandardDriverPoolError("held-out profiles did not reproduce exact targets")
+        candidate_spacing = passage.departure_spacing_summary(sorted(departures.values()))
+        passage.validate_departure_dispersion(source_spacing, candidate_spacing)
+        _write_agents(agent_path, output_dir / "calibrated.agents.json", departures)
+        shifts = [abs(departures[v.vehicle_id] - v.depart_s) for v in original]
+        report.update(
+            status="verified_exact_isolated", candidate_departure_spacing=candidate_spacing,
+            shifted_vehicles=sum(value >= .05 for value in shifts),
+            max_absolute_shift_s=round(max(shifts, default=0), 1),
+            median_absolute_shift_s=round(median(shifts), 1) if shifts else 0,
+            remaining_evidence=["other demand dates and sensor layouts",
+                                "paired production baseline and closure latency"],
+        )
+    except (StandardDriverPoolError, passage.DepartureReconciliationError) as error:
+        report["reason"] = str(error)
+    (output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    return report
 
 
 def _parse_args() -> argparse.Namespace:

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "reviewed_revision": "760fa08",
+  "verdict": "ACCEPT_AFTER_REPORTING_FIX",
+  "release_evidence": false,
+  "verified": {
+    "branch_contains_commits": ["34f989d", "6d76ffe", "a08915f", "760fa08"],
+    "focused_tests_passed": 60,
+    "broader_tests_passed": 598,
+    "failed": 0,
+    "git_diff_check": "passed"
+  },
+  "authoritative_retention_timing_s": {
+    "per_repeat": [5.137247, 5.811303, 5.708821],
+    "repeat_2_3_median": 5.760062,
+    "copy_per_repeat": [0.677043, 0.446238, 0.464685]
+  },
+  "authoritative_size_accounting": {
+    "tree_bytes_before": 1075071455,
+    "raw_xml_files_before": 118,
+    "compressed_xml_files_after": 114,
+    "compressed_source_bytes": 805331251,
+    "compressed_payload_bytes": 139865918,
+    "retained_tree_ratio": 0.192312,
+    "gzip_payload_ratio": 0.173675
+  },
+  "findings_repaired_locally": [
+    {
+      "severity": "H1",
+      "problem": "The committed summary and coordination text retained timings from an earlier run instead of the committed per-repeat data",
+      "repair": "Use 5.137/5.811/5.709 seconds and a 5.760 second repeat-2/3 median everywhere"
+    },
+    {
+      "severity": "H2",
+      "problem": "compression_ratio actually described the whole retained tree, not gzip payload compression",
+      "repair": "Preserve it with an explicit basis and add retained_tree_ratio plus gzip_payload_ratio"
+    },
+    {
+      "severity": "H2",
+      "problem": "TASKS still said the concurrent repair, retention measurement and _tracked_main instrumentation were pending",
+      "repair": "Advance the current block to the bounded worker-count experiment"
+    }
+  ],
+  "next_experiment": "Counterbalanced 3-worker versus 6-worker retention A/B/B/A on owned copies; retain the change only if wall time improves at least 15 percent with byte-identical outputs and acceptable resource use",
+  "patch": "validation/claude_step4_retention_review_fix_20260913.patch"
+}

@@ -232,7 +232,22 @@ def _short_trip_violation_quarters(report: dict) -> set[int]:
     return result
 
 
-def _refine(data, source_report, network, work, candidate_pool):
+_PHASE_NAMES = (
+    'prepare_inputs', 'learning_sumo', 'prepare_system',
+    'solve_integer_flows', 'stage_and_structure', 'validation_sumo',
+    'report_serialization',
+)
+
+
+def _refine(data, source_report, network, work, candidate_pool,
+            phase_timings=None):
+    phase_timings = (phase_timings if phase_timings is not None
+                     else {name: 0.0 for name in _PHASE_NAMES})
+
+    def record_phase(name, started):
+        phase_timings[name] += time.perf_counter() - started
+
+    phase_started = time.perf_counter()
     quarters = len(data['targets'])
     edges = sorted({edge for row in data['targets'] for edge in row})
     if not quarters or not edges or any(set(row) != set(edges) for row in data['targets']):
@@ -260,9 +275,13 @@ def _refine(data, source_report, network, work, candidate_pool):
     manifest = {'input_sha256': {p.name: sha256_file(p) for p in inputs.iterdir()},
                 'evidence_sha256': {}}
     (work / 'evidence').mkdir()
+    record_phase('prepare_inputs', phase_started)
+    phase_started = time.perf_counter()
     _measure_batch([(inputs / 'calibrated.rou.xml', network,
                      work / 'evidence' / f'learning-0-arm-{seed}',
                      seed, targets, quarters, vehicles) for seed in trial.LEARNING_ARMS])
+    record_phase('learning_sumo', phase_started)
+    phase_started = time.perf_counter()
     for seed in trial.LEARNING_ARMS:
         directory = work / 'evidence' / f'learning-0-arm-{seed}'
         for name in ('edge.xml', 'vehroute.xml'):
@@ -292,9 +311,11 @@ def _refine(data, source_report, network, work, candidate_pool):
         route, pool_path=candidate_pool, _context=structure)
     if before_structure is None:
         raise ValueError('automatic passage calibration lacks structural evidence')
+    record_phase('prepare_system', phase_started)
 
     def solve_and_stage(support, name: str, *, group_bounds=None,
                         time_limit_s: float = 60):
+        solve_started = time.perf_counter()
         system = dynamic.build_passage_system(support, edges, quarters)
         fitted = dynamic.fit_integer_flows(
             system, targets, groups, time_limit_s=time_limit_s,
@@ -302,6 +323,8 @@ def _refine(data, source_report, network, work, candidate_pool):
             departure_group_bounds=group_bounds,
             checkpoint_dir=work / f'solver-{name}',
             cache_dir=work.parent.parent / 'passage-solver-cache')
+        record_phase('solve_integer_flows', solve_started)
+        stage_started = time.perf_counter()
         chosen = [option for option, count in zip(support, fitted.counts)
                   if count == 1]
         if Counter(option.group for option in chosen) != groups \
@@ -313,6 +336,7 @@ def _refine(data, source_report, network, work, candidate_pool):
             chosen_candidate, pool_path=candidate_pool, _context=structure)
         if chosen_structure is None:
             raise ValueError('automatic passage calibration lacks structural evidence')
+        record_phase('stage_and_structure', stage_started)
         return fitted, chosen, chosen_stage, chosen_candidate, chosen_structure
 
     initial_boundary = False
@@ -389,7 +413,9 @@ def _refine(data, source_report, network, work, candidate_pool):
     jobs = [(source, network, work / f'{label}-{seed}', seed, targets, quarters, vehicles)
             for seed in trial.VALIDATION_ARMS for label, source in (
                 ('before', inputs / 'calibrated.rou.xml'), ('after', candidate))]
+    phase_started = time.perf_counter()
     measured = _measure_batch(jobs)
+    record_phase('validation_sumo', phase_started)
     for index, seed in enumerate(trial.VALIDATION_ARMS):
         before[seed], after[seed] = measured[2*index:2*index+2]
         if _error(after[seed], targets) > _error(before[seed], targets):
@@ -398,6 +424,7 @@ def _refine(data, source_report, network, work, candidate_pool):
         if sum(_error({edge: row[edge]}, targets) for row in after.values()) > sum(
                 _error({edge: row[edge]}, targets) for row in before.values()):
             raise ValueError(f'passage validation regressed for sensor edge {edge}')
+    phase_started = time.perf_counter()
     rows = [{'target_mean': targets[e], 'simulated_mean_raw': [
         sum(row[e][q] for row in after.values()) / len(after) for q in range(quarters)],
         'seed_runs': [{'seed': seed, 'simulated_raw': row[e]} for seed, row in after.items()]}
@@ -435,6 +462,7 @@ def _refine(data, source_report, network, work, candidate_pool):
     report.pop('purpose_allocation', None)
     report.pop('purpose_allocation_summary', None)
     (work / 'result.json').write_text(json.dumps(evidence, indent=2))
+    record_phase('report_serialization', phase_started)
     return report, stage, totals
 
 
@@ -584,16 +612,20 @@ def refine_variants(variant_inputs: dict, reports: dict, network: Path,
     if '' not in variant_inputs or set(variant_inputs) != set(reports):
         raise ValueError('automatic passage calibration requires a matching median arm')
     started = time.perf_counter()
-    timings = {'variant_s': {}}
+    timings = {'variant_s': {}, 'variant_phase_s': {}}
     evidence_root.mkdir(parents=True, exist_ok=False)
     (evidence_root / 'source_reports.json').write_text(json.dumps(reports, indent=2))
     result, staged = {}, []
     for suffix in sorted(variant_inputs, key=lambda value: (value != '', value)):
         variant_started = time.perf_counter()
+        phase_timings = {name: 0.0 for name in _PHASE_NAMES}
         report, stage, _population = _refine(
             variant_inputs[suffix], reports[suffix], network,
-            evidence_root / ('q50' if not suffix else suffix), candidate_pool)
-        timings['variant_s'][suffix or 'q50'] = time.perf_counter() - variant_started
+            evidence_root / ('q50' if not suffix else suffix), candidate_pool,
+            phase_timings)
+        label = suffix or 'q50'
+        timings['variant_s'][label] = time.perf_counter() - variant_started
+        timings['variant_phase_s'][label] = phase_timings
         result[suffix] = report
         target = Path(variant_inputs[suffix]['out_path'])
         staged.extend([(stage / 'calibrated.rou.xml', target),

@@ -1,0 +1,21 @@
+{
+  "protocol": "path_size_geometry_diagnostic_v1",
+  "diagnostic_only": true,
+  "production_policy_changed": false,
+  "held_out_accuracy_measured": false,
+  "input_sha256": {
+    "sumo/candidates.rou.xml": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+    "sumo/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "/Users/gt/Documents/gs-project/traffic_sim/demand/route_regularization.py": "84cdfdb4eb48a05a8fc58d3f938d1dab877686fd56057e42662114a8869c7cf5",
+    "/Users/gt/Documents/gs-project/traffic_sim/demand/pfe.py": "5982fcbeaad3693060be7ef7e479d11e8c9eb3c3fdb541453bcfa126b9410fdb"
+  },
+  "edge_length_convention": "first SUMO lane length in metres",
+  "unique_geometries": 416,
+  "changed_costs": 92,
+  "cost_ratio_min_median_max": [
+    0.48426913103339386,
+    1.0,
+    1.413825094868379
+  ],
+  "adoption_requirement": "Paired frozen LOSO and SUMO comparison with identical inputs, seeds, active sensor constraints and route provenance; no gate weakening."
+}

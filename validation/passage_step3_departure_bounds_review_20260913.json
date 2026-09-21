@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "reviewed_revision": "a719da4",
+  "verdict": "ACCEPT_AFTER_REVIEW_FIX",
+  "release_evidence": false,
+  "diagnostic_only": true,
+  "finding": {
+    "severity": "H1",
+    "problem": "departure_bound_constraints used option.edges directly as a memo key, although RouteDeparture still accepts list-backed edge sequences at runtime",
+    "failure": "TypeError: unhashable type: 'list'",
+    "repair": "preserve tuple and tuple-subclass values; convert only non-tuples to tuple before lookup and set construction",
+    "regression_test": "TestDepartureBoundIncidenceReuse::test_list_backed_route_keeps_the_previous_public_behavior"
+  },
+  "independent_exactness": {
+    "profiles": ["A1", "B1", "B2", "A2"],
+    "replays": 12,
+    "request_npz_sha256": "d1cf64e0f6decd4fa2d822bae6ec61c4395b7871ea4ab6e2696dd7d26a38653a",
+    "request_arrays": [
+      "c", "data", "indices", "indptr", "integrality", "lower",
+      "options", "row_lower", "row_upper", "shape", "upper"
+    ],
+    "request_arrays_identical": true,
+    "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+    "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+    "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+    "selection_reproduced": "identical in all 12 replays",
+    "solver_cache_hit_by_profile": [false, true, true],
+    "milp_executed_by_profile": [true, false, false]
+  },
+  "timing_review": {
+    "warm_departure_bound_constraints_improvement_percent": 51.95,
+    "warm_fit_integer_flows_improvement_percent": 24.56,
+    "cold_fit_baseline_median_s": 3.6545955,
+    "cold_fit_candidate_median_s": 3.633094,
+    "cold_fit_candidate_change_percent": -0.58834,
+    "interpretation": "practically unchanged; candidate is 0.59 percent faster, not slower"
+  },
+  "verification": {
+    "command": "python3 -m pytest -q tests/test_dynamic_assignment.py tests/test_passage_solver_checkpoint.py tests/test_profile_passage_replay.py tests/test_automatic_passage.py tests/test_build_sumo_demand.py tests/test_build_candidates.py",
+    "passed": 544,
+    "failed": 0,
+    "warning": "pre-existing urllib3 LibreSSL warning"
+  },
+  "patch": "validation/claude_step3_optimization_review_fix_20260913.patch",
+  "next_step": "Apply and commit the review fix, then begin Step 4 with measurement only"
+}

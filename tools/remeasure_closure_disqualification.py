@@ -22,9 +22,11 @@ them by what the CURRENT rules would do with each reason —
     2026-08-06 (C1, `metrics.access_impact_reasons`);
   * `teleports` cannot arise at all under the Stage 3 policy
     (`closure_teleport.CLOSURE_TIME_TO_TELEPORT_S`);
-  * `active_closure_edge_throughput` had a teleport as its necessary
-    condition in all 75 measured schedules, so it too is expected to go —
-    EXPECTED, which is not the same as measured;
+  * `active_closure_edge_throughput` co-occurred with teleports in that
+    historical 75-schedule sample. This is not a necessary-cause claim:
+    routing or measurement defects can produce this failure with zero
+    teleports. Current cold/warm flow readers must preserve the absolute
+    XML time origin (2026-09-10 double-offset regression);
   * everything else (`queue_proxy_unmeasured`, `unfinished_vehicle_share`,
     any `baseline_*` reason) is untouched by either change and still
     disqualifies.

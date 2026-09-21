@@ -225,3 +225,92 @@ def test_failed_pool_leaves_no_result_and_no_source_change(tmp_path, monkeypatch
 
     assert (route.read_bytes(), agents.read_bytes()) == before
     assert not any(output_root.rglob("manifest.json"))
+
+
+def test_source_quarter_bound_applies_to_measured_and_unmeasured_routes():
+    vehicles = [
+        passage.RouteVehicle('measured', 901.0, ('a', 'e')),
+        passage.RouteVehicle('other', 1799.0, ('b',)),
+    ]
+    windows = pool._departure_windows(
+        vehicles, {'measured': [120.0]}, duration_s=1800, guard_s=60,
+        preserve_source_quarter=True)
+    assert all(9000 <= window.lower <= window.upper < 18000
+               for window in windows)
+    schedule = pool.derive_distributed_departures(
+        vehicles, {'measured': [120.0]}, duration_s=1800, guard_s=60,
+        preserve_source_quarter=True)
+    assert all(900 <= value < 1800 for value in schedule.values())
+
+
+def test_quarter_bound_refuses_travel_time_longer_than_window():
+    vehicle = passage.RouteVehicle('v', 950.0, ('a', 'e'))
+    with pytest.raises(pool.StandardDriverPoolError, match='no robust'):
+        pool.derive_distributed_departures(
+            [vehicle], {'v': [850.0]}, duration_s=1800, guard_s=60,
+            preserve_source_quarter=True)
+
+
+def test_quarter_trial_retains_evidence_and_checks_unseen_arms(tmp_path, monkeypatch):
+    route = tmp_path / 'source.rou.xml'
+    route.write_text('<routes><vType id="car"/><vehicle id="v" type="car" depart="100"><route edges="a e"/></vehicle></routes>')
+    agents = tmp_path / 'agents.json'
+    agents.write_text(json.dumps({'agents': [{'vehicle_id': 'v', 'departure_s': 100}]}))
+    metadata = {'date': '2027-09-08', 'build_id': 'test', 'n_intervals': 1,
+                'sensor_targets': {'variants': {'edge_shares': {'e': [1]}}}}
+    output = tmp_path / 'output'
+    calls = []
+
+    def run_arm(**kwargs):
+        calls.append(kwargs['arm'])
+        kwargs['run_dir'].mkdir()
+        (kwargs['run_dir'] / 'raw.xml').write_text('<evidence/>')
+        return {'v': [10.]}, {'e': [1]}, str(kwargs['arm']), .01
+
+    monkeypatch.setattr(pool, '_run_arm', run_arm)
+    before = route.read_bytes(), agents.read_bytes()
+    report = pool.reconcile_quarter_departures(
+        route, agents, metadata, route, output, home=tmp_path)
+    assert report['status'] == 'verified_exact_isolated'
+    assert report['source_quarters_preserved'] is True
+    assert calls == [1000, 1001, 1002, 2000, 2001, 2002]
+    assert len(list(output.rglob('raw.xml'))) == 6
+    assert (output / 'calibrated.agents.json').is_file()
+    assert before == (route.read_bytes(), agents.read_bytes())
+
+
+def test_quarter_trial_refuses_unseen_arm_failure(tmp_path, monkeypatch):
+    route = tmp_path / 'source.rou.xml'
+    route.write_text('<routes><vehicle id="v" depart="100"><route edges="a e"/></vehicle></routes>')
+    agents = tmp_path / 'agents.json'
+    agents.write_text(json.dumps({'agents': [{'vehicle_id': 'v', 'departure_s': 100}]}))
+    metadata = {'date': '2027-09-08', 'build_id': 'test', 'n_intervals': 1,
+                'sensor_targets': {'variants': {'edge_shares': {'e': [1]}}}}
+
+    def run_arm(**kwargs):
+        kwargs['run_dir'].mkdir()
+        return {'v': [10.]}, {'e': [0 if kwargs['arm'] == 2000 else 1]}, str(kwargs['arm']), .01
+
+    monkeypatch.setattr(pool, '_run_arm', run_arm)
+    report = pool.reconcile_quarter_departures(
+        route, agents, metadata, route, tmp_path / 'output', home=tmp_path)
+    assert report['status'] == 'refused'
+    assert 'held-out' in report['reason']
+    assert not (tmp_path / 'output' / 'calibrated.agents.json').exists()
+
+
+def test_quarter_assignment_minimizes_unnecessary_route_time_changes():
+    windows = [pool.DepartureWindow('early', 1000, 0, 8000),
+               pool.DepartureWindow('late', 7000, 0, 7500)]
+    # Earliest deadline first swaps both routes even though their own slots work.
+    assigned = pool.minimize_quarter_shifts(
+        windows, {'early': 700., 'late': 100.})
+    assert assigned == {'early': 100., 'late': 700.}
+
+
+def test_minimum_shift_assignment_respects_passage_deadlines():
+    windows = [pool.DepartureWindow('urgent', 7000, 0, 1500),
+               pool.DepartureWindow('flexible', 1000, 0, 8000)]
+    assigned = pool.minimize_quarter_shifts(
+        windows, {'urgent': 100., 'flexible': 700.})
+    assert assigned == {'urgent': 100., 'flexible': 700.}

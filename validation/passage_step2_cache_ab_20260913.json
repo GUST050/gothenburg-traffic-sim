@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "purpose": "Counterbalanced local replay of the Step 2 route-facts cache",
+  "diagnostic_only": true,
+  "release_evidence": false,
+  "source_evidence": "runs/automatic-passage-8cae0ea6442b427db04a46d2b4108430/q50",
+  "sample": {
+    "date": "2027-06-25",
+    "vehicles": 9675,
+    "unique_edge_tuples": 296,
+    "vehicles_per_unique_edge_tuple": 32.686
+  },
+  "arms": {
+    "A": {
+      "revision": "d10361b",
+      "profiles": [
+        "runs/profile-structure-cache-a1-20260913",
+        "runs/profile-structure-cache-a2-20260913"
+      ],
+      "cold_median_s": 9.943896,
+      "hot_median_s": 6.6376895,
+      "combined_hot_structure_median_s": 1.3972755
+    },
+    "B": {
+      "revision": "b375c3c",
+      "profiles": [
+        "runs/profile-structure-cache-b1-20260913",
+        "runs/profile-structure-cache-b2-20260913"
+      ],
+      "cold_median_s": 9.233191,
+      "hot_median_s": 5.956609,
+      "combined_hot_structure_median_s": 0.749738
+    },
+    "B_review_fixed": {
+      "base_revision": "b375c3c",
+      "profile": "runs/profile-structure-cache-bfix2-20260913",
+      "cold_s": 9.273066,
+      "hot_median_s": 5.8138625,
+      "source_structure_hot_median_s": 0.372746,
+      "candidate_structure_hot_median_s": 0.278546,
+      "combined_hot_structure_median_s": 0.651292,
+      "route_facts_cache": "operation_scoped_content_bound"
+    }
+  },
+  "counterbalanced_result": {
+    "order": ["A", "B", "B", "A"],
+    "hot_replay_saved_s": 0.6810805,
+    "hot_replay_saved_percent": 10.26,
+    "cold_replay_saved_s": 0.710705,
+    "cold_replay_saved_percent": 7.15,
+    "hot_structure_saved_s": 0.6475375,
+    "hot_structure_saved_percent": 46.34
+  },
+  "identity_checks": {
+    "selection_reproduced_state": "identical in all 15 replays",
+    "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+    "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+    "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+    "solver_request_arrays": {
+      "count": 11,
+      "all_exactly_equal": true,
+      "names": [
+        "c", "integrality", "lower", "upper", "data", "indices",
+        "indptr", "shape", "row_lower", "row_upper", "options"
+      ]
+    },
+    "solver_cache_hits_each_profile": [false, true, true],
+    "structure_input_identity_equal": true,
+    "note": "Top-level replay input_identity changes when bound source code changes; geometry and measured-sensor identity remained equal."
+  },
+  "review_findings_fixed": [
+    "Python 3.9 test collection failed because a test used PEP 604 syntax without postponed annotations.",
+    "A same-size same-mtime geometry rewrite could attach a new digest to stale cached arrays.",
+    "The pool report cache was keyed only by path and could survive route or sidecar content changes within an operation.",
+    "The replay contract did not bind demand/structure.py even though it affects acceptance flags.",
+    "The profiler created separate contexts for source and candidate and reported the implemented cache as not_implemented."
+  ],
+  "tests": {
+    "targeted": "144 passed",
+    "selected_broad": "507 passed, 1 unrelated pre-existing failure",
+    "unrelated_failure": "tests/test_validation_report.py::TestAssemble::test_passage_section_is_judged_on_accuracy_not_exactness"
+  },
+  "decision": {
+    "step_2": "accept after applying the review patch",
+    "production_day_build": "not run",
+    "monthly_search": "not run",
+    "next": "Apply review fixes, rerun focused tests, then instrument Step 3 without changing solver semantics."
+  }
+}

@@ -1,0 +1,94 @@
+diff --git a/tests/test_profile_passage_replay.py b/tests/test_profile_passage_replay.py
+index 6989b21..9e2f0cc 100644
+--- a/tests/test_profile_passage_replay.py
++++ b/tests/test_profile_passage_replay.py
+@@ -503,6 +503,19 @@ class TestRepeatedProfile:
+         assert (tmp_path / 'out/repeat-2/replay_report.json').is_file()
+         assert (tmp_path / 'out/profile_report.json').is_file()
+ 
++    def test_repeats_measure_cold_then_shared_solver_cache_hits(self, tmp_path):
++        summary = profiler.profile(
++            evidence_root(tmp_path), tmp_path / 'out', repeats=3)
++
++        assert [run['solver_cache_hit'] for run in summary['runs']] \
++            == [False, True, True]
++        assert summary['solver_cache_basis'] \
++            == 'empty_output_local_cache_then_shared_across_repeats'
++        for index, expected in enumerate((False, True, True), start=1):
++            report = json.loads((tmp_path / f'out/repeat-{index}'
++                                 / 'replay_report.json').read_text())
++            assert report['solver_cache_hit'] is expected
++
+ 
+ class TestArchiveValidationPhase:
+     def _stub(self, monkeypatch, calls):
+diff --git a/tools/profile_passage_replay.py b/tools/profile_passage_replay.py
+index 28df120..9faf1cd 100644
+--- a/tools/profile_passage_replay.py
++++ b/tools/profile_passage_replay.py
+@@ -343,10 +343,16 @@ def replay(source: Path, out: Path, *, label: str | None = None,
+            pool: Path | None = None, allow_compressed: bool = False,
+            solver_time_limit_s: float = 60, archive: Path | None = None,
+            demand_spec: Path | None = None, archive_repeats: int = 3,
+-           preparation_only: bool = False) -> dict:
++           preparation_only: bool = False,
++           _solver_cache_dir: Path | None = None) -> dict:
+     """Replay preparation, solving, staging and structure over saved traces."""
+     source, out = _resolve_isolation(source, out)
+     out.mkdir(parents=True, exist_ok=False)
++    solver_cache_dir = (out / 'solver-cache' if _solver_cache_dir is None
++                        else Path(_solver_cache_dir).resolve())
++    if source == solver_cache_dir or source in solver_cache_dir.parents \
++            or solver_cache_dir in source.parents:
++        raise ReplayRefused('solver cache must be outside the source evidence root')
+     variant = source.name
+     context = {'variant': variant, 'date': None, 'input_identity': None}
+     recorder = PhaseRecorder(context)
+@@ -467,9 +473,19 @@ def replay(source: Path, out: Path, *, label: str | None = None,
+                         system, targets, groups, time_limit_s=solver_time_limit_s,
+                         departure_bounds=bounds,
+                         checkpoint_dir=out / 'solver',
+-                        cache_dir=out / 'solver-cache')
++                        cache_dir=solver_cache_dir)
++                try:
++                    solver_state = json.loads((out / 'solver/state.json').read_text())
++                except (OSError, ValueError, TypeError) as error:
++                    raise ReplayRefused(
++                        f'solver checkpoint state is unreadable: {error}') from error
++                if not isinstance(solver_state.get('cache_hit'), bool):
++                    raise ReplayRefused('solver checkpoint lacks a boolean cache_hit state')
+                 solver['status'] = fit.status
++                solver['cache_hit'] = solver_state['cache_hit']
+             report['fit_status'] = fit.status
++            report['solver_cache_hit'] = solver_state['cache_hit']
++            report['solver_request_key'] = solver_state.get('key')
+             selected = [option for option, count in zip(expanded, fit.counts) if count == 1]
+             report['selected_vehicles'] = len(selected)
+             if Counter(option.group for option in selected) != Counter(groups) \
+@@ -587,7 +603,9 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
+         raise ReplayRefused('at least one replay is required')
+     source, out = _resolve_isolation(source, out)
+     out.mkdir(parents=True, exist_ok=False)
+-    runs = [replay(source, out / f'repeat-{index + 1}', **options)
++    shared_solver_cache = out / 'shared-solver-cache'
++    runs = [replay(source, out / f'repeat-{index + 1}',
++                   _solver_cache_dir=shared_solver_cache, **options)
+             for index in range(repeats)]
+     walls = [_phase_walls(run) for run in runs]
+     names = sorted({name for row in walls for name in row})
+@@ -596,10 +614,13 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
+         'diagnostic_only': True, 'active_production': False,
+         'source_evidence_root': str(source), 'output_root': str(out),
+         'repeats': repeats,
+-        'process_state': ('all repeats run after module imports; the first may populate lazy '
+-                          'and filesystem caches, later repeats reuse this process'),
++        'process_state': ('all repeats run after module imports; the first starts with an '
++                          'empty output-local solver cache, and later repeats reuse both '
++                          'this process and that cache'),
++        'solver_cache_basis': 'empty_output_local_cache_then_shared_across_repeats',
+         'runs': [{'repeat': index + 1, 'status': run['status'],
+                   'report': str(out / f'repeat-{index + 1}/replay_report.json'),
++                  'solver_cache_hit': run.get('solver_cache_hit'),
+                   'root_wall_s': run['timing']['root_wall_s'],
+                   'residual_s': run['timing']['residual_s'],
+                   'phase_wall_s': wall}

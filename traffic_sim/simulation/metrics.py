@@ -170,6 +170,10 @@ def active_closure_throughput(flows: Mapping[str, Sequence[float]],
     that already built a relative in-memory series; production edgeData files
     should use ``read_active_closure_throughput`` so their absolute SUMO
     timestamps are never converted twice.
+
+    ``window_begin_s`` is the origin of the supplied array, not the SUMO
+    process start time. Confusing those origins double-shifts the window and
+    can count pre-closure traffic or miss real entries on a later day.
     """
     total = 0.0
     measured = False

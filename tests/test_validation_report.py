@@ -184,6 +184,12 @@ def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
     if with_loso:
         (web / "loso_report.json").write_text(json.dumps({
             "window": "2025-09-16",
+            "comparison_contract": {
+                "reference_window_start": "2025-09-16T00:00:00",
+                "source": "historical", "through_share_target": 0.25,
+                "candidate_pool_sha256": hashlib.sha256(candidate_bytes).hexdigest(),
+                "network_sha256": hashlib.sha256(network_bytes).hexdigest(),
+            },
             "stations": {"134": {"edges": {"e1": {"ratio": 0.78}}}}}))
     if with_temporal:
         (web / "temporal_holdout_report.json").write_text(json.dumps({

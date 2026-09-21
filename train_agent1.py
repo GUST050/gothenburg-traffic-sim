@@ -149,31 +149,49 @@ def leave_weeks_out_mae(
     holiday_mask: np.ndarray,
     held_out_weeks: tuple[int, ...] = (8, 20, 32, 44),
 ) -> float:
+    """Compatibility wrapper for the chronological, paired forecast score."""
+    return rolling_origin_scores(model_fn, X, y, orig_mask, holiday_mask,
+                                 held_out_weeks=held_out_weeks)["model_mae"]
+
+
+def rolling_origin_scores(model_fn, X: pd.DataFrame, y: np.ndarray,
+                          orig_mask: np.ndarray, holiday_mask: np.ndarray,
+                          held_out_weeks: tuple[int, ...] = (8, 20, 32, 44)) -> dict:
+    """Evaluate observed targets chronologically on the same points as naive.
+
+    Missing target labels are excluded, never filled using validation values.
+    Models see only past observations; neither held nor future target values
+    enter training. Both methods are evaluated on the same finite, observed,
+    non-holiday target/seasonal-reference pairs, with equal point weighting.
     """
-    4-fold CV: hold out one week per season.
-    Train on non-holiday slots only. Evaluate on real non-holiday slots.
-    """
-    maes = []
-    n = len(X)
-    for w in held_out_weeks:
-        start = w * 7 * 96
-        end   = min(start + 7 * 96, n)
-        if end <= start:
+    y = np.asarray(y, dtype=float)
+    observed = np.asarray(orig_mask, dtype=bool) & np.isfinite(y)
+    ordinary = ~np.asarray(holiday_mask, dtype=bool)
+    model_errors, naive_errors, folds = [], [], []
+    for week in held_out_weeks:
+        start = week * 7 * 96
+        end = min(start + 7 * 96, len(X))
+        if start <= 0 or end <= start:
             continue
-        val_idx   = np.arange(start, end)
-        train_idx = np.concatenate([np.arange(0, start), np.arange(end, n)])
-
-        # Train only on non-holiday slots
-        train_ok = train_idx[~holiday_mask[train_idx]]
-        mdl = model_fn()
-        mdl.fit(X.iloc[train_ok], y[train_ok])
-
-        # Evaluate on real non-holiday slots in held-out week
-        val_ok = val_idx[orig_mask[val_idx] & ~holiday_mask[val_idx]]
-        if len(val_ok):
-            maes.append(float(np.mean(np.abs(mdl.predict(X.iloc[val_ok]) - y[val_ok]))))
-
-    return float(np.mean(maes)) if maes else float("nan")
+        train = np.flatnonzero(observed[:start] & ordinary[:start])
+        test = np.arange(start, end)
+        test = test[test >= SEASONAL_LAG]
+        lag = test - SEASONAL_LAG
+        test = test[observed[test] & ordinary[test] & observed[lag] & ordinary[lag]]
+        if not len(train) or not len(test):
+            continue
+        model = model_fn()
+        model.fit(X.iloc[train], y[train])
+        predictions = np.asarray(model.predict(X.iloc[test]), dtype=float)
+        if predictions.shape != y[test].shape or not np.isfinite(predictions).all():
+            raise ValueError("forecast validation requires finite predictions for every test point")
+        model_errors.extend(np.abs(predictions - y[test]))
+        naive_errors.extend(np.abs(y[test - SEASONAL_LAG] - y[test]))
+        folds.append({"week": week, "train_points": len(train), "test_points": len(test)})
+    return {"model_mae": float(np.mean(model_errors)) if model_errors else float("nan"),
+            "naive_mae": float(np.mean(naive_errors)) if naive_errors else float("nan"),
+            "evaluation_points": len(model_errors), "folds": folds,
+            "protocol": "rolling_origin_observed_targets_paired_week_v1"}
 
 
 def seasonal_naive_mae(
@@ -294,8 +312,8 @@ def main() -> None:
         mask  = orig_mask[:, col_idx]
         y     = impute_column(y_raw)
 
-        naive  = seasonal_naive_mae(y, mask, holiday_mask)
-        cv_mae = leave_weeks_out_mae(make_lgb, feat_df, y, mask, holiday_mask)
+        scores = rolling_origin_scores(make_lgb, feat_df, y_raw, mask, holiday_mask)
+        naive, cv_mae = scores["naive_mae"], scores["model_mae"]
         pct    = 100 * (1 - cv_mae / naive) if naive > 0 else 0
         print(f"  Seasonal naïve  MAE: {naive:.2f}  (non-holiday slots)")
         print(f"  LightGBM CV     MAE: {cv_mae:.2f}  ({pct:+.1f}% vs naïve)")
@@ -313,6 +331,7 @@ def main() -> None:
 
         all_results[sid] = {
             "model":       "lightgbm_baseline",
+            "validation": scores,
             "naive_mae":   round(naive, 2),
             "cv_mae":      round(cv_mae, 2),
             "improvement": round(pct, 1),

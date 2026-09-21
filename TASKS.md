@@ -9,13 +9,22 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: Implementation and verification.
-- Current focus: q50 monthly execution with the current-input route catalog active and closure-throughput time-axis repair verified.
-- Status: Q50_ROUTE_CATALOG_ADOPTED; trimmed/warm edgeData is scored on SUMO's absolute clock. Full cold month remains separate and not release-qualified.
-- Suggested next action: Rerun the bounded three-day search to replace the invalid pre-fix result, then measure a complete cold q50 month before selecting another optimization.
+- Current focus: Integrate all q50/WCI/catalog, passage-calibration, simulation and UI changes on local `main`.
+- Status: COLD_MONTH_COMPLETE; source commits integrated; focused checks 338 passed and full suite 6,893 passed with zero failures.
+- Suggested next action: Commit the verified merge and fast-forward local `main`.
 - Eligible actors: Any capable actor.
-- Safety boundary: Preserve q50 calibration, seeds, catalog provenance and health/release gates. No commit, push or full-month launch without explicit scope.
+- Safety boundary: Preserve q50 calibration, canonical seeds, catalog provenance and all health/release gates. Do not include ignored runtime caches and do not push without a separate request.
 - Updated: 2026-09-21.
 <!-- WORKFLOW_CONTROL_END -->
+
+### Historical passage-speed workflow snapshot incorporated on 2026-09-21
+- Mode: `FLEXIBLE — simulation quality and performance research`
+- Current focus: `Measure and reduce automatic passage-calibration time without changing sensor, route, population or validation semantics.`
+- Status: `Step 2 is accepted after its review patch. Step 3 instrumentation on Claude commit 450de9b was locally reviewed and measured on retained q50 evidence. Cold fit is 1.971947 s with MILP at 1.576139 s; hot-cache fit is 0.3868705 s with no MILP, dominated by departure bounds at 0.206246 s and column reduction at 0.126166 s. Exact request bytes and output hashes are preserved. Two concurrency/provenance defects are fixed in validation/claude_step3_review_fix_20260913.patch; neither Claude implementation is integrated into this dirty worktree.`
+- Suggested next action: `Apply the Step-3 review patch, then run one bounded departure-bound incidence-reuse experiment with exact CSR, request and output equality. Use validation/claude_passage_step3_optimization_prompt_20260913.md. Do not change MILP semantics, launch a monthly search or pre-warm dates.`
+- Eligible actors: `Any capable actor.`
+- Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. Do not pre-warm a month, horizon or year. The authorized June run may build only the dates its warmup/recovery envelopes request. Keep unrelated local changes outside this delivery.`
+- Updated: `2026-09-13. Step-3 timing is measured on one production-shape q50 replay; optimization and production-day acceptance remain.`
 
 ### Superseded coordination snapshot before q50-only (2026-09-20)
 
@@ -700,15 +709,22 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### MONTHLY-Q50-2026-09-20 — Median-only monthly execution
 
-- Status: IMPLEMENTED_FULL_SUITE_VERIFIED; current route catalog adopted; full month not release-qualified.
+- Status: IMPLEMENTED_FULL_SUITE_VERIFIED; current route catalog adopted; cold November month completed under provisional policy.
 - Objective and scope: User approved removing q10/q90 from current monthly execution.
-- Completion outcome: q50 implementation and closure-throughput time-axis repair full-suite verified; cold-run population bug fixed with strict real-SUMO canary evidence; new catalog qualified and active. No completed full-month speed claim.
+- Completion outcome: q50 implementation and closure-throughput time-axis repair full-suite verified; cold-run population bug fixed with strict real-SUMO canary evidence; new catalog qualified and active; cold November search completed in 48m32.789s.
 - Context or checkpoints: The cold October run built 31 archives, then failed its first pilot because a shortened SUMO horizon still received the full three-day route file. The fixed q50 catalog path passed four current cold classes at 3.38x-5.54x versus legacy. Historical tri-variant evidence remains distinct.
 - Primary files: `suggest_closure_time.py`, `traffic_sim/simulation/monthly_sumo.py`, their regression tests, plus the existing q50 demand/WCI changes.
 - Constraints and safety: No weaker calibration/health/release gates or expensive simulations.
 - Acceptance criteria: q50 throughout current chain; canonical seeds retained; scope-bound caches; explicit UI scope.
-- Useful checks: Full suite 6,814 passed, 43 skipped, 0 failed in 798.17 s. Closure time-axis focused set: 570 passed. Catalog suite after review fixes: 58 passed; fresh source-sealed suite evidence: 132 passed. Runtime semantically recomputes raw trials, verifies exact fixture/pool bindings and requires all suite-test plus validator/adopter source hashes. Real Oct-25 q50/seed-1001 canary: 34,604 loaded/inserted/trips, zero waiting/teleports/closed-edge throughput, 21.467 s.
+- Useful checks: Integrated full suite 6,893 passed, 44 skipped, 0 failed in 467.43 s; conflict-focused suite 338 passed, 8 skipped. Closure time-axis focused set before integration: 570 passed. Catalog suite after review fixes: 58 passed; fresh source-sealed suite evidence: 132 passed. Cold November costed 1,625 schedules, SUMO-evaluated two finalists and completed without a hard failure.
 <!-- ACTIVE_TASK_END -->
+
+### Historical passage research task incorporated on 2026-09-21
+- Status: `STAGES 1-4 DELIVERED; EXACT JUNE SEARCH COMPLETE; PASSAGE SPEED STEP 0 PARTIALLY MEASURED AND PROFILER CACHE DEFECT REPAIRED LOCALLY.`
+- Objective and scope: `Identify robust, evidence-preserving improvements to heldag build speed, physical sensor matching, unseen-sensor/day generalization and closure decision fidelity.`
+- Completion outcome: `Item 1 now separates zero-risk offline diagnosis, structured in-build lookup reasons, a bounded context-independent pool experiment and job-level accounting. A pool policy can be promoted only with exact output equivalence; otherwise the current context-aware identity remains.`
+- Evidence: `validation/codebase_simulation_improvement_research_20260910.md; direct reproductions of map-validator IndexError and merge AttributeError; exact clockBegin/clockEnd unions from54 archived stats files; nested builder call inspection; active catalog-hit cadence; metadata and NumPy measurements; local timing, solver, source-reuse, LOSO, structure and libsumo preflight artifacts; official SUMO and FHWA primary guidance.`
+- Constraints and safety: `Do not weaken seeds, health, exactness, provenance or release gates. Historical no_viable remains invalid; bounded corrected closure check precedes a new full search. Performance patches remain unactivated until full-population equivalence, resource and cancellation checks pass.`
 
 ### Superseded coordination snapshot before q50-only (2026-09-20)
 

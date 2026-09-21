@@ -1,0 +1,305 @@
+{
+  "diagnostic_only": true,
+  "active_production": false,
+  "status": "sumo_mismatch",
+  "source_trial": "/Users/gt/Documents/gs-project/runs/quarter-assignment-final-20260908",
+  "source_manifest_sha256": "d6f4a86311138017b4803aa5c9cd5b3e390bc31db83e2802549a578518c1c491",
+  "input_sha256": {
+    "calibrated.rou.xml": "1d52738ec84c98d1c4576e47fafc1009a2564ba3954e86f00045cf0df63becea",
+    "calibrated.agents.json": "3f39505e47521f672d19dd27f36b4edf743ba52261be45ae47e69efe9bd9c0f8",
+    "demand_meta.json": "f0a6660e105c9e4b71b6d27f27ba48e8478d22dd0367a7504105d2d617e0f69f",
+    "net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+  },
+  "source_sha256": {
+    "/Users/gt/Documents/gs-project/tools/trial_dynamic_passage.py": "7fbd3baca9564d053f54f2e09f3d4aa8c222f3798cf9e118b8c6826c90fc3468",
+    "/Users/gt/Documents/gs-project/traffic_sim/experimental/dynamic_assignment.py": "ebf4a5ca031d624404fd3aec0d0b98f4227658647348d526ffd8d999ef4e3514",
+    "/Users/gt/Documents/gs-project/tools/departure_reconciliation.py": "9abd801d4ac6b786e173d4eb09e9b42877f0f27e17a0d5efe7cc27020f696437"
+  },
+  "sumo_binary_sha256": "adf7bb8425eca761980ea2a2b43e9761c5b464b046ce3b5ed038ff16e300489a",
+  "target_semantics": "explicit round-to-nearest integer from existing edge_shares",
+  "shift_support_s": [
+    -900,
+    -600,
+    -300,
+    0,
+    300,
+    600,
+    900
+  ],
+  "guard_s": 60,
+  "learning_arms": [
+    1000,
+    1001,
+    1002
+  ],
+  "validation_arms": [
+    4000,
+    4001,
+    4002
+  ],
+  "vehicles": 19697,
+  "od_purpose_groups": 364,
+  "target_source": "forecast",
+  "target_date": "2027-08-12",
+  "unvalidated_contracts": [
+    "production structural bounds and entropy priors",
+    "other dates and sensors",
+    "production latency"
+  ],
+  "columns": 137675,
+  "sparse_nonzeros": 889819,
+  "fit_s": 14.878,
+  "predicted_status": "predicted_exact_requires_sumo",
+  "absolute_prior_change": 6444.0,
+  "selected_shifted_options": 3222,
+  "predicted_boundary_counts": {
+    "1000": {
+      "1455801464_18241874_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26355153_91615277_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26355153_96523321_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26842525_26355153_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "30420757_30421744_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "60786979_3575001205_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "60790252_60790253_0": {
+        "before": 0.0,
+        "after": 0.0
+      }
+    },
+    "1001": {
+      "1455801464_18241874_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26355153_91615277_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26355153_96523321_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26842525_26355153_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "30420757_30421744_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "60786979_3575001205_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "60790252_60790253_0": {
+        "before": 0.0,
+        "after": 0.0
+      }
+    },
+    "1002": {
+      "1455801464_18241874_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26355153_91615277_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26355153_96523321_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26842525_26355153_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "30420757_30421744_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "60786979_3575001205_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "60790252_60790253_0": {
+        "before": 0.0,
+        "after": 0.0
+      }
+    },
+    "uncertainty_lower": {
+      "1455801464_18241874_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26355153_91615277_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26355153_96523321_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26842525_26355153_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "30420757_30421744_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "60786979_3575001205_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "60790252_60790253_0": {
+        "before": 0.0,
+        "after": 0.0
+      }
+    },
+    "uncertainty_upper": {
+      "1455801464_18241874_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26355153_91615277_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26355153_96523321_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "26842525_26355153_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "30420757_30421744_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "60786979_3575001205_0": {
+        "before": 0.0,
+        "after": 0.0
+      },
+      "60790252_60790253_0": {
+        "before": 0.0,
+        "after": 0.0
+      }
+    }
+  },
+  "verification": [
+    {
+      "seed": 4000,
+      "exact_cells": 670,
+      "cells": 672,
+      "absolute_error": 2,
+      "sumo_wall_s": 1.554,
+      "baseline": {
+        "seed": 4000,
+        "exact_cells": 125,
+        "cells": 672,
+        "absolute_error": 1557,
+        "sumo_wall_s": 1.761
+      }
+    },
+    {
+      "seed": 4001,
+      "exact_cells": 666,
+      "cells": 672,
+      "absolute_error": 8,
+      "sumo_wall_s": 1.562,
+      "baseline": {
+        "seed": 4001,
+        "exact_cells": 117,
+        "cells": 672,
+        "absolute_error": 1510,
+        "sumo_wall_s": 1.551
+      }
+    },
+    {
+      "seed": 4002,
+      "exact_cells": 669,
+      "cells": 672,
+      "absolute_error": 3,
+      "sumo_wall_s": 1.566,
+      "baseline": {
+        "seed": 4002,
+        "exact_cells": 130,
+        "cells": 672,
+        "absolute_error": 1549,
+        "sumo_wall_s": 1.559
+      }
+    }
+  ],
+  "elapsed_s": 29.427,
+  "artifact_sha256": {
+    "validation-4002/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "validation-4002/edge.xml": "7986525b716b2cace6855ae9cc85edee7fd702df95590850aa5dfc1b0b12ca40",
+    "validation-4002/vehroute.xml": "f17303a23b3bf5231a4932dff1b92a9139cd3eed00836c3404ee51e59904f952",
+    "validation-4002/stats.xml": "a81757dbc43ac212c73a02f8e4951fb474df64f32fb0905cbbd87a5803a84271",
+    "candidate/calibrated.agents.json": "854aa4ac92998aeaf5c941e4dc16a118dfa173869206ce510cb17fa488bd5371",
+    "candidate/selection.json": "454911837fd7c3d059f4c0f69422fc79f0afa6aba3dbca70cc3acd1451829f4a",
+    "candidate/calibrated.rou.xml": "efa262acbd8fa1798b5b9242c8a42ac765803e1cc86fdb42de421f3bb02abfa2",
+    "baseline-4002/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "baseline-4002/edge.xml": "df63fdb24de45d0ce2d94c29b4a997c995d64d182ca88bb5d450d02243a4090a",
+    "baseline-4002/vehroute.xml": "b8b063a6af7eee5a95c1a9a2f7c87f4e9d66a5f0f52320bb5e60d63769a1d015",
+    "baseline-4002/stats.xml": "213734e5c8436ec40e33a8ab9e19cd48612cb0d1d16444ace62800798b021a06",
+    "input/calibrated.agents.json": "3f39505e47521f672d19dd27f36b4edf743ba52261be45ae47e69efe9bd9c0f8",
+    "input/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "input/demand_meta.json": "f0a6660e105c9e4b71b6d27f27ba48e8478d22dd0367a7504105d2d617e0f69f",
+    "input/calibrated.rou.xml": "1d52738ec84c98d1c4576e47fafc1009a2564ba3954e86f00045cf0df63becea",
+    "validation-4001/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "validation-4001/edge.xml": "2a95761e5af32bbbc27ffea003b39ea95eeca57c2785fd04c0da1fcba97f7027",
+    "validation-4001/vehroute.xml": "b7fa5696f5f53ccff32df24398477683f80d510b426d2d54cabf956cf9c13d46",
+    "validation-4001/stats.xml": "41ac39dd840342c69470f0ab171aa0a468212cc26becce8803754b5ee9be3048",
+    "validation-4000/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "validation-4000/edge.xml": "7c04eab47b290925772057fcf84840ff39ca0996e434b3f60a5ccac342796553",
+    "validation-4000/vehroute.xml": "9654202b2d67c4221f895bc56148d45173b625bc8d1f55c7e1b964ccac89e4ca",
+    "validation-4000/stats.xml": "dafb4578017b6f54993ee4b1fd3afa1870d8d89723cfb5f19f7e830b0174492e",
+    "baseline-4000/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "baseline-4000/edge.xml": "35a10f66b0dbe263c5eb3d9cc6165692254820edf49adf04bd29801227d1bdca",
+    "baseline-4000/vehroute.xml": "8c50fce10d38f11d6e184ffb2f50578b7a9092c01fd34b966893c14e742b50cd",
+    "baseline-4000/stats.xml": "e149cd8b35efe6f57299e239522770c6729d05db0c00189efb788cf71625070f",
+    "baseline-4001/edge.add.xml": "c499ec9f5a45508efa103146833ac847fe85ff2c555973f10324def75a698df2",
+    "baseline-4001/edge.xml": "38d1ce322fa8e2e5533acf4a188fb021a5ddda4a1630613fa56ca8b796768a48",
+    "baseline-4001/vehroute.xml": "599509ec5b5320595e7f7c5e8fc12b06c0d14153018d15101d86c2039eaf67cf",
+    "baseline-4001/stats.xml": "8ac786fbf2027b10b755b31d98370e19051542d54b0a8f038afcade1d509cb01"
+  },
+  "source_reconstruction_audit": {
+    "verified": true,
+    "cells": 2016,
+    "vehicles": 19697,
+    "scope": "All 672 original raw entered cells reconstructed in each of three source arms",
+    "auditor_source_sha256": "ba04a2b771f2fb293fc752ef72a464b628c362abbe807fee69fde31fbb5d4115"
+  },
+  "production_inputs_unchanged": true,
+  "aggregate_comparison": {
+    "baseline_absolute_error": 4616,
+    "candidate_absolute_error": 13,
+    "candidate_exact_cells": 2005,
+    "cells": 2016
+  },
+  "decision": "not_adopted_exactness_and_production_contracts_pending",
+  "evidence_location": "/Users/gt/Documents/gs-project/runs/dynamic-passage-comparison-20260908",
+  "research": [
+    "https://arxiv.org/abs/2202.00099",
+    "https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.milp.html"
+  ]
+}

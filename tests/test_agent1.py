@@ -113,9 +113,8 @@ class TestLeaveWeeksOutMae:
         mask = np.ones(n, dtype=bool)
         holiday = np.zeros(n, dtype=bool)
         mae = leave_weeks_out_mae(ConstantMeanModel, X, y, mask, holiday,
-                                  held_out_weeks=(0,))
-        # Trained on week 1 (all 100s) -> predicts 100 -> held-out week 0
-        # (all 0s) is off by exactly 100 everywhere.
+                                  held_out_weeks=(1,))
+        # Trained on past week 0 only; held-out week 1 differs by 100.
         assert mae == pytest.approx(100.0)
 
 

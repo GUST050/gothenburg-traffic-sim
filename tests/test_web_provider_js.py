@@ -19,6 +19,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 HARNESSES = [
+    ROOT / "tests" / "js" / "controls_keyboard.test.js",
     ROOT / "tests" / "js" / "provider_coverage.test.js",
     ROOT / "tests" / "js" / "polling.test.js",
     ROOT / "tests" / "js" / "animation.test.js",

@@ -1,0 +1,87 @@
+diff --git a/AGENT_NOTES.md b/AGENT_NOTES.md
+index 22ac790..84f2f4d 100644
+--- a/AGENT_NOTES.md
++++ b/AGENT_NOTES.md
+@@ -47,8 +47,8 @@ which model may continue. See `AGENTS.md`.
+ - No step-3 optimization is proposed: the fixture's phases are microseconds and say nothing about which phase dominates in production. Run the profiler on the saved q50 evidence and read `solver_measurement.phases` first.
+ - Suggested next action: independently review `2b482dd..5b9a3e9`. Repair concrete findings, then run one catalog qualification/adoption pass locally, verify implicit catalog selection, and perform the planned demand re-warm.
+ - Step 3 review fixes and optimisation, 2026-09-13 (local machine, real evidence): the two required corrections landed as `7e1a976`. `_SOLVER_PHASE_OBSERVER` is a `contextvars.ContextVar` set and reset through a token in `finally`; the added interleaving test fails on the old module global with `KeyError: 'milp_solve'`, which is the phase being recorded into the other profile's collector, and passes on the fix. `passage_solver.py` is now inside `replay_source_sha256()`, so a replay contract can no longer claim the same source identity after the file that decides the solver cache key, the feasibility check and the solve call has changed.
+-- The optimisation is a call-local memo in `departure_bound_constraints`, keyed by the VALUE of `(departure quarter, option.edges)` and returning the exact tuple of bound rows. Nothing global, nothing path-derived, nothing survives the call. Append order is safe because `coo_matrix.tocsr()` canonicalises -- duplicates summed, indices sorted -- verified directly on scipy 1.13.1, so reusing the first option's set-iteration order reproduces the same arrays. `option.edges` is a tuple everywhere in production: `departure_reconciliation` parses it with `tuple(...)` and `_shifted_alternatives` carries the same object through `replace()`, which is also why the memo hits so often.
+-- Measured A/B/B/A on the saved 2027-06-25 q50 evidence, 3 repeats per profile, one empty solver cache per profile and never shared between revisions (the key hashes the source on purpose). Warm `departure_bound_constraints` median 0.400201 -> 0.192282 s, 51.95% faster; the worst candidate measurement is still 51.61% below the best baseline one, so the distributions do not overlap. Warm `fit_integer_flows` median 0.762698 -> 0.575360 s, 24.56% faster. Cold fit is unchanged at +0.59% because it is ~3 s of MILP. Requirement was 15% on the phase and no regression on the total.
++- The optimisation is a call-local memo in `departure_bound_constraints`, keyed by the VALUE of `(departure quarter, option.edges)` and returning the exact tuple of bound rows. Nothing global, nothing path-derived, nothing survives the call. Append order is safe because `coo_matrix.tocsr()` canonicalises -- duplicates summed, indices sorted -- verified directly on scipy 1.13.1, so reusing the first option's set-iteration order reproduces the same arrays. `option.edges` is a tuple on the production construction path: `departure_reconciliation` parses it with `tuple(...)` and `_shifted_alternatives` carries the same object through `replace()`, which is also why the memo hits so often. The public helper still accepts list-backed `RouteDeparture` values; the memo normalises only non-tuples so that contract is preserved without adding iterations for tuple subclasses.
++- Measured A/B/B/A on the saved 2027-06-25 q50 evidence, 3 repeats per profile, one empty solver cache per profile and never shared between revisions (the key hashes the source on purpose). Warm `departure_bound_constraints` median 0.400201 -> 0.192282 s, 51.95% faster; the worst candidate measurement is still 51.61% below the best baseline one, so the distributions do not overlap. Warm `fit_integer_flows` median 0.762698 -> 0.575360 s, 24.56% faster. Cold fit is practically unchanged; the candidate median is 0.59% faster because the ~3 s MILP dominates. Requirement was 15% on the phase and no regression on the total.
+ - Exactness: all 11 solver request arrays (`c`, `data`, `indices`, `indptr`, `integrality`, `lower`, `options`, `row_lower`, `row_upper`, `shape`, `upper`) are identical across every baseline/candidate repeat pairing, `request.npz` is byte-identical in all four arms, published routes/agents/selection are byte-identical, and `selection_reproduced.state` is `identical` in all 12 replays. Unit exactness is pinned against a frozen verbatim copy of the pre-change implementation over repeated routes, repeated edges, repeated sensor visits, mixed measured/unmeasured edges, absent bounds, empty rows, zero bounds, negative departures, beyond-window departures and 12 seeded random systems. Two of the new tests were genuinely red first: they count route walks and demanded 1 and 2 where the old code did 5 and 3.
+ - Evidence: `validation/passage_step3_departure_bounds_experiment_20260913.json`, release_evidence false. Tests: focused 216 passed, wider dependent set 370 passed with the one pre-existing urllib3 LibreSSL warning.
+ - Workspace note: this was done in a git worktree at `/private/tmp/gs-step3-departure-bounds`, with the baseline arm in a second worktree at `7e1a976`, because the main checkout carries 115 unrelated uncommitted changes on `strict-sensor-routes-2026-09-01` that must not travel onto this branch. A fresh worktree has no gitignored `sumo/`, so `direction_split.json`, `net.net.xml` and `plain.edg.xml` were copied in read-only; without them `test_q50_subset_identity` and `test_independent_daily` fail on missing generated inputs, which is environment, not code.
+diff --git a/IMPROVEMENT_PLAN.md b/IMPROVEMENT_PLAN.md
+index f14e655..955261b 100644
+--- a/IMPROVEMENT_PLAN.md
++++ b/IMPROVEMENT_PLAN.md
+@@ -577,8 +577,8 @@ profil** (aldrig delad mellan revisioner — nyckeln hashar källan med flit):
+ | `fit_integer_flows` median | 0,762698 s | 0,575360 s | 24,56 % |
+ 
+ Sämsta kandidatmätningen ligger 51,61 % under bästa baslinjemätningen, så
+-fördelningarna överlappar inte. Kall `fit_integer_flows` är oförändrad
+-(+0,59 %) eftersom den är ~3 s MILP.
++fördelningarna överlappar inte. Kall `fit_integer_flows` är praktiskt oförändrad; kandidatmedianen är 0,59 %
++snabbare eftersom den domineras av ~3 s MILP.
+ 
+ **Exakthet.** Alla 11 solver-request-arrayer (`c`, `data`, `indices`,
+ `indptr`, `integrality`, `lower`, `options`, `row_lower`, `row_upper`,
+diff --git a/tests/test_dynamic_assignment.py b/tests/test_dynamic_assignment.py
+index 5b133c2..a965244 100644
+--- a/tests/test_dynamic_assignment.py
++++ b/tests/test_dynamic_assignment.py
+@@ -729,6 +729,16 @@ def _random_bounds(rng, system):
+ 
+ 
+ class TestDepartureBoundIncidenceReuse:
++    def test_list_backed_route_keeps_the_previous_public_behavior(self):
++        route = dynamic.RouteDeparture(
++            'list-route', 'od', 0.0, ['a', 's'],
++            {'fit': (0.0, 10.0)}, 1.0, 1)
++        system = dynamic.build_passage_system([route], ['s'], 2)
++        bounds = [{'a': (0.0, 1.0)}, {}]
++
++        _assert_identical(dynamic.departure_bound_constraints(system, bounds),
++                          _frozen_departure_bound_constraints(system, bounds))
++
+     def test_one_route_and_quarter_is_walked_once_not_once_per_option(self):
+         counter = [0]
+         routes = [
+diff --git a/traffic_sim/experimental/dynamic_assignment.py b/traffic_sim/experimental/dynamic_assignment.py
+index e51e5aa..3b87e58 100644
+--- a/traffic_sim/experimental/dynamic_assignment.py
++++ b/traffic_sim/experimental/dynamic_assignment.py
+@@ -634,13 +634,15 @@ def departure_bound_constraints(system: PassageSystem, bounds) -> tuple:
+     incidence: dict[tuple[int, tuple[str, ...]], tuple[int, ...]] = {}
+     for column, option in enumerate(system.options):
+         quarter = math.floor(option.departure_s / system.interval_s)
+-        cached = incidence.get((quarter, option.edges))
++        route = (option.edges if isinstance(option.edges, tuple)
++                 else tuple(option.edges))
++        cached = incidence.get((quarter, route))
+         if cached is None:
+             cached = tuple(
+                 row for row in
+-                (keys.get((quarter, edge)) for edge in set(option.edges))
++                (keys.get((quarter, edge)) for edge in set(route))
+                 if row is not None)
+-            incidence[quarter, option.edges] = cached
++            incidence[quarter, route] = cached
+         rows.extend(cached)
+         columns.extend([column] * len(cached))
+     matrix = coo_matrix((np.ones(len(rows)), (rows, columns)),
+diff --git a/validation/passage_step3_departure_bounds_experiment_20260913.json b/validation/passage_step3_departure_bounds_experiment_20260913.json
+index 0f8df04..9065e92 100644
+--- a/validation/passage_step3_departure_bounds_experiment_20260913.json
++++ b/validation/passage_step3_departure_bounds_experiment_20260913.json
+@@ -28,7 +28,7 @@
+   "exactness": {
+     "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+     "key_change_reason": "the solver cache deliberately hashes dynamic_assignment.py source bytes, so a changed revision cannot reuse a cache entry",
+-    "request_npz_sha256_all_arms": "d1cf64e0f6decd4f (first 16, identical in A1/A2/B1/B2)",
++    "request_npz_sha256_all_arms": "d1cf64e0f6decd4fa2d822bae6ec61c4395b7871ea4ab6e2696dd7d26a38653a",
+     "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+     "selection_reproduced_state": "identical in all 12 replays",
+     "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",

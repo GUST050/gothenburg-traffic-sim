@@ -1,0 +1,56 @@
+{
+  "date": "2026-09-09",
+  "incident": {
+    "search_id": "ui-monthly-198410y",
+    "phase": "prepare_backend",
+    "stalled_day": 2,
+    "worker_count": 10,
+    "observed_elapsed_minutes": 84,
+    "observed_cpu_minutes_per_worker": 42,
+    "stack_evidence": "HighsTaskExecutor::shutdown",
+    "diagnosis": "A native HiGHS scheduler created by the parent passage fit was inherited by the next daily PFE fork workers. Applying threads=1 in those children then spun during scheduler shutdown."
+  },
+  "fix": {
+    "passage_solver_threads": 1,
+    "optimization_constraints_changed": false,
+    "preparation_heartbeat_seconds": 5,
+    "heartbeat_claims_candidate_completion": false,
+    "durable_pause_contract": "status remains running for resume compatibility; execution_status is paused and progress.detail.interruption is stopped_by_user"
+  },
+  "isolated_reproduction": {
+    "spec": "2027-04-24 through 2027-04-27, closure envelope, three direction variants",
+    "build_id": "d38ac74adf8b530efba6",
+    "days_completed": 3,
+    "passage_candidate_absolute_error_by_day": [2, 10, 12],
+    "all_passage_days_validated": true,
+    "result": "The full three-day build completed; the day-2 fork stall did not recur.",
+    "limitations": "Diagnostic isolated build under concurrent machine load; not a throughput benchmark or monthly-search completion result."
+  },
+  "live_recovery": {
+    "stalled_process_tree_stopped": true,
+    "workspace_status": "paused",
+    "workspace_resumable": true,
+    "server_restarted": true,
+    "server_ping": true,
+    "restored_release_build_id": "fc873d158dd808b6cc15",
+    "restored_release_date": "2027-06-23",
+    "publication_gate_passed": true,
+    "validation_overall": "warn",
+    "warning_sections": ["structure", "purposes", "sensor_output_exact"],
+    "missing_sections": ["temporal_holdout"]
+  },
+  "catalog": {
+    "status": "serves_current_inputs",
+    "stale_pools": [],
+    "weekday_key": "f0ce2e06669dbf3e3417254372df7cf8",
+    "weekend_key": "b4e2cd685ce979141880756467fbb884"
+  },
+  "verification": {
+    "focused_tests_passed": 454,
+    "focused_test_seconds": 69.84,
+    "scoped_pylint": "passed",
+    "javascript_syntax": "passed",
+    "git_diff_check": "passed",
+    "full_repository_suite_run": false
+  }
+}

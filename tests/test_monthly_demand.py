@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import shutil
 from datetime import date, timedelta
 from pathlib import Path
@@ -10,6 +11,7 @@ from traffic_sim.core.closure_calendar import generate_closure_schedules
 from traffic_sim.core.contracts import (
     ClosureSearchSpec,
     DailyTimeBand,
+    DemandBuildSpec,
 )
 from traffic_sim.simulation.finalist_decision import CandidateEvidence
 from traffic_sim.simulation.monthly_demand import (
@@ -1514,3 +1516,17 @@ def test_resolver_prepare_rejects_when_no_archive_matches_the_manifest(
     )
     with pytest.raises(FileNotFoundError, match="qualified-demand manifest"):
         gated_resolver.prepare(schedules[:1])
+
+
+def test_empty_archive_accounting_is_explicitly_incomplete():
+    result = aggregate_day_library_accounting([])
+
+    assert result == {
+        "schema_version": 1,
+        "status": "incomplete",
+        "builds": 0,
+        "requested_days": 0,
+        "incomplete_builds": [
+            {"build_key": "", "reason": "no_archives"},
+        ],
+    }

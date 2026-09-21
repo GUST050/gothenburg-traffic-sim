@@ -24,6 +24,15 @@
         await Render.init(document.getElementById('map'), histProvider,
                           normalProfile, networkPayload);
         Controls.init(histProvider);
+        const legendToggle = document.getElementById('legend-toggle');
+        const legendContent = document.getElementById('legend-content');
+        legendContent.hidden = window.matchMedia('(max-width: 720px)').matches;
+        legendToggle.setAttribute('aria-expanded', String(!legendContent.hidden));
+        legendToggle.addEventListener('click', () => {
+          legendContent.hidden = !legendContent.hidden;
+          legendToggle.setAttribute('aria-expanded', String(!legendContent.hidden));
+        });
+        document.getElementById('map').inert = true;
         Clock.start();
         State.setQI(0);
 
@@ -175,6 +184,13 @@
               return;
             }
             const table = document.createElement('table');
+            const header = table.createTHead().insertRow();
+            for (const label of ['Status', 'Studie', 'Startad', 'Jobbdetaljer']) {
+              const th = document.createElement('th');
+              th.scope = 'col';
+              th.textContent = label;
+              header.append(th);
+            }
             for (const record of records) {
               const row = document.createElement('tr');
               row.className = 'history-row';
@@ -194,7 +210,16 @@
                 ? new Date(record.started_at * 1000).toLocaleString('sv-SE') : '–';
               row.append(time);
               const id = document.createElement('td');
-              id.textContent = record.id || '–';
+              if (record.id) {
+                const button = document.createElement('button');
+                button.className = 'history-open';
+                button.textContent = record.id;
+                button.addEventListener('click', event => {
+                  event.stopPropagation();
+                  showJobDetail(record.id);
+                });
+                id.append(button);
+              } else id.textContent = '–';
               id.title = record.error || '';
               row.append(id);
               table.append(row);
@@ -774,10 +799,14 @@
               // then the exact-integer counts. Leading with "100/672" read as
               // near-total failure for a run that sat inside every published
               // criterion by a wide margin.
-              return `GEH<5 på ${s.geh_within ?? '–'}/${s.geh_cells ?? '–'} `
+              const hourly = s.standard_aggregation_minutes === 60
+                ? `Timvis GEH<5: ${s.hourly_geh_within}/${s.hourly_geh_cells} `
+                  + `(max ${s.hourly_geh_max}; DfT-riktvärde >${s.geh_guideline_pct}%). `
+                : 'Äldre rapport: timvis standardjämförelse saknas. ';
+              return hourly + `Kvartvis GEH<5 på ${s.geh_within ?? '–'}/${s.geh_cells ?? '–'} `
                 + `kvartsceller (median ${s.geh_median ?? '–'}, `
-                + `max ${s.geh_max ?? '–'}; ${s.standard ?? 'TAG M3.1'} kräver `
-                + `>${s.geh_guideline_pct ?? '–'}%) · dygnsvolym per riktning `
+                + `max ${s.geh_max ?? '–'}; separat projektkrav `
+                + `>${s.geh_guideline_pct ?? '–'}%) · totalvolym per riktning `
                 + `max ${s.volume_max_abs_pct ?? '–'}% av `
                 + `${s.volume_limit_pct ?? '–'}% · relativt fel per kvart: `
                 + `median ${s.relative_error_median_pct ?? '–'}%, `
@@ -884,6 +913,7 @@
         }
         validationBtn.addEventListener('click', () => {
           validationPanel.hidden = !validationPanel.hidden;
+          validationBtn.setAttribute('aria-expanded', String(!validationPanel.hidden));
           if (!validationPanel.hidden) loadValidation();
           Render.invalidateSize?.();
         });
@@ -1328,6 +1358,7 @@
         }
 
         async function openWorkspace(task) {
+          document.getElementById('map').inert = task === 'history';
           workspaceTask = task;
           document.body.dataset.task = task;
           taskHome.hidden = task !== 'history';
@@ -1337,6 +1368,7 @@
           setClosureTool(null);
           dayPickMode = false;
           if (task === 'history') {
+            document.getElementById('history-back').focus();
             await loadHistory();
             return;
           } else if (task === 'traffic') {
@@ -1350,14 +1382,17 @@
             }
           }
           refreshCloseUI();
+          document.getElementById('workspace-menu-btn').focus();
           requestAnimationFrame(() => Render.invalidateSize());
         }
 
         function showTaskHome() {
+          document.getElementById('map').inert = true;
           workspaceTask = 'home';
           document.body.dataset.task = 'home';
           taskHome.hidden = false;
           historyPanel.hidden = true;
+          document.querySelector('#task-grid button').focus();
           setClosureTool(null);
           dayPickMode = false;
           refreshCloseUI();
@@ -1373,6 +1408,7 @@
           if (tool === 'monthly') {
             monthlyResults.classList.remove('show');
             document.body.classList.remove('monthly-results-open');
+            setMonthlyBackgroundInert(false);
             document.getElementById('map').removeAttribute('aria-hidden');
           }
           if (tool) optimizeResults.classList.remove('show');
@@ -2219,7 +2255,7 @@
           cost_units: 'Beräknar dagskostnader',
           cost_parents: 'Summerar kostnad per schema',
           health_scan: 'Kontrollerar körbarhet',
-          prepare_backend: 'Bygger kalibrerat underlag per datum (~6 min/datum första gången)',
+          prepare_backend: 'Förbereder kalibrerat trafikunderlag',
           pilot: 'Pilotkörningar i SUMO',
           finalists: 'Finalistkörningar i SUMO',
           decide: 'Beslutar',
@@ -2233,6 +2269,9 @@
         function monthlyProgressDetail(detail) {
           if (!detail || typeof detail !== 'object') return '';
           const parts = [];
+          if (detail.heartbeat_only === true) {
+            parts.push('förberedelsen pågår; inga kandidater simulerade ännu');
+          }
           if (Number.isFinite(detail.costed) && Number.isFinite(detail.cost_total)) {
             parts.push(`${detail.costed}/${detail.cost_total} kostnadsberäknade`);
           }
@@ -2277,9 +2316,16 @@
           btnMonthlyCancel.disabled = unownedMonthlyJob;
           const progress = status.progress || {};
           const label = MONTHLY_PHASE_LABELS[progress.phase] || 'Söker';
-          const counts = progress.total
+          const counts = progress.total && progress.phase !== 'prepare_backend'
             ? ` ${progress.completed}/${progress.total}` : '';
-          const detail = monthlyProgressDetail(progress.detail);
+          let detail = monthlyProgressDetail(progress.detail);
+          if (progress.phase === 'prepare_backend' && progress.updated_at) {
+            const updated = Date.parse(progress.updated_at);
+            if (Number.isFinite(updated)) {
+              const age = monthlyElapsedLabel((Date.now() - updated) / 1000);
+              detail += ` · senaste statusuppdatering för ${age} sedan`;
+            }
+          }
           const wallElapsed = monthlyElapsedLabel(
             status.wall_elapsed_s ?? status.elapsed_s);
           btnMonthlyRun.textContent =
@@ -2582,6 +2628,7 @@
           });
           monthlyResultsBody.replaceChildren(
             ...(periodComparison ? periodRows() : scheduleRows()));
+          setMonthlyBackgroundInert(true);
           monthlyResults.classList.add('show');
           document.body.classList.add('monthly-results-open');
           document.getElementById('map').setAttribute('aria-hidden', 'true');
@@ -2671,6 +2718,7 @@
             if (status.status === 'cancelled') return;
             monthlyResults.classList.remove('show');
             document.body.classList.remove('monthly-results-open');
+            setMonthlyBackgroundInert(false);
             document.getElementById('map').removeAttribute('aria-hidden');
             setClosureTool(null);
             await activateClosedScenario(status);
@@ -2686,9 +2734,25 @@
         }
 
         btnMonthly.addEventListener('click', () => setClosureTool('monthly'));
+        const monthlyBackgroundState = new Map();
+        function setMonthlyBackgroundInert(open) {
+          if (open) {
+            for (const element of document.body.children) {
+              if (element === monthlyResults || element.tagName === 'SCRIPT') continue;
+              if (!monthlyBackgroundState.has(element)) {
+                monthlyBackgroundState.set(element, element.inert);
+              }
+              element.inert = true;
+            }
+          } else {
+            for (const [element, inert] of monthlyBackgroundState) element.inert = inert;
+            monthlyBackgroundState.clear();
+          }
+        }
         function closeMonthlyResults() {
           monthlyResults.classList.remove('show');
           document.body.classList.remove('monthly-results-open');
+          setMonthlyBackgroundInert(false);
           document.getElementById('map').removeAttribute('aria-hidden');
           const returnTarget = monthlyBanner.classList.contains('show')
             ? btnMonthlyRun : btnMonthly;
@@ -2696,8 +2760,24 @@
         }
         btnMonthlyResultsClose.addEventListener('click', closeMonthlyResults);
         document.addEventListener('keydown', event => {
-          if (event.key === 'Escape' && monthlyResults.classList.contains('show')) {
+          if (!monthlyResults.classList.contains('show')) return;
+          if (event.key === 'Escape') {
+            event.preventDefault();
             closeMonthlyResults();
+          } else if (event.key === 'Tab') {
+            const focusable = [...monthlyResults.querySelectorAll(
+              'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), summary, [tabindex="0"]'
+            )].filter(element => element.getClientRects().length);
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            const current = document.activeElement;
+            if (event.shiftKey && (current === first || current === monthlyResults)) {
+              event.preventDefault();
+              last?.focus();
+            } else if (!event.shiftKey && (current === last || current === monthlyResults)) {
+              event.preventDefault();
+              first?.focus();
+            }
           }
         });
         // "Heldag" means the road is shut for whole calendar days, so the
@@ -2925,8 +3005,8 @@
         // monthly: after a reload or closed tab, the active job reopens the
         // unified Vägavstängning workspace and keeps polling its own status.
         // Genuinely running/cancelling state takes priority. A completed
-        // monthly result is also restored because it is the user's requested
-        // search output; older jobs remain available separately in Körhistorik.
+        // monthly result is offered on the home screen without taking focus;
+        // older jobs remain available separately in Körhistorik.
         (async () => {
           try {
             const states = await Promise.all(
@@ -2952,20 +3032,24 @@
                 kind === 'monthly' && state.status === 'done' && state.result);
               if (completedMonthly) {
                 const [, state] = completedMonthly;
-                await openWorkspace('closure');
-                setClosureTool('monthly');
-                monthlyJobRunning = false;
-                monthlyJobServerTracked = state.server_tracked !== false;
-                restoreMonthlySearchSpec(state.closure_search_spec);
-                selected.clear();
-                for (const edge of state.edges ||
-                     state.closure_search_spec?.directed_edges || []) {
-                  selected.add(edge);
-                }
-                lastMonthlySpec = state.closure_search_spec || lastMonthlySpec;
-                monthlyProgress.hidden = true;
-                renderMonthlyResults(state.result);
-                refreshCloseUI();
+                const resumeResult = document.getElementById('resume-monthly-result');
+                resumeResult.hidden = false;
+                resumeResult.addEventListener('click', async () => {
+                  await openWorkspace('closure');
+                  setClosureTool('monthly');
+                  monthlyJobRunning = false;
+                  monthlyJobServerTracked = state.server_tracked !== false;
+                  restoreMonthlySearchSpec(state.closure_search_spec);
+                  selected.clear();
+                  for (const edge of state.edges ||
+                       state.closure_search_spec?.directed_edges || []) {
+                    selected.add(edge);
+                  }
+                  lastMonthlySpec = state.closure_search_spec || lastMonthlySpec;
+                  monthlyProgress.hidden = true;
+                  renderMonthlyResults(state.result);
+                  refreshCloseUI();
+                });
                 return;
               }
               const paused = states.find(([kind, state]) =>

@@ -1,0 +1,47 @@
+{
+  "diagnostic_only": true,
+  "production_policy_changed": false,
+  "input_sha256": {
+    "calibrated.rou.xml": "1d52738ec84c98d1c4576e47fafc1009a2564ba3954e86f00045cf0df63becea",
+    "calibrated.agents.json": "3f39505e47521f672d19dd27f36b4edf743ba52261be45ae47e69efe9bd9c0f8",
+    "demand_meta.json": "f0a6660e105c9e4b71b6d27f27ba48e8478d22dd0367a7504105d2d617e0f69f",
+    "net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+  },
+  "source_sha256": "9abd801d4ac6b786e173d4eb09e9b42877f0f27e17a0d5efe7cc27020f696437",
+  "runner_sha256": "d052265625f75687e43f04248506fb8838082728640c01e419048212756c0570",
+  "sumo_binary_sha256": "adf7bb8425eca761980ea2a2b43e9761c5b464b046ce3b5ed038ff16e300489a",
+  "seeds": [
+    1000,
+    1001,
+    1002
+  ],
+  "duration_s": 86400,
+  "workspace": "/Users/gt/Documents/gs-project/runs/passage-trial-20260908-verified",
+  "status": "refused",
+  "reason": "no order-preserving departure schedule exists near vehicle pfe987",
+  "elapsed_s": 6.326,
+  "original_inputs_unchanged": true,
+  "evidence_sha256": {
+    "evidence/learn-1000/stats.xml": "33392b5612c155e6e24738b684c1f758a1a0160f95e260d96411c9f72f1e7d4f",
+    "evidence/learn-1000/vehroute.xml": "e01392a47136ae3051db31476ba5de70bfc46ddb2f206d04fb67a8f0a28e55f2",
+    "evidence/learn-1001/stats.xml": "26e66381c81797cc195accfd62baa3e5b75dc46f263261a7aebb71f871225b62",
+    "evidence/learn-1001/vehroute.xml": "8899b1a1444171c11a8fb20c6d70b9c23378612f2f193b23f17d5f637c8e5c7d",
+    "evidence/learn-1002/stats.xml": "49123e87668959f10594b7e13a38c565e2c0d0e669fca3e7fef98c1a0f6942dd",
+    "evidence/learn-1002/vehroute.xml": "8176ad8040ad856d64e0357e284320d2335dec34df8475137d44cc62d92d8bd6"
+  },
+  "first_schedule_conflict": {
+    "vehicle_id": "pfe987",
+    "original_departure_s": 24302.5,
+    "quarter": 27,
+    "observed_sensor_offsets_s": [
+      17.5,
+      18.5,
+      17.5
+    ],
+    "forward_minimum_s": 24342.5,
+    "backward_maximum_s": 24330.4,
+    "gap_deficit_s": 12.1,
+    "guard_s": 60,
+    "minimum_original_gap_fraction": 0.5
+  }
+}

@@ -1,0 +1,576 @@
+diff --git a/AGENT_NOTES.md b/AGENT_NOTES.md
+index 7ea1fd6..3868e9f 100644
+--- a/AGENT_NOTES.md
++++ b/AGENT_NOTES.md
+@@ -87,6 +87,9 @@ which model may continue. See `AGENTS.md`.
+ - NO optimisation proposed. The plan assumes repeated per-archive validation during resolver setup; the measurement does not find it, and the plan forbids building a cache where each unit is already handled once. prepare() over a real qualified manifest remains the only place repetition could still appear, and it is unmeasurable until an archive exists under the current source identity.
+ - Not instrumented this round, stated rather than implied: assemble_window's days/rows/agents/bytes, and the costing and ClosureRouteResolver counters. tools/profile_monthly_cost_ledger.py already binds the ledger, winner and stop-proof identities and was not duplicated.
+ - Evidence: validation/passage_step5_archive_cost_measurement_20260913.json, status instrumented_unmeasured, release_evidence false. Freeze the code series before the targeted re-warm so the same dates are not warmed after every step.
++- Step 5 Codex review of `294c75a`: REJECTED AS COMPLETE. Its same-stat tests restored `st_mtime` through float seconds but the caches keyed `st_mtime_ns`; exact `os.utime(ns=...)` makes both claims fail. A changed calibrated route is returned from `_VALIDATED_ARCHIVE_CACHE` without any read, and a same-size `demand_meta.json` build-key change remains hidden in `_ARCHIVE_METADATA_INDEX`. The committed statement that the warm stat cache is content-safe is false.
++- Review repair: remove both process-global stat-authorized caches. `_archives_for_build_key` now reads metadata on each new disk entry; `_resolve_new_release` shares that index only inside its one locked operation and refreshes it after a builder call. `find_demand_archives` full-validates every candidate even with the local index. RED was two exact-nanosecond tests; GREEN is 59 tests across the new module and monthly_demand. This correctness fix invalidates the fixture's zero-work warm result; three new entries over three fixture archives now mean 9 validations/36 JSON reads/90 digests, while a shared local index saves only the 9 metadata reads and never a validation.
++- Step 5 remains partial: production is still unmeasured because zero current-source archives exist, and metric groups 5-7 (assemble_window, costing/ClosureRouteResolver, exact combined ledger/winner/disqualification/stop-proof comparison) were not instrumented. Apply the safety repair, correct the evidence and finish those groups before Step 6. No optimisation is accepted from the current artifact.
+ <!-- CURRENT_HANDOFF_END -->
+ 
+ <!-- CURRENT_HANDOFF_HISTORY_START -->
+diff --git a/IMPROVEMENT_PLAN.md b/IMPROVEMENT_PLAN.md
+index 2ef8ec7..6b48b13 100644
+--- a/IMPROVEMENT_PLAN.md
++++ b/IMPROVEMENT_PLAN.md
+@@ -826,7 +826,7 @@ utfall; identisk kostnadslista, vinnare och stoppbevis. Ingen liveträdsmutation
+ **Prioritet:** villkorad av steg 0; exempelvalidering på 0,35 s är inte bevis
+ för många minuters möjlig vinst.
+ 
+-#### Steg 5 mätning — instrumenterad men OMÄTT i produktion, 2026-09-13
++#### Steg 5 DELVIS MÄTT — reviewreparation krävs, 2026-09-13
+ 
+ **Preflight avgjorde saken först.** Av 142 arkiv med metadata matchar **noll**
+ `demand_source_fingerprints` för det aktuella trädet; varje arkiv skiljer sig i
+@@ -835,27 +835,38 @@ Ingen produktionstid rapporteras, ingen gammal evidens bands om till nya
+ source-hashar, och inget ersättningsarkiv byggdes. Exakt lokalt kommando när
+ ett kvalificerat arkiv finns står i evidensfilen.
+ 
+-**Instrumenterat:** `_read`, `validate_demand_archive`,
+-`_archive_validation_state` och digest-loopen, med räknare för valideringar,
+-JSON-läsningar, SHA-256-beräkningar och stat-sonderingar, unika arkivsökvägar
+-samt lästa och hashade bytes.
+-
+-**Hermetiskt fixturresultat — uttryckligen INTE produktionstid** (tre
+-syntetiska arkiv, 23 676 hashade byte): kallt gör en `find_demand_archives`
+-över tre arkiv exakt tre valideringar, **1,00 per unik sökväg**. Varmt gör tre
+-ytterligare anrop **noll** valideringar, läsningar och digests — bara nio
+-stat-sonderingar.
+-
+-**Ingen optimering föreslås.** Planens antagande om upprepad validering per
+-arkiv återfinns inte i mätningen, och planen förbjuder själv att bygga en cache
+-där varje enhet redan hanteras en gång. Två säkerhetsegenskaper är dessutom
+-bekräftade och pinnade: en innehållsändring med bevarad storlek och återställd
+-mtime avvisas både av `validate_demand_archive` och av den varma stat-nycklade
+-grinden.
+-
+-**Inte instrumenterat denna omgång:** `assemble_window`-detaljerna och
+-costing-/resolver-räknarna. `tools/profile_monthly_cost_ledger.py` binder redan
+-ledger-, vinnar- och stoppbevisidentiteter och dubblerades inte.
++Commit `294c75a` instrumenterade `_read`, `validate_demand_archive`,
++`_archive_validation_state` och digest-loopen, men dess slutsats om säker varm
++återanvändning var fel. Testet återställde `st_mtime` som flyttal medan
++cache-nyckeln använde `st_mtime_ns`; nanosekunderna ändrades och testet skapade
++en cachemiss. Med exakt återställda nanosekunder serverades ändrade route-bytes
++från `_VALIDATED_ARCHIVE_CACHE`, och ändrad `demand_meta.json` låg kvar under
++gammal build-key i `_ARCHIVE_METADATA_INDEX`. Båda var processglobala
++`path/stat -> valid/index`-cacher av den form steg 5 uttryckligen förbjuder.
++
++Reviewreparationen tar bort båda globala cacherna. Varje ny diskentré bygger
++indexet från `demand_meta.json`-innehåll och fullvaliderar kandidaterna. Inom
++`_resolve_new_release` kan samma index skickas vidare anropslokalt till flera
++build-keys och byggs om efter varje demand-builder-anrop; valideringsresultat
++återanvänds aldrig över en ny läsgräns.
++
++**Hermetiskt reviewresultat — uttryckligen INTE produktionstid** (tre
++syntetiska arkiv): en kall diskentré gör tre fullvalideringar, 12 JSON-läsningar
++och 30 digests. Tre nya diskentréer gör nio valideringar, 36 JSON-läsningar och
++90 digests. Tre uppslag som delar ett operationslokalt index gör fortfarande
++nio valideringar och 90 digests men bara 27 JSON-läsningar, eftersom enbart
++metadataindexeringen återanvänds.
++
++Den ursprungliga slutsatsen “ingen onödig upprepning” är därmed inte giltig:
++den mätte en osäker global cacheträff. Ingen optimering får väljas från denna
++fixturmätning. Först måste den verkliga `prepare`-kedjan mätas när ett
++current-source-arkiv finns; en ny diskentré ska fortsatt fullvalidera.
++
++**Steg 5 är inte komplett.** `assemble_window`-detaljerna,
++costing-/`ClosureRouteResolver`-räknarna och en samlad jämförelse av exakt
++ledger, vinnare, disqualifications och stop proof saknas fortfarande.
++`tools/profile_monthly_cost_ledger.py` kan utökas eller återanvändas; att den
++redan binder identiteter ersätter inte de saknade räknarna och tiderna.
+ 
+ ### Steg 6 — isolerad byggare och kontrollerad parallellism
+ 
+diff --git a/TASKS.md b/TASKS.md
+index df1c40d..a3e64f2 100644
+--- a/TASKS.md
++++ b/TASKS.md
+@@ -9,12 +9,12 @@ owners, states and approval formulas are not active workflow rules. See
+ ## WORKFLOW_CONTROL
+ 
+ - Mode: `FLEXIBLE — simulation quality and performance research`
+-- Current focus: `Steps 0-4 of the passage-speed plan are complete. Step 4 accepted six retention workers after a counterbalanced A/B/B/A with byte-identical outputs. The profiler's experimental worker cap is call-local, so concurrent profiles cannot mutate or observe a temporary production policy. Step 5 measurement is next.`
+-- Status: `Step 4 accepted: retention root wall median 5.4473 -> 3.9178 s (28.08%) on the complete three-variant root, no distribution overlap, source unchanged, all 114 gzip payloads verified and retained trees byte-identical. The saving is about 1.53 s per completed root. Codex review repaired the profiler's process-global worker override without changing the measured production policy or the A/B verdict; 610 dependent tests pass.`
+-- Suggested next action: `Apply the call-local worker-cap review fix, commit and push it separately, then perform Step 5 measurement only on existing archives and saved outputs. Count actual archive reads and validations, route parsing and resolver work, and assemble_window time before proposing any cache or optimisation. Do not start SUMO, a monthly search, a demand build, catalog generation or warming for this measurement.`
++- Current focus: `Steps 0-4 of the passage-speed plan are complete. Step 5 is partial: archive instrumentation exists, but production timing is blocked by zero current-source archives and assemble_window, costing, ClosureRouteResolver and final ledger/stop-proof measurements are still absent.`
++- Status: `Step 5 commit 294c75a is not accepted as complete. Codex review proved its warm-cache safety claim false: the test restored float mtime while the key used mtime_ns. With exact nanoseconds restored, changed route bytes were served from the global validated-record cache and changed demand_meta bytes stayed under the old global metadata index. The review repair removes both stat-authorized global caches, rebuilds the metadata index at each new disk entry, permits operation-local index reuse, and full-validates every candidate. The zero-current-source preflight remains valid; no production timing or optimisation claim is available.`
++- Suggested next action: `Apply and commit the archive-cache safety review fix, correct the evidence, then finish Step 5 measurement groups 5-7: assemble_window; cost-ledger and ClosureRouteResolver counts/timing; exact ledger, winner, disqualification and stop-proof digests. Use existing artifacts or hermetic fixtures and report production as unmeasured when no current-source archive exists. Do not start Step 6 or launch SUMO, a monthly search, demand, catalog or warming.`
+ - Eligible actors: `Any capable actor.`
+ - Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation or expensive catalog/demand run without explicit scope; keep unrelated local changes outside this delivery.`
+-- Updated: `2026-09-13. Step 5 instrumented for archive validation; production measurement blocked on a current-source archive.`
++- Updated: `2026-09-13. Step 5 archive review found unsafe stat caches and incomplete metric coverage; repair prepared, completion measurement next.`
+ <!-- WORKFLOW_CONTROL_END -->
+ 
+ <!-- WORKFLOW_HISTORY_START -->
+diff --git a/tests/test_step5_archive_cost_measurement.py b/tests/test_step5_archive_cost_measurement.py
+index 10b7cc2..757a3f8 100644
+--- a/tests/test_step5_archive_cost_measurement.py
++++ b/tests/test_step5_archive_cost_measurement.py
+@@ -140,21 +140,16 @@ class TestContentChangesSurviveStatPreservation:
+         edited[index] = original[index] ^ 0x01
+         assert len(edited) == len(original)
+         target.write_bytes(bytes(edited))
+-        os.utime(target, (before.st_atime, before.st_mtime))
++        os.utime(target, ns=(before.st_atime_ns, before.st_mtime_ns))
+         assert target.stat().st_size == before.st_size
+-        assert target.stat().st_mtime == before.st_mtime
++        assert target.stat().st_mtime_ns == before.st_mtime_ns
+ 
+         with pytest.raises(ValueError):
+             md.validate_demand_archive(archive, spec)
+ 
+ 
+-class TestTheWarmDiscoveryCacheIsNotFooledByStatInformation:
+-    """find_demand_archives reuses a state keyed on path, size and mtime.
+-
+-    That is the exact shape the plan warns about: if a content change with a
+-    preserved size and a restored mtime survived it, a stale archive could be
+-    selected without a single byte being re-read.
+-    """
++class TestEveryNewDiskEntryRevalidatesContent:
++    """Stat metadata cannot authorize reuse across separate operations."""
+ 
+     def test_a_content_change_under_preserved_stat_is_not_served_from_cache(
+             self, tmp_path):
+@@ -172,12 +167,69 @@ class TestTheWarmDiscoveryCacheIsNotFooledByStatInformation:
+         edited[index] = original[index] ^ 0x01
+         assert len(edited) == len(original)
+         target.write_bytes(bytes(edited))
+-        os.utime(target, (before.st_atime, before.st_mtime))
++        os.utime(target, ns=(before.st_atime_ns, before.st_mtime_ns))
+         assert target.stat().st_size == before.st_size
+-        assert target.stat().st_mtime == before.st_mtime
++        assert target.stat().st_mtime_ns == before.st_mtime_ns
+ 
+         again = md.find_demand_archives(tmp_path, required)
+ 
+         assert not again, (
+             'a tampered archive was still offered: the warm state was reused '
+             'although the bytes changed under identical stat information')
++
++    def test_the_metadata_index_does_not_hide_a_same_stat_build_key_change(
++            self, tmp_path):
++        from traffic_sim.simulation import monthly_demand as md
++
++        archive = tmp_path / 'demand-indexed'
++        archive.mkdir()
++        metadata = archive / 'demand_meta.json'
++        metadata.write_text(json.dumps({'demand_build_key': 'a' * 16}))
++        before = metadata.stat()
++
++        first = md._archives_for_build_key(tmp_path)
++        assert first == {'a' * 16: (archive,)}
++
++        metadata.write_text(json.dumps({'demand_build_key': 'b' * 16}))
++        os.utime(metadata, ns=(before.st_atime_ns, before.st_mtime_ns))
++        assert metadata.stat().st_size == before.st_size
++        assert metadata.stat().st_mtime_ns == before.st_mtime_ns
++
++        again = md._archives_for_build_key(tmp_path)
++
++        assert again == {'b' * 16: (archive,)}
++
++    def test_repeated_public_discovery_revalidates_the_same_archive(self,
++                                                                    tmp_path):
++        from traffic_sim.simulation import monthly_demand as md
++
++        archive, required = _valid_archive(tmp_path)
++        collector = io_phases.PhaseCollector()
++
++        with io_phases.observe(collector):
++            assert md.find_demand_archives(tmp_path, required)
++            assert md.find_demand_archives(tmp_path, required)
++
++        report = collector.report()
++        assert report['counters']['archive_index_build'] == 2
++        assert report['counters']['archive_validate'] == 2
++        assert report['unique_counts']['archive_validated_path'] == 1
++
++    def test_an_operation_local_index_skips_only_the_metadata_rescan(
++            self, tmp_path):
++        from traffic_sim.simulation import monthly_demand as md
++
++        archive, required = _valid_archive(tmp_path)
++        index = md._archives_for_build_key(tmp_path)
++        collector = io_phases.PhaseCollector()
++
++        with io_phases.observe(collector):
++            assert md.find_demand_archives(
++                tmp_path, required, _archive_index=index)
++            assert md.find_demand_archives(
++                tmp_path, required, _archive_index=index)
++
++        report = collector.report()
++        assert report['counters'].get('archive_index_build', 0) == 0
++        assert report['counters']['archive_validate'] == 2
++        assert report['unique_counts']['archive_validated_path'] == 1
+diff --git a/traffic_sim/simulation/monthly_demand.py b/traffic_sim/simulation/monthly_demand.py
+index 54135bf..1f2b45f 100644
+--- a/traffic_sim/simulation/monthly_demand.py
++++ b/traffic_sim/simulation/monthly_demand.py
+@@ -67,17 +67,6 @@ _REQUIRED_ARCHIVE_FILES = (
+     "calibrated_v2.agents.json",
+ )
+ 
+-# Archive validation hashes several immutable route files.  A monthly
+-# preparation resolves many daily units against the same archive set, so
+-# repeating those hashes for every required build key can dominate the cold
+-# profile before the ledger starts.  Cache only successful validations and
+-# key them by the stat state of every input that validation binds; a replaced
+-# or edited archive therefore cannot reuse an old validated record.
+-_VALIDATED_ARCHIVE_CACHE: dict[tuple[str, str, str, tuple[tuple[str, int, int], ...]], dict[str, Any]] = {}
+-_ARCHIVE_METADATA_INDEX: dict[
+-    str, tuple[tuple[tuple[str, int, int], ...], dict[str, tuple[Path, ...]]]
+-] = {}
+-
+ def _incomplete_day_library_accounting(
+     requested_days: int,
+     reason: str,
+@@ -255,36 +244,19 @@ def aggregate_day_library_accounting(
+     return result
+ 
+ 
+-def _archive_validation_state(archive: Path) -> tuple[tuple[str, int, int], ...] | None:
+-    paths = (
+-        archive / "manifest.json",
+-        archive / "demand_build_spec.json",
+-        archive / "demand_meta.json",
+-        *(archive / name for name in _REQUIRED_ARCHIVE_FILES),
+-    )
+-    io_phases.count("archive_state_probe")
+-    state = []
+-    try:
+-        for path in paths:
+-            stat = path.stat()
+-            state.append((str(path.name), int(stat.st_mtime_ns), int(stat.st_size)))
+-    except OSError:
+-        return None
+-    return tuple(state)
+-
+-
+ def _archives_for_build_key(runs_root: Path) -> dict[str, tuple[Path, ...]]:
+-    """Index archive candidates from metadata before expensive validation."""
++    """Build one content-read candidate index for the caller's operation.
++
++    A prior module-global index reused entries from directory stat metadata.
++    Rewriting ``demand_meta.json`` with the same size and restored mtime could
++    therefore leave an archive under its old build key forever.  Callers that
++    need several keys may pass this returned index within their one controlled
++    operation; a new entry from disk always rebuilds it from file contents.
++    """
+     root = Path(runs_root).resolve()
+     archives = tuple(sorted(path for path in root.glob("demand-*")
+                             if path.is_dir()))
+-    signature = tuple(
+-        (path.name, int(path.stat().st_mtime_ns), int(path.stat().st_size))
+-        for path in archives
+-    )
+-    cached = _ARCHIVE_METADATA_INDEX.get(str(root))
+-    if cached is not None and cached[0] == signature:
+-        return cached[1]
++    io_phases.count("archive_index_build")
+     by_key: dict[str, list[Path]] = {}
+     for archive in archives:
+         try:
+@@ -295,7 +267,6 @@ def _archives_for_build_key(runs_root: Path) -> dict[str, tuple[Path, ...]]:
+         if isinstance(build_key, str) and build_key:
+             by_key.setdefault(build_key, []).append(archive)
+     result = {key: tuple(value) for key, value in by_key.items()}
+-    _ARCHIVE_METADATA_INDEX[str(root)] = (signature, result)
+     return result
+ # The tracked demand builder writes THROUGH the live release paths (sumo/
+ # demand products, web/data OD export) even when it is only materializing a
+@@ -874,6 +845,7 @@ def find_demand_archives(
+     *,
+     qualified_manifest: Mapping[str, Any] | None = None,
+     qualified_manifest_net_path: Path | None = None,
++    _archive_index: Mapping[str, tuple[Path, ...]] | None = None,
+ ) -> tuple[dict[str, Any], ...]:
+     """Return all valid succeeded archives for ``required``, newest first.
+ 
+@@ -888,34 +860,20 @@ def find_demand_archives(
+     if qualified_manifest is not None:
+         validate_qualified_demand_manifest_shape(qualified_manifest)
+     matches: list[dict[str, Any]] = []
+-    candidates = _archives_for_build_key(Path(runs_root)).get(
+-        required.build_key, ())
++    archive_index = (_archives_for_build_key(Path(runs_root))
++                     if _archive_index is None else _archive_index)
++    candidates = archive_index.get(required.build_key, ())
+     for archive in candidates:
+-        state = _archive_validation_state(archive)
+-        cache_key = None
+-        if state is not None:
+-            cache_key = (str(Path(runs_root).resolve()), str(archive.resolve()),
+-                         required.build_key, state)
+-            cached = _VALIDATED_ARCHIVE_CACHE.get(cache_key)
+-            if cached is not None:
+-                record = cached
+-            else:
+-                record = None
+-        else:
+-            record = None
+-        if record is None:
+-            try:
+-                record = validate_demand_archive(archive, required)
+-            except (
+-                FileNotFoundError,
+-                json.JSONDecodeError,
+-                KeyError,
+-                TypeError,
+-                ValueError,
+-            ):
+-                continue
+-            if cache_key is not None:
+-                _VALIDATED_ARCHIVE_CACHE[cache_key] = record
++        try:
++            record = validate_demand_archive(archive, required)
++        except (
++            FileNotFoundError,
++            json.JSONDecodeError,
++            KeyError,
++            TypeError,
++            ValueError,
++        ):
++            continue
+         if qualified_manifest is not None and qualified_manifest_archive_mismatch(
+                 record, qualified_manifest,
+                 net_path=qualified_manifest_net_path) is not None:
+@@ -1251,6 +1209,7 @@ class MonthlyDemandResolverRunner:
+         with demand_build_lock():
+             live_snapshot: dict[str, Any] | None = None
+             try:
++                archive_index = _archives_for_build_key(self.runs_root)
+                 # Recheck under the inter-process lock: another search may have
+                 # completed the same immutable archive while this one waited.
+                 for key in sorted(required_by_key):
+@@ -1258,7 +1217,8 @@ class MonthlyDemandResolverRunner:
+                     matches = find_demand_archives(
+                         self.runs_root, required,
+                         qualified_manifest=self.qualified_demand_manifest,
+-                        qualified_manifest_net_path=self.qualified_demand_net_path)
++                        qualified_manifest_net_path=self.qualified_demand_net_path,
++                        _archive_index=archive_index)
+                     if not matches and self.build_missing:
+                         if live_snapshot is None:
+                             live_snapshot = snapshot_live_demand_release(
+@@ -1266,10 +1226,12 @@ class MonthlyDemandResolverRunner:
+                                 products=self.live_release_products,
+                             )
+                         self.demand_builder(required)
++                        archive_index = _archives_for_build_key(self.runs_root)
+                         matches = find_demand_archives(
+                             self.runs_root, required,
+                             qualified_manifest=self.qualified_demand_manifest,
+-                            qualified_manifest_net_path=self.qualified_demand_net_path)
++                            qualified_manifest_net_path=self.qualified_demand_net_path,
++                            _archive_index=archive_index)
+                     if not matches:
+                         manifest_note = (
+                             " matching the bound qualified-demand manifest"
+diff --git a/validation/passage_step5_archive_cost_measurement_20260913.json b/validation/passage_step5_archive_cost_measurement_20260913.json
+index 47f9ad1..bf388d5 100644
+--- a/validation/passage_step5_archive_cost_measurement_20260913.json
++++ b/validation/passage_step5_archive_cost_measurement_20260913.json
+@@ -1,40 +1,51 @@
+ {
+   "conditional_next_hypothesis": {
+-    "expected_upper_bound": "unknown; the fixture chain shows zero avoidable validations, so no time saving may be projected from this measurement",
+-    "gate": "only after a current-source qualified archive exists",
+-    "required_evidence": "RED/GREEN on repetition counters plus an A/B preserving the exact cost ledger, sorted cost list, winner, disqualifications and stop proof",
+-    "shape_if_repetition_appears": "an operation-local frozen descriptor carrying the parsed metadata and the full content digests already computed by the first validation, with a snapshot lifetime bounded by the operation and a re-check at every new read boundary; never a global path -> valid cache"
++    "gate": "finish metric groups 5-7 and measure a current-source qualified archive before proposing one bounded optimization",
++    "reason": "production is unmeasured and assemble_window, costing, resolver and final decision measurements are incomplete",
++    "status": "withheld"
+   },
+   "date": "2026-09-13",
+   "diagnostic_only": true,
+   "findings": [
+-    "On the fixture chain there is NO unnecessary repetition to remove: find_demand_archives performs exactly one full validation per unique archive path (1.00 per path), and repeated calls within one verified snapshot perform zero reads, zero parses and zero digests.",
+-    "The warm state guard is keyed on path, size and mtime, but it is not fooled by them: an archive whose bytes changed with the size preserved and the mtime restored is excluded on the next call. Pinned by a test.",
+-    "validate_demand_archive itself also rejects a same-size, same-mtime content change, because demand_meta.json is inside _REQUIRED_ARCHIVE_FILES and is digested. Pinned by a test."
++    "The committed warm-cache safety claim is false: exact preservation of size and st_mtime_ns lets changed bytes reuse global stat-authorized cache entries.",
++    "Every new disk entry must read the metadata index and full-validate candidates; only the metadata index may be shared inside one controlled resolver operation.",
++    "No current-source qualified archive exists, so production timing remains unavailable.",
++    "Metric groups 5-7 are absent, so Step 5 is not complete and no optimization is selected."
+   ],
+   "hermetic_fixture_measurement": {
+-    "WARNING": "FIXTURE TIMES, NOT PRODUCTION TIMES. Three synthetic archives, 23676 bytes hashed in total.",
+-    "cold_first_entry": {
++    "WARNING": "FIXTURE TIMES AND COUNTS, NOT PRODUCTION RESULTS. Three synthetic archives.",
++    "cold_new_disk_entry": {
++      "archive_index_build": 1,
+       "archive_json_read": 12,
+       "archive_sha256": 30,
+-      "archive_state_probe": 3,
+       "archive_validate": 3,
+       "archives": 3,
+       "bytes_hashed": 23676,
+-      "find_demand_archives_calls": 1,
+-      "json_read_exclusive_s": 0.001,
+-      "sha256_exclusive_s": 0.001488,
+-      "unique_archive_paths": 3,
++      "bytes_read": 48186,
++      "json_read_exclusive_s": 0.000989,
++      "sha256_exclusive_s": 0.001461,
+       "validations_per_unique_path": 1.0
+     },
+-    "purpose": "verify the measurement contract only",
+-    "warm_reuse_same_snapshot": {
+-      "archive_json_read": 0,
+-      "archive_sha256": 0,
+-      "archive_state_probe": 9,
+-      "archive_validate": 0,
++    "purpose": "verify safe archive accounting after review repair",
++    "three_lookups_one_operation_local_index": {
++      "archive_index_build": 0,
++      "archive_json_read": 27,
++      "archive_sha256": 90,
++      "archive_validate": 9,
++      "bytes_hashed": 71028,
++      "bytes_read": 79704,
+       "find_demand_archives_calls": 3,
+-      "note": "the existing state guard absorbed every repeat entirely"
++      "note": "only metadata indexing is reused; candidate content is fully validated"
++    },
++    "three_new_disk_entries": {
++      "archive_index_build": 3,
++      "archive_json_read": 36,
++      "archive_sha256": 90,
++      "archive_validate": 9,
++      "bytes_hashed": 71028,
++      "bytes_read": 144558,
++      "find_demand_archives_calls": 3,
++      "note": "a new disk entry never reuses a prior validation result"
+     }
+   },
+   "instrumented": {
+@@ -44,15 +55,15 @@
+         "hashed on every digest"
+       ],
+       "counters": [
++        "archive_index_build",
+         "archive_validate",
+         "archive_json_read",
+-        "archive_sha256",
+-        "archive_state_probe"
++        "archive_sha256"
+       ],
+       "sites": [
++        "monthly_demand._archives_for_build_key",
+         "monthly_demand._read",
+         "monthly_demand.validate_demand_archive",
+-        "monthly_demand._archive_validation_state",
+         "the sha256 loop over _REQUIRED_ARCHIVE_FILES"
+       ],
+       "unique_counts": [
+@@ -86,9 +97,20 @@
+     "method": "compared each archive's build_fingerprint.source_files with demand_source_fingerprints(project_root), which is the exact equality validate_demand_archive requires",
+     "question": "does any existing archive pass validate_demand_archive against the current source identity?"
+   },
+-  "purpose": "Step 5: measure archive discovery, validation and costing before changing anything",
++  "purpose": "Step 5 archive measurement only; costing and assemble_window remain unmeasured",
+   "release_evidence": false,
++  "review_of_294c75a": {
++    "finding": "the same-stat tests restored float st_mtime although both global caches keyed nanosecond stat values; exact os.utime(ns=...) reproduces unsafe reuse",
++    "focused_green_tests": 59,
++    "red_tests": 2,
++    "repair": "remove both global stat-authorized caches; rebuild the metadata index on each new disk entry, share it only inside _resolve_new_release, and full-validate every candidate",
++    "unsafe_behaviors_reproduced": [
++      "changed calibrated route bytes served from _VALIDATED_ARCHIVE_CACHE",
++      "changed demand_meta build key hidden by _ARCHIVE_METADATA_INDEX"
++    ],
++    "verdict": "rejected_as_complete"
++  },
+   "schema_version": 1,
+-  "status": "instrumented_unmeasured",
+-  "why_no_optimization": "The plan assumes repeated validation per archive during resolver setup. The measurement does not find it in find_demand_archives, and the plan itself forbids building a cache where the measurement shows each unit is already handled once. The production phase that could still show repetition -- prepare() over a real qualified manifest -- cannot be measured until an archive exists under the current source identity. Proposing an optimisation now would be inventing one."
++  "status": "partial_measurement_review_repair_required",
++  "why_no_optimization": "The original no-repetition result depended on unsafe global stat caches and is superseded. Production remains unmeasured and metric groups 5-7 are absent."
+ }
+diff --git a/validation/passage_step5_archive_review_20260913.json b/validation/passage_step5_archive_review_20260913.json
+new file mode 100644
+index 0000000..f7d831a
+--- /dev/null
++++ b/validation/passage_step5_archive_review_20260913.json
+@@ -0,0 +1,76 @@
++{
++  "base_revision": "294c75a915c6ea64960496e86db363de62df3f7c",
++  "checks": {
++    "dependent_green": {
++      "failed": 0,
++      "passed": 537
++    },
++    "focused_green": {
++      "failed": 0,
++      "passed": 59
++    },
++    "git_diff_check": "passed",
++    "red": {
++      "failed_for_intended_bug": true,
++      "tests": 2
++    }
++  },
++  "date": "2026-09-13",
++  "findings": [
++    {
++      "component": "monthly_demand._VALIDATED_ARCHIVE_CACHE",
++      "problem": "a same-size route edit with exactly restored st_mtime_ns is served from the successful-validation cache without reading changed bytes",
++      "red_evidence": "the corrected exact-nanosecond regression test returns the tampered archive",
++      "severity": "high"
++    },
++    {
++      "component": "monthly_demand._ARCHIVE_METADATA_INDEX",
++      "problem": "a same-size demand_meta build-key edit with exactly restored st_mtime_ns remains indexed under the old key",
++      "red_evidence": "the corrected exact-nanosecond regression test returns the old build-key mapping",
++      "severity": "medium"
++    },
++    {
++      "component": "Step 5 completion claim",
++      "effect": "Step 5 acceptance criteria cannot be evaluated and no optimization may be selected",
++      "problem": "assemble_window, costing, ClosureRouteResolver and combined decision identity measurements were explicitly omitted",
++      "severity": "high"
++    }
++  ],
++  "hermetic_counts_after_repair": {
++    "cold_three_archives": {
++      "digests": 30,
++      "json_reads": 12,
++      "validations": 3
++    },
++    "production_timing": null,
++    "three_lookups_one_local_index": {
++      "digests": 90,
++      "json_reads": 27,
++      "validations": 9
++    },
++    "three_new_disk_entries": {
++      "digests": 90,
++      "json_reads": 36,
++      "validations": 9
++    }
++  },
++  "performance_limit": "removing unsafe validation reuse can cost time; no current-source archive exists, so the production delta is unmeasured and must not be estimated from fixtures",
++  "release_evidence": false,
++  "remaining_step5_work": [
++    "assemble_window days, rows, agents, bytes and exclusive time",
++    "cost ledger and ClosureRouteResolver counts, unique routes and exclusive time",
++    "plain-versus-observed exact ledger, winner, disqualifications and stop-proof digests",
++    "production measurement when a current-source qualified archive exists"
++  ],
++  "repair": {
++    "global_metadata_index_cache_removed": true,
++    "global_validated_archive_cache_removed": true,
++    "new_disk_entry": "rebuild metadata index from demand_meta content and fully validate every candidate",
++    "operation_local_reuse": "share only the metadata index inside _resolve_new_release and refresh it after a demand builder call",
++    "validated_records_reused_across_read_boundaries": false
++  },
++  "root_cause": "tests restored float st_mtime but cache keys used st_mtime_ns; the supposed preserved-stat tests actually caused cache misses",
++  "schema_version": 1,
++  "scope": "Codex review of Step 5 commit 294c75a",
++  "verdict": "rejected_as_complete_repair_prepared"
++}

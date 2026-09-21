@@ -1,0 +1,216 @@
+{
+  "status": "automatic_default_enabled",
+  "policy": "automatic_dynamic_passage_v1",
+  "scope": "PFE day-library and direct-window builds; routeSampler remains a reference engine",
+  "evidence_root": "/Users/gt/Documents/gs-project/runs/automatic-passage-integration-20260908",
+  "integration_build_id": "e6f74af6f6c736362cdd",
+  "source_inventory_matches_current": true,
+  "source_files": {
+    "assignment_priors": {
+      "sha256": "2d5e7201120bfcb0beaf0fe5e36ade8d57664230bc56825a1a5add3aef5ad92d",
+      "bytes": 31310
+    },
+    "build_candidates": {
+      "sha256": "1c1ee4cd22fd7a049e209c00dbd4ad145dc14081d2ecfeb066f4964f005d5602",
+      "bytes": 255953
+    },
+    "build_data": {
+      "sha256": "b3f395cebffd309d3e4130cf7cf8fd200323918b372e90af9f6bfa206fdfe8f7",
+      "bytes": 35336
+    },
+    "build_sumo_demand": {
+      "sha256": "09987a258d549f4586449485171e570906e0702317aef126443d855ec35668d7",
+      "bytes": 118852
+    },
+    "build_sumo_net": {
+      "sha256": "f2c0d830cf5173093639ccc2b767e5bc08735f6b4cfa7ac5669aca14dc319594",
+      "bytes": 12151
+    },
+    "calibrated_provenance": {
+      "sha256": "3fe34be7a2cdbebd34f29a78d7688a9d9e5dff762c7f6744a51dd3eb561c9898",
+      "bytes": 13956
+    },
+    "candidate_cache": {
+      "sha256": "5809c21df7d9d1eaf8c18d5b8e5cb1f276e4ff01e84cf4c7f6853a5a52e7cc98",
+      "bytes": 3736
+    },
+    "demand/__init__.py": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "demand/calibration.py": {
+      "sha256": "458ca86c1d58024136106b198f18a91ee687f1267257544024fbdb98438ceb74",
+      "bytes": 37665
+    },
+    "demand/day_library.py": {
+      "sha256": "d5fe387987be4bef8fd1152660452185155c86c9c01f961db31e655acdd2942f",
+      "bytes": 19237
+    },
+    "demand/feedback.py": {
+      "sha256": "4e558de35352d9c6970d8b169299ddd0d33e9c38dbd6ccc3ecd587a6feede0fe",
+      "bytes": 9302
+    },
+    "demand/intake.py": {
+      "sha256": "2bd7034b25c603c48477be10ed6575b595d5c523dc43b37378ed3f3aa0095479",
+      "bytes": 23796
+    },
+    "demand/locations.py": {
+      "sha256": "5d33ada5933d7d178de9795ed2265cee07f4dd140122d53874802949a8b56af2",
+      "bytes": 31452
+    },
+    "demand/priors.py": {
+      "sha256": "17c82d9e823158b10b9181501031caceb4ceb26f74fbbc9b981d8d9b9598e542",
+      "bytes": 15051
+    },
+    "demand/publication.py": {
+      "sha256": "c9ab04738308b5cbd2de2f4e22d23a4ab6330d32dd930449f31af56f6db829da",
+      "bytes": 9083
+    },
+    "demand/structure.py": {
+      "sha256": "591e7dd21c65f08dd0fb73aa0c55256d1d2c1ca6dd686b03869ad76b3547ea38",
+      "bytes": 38725
+    },
+    "demand_source_identity": {
+      "sha256": "e0dc75e0ad26de0bc205deb82635c3cdecc6d59dfb9c0aad5d658b6a18684866",
+      "bytes": 2703
+    },
+    "direction_anchor": {
+      "sha256": "2015a304a9ca435208ca9c624ef135a9c24e9a0a8078cd41512ce9e1a8416f33",
+      "bytes": 15034
+    },
+    "dynamic_assignment": {
+      "sha256": "91a72d2915ed3ddcbf9297f0db3cebd679de9d62271a20d3842135eae4daade4",
+      "bytes": 16451
+    },
+    "dynamic_passage_adapter": {
+      "sha256": "ba04a2b771f2fb293fc752ef72a464b628c362abbe807fee69fde31fbb5d4115",
+      "bytes": 13537
+    },
+    "observability": {
+      "sha256": "dd1cb62ad6252df7f09e795c7a57bad3e715a5d76f9f6d7751fac47b7fc22465",
+      "bytes": 16599
+    },
+    "passage_accuracy": {
+      "sha256": "8d44c5fde6ec38954daf8237a13d487571d339de75116ef0af1b1f486e6891e2",
+      "bytes": 29579
+    },
+    "passage_measurement": {
+      "sha256": "9abd801d4ac6b786e173d4eb09e9b42877f0f27e17a0d5efe7cc27020f696437",
+      "bytes": 31339
+    },
+    "pfe": {
+      "sha256": "93e9b6cceaafff43c687d54ccdf547a75f92b6e68aadbd8d12388d6a959ab55c",
+      "bytes": 173244
+    },
+    "pfe_kernel": {
+      "sha256": "50b6aed2bfb06037e2865c360a39012c49321e4a49bb184c08e007b87007060e",
+      "bytes": 6216
+    },
+    "pipeline_fingerprint": {
+      "sha256": "71baf5b88a9466c9834bedc89b96fca1f1cc3ac5aab85796dbe1c730a7c2dfd9",
+      "bytes": 3577
+    },
+    "prior_flows": {
+      "sha256": "359257cc5250a0318f41492864bc404bcebded80a158e17139eefd059c809f01",
+      "bytes": 6042
+    },
+    "sensor_registry": {
+      "sha256": "3746cf937300dee8af9f8047fa0b512d31c34dd30a4a344b6f6dc35df5d8a4a7",
+      "bytes": 23584
+    },
+    "sensor_registry_data": {
+      "sha256": "41db5d452cb104405d8bd6ac6b78e2c7748dcfe641a9266c7229a4fc7edf1f20",
+      "bytes": 9453
+    },
+    "traffic_sim/demand/__init__.py": {
+      "sha256": "c7a052308425fa340c33ae85b1ab937c68ecc228e527868337ae1e7c9cb5ffaf",
+      "bytes": 44
+    },
+    "traffic_sim/demand/automatic_passage.py": {
+      "sha256": "eccb03d45faa4cab4fc175df8ea5442411b7267c8377d5276f6e991d0dcf57d4",
+      "bytes": 13278
+    },
+    "traffic_sim/demand/build_lock.py": {
+      "sha256": "82bf7dfaf0d2ef52684d008ed42bc1e9d46171b3efab4e79376ad18bec27ee14",
+      "bytes": 1560
+    },
+    "traffic_sim/demand/catalog_qualification.py": {
+      "sha256": "ccf0534e807fa6ba311a9155027c90a0ff425b9cdba48dd9416526cd2150827c",
+      "bytes": 12200
+    },
+    "traffic_sim/demand/route_catalog.py": {
+      "sha256": "5ea4d3090e86d2d3b32d77a4ece7709465140f21fcfcdee599dd2dce4fe75609",
+      "bytes": 35353
+    },
+    "traffic_sim/demand/route_regularization.py": {
+      "sha256": "84cdfdb4eb48a05a8fc58d3f938d1dab877686fd56057e42662114a8869c7cf5",
+      "bytes": 4369
+    },
+    "traffic_sim/demand/route_support.py": {
+      "sha256": "027d93a3f30197d2866bfda22a5079758d6d10133fd52542b02bff0b0802aacb",
+      "bytes": 2045
+    },
+    "traffic_sim/demand/sensor_route_contract.py": {
+      "sha256": "7eac854dc3ae1ac4a4d3c4471687e7b656692202bdee1b9c609ed94de4730d2b",
+      "bytes": 6819
+    },
+    "traffic_sim/demand/structure_caps.py": {
+      "sha256": "c7ee61ab4afeb29111b5fe8268d8d8b17db7db9cd0ab800454e40585c668658b",
+      "bytes": 854
+    }
+  },
+  "forecast_date": "2027-08-13",
+  "vehicles": 20059,
+  "retained_bounds": 3108,
+  "new_relaxations": 0,
+  "validation_seed_error": {
+    "source_absolute_error": 4673,
+    "candidate_absolute_error": 16
+  },
+  "native_baseline_exact": {
+    "available": true,
+    "constraints": 672,
+    "exact": 656,
+    "exact_pct": 97.619048,
+    "max_abs_error": 0.333333333,
+    "sum_abs_error": 5.333333333,
+    "target_rule": "int(round(target))"
+  },
+  "closure": {
+    "closed_edges": [
+      "26842525_26355153_0"
+    ],
+    "closure_integrity": "verified_clean",
+    "truncated_vehicles": 3646,
+    "dropped_vehicles": 0,
+    "active_closure_edge_entries_by_seed": [
+      0,
+      0,
+      0
+    ]
+  },
+  "closure_count_note": "truncated_vehicles is the legacy output field for rerouted vehicles",
+  "publication_gate": {
+    "passed": true,
+    "source": "serve.validate_staged_scenarios"
+  },
+  "cold_passage_seconds": 60.5,
+  "cache_hit": {
+    "days_reused": 1,
+    "days_calibrated": 0,
+    "pfe_assembly_seconds": 0.7
+  },
+  "tests": {
+    "passed": 370,
+    "full_repository_suite_run": false,
+    "scoped_pylint": "pass",
+    "diff_check": "pass"
+  },
+  "active_previous_release_unchanged": true,
+  "limitations": [
+    "Forecast fixture, not an independent historical holdout.",
+    "06:00-10:00 integration interrupted during original PFE solving before passage step; direct seam is covered by focused tests.",
+    "Remaining native quarter residuals are diagnostic and not hidden.",
+    "Catalog adoption was not regenerated; changed builder identity can trigger the existing provenance-safe legacy fallback."
+  ]
+}

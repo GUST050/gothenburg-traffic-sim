@@ -155,6 +155,16 @@ def aggregate_day_library_accounting(
     entries: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     """Combine complete per-archive summaries without inventing missing data."""
+    if not entries:
+        return {
+            "schema_version": 1,
+            "status": "incomplete",
+            "builds": 0,
+            "requested_days": 0,
+            "incomplete_builds": [
+                {"build_key": "", "reason": "no_archives"},
+            ],
+        }
     requested_days = 0
     incomplete = []
     summaries: list[tuple[str, Mapping[str, Any]]] = []

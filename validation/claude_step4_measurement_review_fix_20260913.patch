@@ -1,0 +1,312 @@
+diff --git a/AGENT_NOTES.md b/AGENT_NOTES.md
+index 745f2e6..8a455dc 100644
+--- a/AGENT_NOTES.md
++++ b/AGENT_NOTES.md
+@@ -59,6 +59,8 @@ which model may continue. See `AGENTS.md`.
+ - Measured on the saved 2027-06-25 q50 evidence, 9675 vehicles, 67463 expanded columns, 3 repeats in one process, cache hits [false, true, true]. Ranked on the warm repeats: source_trace_xml 0.9146 s / 47.02% reading 40.8 MB; stage_reformat_xml 0.1826 s / 9.39%; selection_transform 0.1648 s / 8.47%; stage_validate 0.1542 s / 7.93%; selection_write 0.1349 s / 6.94%; source_routes_xml 0.1264 s / 6.50%; gzip_compress 0.0620 s / 3.19%. Every gzip phase together is under 5%: compression is not the cost in this shape.
+ - Honest limits: a single-variant replay calls `_gzip_verified` directly and never runs `prune_evidence`, so the inventory, the three-way pool and the cleanup pass are tested but NOT measured. The same holds for the run registry and the sites around `_tracked_main`, which need a real demand build. The plan's `retention 128.5 s` refers to a full build and is not contradicted by these numbers.
+ - Verification: the evidence copy differs from the original in exactly two files, both from rebinding the replay contract, and `retained_bounds_pq` is unchanged. All three replays report `selection_reproduced.state` identical with the frozen selection/routes/agents hashes. `tools/profile_passage_replay.py` now starts from the repository root without `PYTHONPATH=.`, pinned by a subprocess test that removes only that variable. Evidence: `validation/passage_step4_io_measurement_20260913.json`, release_evidence false. Tests: 656 passed across the step-3 and step-4 modules plus builder, provenance and day library.
++- Step 4 review: the q50 replay numbers are valid for the sequential phases it reached, but the first global ranking double-counted concurrent retention by adding both the concurrent boundary and its descendants. A regression test reproduces 0.220 s ranked for a 0.055 s region. The local review fix gives the concurrent boundary its measured wall contribution and keeps descendants as zero-contribution diagnostic detail. Step 4 remains open until this fix is committed and a copied complete q50/_v1/_v2 evidence root exercises `prune_evidence`. A process parse cache is not accepted from the repeat profile alone: each measured learning trace has a distinct digest and production loads each once per `_refine` call.
++- Step 4 completeness review: `90c0675` did not edit or instrument `build_sumo_demand.py::_tracked_main`, although the plan names it. `runs.Run.add_output` now exposes copy and target verification when observed, but build, archive loop, metadata parse, validation report and finish around `_tracked_main` remain uninstrumented and have no production measurement.
+ <!-- CURRENT_HANDOFF_END -->
+ 
+ <!-- CURRENT_HANDOFF_HISTORY_START -->
+diff --git a/IMPROVEMENT_PLAN.md b/IMPROVEMENT_PLAN.md
+index 7340a67..89032cd 100644
+--- a/IMPROVEMENT_PLAN.md
++++ b/IMPROVEMENT_PLAN.md
+@@ -622,7 +622,7 @@ run-registry-tester. Testa avbruten komprimering, korrupt mål och saknad eviden
+ **Vinstområde:** retention 128,5 s; övrig parsing ingår i andra poster och får
+ inte dubbelräknas. Kompakt atomisk demand_meta-skrivning finns redan.
+ 
+-#### Steg 4 utfall — measurement complete, 2026-09-13
++#### Steg 4 utfall — replay-baslinje mätt, retention-baslinje återstår, 2026-09-13
+ 
+ **Ingen optimering är implementerad.** Detta är enbart mätning, enligt planens
+ egen ordning.
+@@ -670,6 +670,29 @@ ställena kring `build_sumo_demand.py::_tracked_main`: de kräver ett riktigt
+ demand-bygge, vilket ligger utanför detta steg. Planens `retention 128,5 s`
+ avser ett fullt bygge, inte den här replayen; siffrorna ovan motsäger den inte.
+ 
++**Reviewkorrigering.** Den första rapportören lade både den samtidiga
++förälderns kritiska tid och barnens summerade trådtid i den globala rankingen.
++Tre parallella 50 ms-barn kunde därför redovisas som cirka 220 ms för en region
++vars uppmätta väggtid var cirka 55 ms. Barnen ska finnas kvar som diagnostisk
++detalj, men bara den samtidiga regionens direkt uppmätta väggtid får bidra till
++rankingen. q50-replayen ovan anropade inte `prune_evidence`, så dess befintliga
++fasvärden påverkas inte av felet. Instrumenteringen måste korrigeras och den
++fulla trevariants-retentionen mätas på en kopia innan steg 4 kan stängas.
++
++En innehållsnycklad cache för `source_trace_xml` är inte ännu en godkänd
++produktionsoptimering. Varje av de tre spårfilerna i den mätta varianten hade en
++egen digest och lästes en gång i ett normalt `_refine`-anrop. Profilens varma
++repeats läser däremot samma evidens igen. En cachevinst där riskerar därför att
++mäta profilverktygets upprepning i stället för dagsbyggets kritiska väg.
++
++`build_sumo_demand.py::_tracked_main` instrumenterades inte i `90c0675` trots
++att den ingår i steg 4:s fil- och mätlista. `traffic_sim/ops/runs.py` mäter
++kopiering och målhashning när en observerare finns, men det finns ännu ingen
++fas för bygganropet, produktarkiveringen, metadata-parsningen,
++valideringsrapporten eller slutpubliceringen runt `_tracked_main`. Det ska
++läggas till och testas, men produktionstid får inte hävdas utan en avgränsad
++riktig byggmätning.
++
+ **Driftfix.** `tools/profile_passage_replay.py` startar nu från repo-roten utan
+ `PYTHONPATH=.`; ett subprocess-test kör `--help` med `PYTHONPATH` borttaget.
+ 
+diff --git a/TASKS.md b/TASKS.md
+index e6c3af5..a8a251a 100644
+--- a/TASKS.md
++++ b/TASKS.md
+@@ -9,12 +9,12 @@ owners, states and approval formulas are not active workflow rules. See
+ ## WORKFLOW_CONTROL
+ 
+ - Mode: `FLEXIBLE — simulation quality and performance research`
+-- Current focus: `Step 3 is complete and reviewed. Step 4 is measurement complete: evidence I/O, parsing and serialization are instrumented and profiled on the saved q50 evidence. No step-4 optimisation is implemented.`
++- Current focus: `Step 3 is complete and reviewed. Step 4 instrumentation and its q50 replay baseline exist, but the concurrent ranking needs the review fix, full three-variant retention remains unmeasured, and _tracked_main lacks the instrumentation named by the plan. No step-4 optimisation is implemented.`
+ - Status: `Step 3 accepted. Review fixes (7e1a976): the diagnostic phase observer is a contextvars.ContextVar set and reset by token, and passage_solver.py is bound into replay_source_sha256(). departure_bound_constraints now reuses the incidence of a repeated (departure quarter, route) within one call: warm median 0.400201 -> 0.192282 s (51.95%), warm fit_integer_flows 0.762698 -> 0.575360 s (24.56%), with the worst candidate measurement still 51.61% under the best baseline one. All 11 solver request arrays, the whole request.npz and the published routes/agents/selection are identical in all four arms, and selection_reproduced is identical in all 12 replays. Column-equivalence reduction was deliberately left alone. PREVIOUS: step 2 accepted (b270087) after five review fixes: postponed annotations for Python 3.9, a StructureContext that derives its SHA-256 and its arrays from ONE read so a same-size same-mtime rewrite invalidates it, a pool report keyed on the content of the route file plus its sidecar and the generation target, demand/structure.py added to replay_source_sha256(), and one profiler context shared by the source and candidate reports with route_facts_cache: operation_scoped_content_bound. Codex's counterbalanced A/B/B/A accepted it: warm replay median 6.6376895 -> 5.956609 s (10.26%), warm structure 1.3972755 -> 0.749738 s (46.34%), cold replay 9.943896 -> 9.233191 s (7.15%), all 11 solver request arrays equal and identical selection/route/agent hashes; with the fixes, 5.8138625 s and 0.651292 s. Step 3 adds a private diagnostic solver hook measuring nine phases with exclusive time; a cache hit reports milp_solve at 0 calls and milp_executed false. Verified request.npz byte-identical and state.json keys unchanged. The cache KEY moves because solve_checkpointed hashes the solver source bytes, so every existing passage-solver cache entry is invalid from this commit.`
+-- Suggested next action: `Decide whether to open a step-4 optimisation. The measured candidate is source_trace_xml at 47.02% of ranked warm I/O (0.9146 s for 40.8 MB over three learning arms), read once per replay and re-parsed per arm. Anything proposed must preserve every trace hash check and the exact offsets. Retention, the run registry and _tracked_main are instrumented and tested but NOT measured: they need a real demand build. column_equivalence_reduction from step 3 also remains unexamined.`
++- Suggested next action: `Apply the concurrent-ranking review fix, then profile prune_evidence on an isolated copy of an already-complete q50/_v1/_v2 evidence root. This needs no new SUMO or demand build. Do not implement the proposed trace parse cache yet: the three measured trace files have distinct digests and production reads each only once per _refine, so repeat-profile cache hits do not establish a dagsbygge speedup.`
+ - Eligible actors: `Any capable actor.`
+ - Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation or expensive catalog/demand run without explicit scope; keep unrelated local changes outside this delivery.`
+-- Updated: `2026-09-13. Step 3 closed and reviewed; step 4 measurement complete, no optimisation implemented.`
++- Updated: `2026-09-13. Step 3 closed and reviewed; step 4 replay baseline measured, concurrent accounting repair and full retention baseline pending.`
+ <!-- WORKFLOW_CONTROL_END -->
+ 
+ <!-- WORKFLOW_HISTORY_START -->
+diff --git a/tests/test_io_phases.py b/tests/test_io_phases.py
+index f07c958..132db35 100644
+--- a/tests/test_io_phases.py
++++ b/tests/test_io_phases.py
+@@ -118,6 +118,32 @@ def test_a_concurrent_parent_refuses_to_pretend_its_children_were_sequential():
+     assert entry['inclusive_s'] < entry['children_sum_s']
+ 
+ 
++def test_concurrent_children_are_detail_not_extra_ranked_wall_time():
++    collector = io_phases.PhaseCollector()
++
++    def worker():
++        with io_phases.phase('compress'):
++            time.sleep(0.05)
++
++    with io_phases.observe(collector):
++        with io_phases.phase('retention', concurrent=True):
++            _run_together(io_phases.in_current_context(worker), 3)
++
++    report = collector.report()
++    retention = report['phases']['retention']
++    compress = report['phases']['compress']
++    ranked = {entry['phase']: entry for entry in report['ranking']}
++
++    assert retention['wall_contribution_s'] == pytest.approx(
++        retention['inclusive_s'], abs=ROUNDING_TOLERANCE_S)
++    assert compress['inclusive_s'] > retention['inclusive_s']
++    assert compress['wall_contribution_s'] == 0
++    assert 'compress' not in ranked
++    assert ranked['retention']['basis'] == 'concurrent_region_wall'
++    assert sum(entry['wall_s'] for entry in report['ranking']) == \
++        pytest.approx(retention['inclusive_s'], abs=ROUNDING_TOLERANCE_S)
++
++
+ def test_children_started_in_worker_threads_still_find_their_parent():
+     collector = io_phases.PhaseCollector()
+ 
+diff --git a/tools/profile_passage_replay.py b/tools/profile_passage_replay.py
+index 93da1f3..d6297c9 100644
+--- a/tools/profile_passage_replay.py
++++ b/tools/profile_passage_replay.py
+@@ -862,7 +862,8 @@ def replay(source: Path, out: Path, *, label: str | None = None,
+             report['io_measurement']['basis'] = (
+                 'observational; outside every demand, passage, solver and '
+                 'replay identity. Concurrent parents report exclusive_s null '
+-                'with the children sum and max stated separately.')
++                'and their measured region wall; descendants remain detail '
++                'with zero additional wall contribution.')
+         report['timing'] = recorder.summary()
+         report['date'] = context['date']
+         report['input_identity'] = context['input_identity']
+@@ -919,21 +920,22 @@ def _spread(values: list[float]) -> dict:
+ def _io_phase_walls(run: dict) -> dict:
+     """One run's measured I/O phases, as wall contribution plus bytes.
+ 
+-    A concurrent parent contributes the wall its slowest child occupied, never
+-    the sum of children that overlapped, so this number can be compared and
+-    ranked without inventing time.
++    A concurrent boundary contributes its measured region wall. Descendants
++    remain visible as diagnostic thread time but contribute zero additional
++    ranked wall time.
+     """
+     measurement = run.get('io_measurement') or {}
+     result = {}
+     for name, entry in (measurement.get('phases') or {}).items():
+-        wall = (entry['exclusive_s'] if entry['exclusive_s'] is not None
+-                else entry['children_max_s'])
++        wall = entry['wall_contribution_s']
+         result[name] = {
+             'wall_s': wall,
+             'calls': entry['calls'],
+             'concurrent': entry['concurrent'],
+-            'basis': ('exclusive' if entry['exclusive_s'] is not None
+-                      else 'concurrent_children_max'),
++            'basis': next(
++                (row['basis'] for row in measurement.get('ranking', [])
++                 if row['phase'] == name),
++                'concurrent_detail_only'),
+             'bytes': entry['bytes'],
+         }
+     return result
+@@ -1003,6 +1005,10 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
+                              for name, entry in io_walls[0].items()})
+         def _median(entry):
+             return entry['median_s'] if isinstance(entry, dict) else entry
++        ranked_source = {
++            name: entry for name, entry in ranked_source.items()
++            if _median(entry) > 0
++        }
+         total = sum(_median(entry) for entry in ranked_source.values()) or 1.0
+         summary['io_phase_ranking'] = [
+             {'phase': name,
+@@ -1014,8 +1020,8 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
+                                       key=lambda item: -_median(item[1]))]
+         summary['io_measurement_basis'] = (
+             'observational; outside every demand, passage, solver and replay '
+-            'identity. Ranked on the reused repeats; a concurrent parent '
+-            'contributes its slowest child, never the sum of overlapping ones.')
++            'identity. Ranked on the reused repeats; a concurrent boundary '
++            'contributes its measured region wall and descendants add zero.')
+     (out / 'profile_report.json').write_text(json.dumps(summary, indent=2) + '\n')
+     return summary
+ 
+diff --git a/traffic_sim/ops/io_phases.py b/traffic_sim/ops/io_phases.py
+index 36407ab..51cca51 100644
+--- a/traffic_sim/ops/io_phases.py
++++ b/traffic_sim/ops/io_phases.py
+@@ -17,9 +17,10 @@ Two accounting rules earn their own machinery:
+ * A parent reports wall time MINUS its direct children, so instrumenting a
+   nested call can never make the same second count twice.
+ * A parent whose children ran AT THE SAME TIME reports ``exclusive_s: None``
+-  and publishes the children's sum and max separately. Retention compresses
+-  up to three files in a thread pool; adding those as if they had run in
+-  sequence would invent wall time that never elapsed.
++  and publishes its measured region wall time plus the children's sum and max.
++  Descendants remain diagnostic detail and add no second wall contribution.
++  Retention compresses up to three files in a thread pool; adding those as if
++  they had run in sequence would invent wall time that never elapsed.
+ """
+ from __future__ import annotations
+ 
+@@ -39,11 +40,14 @@ _STACK: ContextVar[tuple] = ContextVar('io_phase_stack', default=())
+ class _Frame:
+     """One open phase. Shared by reference with any worker thread."""
+ 
+-    __slots__ = ('name', 'started', 'concurrent', 'children_s', 'children_max_s')
++    __slots__ = ('name', 'started', 'concurrent', 'inside_concurrent',
++                 'children_s', 'children_max_s')
+ 
+-    def __init__(self, name: str, concurrent: bool) -> None:
++    def __init__(self, name: str, concurrent: bool,
++                 inside_concurrent: bool = False) -> None:
+         self.name = name
+         self.concurrent = concurrent
++        self.inside_concurrent = inside_concurrent
+         self.started = time.perf_counter()
+         self.children_s = 0.0
+         self.children_max_s = 0.0
+@@ -66,7 +70,8 @@ class PhaseCollector:
+         return self._phases.setdefault(name, {
+             'calls': 0, 'inclusive_s': 0.0, 'exclusive_s': 0.0,
+             'children_sum_s': 0.0, 'children_max_s': 0.0,
+-            'concurrent': False, 'parents': set(), 'bytes': {},
++            'wall_contribution_s': 0.0, 'concurrent': False,
++            'inside_concurrent': False, 'parents': set(), 'bytes': {},
+         })
+ 
+     def close(self, frame: _Frame, parent: _Frame | None,
+@@ -79,11 +84,21 @@ class PhaseCollector:
+             entry['children_sum_s'] += frame.children_s
+             entry['children_max_s'] = max(entry['children_max_s'],
+                                           frame.children_max_s)
++            entry['inside_concurrent'] |= frame.inside_concurrent
+             if frame.concurrent:
+                 entry['concurrent'] = True
+                 entry['exclusive_s'] = None
+             elif entry['exclusive_s'] is not None:
+                 entry['exclusive_s'] += max(elapsed - frame.children_s, 0.0)
++            # A concurrent boundary contributes its measured wall duration.
++            # Work below that boundary remains visible as diagnostic thread
++            # time, but contributes zero to the global wall-time ranking.
++            if not frame.inside_concurrent:
++                if frame.concurrent:
++                    entry['wall_contribution_s'] += elapsed
++                else:
++                    entry['wall_contribution_s'] += max(
++                        elapsed - frame.children_s, 0.0)
+             if parent is not None:
+                 parent.children_s += elapsed
+                 parent.children_max_s = max(parent.children_max_s, elapsed)
+@@ -114,27 +129,35 @@ class PhaseCollector:
+                     'concurrent': entry['concurrent'],
+                     'children_sum_s': round(entry['children_sum_s'], 6),
+                     'children_max_s': round(entry['children_max_s'], 6),
++                    'wall_contribution_s': round(
++                        entry['wall_contribution_s'], 6),
++                    'inside_concurrent': entry['inside_concurrent'],
+                     'parent': parent,
+                     'bytes': dict(entry['bytes']),
+                 }
+             unmeasured = list(self.unmeasured_categories)
+ 
+-        # A concurrent parent contributes the wall time its slowest child
+-        # actually occupied, never the sum of what overlapped.
+         def contribution(entry: dict) -> float:
+-            if entry['exclusive_s'] is not None:
+-                return entry['exclusive_s']
+-            return entry['children_max_s']
++            return entry['wall_contribution_s']
++
++        def basis(entry: dict) -> str:
++            if entry['inside_concurrent'] and contribution(entry) == 0:
++                return 'concurrent_detail_only'
++            if entry['inside_concurrent']:
++                return 'mixed_exclusive_and_concurrent_detail'
++            if entry['concurrent']:
++                return 'concurrent_region_wall'
++            return 'exclusive'
+ 
+         total = sum(contribution(entry) for entry in phases.values()) or 1.0
+         ranking = [
+             {'phase': name,
+              'wall_s': round(contribution(entry), 6),
+              'share_percent': round(contribution(entry) / total * 100, 2),
+-             'basis': 'exclusive' if entry['exclusive_s'] is not None
+-                      else 'concurrent_children_max'}
++             'basis': basis(entry)}
+             for name, entry in sorted(
+                 phases.items(), key=lambda item: -contribution(item[1]))
++            if contribution(entry) > 0
+         ]
+         report = {
+             'schema_version': 1,
+@@ -175,7 +198,10 @@ def phase(name: str, *, concurrent: bool = False):
+         return
+     stack = _STACK.get()
+     parent = stack[-1] if stack else None
+-    frame = _Frame(name, concurrent)
++    inside_concurrent = any(
++        ancestor.concurrent or ancestor.inside_concurrent
++        for ancestor in stack)
++    frame = _Frame(name, concurrent, inside_concurrent)
+     token = _STACK.set(stack + (frame,))
+     try:
+         yield frame
+@@ -302,6 +328,9 @@ def record_derived(name: str, seconds: float, **counts: int) -> None:
+         return
+     stack = _STACK.get()
+     parent = stack[-1] if stack else None
+-    collector.close(_Frame(name, False), parent, max(seconds, 0.0))
++    inside_concurrent = bool(
++        parent and (parent.concurrent or parent.inside_concurrent))
++    collector.close(_Frame(name, False, inside_concurrent), parent,
++                    max(seconds, 0.0))
+     if counts:
+         collector.add_bytes(name, counts)

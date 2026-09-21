@@ -210,3 +210,47 @@ def test_unledgered_artifact_blocks_successful_publication(tmp_path):
         "workspace artifact is not in the ledger: artifacts/orphan.json"]
     with pytest.raises(ValueError, match="not in the ledger"):
         workspace.finish("succeeded")
+
+
+def test_preparation_heartbeat_persists_active_time_before_backend_returns(tmp_path, monkeypatch):
+    import threading
+    import traffic_sim.simulation.search_workspace as module
+    from traffic_sim.simulation.monthly_search import _preparation_heartbeat
+    now = [100.0]
+    monkeypatch.setattr(module, '_active_clock_s', lambda: now[0])
+    workspace = create_search_workspace(_spec(), root=tmp_path)
+    workspace.update_progress('prepare_backend', completed=0, total=60)
+    written = threading.Event()
+    original = workspace.update_progress
+    def update(*args, **kwargs):
+        original(*args, **kwargs)
+        written.set()
+    monkeypatch.setattr(workspace, 'update_progress', update)
+    now[0] = 107.0
+    with _preparation_heartbeat(workspace, 60, interval_s=0.01):
+        assert written.wait(2)
+        manifest = json.loads((workspace.directory / 'manifest.json').read_text())
+        assert manifest['active_elapsed_s'] == 7.0
+        assert manifest['progress']['completed'] == 0
+        assert manifest['progress']['detail']['heartbeat_only'] is True
+
+
+def test_pause_keeps_workspace_resumable_but_records_stopped_execution(
+        tmp_path, monkeypatch):
+    import traffic_sim.simulation.search_workspace as module
+    now = [100.0]
+    monkeypatch.setattr(module, '_active_clock_s', lambda: now[0])
+    workspace = create_search_workspace(_spec(), root=tmp_path)
+    workspace.update_progress('prepare_backend', completed=0, total=60)
+    now[0] = 107.0
+    workspace.pause('stopped_by_user')
+
+    manifest = json.loads((workspace.directory / 'manifest.json').read_text())
+    assert manifest['status'] == 'running'
+    assert manifest['execution_status'] == 'paused'
+    assert manifest['active_elapsed_s'] == 7.0
+    assert manifest['progress']['detail']['interruption'] == 'stopped_by_user'
+
+    resumed, created = open_search_workspace(_spec(), root=tmp_path)
+    assert created is False
+    assert resumed.status == 'running'

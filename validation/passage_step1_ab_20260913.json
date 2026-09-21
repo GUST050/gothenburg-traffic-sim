@@ -1,0 +1,983 @@
+{
+  "artifacts": {
+    "report": "validation/passage_step1_ab_20260913.json",
+    "review_patch": "validation/claude_step1_review_fix_20260913.patch"
+  },
+  "claude_commit_reviewed": "c3a5b2eff4583edec700d2a3b720dbe516fe140c",
+  "correctness": {
+    "all_output_hashes_equal_within_a": true,
+    "all_output_hashes_equal_within_b": true,
+    "all_replays_reproduced_saved_selection": true,
+    "all_solver_request_arrays_exact": true,
+    "cross_arm_output_hashes_equal": true,
+    "note": "Cross-version solver request keys differ by design because checkpoint identity binds dynamic_assignment.py source bytes; numerical request arrays are exact.",
+    "solver_request_arrays_exact": {
+      "c": true,
+      "data": true,
+      "indices": true,
+      "indptr": true,
+      "integrality": true,
+      "lower": true,
+      "options": true,
+      "row_lower": true,
+      "row_upper": true,
+      "shape": true,
+      "upper": true
+    },
+    "solver_request_npz_a": "runs/profile-passage-step1-a2-20260913/repeat-2/solver/request.npz",
+    "solver_request_npz_b": "runs/profile-passage-step1-b1-20260913/repeat-2/solver/request.npz"
+  },
+  "date": "2026-09-13",
+  "performance": {
+    "baseline_a": {
+      "all_hashes_equal": true,
+      "all_selection_reproduced": true,
+      "cache_pattern_per_profile": [
+        [
+          false,
+          true,
+          true
+        ],
+        [
+          false,
+          true,
+          true
+        ],
+        [
+          false,
+          true,
+          true
+        ]
+      ],
+      "cold_profile_median_s": 4.975038,
+      "hot_profile_median_s": 3.387834,
+      "median_hot_phase_wall_s": {
+        "baseline_reproduction": 0.789077,
+        "build_passage_system_base": 0.176082,
+        "build_passage_system_expanded": 0.390852,
+        "departure_bound_constraints": 0.032475,
+        "expand_departure_support": 0.527231,
+        "fit_integer_flows": 0.380207,
+        "gzip_verified": 0.044856,
+        "inventory": 0.027801,
+        "load_source": 0.789069,
+        "replay": 3.387834,
+        "retention": 0.047958,
+        "solver": 0.38034,
+        "staging": 0.379204,
+        "structure_candidate": 0.304694,
+        "structure_source": 0.306496,
+        "system_construction": 1.126677
+      },
+      "profiles": [
+        {
+          "cold_wall_s": 4.940388,
+          "hot_median_s": 3.3883945,
+          "hot_wall_s": [
+            3.376637,
+            3.400152
+          ],
+          "path": "runs/profile-passage-step1-a2-20260913/profile_report.json",
+          "reused_process_phase_wall_s": {
+            "baseline_reproduction": {
+              "max_s": 0.790754,
+              "median_s": 0.789801,
+              "min_s": 0.788848,
+              "n": 2
+            },
+            "build_passage_system_base": {
+              "max_s": 0.178701,
+              "median_s": 0.176754,
+              "min_s": 0.174807,
+              "n": 2
+            },
+            "build_passage_system_expanded": {
+              "max_s": 0.403118,
+              "median_s": 0.392844,
+              "min_s": 0.382569,
+              "n": 2
+            },
+            "departure_bound_constraints": {
+              "max_s": 0.032892,
+              "median_s": 0.03284,
+              "min_s": 0.032789,
+              "n": 2
+            },
+            "expand_departure_support": {
+              "max_s": 0.533867,
+              "median_s": 0.529446,
+              "min_s": 0.525024,
+              "n": 2
+            },
+            "fit_integer_flows": {
+              "max_s": 0.382269,
+              "median_s": 0.380207,
+              "min_s": 0.378145,
+              "n": 2
+            },
+            "gzip_verified": {
+              "max_s": 0.045918,
+              "median_s": 0.045575,
+              "min_s": 0.045231,
+              "n": 2
+            },
+            "inventory": {
+              "max_s": 0.028114,
+              "median_s": 0.02806,
+              "min_s": 0.028006,
+              "n": 2
+            },
+            "load_source": {
+              "max_s": 0.790748,
+              "median_s": 0.789794,
+              "min_s": 0.788841,
+              "n": 2
+            },
+            "replay": {
+              "max_s": 3.400152,
+              "median_s": 3.388394,
+              "min_s": 3.376637,
+              "n": 2
+            },
+            "retention": {
+              "max_s": 0.048652,
+              "median_s": 0.048241,
+              "min_s": 0.047831,
+              "n": 2
+            },
+            "solver": {
+              "max_s": 0.382396,
+              "median_s": 0.38034,
+              "min_s": 0.378285,
+              "n": 2
+            },
+            "staging": {
+              "max_s": 0.383467,
+              "median_s": 0.379204,
+              "min_s": 0.37494,
+              "n": 2
+            },
+            "structure_candidate": {
+              "max_s": 0.306324,
+              "median_s": 0.304694,
+              "min_s": 0.303065,
+              "n": 2
+            },
+            "structure_source": {
+              "max_s": 0.306539,
+              "median_s": 0.306496,
+              "min_s": 0.306453,
+              "n": 2
+            },
+            "system_construction": {
+              "max_s": 1.135879,
+              "median_s": 1.131924,
+              "min_s": 1.127968,
+              "n": 2
+            }
+          },
+          "runs": [
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 1,
+              "root_wall_s": 4.940388,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": false,
+              "solver_request_key": "ddcc3eadb17bbf82802b7dbf9b58396ca63ecc2f2113b9c286b6b3635c0603a8"
+            },
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 2,
+              "root_wall_s": 3.376637,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": true,
+              "solver_request_key": "ddcc3eadb17bbf82802b7dbf9b58396ca63ecc2f2113b9c286b6b3635c0603a8"
+            },
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 3,
+              "root_wall_s": 3.400152,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": true,
+              "solver_request_key": "ddcc3eadb17bbf82802b7dbf9b58396ca63ecc2f2113b9c286b6b3635c0603a8"
+            }
+          ]
+        },
+        {
+          "cold_wall_s": 5.136443,
+          "hot_median_s": 3.364668,
+          "hot_wall_s": [
+            3.345769,
+            3.383567
+          ],
+          "path": "runs/profile-passage-step1-a3-20260913/profile_report.json",
+          "reused_process_phase_wall_s": {
+            "baseline_reproduction": {
+              "max_s": 0.785682,
+              "median_s": 0.784631,
+              "min_s": 0.783579,
+              "n": 2
+            },
+            "build_passage_system_base": {
+              "max_s": 0.176901,
+              "median_s": 0.176045,
+              "min_s": 0.175189,
+              "n": 2
+            },
+            "build_passage_system_expanded": {
+              "max_s": 0.402146,
+              "median_s": 0.389264,
+              "min_s": 0.376382,
+              "n": 2
+            },
+            "departure_bound_constraints": {
+              "max_s": 0.032504,
+              "median_s": 0.032189,
+              "min_s": 0.031875,
+              "n": 2
+            },
+            "expand_departure_support": {
+              "max_s": 0.524435,
+              "median_s": 0.523718,
+              "min_s": 0.523,
+              "n": 2
+            },
+            "fit_integer_flows": {
+              "max_s": 0.380762,
+              "median_s": 0.380119,
+              "min_s": 0.379475,
+              "n": 2
+            },
+            "gzip_verified": {
+              "max_s": 0.044686,
+              "median_s": 0.044624,
+              "min_s": 0.044563,
+              "n": 2
+            },
+            "inventory": {
+              "max_s": 0.027857,
+              "median_s": 0.027667,
+              "min_s": 0.027478,
+              "n": 2
+            },
+            "load_source": {
+              "max_s": 0.785674,
+              "median_s": 0.784623,
+              "min_s": 0.783573,
+              "n": 2
+            },
+            "replay": {
+              "max_s": 3.383567,
+              "median_s": 3.364668,
+              "min_s": 3.345769,
+              "n": 2
+            },
+            "retention": {
+              "max_s": 0.047544,
+              "median_s": 0.047438,
+              "min_s": 0.047332,
+              "n": 2
+            },
+            "solver": {
+              "max_s": 0.38091,
+              "median_s": 0.38027,
+              "min_s": 0.37963,
+              "n": 2
+            },
+            "staging": {
+              "max_s": 0.377309,
+              "median_s": 0.374977,
+              "min_s": 0.372646,
+              "n": 2
+            },
+            "structure_candidate": {
+              "max_s": 0.30684,
+              "median_s": 0.304532,
+              "min_s": 0.302224,
+              "n": 2
+            },
+            "structure_source": {
+              "max_s": 0.306091,
+              "median_s": 0.304204,
+              "min_s": 0.302317,
+              "n": 2
+            },
+            "system_construction": {
+              "max_s": 1.132889,
+              "median_s": 1.12126,
+              "min_s": 1.109632,
+              "n": 2
+            }
+          },
+          "runs": [
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 1,
+              "root_wall_s": 5.136443,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": false,
+              "solver_request_key": "ddcc3eadb17bbf82802b7dbf9b58396ca63ecc2f2113b9c286b6b3635c0603a8"
+            },
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 2,
+              "root_wall_s": 3.345769,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": true,
+              "solver_request_key": "ddcc3eadb17bbf82802b7dbf9b58396ca63ecc2f2113b9c286b6b3635c0603a8"
+            },
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 3,
+              "root_wall_s": 3.383567,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": true,
+              "solver_request_key": "ddcc3eadb17bbf82802b7dbf9b58396ca63ecc2f2113b9c286b6b3635c0603a8"
+            }
+          ]
+        },
+        {
+          "cold_wall_s": 4.975038,
+          "hot_median_s": 3.387834,
+          "hot_wall_s": [
+            3.377495,
+            3.398173
+          ],
+          "path": "runs/profile-passage-step1-a4-20260913/profile_report.json",
+          "reused_process_phase_wall_s": {
+            "baseline_reproduction": {
+              "max_s": 0.789531,
+              "median_s": 0.789077,
+              "min_s": 0.788624,
+              "n": 2
+            },
+            "build_passage_system_base": {
+              "max_s": 0.177172,
+              "median_s": 0.176082,
+              "min_s": 0.174991,
+              "n": 2
+            },
+            "build_passage_system_expanded": {
+              "max_s": 0.401516,
+              "median_s": 0.390852,
+              "min_s": 0.380187,
+              "n": 2
+            },
+            "departure_bound_constraints": {
+              "max_s": 0.032637,
+              "median_s": 0.032475,
+              "min_s": 0.032312,
+              "n": 2
+            },
+            "expand_departure_support": {
+              "max_s": 0.530622,
+              "median_s": 0.527231,
+              "min_s": 0.523839,
+              "n": 2
+            },
+            "fit_integer_flows": {
+              "max_s": 0.384678,
+              "median_s": 0.382417,
+              "min_s": 0.380155,
+              "n": 2
+            },
+            "gzip_verified": {
+              "max_s": 0.045678,
+              "median_s": 0.044856,
+              "min_s": 0.044033,
+              "n": 2
+            },
+            "inventory": {
+              "max_s": 0.028013,
+              "median_s": 0.027801,
+              "min_s": 0.027589,
+              "n": 2
+            },
+            "load_source": {
+              "max_s": 0.789522,
+              "median_s": 0.789069,
+              "min_s": 0.788616,
+              "n": 2
+            },
+            "replay": {
+              "max_s": 3.398173,
+              "median_s": 3.387834,
+              "min_s": 3.377495,
+              "n": 2
+            },
+            "retention": {
+              "max_s": 0.04838,
+              "median_s": 0.047958,
+              "min_s": 0.047535,
+              "n": 2
+            },
+            "solver": {
+              "max_s": 0.384803,
+              "median_s": 0.382555,
+              "min_s": 0.380306,
+              "n": 2
+            },
+            "staging": {
+              "max_s": 0.381666,
+              "median_s": 0.38009,
+              "min_s": 0.378514,
+              "n": 2
+            },
+            "structure_candidate": {
+              "max_s": 0.307059,
+              "median_s": 0.305758,
+              "min_s": 0.304457,
+              "n": 2
+            },
+            "structure_source": {
+              "max_s": 0.3083,
+              "median_s": 0.308208,
+              "min_s": 0.308116,
+              "n": 2
+            },
+            "system_construction": {
+              "max_s": 1.133025,
+              "median_s": 1.126677,
+              "min_s": 1.120329,
+              "n": 2
+            }
+          },
+          "runs": [
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 1,
+              "root_wall_s": 4.975038,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": false,
+              "solver_request_key": "ddcc3eadb17bbf82802b7dbf9b58396ca63ecc2f2113b9c286b6b3635c0603a8"
+            },
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 2,
+              "root_wall_s": 3.377495,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": true,
+              "solver_request_key": "ddcc3eadb17bbf82802b7dbf9b58396ca63ecc2f2113b9c286b6b3635c0603a8"
+            },
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 3,
+              "root_wall_s": 3.398173,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": true,
+              "solver_request_key": "ddcc3eadb17bbf82802b7dbf9b58396ca63ecc2f2113b9c286b6b3635c0603a8"
+            }
+          ]
+        }
+      ]
+    },
+    "cold_delta_s": 0.321675,
+    "cold_improvement_percent": 6.47,
+    "hot_delta_s": 0.34669,
+    "hot_improvement_percent": 10.23,
+    "interpretation": "The hot delta matches removal of the duplicate base-system build and dummy validation build. This is replay evidence, not a complete production-day or monthly benchmark.",
+    "metric": "profile root wall time; median of each profile hot repeats, then median across three profiles",
+    "reviewed_step1_b": {
+      "all_hashes_equal": true,
+      "all_selection_reproduced": true,
+      "cache_pattern_per_profile": [
+        [
+          false,
+          true,
+          true
+        ],
+        [
+          false,
+          true,
+          true
+        ],
+        [
+          false,
+          true,
+          true
+        ]
+      ],
+      "cold_profile_median_s": 4.653363,
+      "hot_profile_median_s": 3.0411444999999997,
+      "median_hot_phase_wall_s": {
+        "baseline_reproduction": 0.788569,
+        "build_passage_system_base": 1e-06,
+        "build_passage_system_expanded": 0.402375,
+        "departure_bound_constraints": 0.032566,
+        "expand_departure_support": 0.363228,
+        "fit_integer_flows": 0.379849,
+        "gzip_verified": 0.044656,
+        "inventory": 0.027446,
+        "load_source": 0.788551,
+        "replay": 3.041144,
+        "retention": 0.047447,
+        "solver": 0.379856,
+        "staging": 0.375047,
+        "structure_candidate": 0.301615,
+        "structure_source": 0.303187,
+        "system_construction": 0.797808
+      },
+      "profiles": [
+        {
+          "cold_wall_s": 4.649058,
+          "hot_median_s": 3.0288195,
+          "hot_wall_s": [
+            3.021872,
+            3.035767
+          ],
+          "path": "runs/profile-passage-step1-b1-20260913/profile_report.json",
+          "reused_process_phase_wall_s": {
+            "baseline_reproduction": {
+              "max_s": 0.792867,
+              "median_s": 0.787037,
+              "min_s": 0.781207,
+              "n": 2
+            },
+            "build_passage_system_base": {
+              "max_s": 1e-06,
+              "median_s": 1e-06,
+              "min_s": 1e-06,
+              "n": 2
+            },
+            "build_passage_system_expanded": {
+              "max_s": 0.400333,
+              "median_s": 0.399892,
+              "min_s": 0.399452,
+              "n": 2
+            },
+            "departure_bound_constraints": {
+              "max_s": 0.032863,
+              "median_s": 0.032674,
+              "min_s": 0.032484,
+              "n": 2
+            },
+            "expand_departure_support": {
+              "max_s": 0.366975,
+              "median_s": 0.361876,
+              "min_s": 0.356776,
+              "n": 2
+            },
+            "fit_integer_flows": {
+              "max_s": 0.380672,
+              "median_s": 0.379291,
+              "min_s": 0.37791,
+              "n": 2
+            },
+            "gzip_verified": {
+              "max_s": 0.043269,
+              "median_s": 0.04312,
+              "min_s": 0.04297,
+              "n": 2
+            },
+            "inventory": {
+              "max_s": 0.027005,
+              "median_s": 0.026871,
+              "min_s": 0.026738,
+              "n": 2
+            },
+            "load_source": {
+              "max_s": 0.792849,
+              "median_s": 0.787019,
+              "min_s": 0.78119,
+              "n": 2
+            },
+            "replay": {
+              "max_s": 3.035767,
+              "median_s": 3.028819,
+              "min_s": 3.021872,
+              "n": 2
+            },
+            "retention": {
+              "max_s": 0.045425,
+              "median_s": 0.0453,
+              "min_s": 0.045175,
+              "n": 2
+            },
+            "solver": {
+              "max_s": 0.38068,
+              "median_s": 0.379298,
+              "min_s": 0.377917,
+              "n": 2
+            },
+            "staging": {
+              "max_s": 0.376345,
+              "median_s": 0.375047,
+              "min_s": 0.37375,
+              "n": 2
+            },
+            "structure_candidate": {
+              "max_s": 0.301135,
+              "median_s": 0.299017,
+              "min_s": 0.296898,
+              "n": 2
+            },
+            "structure_source": {
+              "max_s": 0.305445,
+              "median_s": 0.302622,
+              "min_s": 0.299799,
+              "n": 2
+            },
+            "system_construction": {
+              "max_s": 0.79982,
+              "median_s": 0.794471,
+              "min_s": 0.789122,
+              "n": 2
+            }
+          },
+          "runs": [
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 1,
+              "root_wall_s": 4.649058,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": false,
+              "solver_request_key": "6ad308618733a752490e7cc8a19fa6dba26542d4413552ae38b45f3bbb696447"
+            },
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 2,
+              "root_wall_s": 3.021872,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": true,
+              "solver_request_key": "6ad308618733a752490e7cc8a19fa6dba26542d4413552ae38b45f3bbb696447"
+            },
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 3,
+              "root_wall_s": 3.035767,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": true,
+              "solver_request_key": "6ad308618733a752490e7cc8a19fa6dba26542d4413552ae38b45f3bbb696447"
+            }
+          ]
+        },
+        {
+          "cold_wall_s": 4.653363,
+          "hot_median_s": 3.0411444999999997,
+          "hot_wall_s": [
+            3.032101,
+            3.050188
+          ],
+          "path": "runs/profile-passage-step1-b2-20260913/profile_report.json",
+          "reused_process_phase_wall_s": {
+            "baseline_reproduction": {
+              "max_s": 0.792392,
+              "median_s": 0.788569,
+              "min_s": 0.784746,
+              "n": 2
+            },
+            "build_passage_system_base": {
+              "max_s": 1e-06,
+              "median_s": 1e-06,
+              "min_s": 1e-06,
+              "n": 2
+            },
+            "build_passage_system_expanded": {
+              "max_s": 0.402753,
+              "median_s": 0.402375,
+              "min_s": 0.401998,
+              "n": 2
+            },
+            "departure_bound_constraints": {
+              "max_s": 0.03246,
+              "median_s": 0.03217,
+              "min_s": 0.03188,
+              "n": 2
+            },
+            "expand_departure_support": {
+              "max_s": 0.369561,
+              "median_s": 0.363228,
+              "min_s": 0.356895,
+              "n": 2
+            },
+            "fit_integer_flows": {
+              "max_s": 0.380046,
+              "median_s": 0.379849,
+              "min_s": 0.379652,
+              "n": 2
+            },
+            "gzip_verified": {
+              "max_s": 0.04843,
+              "median_s": 0.046154,
+              "min_s": 0.043877,
+              "n": 2
+            },
+            "inventory": {
+              "max_s": 0.028172,
+              "median_s": 0.027621,
+              "min_s": 0.02707,
+              "n": 2
+            },
+            "load_source": {
+              "max_s": 0.792375,
+              "median_s": 0.788551,
+              "min_s": 0.784727,
+              "n": 2
+            },
+            "replay": {
+              "max_s": 3.050188,
+              "median_s": 3.041144,
+              "min_s": 3.032101,
+              "n": 2
+            },
+            "retention": {
+              "max_s": 0.051219,
+              "median_s": 0.04893,
+              "min_s": 0.04664,
+              "n": 2
+            },
+            "solver": {
+              "max_s": 0.380053,
+              "median_s": 0.379856,
+              "min_s": 0.37966,
+              "n": 2
+            },
+            "staging": {
+              "max_s": 0.375528,
+              "median_s": 0.373636,
+              "min_s": 0.371743,
+              "n": 2
+            },
+            "structure_candidate": {
+              "max_s": 0.303792,
+              "median_s": 0.301615,
+              "min_s": 0.299438,
+              "n": 2
+            },
+            "structure_source": {
+              "max_s": 0.303389,
+              "median_s": 0.303187,
+              "min_s": 0.302984,
+              "n": 2
+            },
+            "system_construction": {
+              "max_s": 0.804811,
+              "median_s": 0.797808,
+              "min_s": 0.790805,
+              "n": 2
+            }
+          },
+          "runs": [
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 1,
+              "root_wall_s": 4.653363,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": false,
+              "solver_request_key": "6ad308618733a752490e7cc8a19fa6dba26542d4413552ae38b45f3bbb696447"
+            },
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 2,
+              "root_wall_s": 3.032101,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": true,
+              "solver_request_key": "6ad308618733a752490e7cc8a19fa6dba26542d4413552ae38b45f3bbb696447"
+            },
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 3,
+              "root_wall_s": 3.050188,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": true,
+              "solver_request_key": "6ad308618733a752490e7cc8a19fa6dba26542d4413552ae38b45f3bbb696447"
+            }
+          ]
+        },
+        {
+          "cold_wall_s": 4.658423,
+          "hot_median_s": 3.056241,
+          "hot_wall_s": [
+            3.048868,
+            3.063614
+          ],
+          "path": "runs/profile-passage-step1-b3-20260913/profile_report.json",
+          "reused_process_phase_wall_s": {
+            "baseline_reproduction": {
+              "max_s": 0.796636,
+              "median_s": 0.79089,
+              "min_s": 0.785145,
+              "n": 2
+            },
+            "build_passage_system_base": {
+              "max_s": 1e-06,
+              "median_s": 1e-06,
+              "min_s": 1e-06,
+              "n": 2
+            },
+            "build_passage_system_expanded": {
+              "max_s": 0.4056,
+              "median_s": 0.405282,
+              "min_s": 0.404965,
+              "n": 2
+            },
+            "departure_bound_constraints": {
+              "max_s": 0.032835,
+              "median_s": 0.032566,
+              "min_s": 0.032298,
+              "n": 2
+            },
+            "expand_departure_support": {
+              "max_s": 0.36857,
+              "median_s": 0.364163,
+              "min_s": 0.359756,
+              "n": 2
+            },
+            "fit_integer_flows": {
+              "max_s": 0.382836,
+              "median_s": 0.380772,
+              "min_s": 0.378707,
+              "n": 2
+            },
+            "gzip_verified": {
+              "max_s": 0.045078,
+              "median_s": 0.044656,
+              "min_s": 0.044233,
+              "n": 2
+            },
+            "inventory": {
+              "max_s": 0.027904,
+              "median_s": 0.027446,
+              "min_s": 0.026987,
+              "n": 2
+            },
+            "load_source": {
+              "max_s": 0.796618,
+              "median_s": 0.79087,
+              "min_s": 0.785122,
+              "n": 2
+            },
+            "replay": {
+              "max_s": 3.063614,
+              "median_s": 3.056241,
+              "min_s": 3.048868,
+              "n": 2
+            },
+            "retention": {
+              "max_s": 0.047721,
+              "median_s": 0.047447,
+              "min_s": 0.047172,
+              "n": 2
+            },
+            "solver": {
+              "max_s": 0.382843,
+              "median_s": 0.380779,
+              "min_s": 0.378714,
+              "n": 2
+            },
+            "staging": {
+              "max_s": 0.381415,
+              "median_s": 0.378512,
+              "min_s": 0.375608,
+              "n": 2
+            },
+            "structure_candidate": {
+              "max_s": 0.306964,
+              "median_s": 0.303273,
+              "min_s": 0.299581,
+              "n": 2
+            },
+            "structure_source": {
+              "max_s": 0.305656,
+              "median_s": 0.305397,
+              "min_s": 0.305139,
+              "n": 2
+            },
+            "system_construction": {
+              "max_s": 0.806403,
+              "median_s": 0.802045,
+              "min_s": 0.797687,
+              "n": 2
+            }
+          },
+          "runs": [
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 1,
+              "root_wall_s": 4.658423,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": false,
+              "solver_request_key": "6ad308618733a752490e7cc8a19fa6dba26542d4413552ae38b45f3bbb696447"
+            },
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 2,
+              "root_wall_s": 3.048868,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": true,
+              "solver_request_key": "6ad308618733a752490e7cc8a19fa6dba26542d4413552ae38b45f3bbb696447"
+            },
+            {
+              "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+              "repeat": 3,
+              "root_wall_s": 3.063614,
+              "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+              "selection_reproduced": "identical",
+              "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+              "solver_cache_hit": true,
+              "solver_request_key": "6ad308618733a752490e7cc8a19fa6dba26542d4413552ae38b45f3bbb696447"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "release_evidence": false,
+  "review_branch": "codex/review-claude-step1",
+  "review_findings_fixed": [
+    {
+      "finding": "The verified expansion fast path was public and accepted a directly constructible PassageSystem, contrary to the no-public-bypass contract.",
+      "fix": "Rename it to a private internal helper and retain full validation on the public API.",
+      "severity": "H1"
+    },
+    {
+      "finding": "Direct replay callers could pass a solver cache inside source evidence because isolation was checked only by profile().",
+      "fix": "Validate cache location inside replay() before any output or cache directory is created.",
+      "severity": "H1"
+    }
+  ],
+  "schema_version": 1,
+  "source_evidence": "runs/automatic-passage-8cae0ea6442b427db04a46d2b4108430/q50",
+  "status": "accepted_diagnostic_after_review_fix",
+  "verification": {
+    "broader_after_review_fix": "489 passed, 1 warning",
+    "diff_check": "clean",
+    "focused_after_review_fix": "144 passed",
+    "ignored_fixture_links": "The isolated worktree linked the local net.net.xml, plain.edg.xml and direction_split.json only to satisfy existing tests.",
+    "warning": "urllib3 LibreSSL compatibility warning; unrelated to this change"
+  }
+}
