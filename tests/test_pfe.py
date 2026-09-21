@@ -1331,6 +1331,7 @@ class TestRelaxationRungTracking:
             rungs=rungs)
 
         assert report["relaxation_summary"] == {"clean": 1, "infeasible": 1}
+        assert report["structural_bounds_retained_per_quarter"] == [True, False]
 
     def test_relaxation_summary_absent_when_rungs_not_given(self, tmp_path):
         shapes = [cand("A")]

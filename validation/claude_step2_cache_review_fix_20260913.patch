@@ -1,0 +1,354 @@
+diff --git a/demand/structure.py b/demand/structure.py
+index 152107e..b3caa8f 100644
+--- a/demand/structure.py
++++ b/demand/structure.py
+@@ -219,8 +219,8 @@ class StructureContext:
+     """
+ 
+     def __init__(self):
+-        self.edge_latlon, self.sensor_edge_ids, self.edge_len_m = load_edge_geometry()
+-        self.geometry_sha256 = _file_sha256(GEO_PATH)
++        (self.geometry_sha256, self.edge_latlon, self.sensor_edge_ids,
++         self.edge_len_m) = _content_bound_edge_geometry()
+         self.sensor_identity = _sensor_edge_identity(self.sensor_edge_ids)
+         self._sorted_sensors = sorted(self.sensor_edge_ids)
+         self._route_facts: dict[tuple[str, ...], RouteFacts] = {}
+@@ -228,16 +228,13 @@ class StructureContext:
+         self._near_edge: dict[str, bool] = {}
+         self._sensor_points: tuple | None = None
+         self._baseline_near: int | None = None
+-        self._pool_reports: dict[Path, dict] = {}
++        self._pool_reports: dict[tuple, dict] = {}
+ 
+     def is_current(self) -> bool:
+         """True while the geometry on disk is still the one this was built on."""
+         if not GEO_PATH.exists():
+             return False
+-        if _file_sha256(GEO_PATH) != self.geometry_sha256:
+-            return False
+-        _latlon, sensors, _lengths = load_edge_geometry()
+-        return _sensor_edge_identity(sensors) == self.sensor_identity
++        return _file_sha256(GEO_PATH) == self.geometry_sha256
+ 
+     def endpoint_km(self, origin_edge: str | None,
+                     destination_edge: str | None) -> float | None:
+@@ -326,11 +323,12 @@ class StructureContext:
+         every staged candidate. Each caller gets its own deep copy, so no two
+         reports share a mutable structure.
+         """
+-        key = Path(pool_path)
++        pool_path = Path(pool_path)
++        key = _report_input_identity(pool_path)
+         if key not in self._pool_reports:
+-            metrics = _route_structure_metrics(key, _context=self)
++            metrics = _route_structure_metrics(pool_path, _context=self)
+             if metrics is not None:
+-                bins = purpose_length_bins(key, _context=self)
++                bins = purpose_length_bins(pool_path, _context=self)
+                 if bins:
+                     metrics["purpose_length_bins"] = bins
+             self._pool_reports[key] = metrics
+@@ -406,24 +404,9 @@ def calibrated_agent_summary(route_path: Path, n_intervals: int) -> dict | None:
+ _EDGE_GEOMETRY_CACHE: tuple | None = None
+ 
+ 
+-def load_edge_geometry() -> tuple[dict[str, tuple[float, float]],
+-                                  set[str], dict[str, float]]:
+-    """Parse GEO_PATH once per process: edge midpoints as (lat, lon),
+-    measured-edge ids, and polyline lengths in metres.
+-
+-    THE shared geometry source for the destination-bias guard chain
+-    (_route_structure_metrics and structure_groups_for_shapes) — one parse,
+-    one midpoint convention, so the enforced PFE cap and the drift metric
+-    can never disagree about where an edge is. Cached on the file's
+-    (mtime, size), not unconditionally: serve.py-driven recalibrations can
+-    rewrite network.geojson while a process lives."""
+-    global _EDGE_GEOMETRY_CACHE
+-    st = GEO_PATH.stat()
+-    key = (st.st_mtime_ns, st.st_size)
+-    if _EDGE_GEOMETRY_CACHE is not None and _EDGE_GEOMETRY_CACHE[0] == key:
+-        return _EDGE_GEOMETRY_CACHE[1], _EDGE_GEOMETRY_CACHE[2], _EDGE_GEOMETRY_CACHE[3]
+-    with open(GEO_PATH) as f:
+-        geo = json.load(f)
++def _geometry_from_document(geo: dict) -> tuple[dict[str, tuple[float, float]],
++                                                set[str], dict[str, float]]:
++    """Build all geometry views from one already verified document."""
+     edge_latlon: dict[str, tuple[float, float]] = {}
+     sensor_edge_ids: set[str] = set()
+     edge_len_m: dict[str, float] = {}
+@@ -433,17 +416,74 @@ def load_edge_geometry() -> tuple[dict[str, tuple[float, float]],
+         coords = feat["geometry"]["coordinates"]
+         mid = coords[len(coords) // 2]
+         eid = feat["properties"]["id"]
+-        edge_latlon[eid] = (mid[1], mid[0])          # (lat, lon)
++        edge_latlon[eid] = (mid[1], mid[0])
+         lats = np.array([c[1] for c in coords])
+         lons = np.array([c[0] for c in coords])
+         edge_len_m[eid] = float(gravity_distance_km(
+             lats[1:], lons[1:], lats[:-1], lons[:-1]).sum() * 1000.0)
+         if feat["properties"].get("sensor_id"):
+             sensor_edge_ids.add(eid)
+-    _EDGE_GEOMETRY_CACHE = (key, edge_latlon, sensor_edge_ids, edge_len_m)
+     return edge_latlon, sensor_edge_ids, edge_len_m
+ 
+ 
++def _refresh_edge_geometry(stat_key: tuple[int, int]):
++    """Cache arrays and a digest derived from the same file bytes."""
++    global _EDGE_GEOMETRY_CACHE
++    raw = GEO_PATH.read_bytes()
++    digest = hashlib.sha256(raw).hexdigest()
++    edge_latlon, sensor_edge_ids, edge_len_m = _geometry_from_document(
++        json.loads(raw))
++    _EDGE_GEOMETRY_CACHE = (
++        stat_key, digest, edge_latlon, sensor_edge_ids, edge_len_m)
++    return edge_latlon, sensor_edge_ids, edge_len_m
++
++
++def load_edge_geometry() -> tuple[dict[str, tuple[float, float]],
++                                  set[str], dict[str, float]]:
++    """Parse GEO_PATH once per process: edge midpoints as (lat, lon),
++    measured-edge ids, and polyline lengths in metres.
++
++    THE shared geometry source for the destination-bias guard chain
++    (_route_structure_metrics and structure_groups_for_shapes) — one parse,
++    one midpoint convention, so the enforced PFE cap and the drift metric
++    can never disagree about where an edge is. Cached on the file's
++    (mtime, size), not unconditionally: serve.py-driven recalibrations can
++    rewrite network.geojson while a process lives."""
++    global _EDGE_GEOMETRY_CACHE
++    st = GEO_PATH.stat()
++    key = (st.st_mtime_ns, st.st_size)
++    if _EDGE_GEOMETRY_CACHE is not None and _EDGE_GEOMETRY_CACHE[0] == key:
++        return (_EDGE_GEOMETRY_CACHE[2], _EDGE_GEOMETRY_CACHE[3],
++                _EDGE_GEOMETRY_CACHE[4])
++    return _refresh_edge_geometry(key)
++
++
++def _content_bound_edge_geometry():
++    """Return arrays proven to originate from the reported content digest."""
++    edge_latlon, sensor_edge_ids, edge_len_m = load_edge_geometry()
++    digest = _file_sha256(GEO_PATH)
++    if _EDGE_GEOMETRY_CACHE[1] != digest:
++        stat = GEO_PATH.stat()
++        edge_latlon, sensor_edge_ids, edge_len_m = _refresh_edge_geometry(
++            (stat.st_mtime_ns, stat.st_size))
++        digest = _EDGE_GEOMETRY_CACHE[1]
++    return digest, edge_latlon, sensor_edge_ids, edge_len_m
++
++
++def _report_input_identity(route_path: Path) -> tuple:
++    """Bind a cached pool report to every file it reads."""
++    route_path = route_path.resolve()
++    sidecars = [
++        route_path.with_name(route_path.name.replace(".rou.xml", ".agents.json")),
++        route_path.with_name(route_path.name.replace(".rou.xml", ".meta.json")),
++        Path("sumo/trip_length_fit.json").resolve(),
++    ]
++    return (str(route_path),
++            _file_sha256(route_path) if route_path.is_file() else None,
++            tuple((str(path), _file_sha256(path) if path.is_file() else None)
++                  for path in sidecars))
++
++
+ def route_od_distance_km(
+     edges: list[str] | tuple[str, ...],
+     edge_latlon: dict[str, tuple[float, float]] | None = None,
+diff --git a/tests/test_profile_passage_replay.py b/tests/test_profile_passage_replay.py
+index 6ba9508..dcc8259 100644
+--- a/tests/test_profile_passage_replay.py
++++ b/tests/test_profile_passage_replay.py
+@@ -475,6 +475,14 @@ def test_production_evidence_persists_the_exact_replay_contract(tmp_path, monkey
+     assert manifest['input_sha256'][contract_path.name] == sha256_file(contract_path)
+ 
+ 
++def test_replay_contract_binds_the_structure_implementation():
++    from demand import structure
++
++    sources = profiler.automatic_passage.replay_source_sha256()
++
++    assert sources['demand_structure'] == sha256_file(Path(structure.__file__))
++
++
+ class TestRepeatedProfile:
+     def test_the_first_pass_is_reported_apart_from_the_reused_process(self, tmp_path):
+         source = evidence_root(tmp_path)
+@@ -695,14 +703,33 @@ class TestStructureMeasurement:
+ 
+         assert 'fingerprint' in report['structure_measurement']['basis']
+ 
+-    def test_no_route_facts_cache_is_written(self, tmp_path):
+-        """Step 2 is measurement only; nothing may be reused between reports."""
++    def test_route_facts_cache_scope_is_reported(self, tmp_path):
++        """The diagnostic report must describe the production cache it measures."""
+         report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+ 
+         rows = report['structure_measurement']
++        assert rows['route_facts_cache'] == 'operation_scoped_content_bound'
+         assert rows['structure_source_calls']['_route_structure_metrics']['calls'] \
+             == rows['structure_candidate_calls']['_route_structure_metrics']['calls'] == 1
+ 
++    def test_replay_shares_one_structure_context_like_production(
++            self, tmp_path, monkeypatch):
++        context = profiler.structure_context()
++        original = profiler.calibrated_structure_report
++        observed = []
++
++        monkeypatch.setattr(profiler, 'structure_context', lambda: context)
++
++        def capture(*args, **kwargs):
++            observed.append(kwargs.get('_context'))
++            return original(*args, **kwargs)
++
++        monkeypatch.setattr(profiler, 'calibrated_structure_report', capture)
++
++        profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
++
++        assert observed == [context, context]
++
+ 
+ class TestCacheOwnership:
+     """A caller-supplied cache must belong to the profile layout, not anywhere."""
+@@ -1051,7 +1078,7 @@ def test_each_repeat_carries_its_own_structure_measurement(tmp_path):
+ 
+     for run in summary['runs']:
+         measured = run['structure_measurement']
+-        assert measured['route_facts_cache'] == 'not_implemented'
++        assert measured['route_facts_cache'] == 'operation_scoped_content_bound'
+         assert measured['source_route']['unique_edge_tuples'] == 1
+         assert measured['structure_source_calls']['_route_structure_metrics']['calls'] == 1
+ 
+diff --git a/tests/test_structure_route_facts.py b/tests/test_structure_route_facts.py
+index 5aaf244..7ec987d 100644
+--- a/tests/test_structure_route_facts.py
++++ b/tests/test_structure_route_facts.py
+@@ -4,7 +4,10 @@ Deduplication applies to CALCULATIONS only. Every vehicle keeps its own
+ observation, in document order, so counts, medians, shares and per-quarter
+ fields are the ones the report has always produced.
+ """
++from __future__ import annotations
++
+ import json
++import os
+ from pathlib import Path
+ 
+ import pytest
+@@ -264,6 +267,53 @@ class TestContextIdentity:
+         assert len(context.sensor_identity) == 64
+         assert context.is_current()
+ 
++    def test_same_size_same_mtime_geometry_rewrite_cannot_reuse_stale_arrays(
++            self, tmp_path, monkeypatch):
++        path = geometry(tmp_path)
++        payload = json.loads(path.read_text())
++        for feature in payload["features"]:
++            feature["properties"]["sensor_id"] = (
++                1 if feature["properties"]["id"] == "S" else 0)
++        path.write_text(json.dumps(payload, sort_keys=True))
++        monkeypatch.setattr(dstructure, "GEO_PATH", path)
++        dstructure._EDGE_GEOMETRY_CACHE = None
++        context = dstructure.structure_context()
++        route = route_file(tmp_path, [("O S O S T D5", 0.0)])
++        assert dstructure.calibrated_structure_report(
++            route, _context=context)["sensor_passages"] == {"2": 1}
++        stat = path.stat()
++
++        changed = json.loads(path.read_text())
++        for feature in changed["features"]:
++            feature["properties"]["sensor_id"] = (
++                1 if feature["properties"]["id"] == "T" else 0)
++        rewritten = json.dumps(changed, sort_keys=True)
++        assert len(rewritten.encode()) == stat.st_size
++        path.write_text(rewritten)
++        os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns))
++
++        report = dstructure.calibrated_structure_report(route, _context=context)
++
++        assert report["sensor_passages"] == {"1": 1}
++
++    def test_pool_cache_is_bound_to_route_content(self, tmp_path, monkeypatch):
++        monkeypatch.setattr(dstructure, "GEO_PATH", geometry(tmp_path))
++        route = route_file(tmp_path, [("O D5", 0.0)])
++        pool = route_file(
++            tmp_path, [("O S D1", 0.0)], name="candidates.rou.xml")
++        context = dstructure.structure_context()
++        first = dstructure.calibrated_structure_report(
++            route, pool_path=pool, _context=context)
++
++        changed = pool.read_text().replace("O S D1", "O T D1")
++        assert len(changed) == len(pool.read_text())
++        pool.write_text(changed)
++        second = dstructure.calibrated_structure_report(
++            route, pool_path=pool, _context=context)
++
++        assert first["pool"]["sensor_passages"] == {"1": 1}
++        assert second["pool"]["sensor_passages"] == {"0": 1}
++
+ 
+ class TestFailClosed:
+     def test_a_missing_route_file_still_returns_none(self, tmp_path, monkeypatch):
+diff --git a/tools/profile_passage_replay.py b/tools/profile_passage_replay.py
+index 7452992..086181c 100644
+--- a/tools/profile_passage_replay.py
++++ b/tools/profile_passage_replay.py
+@@ -28,7 +28,7 @@ import xml.etree.ElementTree as ET
+ 
+ import numpy as np
+ 
+-from demand.structure import calibrated_structure_report
++from demand.structure import calibrated_structure_report, structure_context
+ from traffic_sim.core.fingerprint import sha256_file
+ from traffic_sim.demand import automatic_passage
+ from traffic_sim.experimental import dynamic_assignment as dynamic
+@@ -668,12 +668,14 @@ def replay(source: Path, out: Path, *, label: str | None = None,
+                     'this replay path cannot reproduce that solver branch')
+ 
+             source_route = replay_root / 'input/calibrated.rou.xml'
++            structure = structure_context()
+             with recorder.phase('route_shape_inventory', route='source') as shape:
+                 source_shape = route_shape_inventory(source_route)
+                 shape.update(source_shape)
+             with measure_structure_calls() as source_calls, \
+                     recorder.phase('structure_source'):
+-                before = calibrated_structure_report(source_route, pool_path=pool)
++                before = calibrated_structure_report(
++                    source_route, pool_path=pool, _context=structure)
+             if before is None:
+                 raise ReplayRefused('source structural report is unavailable')
+ 
+@@ -714,13 +716,14 @@ def replay(source: Path, out: Path, *, label: str | None = None,
+             with measure_structure_calls() as candidate_calls, \
+                     recorder.phase('structure_candidate',
+                                    pool_path=str(pool) if pool else None):
+-                after = calibrated_structure_report(candidate, pool_path=pool)
++                after = calibrated_structure_report(
++                    candidate, pool_path=pool, _context=structure)
+             if after is None:
+                 raise ReplayRefused('candidate structural report is unavailable')
+             report['structure_measurement'] = {
+                 'basis': ('observational; measured outside every semantic '
+                           'fingerprint and never fed back into a report'),
+-                'route_facts_cache': 'not_implemented',
++                'route_facts_cache': 'operation_scoped_content_bound',
+                 'input_identity': structure_input_identity(),
+                 'source_route': source_shape,
+                 'candidate_route': candidate_shape,
+diff --git a/traffic_sim/demand/automatic_passage.py b/traffic_sim/demand/automatic_passage.py
+index b7fff1c..6e3378b 100644
+--- a/traffic_sim/demand/automatic_passage.py
++++ b/traffic_sim/demand/automatic_passage.py
+@@ -22,6 +22,7 @@ import xml.etree.ElementTree as ET
+ 
+ import numpy as np
+ 
++from demand import structure as demand_structure
+ from demand.structure import (DEST_GROUP_CAP_MULT, calibrated_structure_report,
+                               route_od_distance_km, structure_context)
+ from traffic_sim.demand.structure_caps import integer_structure_cap
+@@ -40,6 +41,7 @@ def replay_source_sha256() -> dict[str, str]:
+     """Code identity needed to interpret a saved pure passage replay."""
+     return {
+         'automatic_passage': sha256_file(Path(__file__)),
++        'demand_structure': sha256_file(Path(demand_structure.__file__)),
+         'dynamic_assignment': sha256_file(Path(dynamic.__file__)),
+         'trial_dynamic_passage': sha256_file(Path(trial.__file__)),
+         'departure_reconciliation': sha256_file(Path(passage.__file__)),

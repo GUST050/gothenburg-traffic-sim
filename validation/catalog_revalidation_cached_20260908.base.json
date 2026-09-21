@@ -1,0 +1,25 @@
+{
+  "catalog_build_sha256": "5425d2900b4681d03b7290b4553130c042930e9842a45a3646946b5f1c84a986",
+  "catalog_keys": {
+    "weekday": "70fcff97032d930db2032a770ef4a555",
+    "weekend": "611cce94dd56e63993cbf3e9fb923739"
+  },
+  "catalog_selected_n_total": {
+    "weekday": 6000,
+    "weekend": 6000
+  },
+  "evidence": {
+    "catalog_build": {
+      "path": "validation/route_catalog_build_v5_2026-09-06.json",
+      "sha256": "5425d2900b4681d03b7290b4553130c042930e9842a45a3646946b5f1c84a986"
+    },
+    "qualification": {
+      "path": "validation/route_catalog_qualification_v6_2026-09-07.json",
+      "sha256": "f94e3928a8be07d236b6da2dffab72396ee4f963478133186ced63572de7c22f"
+    }
+  },
+  "qualification_sha256": "f94e3928a8be07d236b6da2dffab72396ee4f963478133186ced63572de7c22f",
+  "rollback": "python3 build_sumo_demand.py --candidate-source legacy ...",
+  "schema_version": 3,
+  "status": "adopt"
+}

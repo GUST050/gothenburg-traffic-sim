@@ -184,6 +184,12 @@ def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
     if with_loso:
         (web / "loso_report.json").write_text(json.dumps({
             "window": "2025-09-16",
+            "comparison_contract": {
+                "reference_window_start": "2025-09-16T00:00:00",
+                "source": "historical", "through_share_target": 0.25,
+                "candidate_pool_sha256": hashlib.sha256(candidate_bytes).hexdigest(),
+                "network_sha256": hashlib.sha256(network_bytes).hexdigest(),
+            },
             "stations": {"134": {"edges": {"e1": {"ratio": 0.78}}}}}))
     if with_temporal:
         (web / "temporal_holdout_report.json").write_text(json.dumps({
@@ -354,19 +360,19 @@ class TestAssemble:
 
         row = {
             "sensor_id": "s", "edge_id": "e",
-            "target_mean": [10.0, 11.0],
-            "simulated_mean_raw": list(raw),
-            "target_representative": [10.0, 11.0],
-            "simulated_representative_raw": list(raw),
+            "target_mean": [10.0, 11.0, 10.0, 11.0],
+            "simulated_mean_raw": list(raw) * 2,
+            "target_representative": [10.0, 11.0, 10.0, 11.0],
+            "simulated_representative_raw": list(raw) * 2,
             "seed_runs": [{
                 "seed": 1000, "variant": "edge_shares",
-                "target": [10.0, 11.0], "simulated_raw": list(raw),
+                "target": [10.0, 11.0, 10.0, 11.0], "simulated_raw": list(raw) * 2,
             }],
         }
         audit = {"directions": [row]}
         audit["exact_output_fit"] = build_exact_output_fit(
-            [row], n_intervals=2, uses_raw_ensemble_mean=True)
-        return {"n_quarters": 2, "sensor_audit": audit}
+            [row], n_intervals=4, uses_raw_ensemble_mean=True)
+        return {"n_quarters": 4, "sensor_audit": audit}
 
     def test_passage_section_is_judged_on_accuracy_not_exactness(self):
         """A one-vehicle miss is no longer reported as a failed test.
@@ -384,11 +390,11 @@ class TestAssemble:
             self._exact_baseline([10.0, 12.0]))
 
         assert exact["status"] == "pass"
-        assert exact["exact"] == exact["constraints"] == 2
+        assert exact["exact"] == exact["constraints"] == 4
         # One vehicle out of eleven: inside TAG, outside exactness.
         assert inexact["status"] == "pass"
-        assert inexact["mismatch_count"] == 1
-        assert inexact["exact"] == 1
+        assert inexact["mismatch_count"] == 2
+        assert inexact["exact"] == 2
         assert inexact["geh_max"] < inexact["geh_limit"]
 
     def test_passage_section_still_warns_when_the_volume_is_wrong(self):

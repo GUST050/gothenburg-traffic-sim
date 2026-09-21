@@ -147,7 +147,10 @@ const Controls = (() => {
 
       // Keyboard: space = play/pause, ←/→ = ±15 min, Shift+←/→ = ±1 day
       window.addEventListener('keydown', e => {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+        if (document.body.dataset.task === 'home' || document.body.dataset.task === 'history'
+            || document.body.classList.contains('monthly-results-open')) return;
+        if (e.target.closest('input, button, select, textarea, summary, a, [contenteditable]')) return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
         if (e.key === ' ') {
           e.preventDefault();
           State.toggle();

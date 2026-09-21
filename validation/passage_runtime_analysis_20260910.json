@@ -1,0 +1,89 @@
+{
+  "generated_at": "2026-09-10T08:34:19.678126+00:00",
+  "scope": "Read-only diagnosis of active ui-monthly-198410y; no runtime edits or SUMO launches.",
+  "recent_build": {
+    "run": "demand-20260910-082559-a38578d7-2486",
+    "days": 3,
+    "pfe_variants_and_rounding_s": 133.612,
+    "dynamic_passage_s": 112.406,
+    "catalog_restore_or_build_s": 0.233
+  },
+  "stage_breakdown": [
+    {
+      "evidence": "runs/automatic-passage-395b5d152c1b49afbb38bf076721bf87",
+      "day_total_s": 53.49069949999999,
+      "sumo_active_wall_s": 10.190000057220459,
+      "sumo_runs": 27,
+      "solver_s": 15.713549209,
+      "solver_cache_hits": 0,
+      "retention_s": 2.1390057499999955,
+      "other_s": 25.448144483779537
+    },
+    {
+      "evidence": "runs/automatic-passage-506459d67b7a40a385a60bbe141e8978",
+      "day_total_s": 58.879520875,
+      "sumo_active_wall_s": 9.419999837875366,
+      "sumo_runs": 27,
+      "solver_s": 22.466675042000006,
+      "solver_cache_hits": 0,
+      "retention_s": 2.014077874999998,
+      "other_s": 24.978768120124627
+    }
+  ],
+  "measurement_caveat": "SUMO active time is the union of its recorded clockBegin/clockEnd intervals, not summed parallel runtimes. Other time is residual including initialization, I/O, validation, matrix construction and serialization; these are not individually profiled in this live snapshot.",
+  "reuse_snapshot": {
+    "successful_builds": 35,
+    "day_references": 105,
+    "distinct_proofs": 73,
+    "distinct_calendar_dates": 57,
+    "dates_with_two_proofs": 16,
+    "sampled_identity_differences": [
+      "pool_composition",
+      "candidate_metadata",
+      "candidate_pool",
+      "catalog_keys"
+    ],
+    "sampled_source_hashes_equal": true,
+    "all_16_pairs_published_route_digests_differ": true,
+    "april_19_original_trip_populations": [
+      18518,
+      17549
+    ],
+    "april_19_original_route_departure_counters_equal": false
+  },
+  "recommended_order": [
+    {
+      "action": "Validate staged process-parallel variant implementation on a representative inactive/isolated three-arm day before adoption.",
+      "reason": "Three sequential variant pipelines contain native solve, parsing and processing cost beyond SUMO.",
+      "preserve": [
+        "exact final route and agent digests",
+        "raw per-seed counts",
+        "all health and structural checks",
+        "bounded CPU/SUMO slots",
+        "failure atomicity",
+        "timeout behavior"
+      ],
+      "status": "34 small tests passed previously; full real-SUMO equivalence/performance and resource/cancellation checks outstanding."
+    },
+    {
+      "action": "Reuse validated parsing and source incidence within a single variant call, then benchmark.",
+      "reason": "load_source builds and validates source incidence; _refine immediately rebuilds it and expansion validates the same source again.",
+      "status": "Code-inspection opportunity, no new measured speed claim."
+    },
+    {
+      "action": "Keep complete provenance-bound day reuse and stable sources during the active campaign.",
+      "reason": "Repeated calendar dates may have different pools and populations. Date-only reuse would change results.",
+      "status": "Existing reuse already avoids32 duplicate references in this snapshot."
+    }
+  ],
+  "not_recommended": [
+    "Reducing validation seeds or deleting health/accuracy checks.",
+    "Reusing different day products merely because their dates match.",
+    "Returning an arbitrary alternative optimum as equivalent to identical vehicle output.",
+    "More compression tuning as the main solution; retention now only about2s per new day."
+  ],
+  "runtime_sha256": {
+    "traffic_sim/demand/automatic_passage.py": "38b9429a61c5c68ac311d83ab08c73c41a0492a6831e559262b951bd77846d98",
+    "traffic_sim/experimental/dynamic_assignment.py": "fa76d4b9e3c00dd23fcffefb48726a24faf63371046583210e1d6318ec06bf03"
+  }
+}

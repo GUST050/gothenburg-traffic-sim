@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "purpose": "Production-shape diagnostic timing of passage solver phases",
+  "diagnostic_only": true,
+  "release_evidence": false,
+  "implementation_revision": "450de9b780f51fb68268f730a11f6963b13d6ba3",
+  "review_patch": "validation/claude_step3_review_fix_20260913.patch",
+  "source_evidence": "runs/automatic-passage-8cae0ea6442b427db04a46d2b4108430/q50",
+  "profile": "runs/profile-solver-step3-fixed-20260913",
+  "sample": {
+    "date": "2027-06-25",
+    "vehicles": 9675,
+    "unique_edge_tuples": 296,
+    "note": "Replay used an isolated evidence copy whose replay contract was rebound to the exact reviewed source bytes. No SUMO run occurred."
+  },
+  "repeats": {
+    "root_wall_s": [4.536162, 2.901859, 3.00614],
+    "fit_integer_flows_s": [1.971947, 0.386845, 0.386896],
+    "solver_cache_hits": [false, true, true],
+    "milp_executed": [true, false, false],
+    "request_key": "8f8e5232543b4d5228daa0d73f4f3cefa285379fe94b2fd42c42f9d961dc7911"
+  },
+  "cold_exclusive_s": {
+    "milp_solve": 1.576139,
+    "departure_bound_constraints": 0.202355,
+    "column_equivalence_reduction": 0.126359,
+    "checkpoint_cache_write": 0.016779,
+    "reexpansion_and_verification": 0.016997,
+    "input_validation_and_hard_rhs": 0.008263,
+    "scenario_difference_matrix": 0.012988,
+    "all_measured_phases": 1.96578,
+    "unmeasured_residual": 0.006167
+  },
+  "hot_median_exclusive_s": {
+    "departure_bound_constraints": 0.206246,
+    "column_equivalence_reduction": 0.126166,
+    "reexpansion_and_verification": 0.0171295,
+    "scenario_difference_matrix": 0.012843,
+    "input_validation_and_hard_rhs": 0.0087555,
+    "checkpoint_cache_lookup": 0.004645,
+    "checkpoint_request_serialization": 0.0019785,
+    "checkpoint_request_key": 0.001843,
+    "checkpoint_request_write": 0.001288,
+    "constraint_assembly": 0.0002285,
+    "departure_group_bound_constraints": 0.0000235,
+    "milp_solve": 0.0,
+    "checkpoint_cache_write": 0.0
+  },
+  "interpretation": {
+    "cold_fit_milp_share_percent": 79.93,
+    "hot_fit_median_s": 0.3868705,
+    "hot_departure_bounds_share_percent": 53.31,
+    "hot_column_reduction_share_percent": 32.61,
+    "measured_fraction_of_cold_fit_percent": 99.69,
+    "finding": "On a cache hit, the MILP is already skipped. Most remaining fit time rebuilds departure-bound and column-equivalence matrices before the cache lookup."
+  },
+  "identity_checks": {
+    "selection_reproduced_state": "identical in all 3 replays",
+    "selection_sha256": "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+    "routes_sha256": "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+    "agents_sha256": "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+    "solver_request_arrays_equal_to_step_2": true,
+    "solver_request_npz_bytes_equal_to_step_2": true,
+    "solver_request_key_changed": true,
+    "key_change_reason": "The solver cache deliberately hashes passage_solver.py and dynamic_assignment.py source bytes."
+  },
+  "review_findings_fixed": [
+    "The process-global phase observer could mix measurements and leak an observer when two profiles overlapped; it is now context-local.",
+    "The replay source contract did not include passage_solver.py although that file controls cache lookup, feasibility checks and solver execution."
+  ],
+  "tests": {
+    "focused_before_review": "181 passed",
+    "focused_after_review": "182 passed",
+    "selected_broad_after_review": "578 passed, 1 unrelated pre-existing failure",
+    "unrelated_failure": "tests/test_validation_report.py::TestAssemble::test_passage_section_is_judged_on_accuracy_not_exactness",
+    "diff_check": "pass"
+  },
+  "decision": {
+    "step_3_instrumentation": "accept after applying the review patch",
+    "optimization": "not yet implemented",
+    "next": "Design a content-bound reuse experiment for departure-bound construction and column equivalence, preserving exact request arrays and full post-solve verification."
+  }
+}

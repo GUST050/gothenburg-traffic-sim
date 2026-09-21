@@ -243,6 +243,12 @@ def adopted_catalog_config(
         if not catalog_entry_matches(
                 root, pool=pool, key=key, n_total=sizes[pool]):
             return None
+    if "equivalence" in payload:
+        from traffic_sim.demand.catalog_revalidation import renewed_config
+        try:
+            return renewed_config(payload, root, PROJECT_ROOT)
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            return None
     return dict(payload)
 
 

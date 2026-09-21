@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "scope": "identical_catalog_artifacts_after_orchestrator_change_v1",
+  "base_adoption": {
+    "path": "validation/catalog_revalidation_20260912_speed_final.base.json",
+    "sha256": "7fea91a29ce5cafa1ca293ec4a3eb5479baeaeb6f58654d1d507a97ffef22dbc"
+  },
+  "catalog_build": {
+    "path": "validation/catalog_revalidation_20260912_speed_final.build.json",
+    "sha256": "a18861e9b6d2b3f5ff3a2cf4ae6e65be070f548b8478c357e5030782a5449d05"
+  },
+  "pools": {
+    "weekday": {
+      "old_key": "70fcff97032d930db2032a770ef4a555",
+      "new_key": "8548c8191269d61bce2f9bbe85e7785d",
+      "changed_sources": [
+        "build_sumo_demand"
+      ],
+      "outputs_identical": true,
+      "old_manifest_sha256": "fdbf8f2be3499e63d029e4eb264d88ed2c62b4b1ace66148043bb24521e6bf85",
+      "new_manifest_sha256": "95ecd41fcbcf9405990a04b982c9919e88fc2b1cd2d17bd50c41e76c1be48c02",
+      "output_sha256": {
+        "catalog.rou.xml": "075b587e4903f7b3cbee29f7f27cbda5ad2904e53b40f9b601664ec81a674653",
+        "catalog.meta.json": "1ca753426060acebc394c77d7995ef28a35a7a64107619321c2d705a14bff22d",
+        "catalog.validation.json": "75b5efeaf27bab3b81734c562de979adf326a49c81249abdc1b0275c736f9ff0",
+        "catalog.template.json": "2d6d7807e61a67ba968d97928b28ef3ae65cd71d371ffd4b6e501a3c276bce5e"
+      }
+    },
+    "weekend": {
+      "old_key": "611cce94dd56e63993cbf3e9fb923739",
+      "new_key": "77e237f04c746a4fb1fac7e790fff419",
+      "changed_sources": [
+        "build_sumo_demand"
+      ],
+      "outputs_identical": true,
+      "old_manifest_sha256": "8951fbbfe48d19e9fbaf446c4af9b7d50d32d50d79527f86d7958106f69a8855",
+      "new_manifest_sha256": "898c77a36e38737c2a85336acdc1cd7552aedc4569a1a175ecb55232291b64f6",
+      "output_sha256": {
+        "catalog.rou.xml": "d7552e601672f44f461edfccee4a73175e30c8dbdb12766e4bbc3956ef12bdc4",
+        "catalog.meta.json": "9359cf9c75c20ea3c6e1a12f77015a1e4ad601507cf0c5a9f9f0efe9fd9b87e3",
+        "catalog.validation.json": "6b2b6da35fdb265e04a5fb85c59485dc9655179b40643e449c338ca607adcc03",
+        "catalog.template.json": "f9691aa5fffd00f8cf212bb97e4a1f8ae982a271d4ffef724f6ee2ff67ca5d1d"
+      }
+    }
+  },
+  "elapsed_s": 116.956,
+  "performance_claim": "No new end-to-end speed claim; original campaign remains historical."
+}

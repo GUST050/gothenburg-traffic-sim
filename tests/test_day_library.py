@@ -394,9 +394,10 @@ class TestStorageHousekeeping:
     """A horizon-long warming run stores thousands of days; what it leaves
     behind matters as much as what it writes."""
 
-    def _identity(self, date="2027-06-01"):
+    def _identity(self, date="2027-06-01",
+                  pool_composition=("weekday",)):
         return dl.DayIdentity(date=date, source="forecast",
-                              pool_composition=("weekday",), inputs={"n": 1},
+                              pool_composition=pool_composition, inputs={"n": 1},
                               source_hashes={"pfe": "x"})
 
     def _artifacts(self, tmp_path, text="a"):
@@ -455,6 +456,37 @@ class TestStorageHousekeeping:
         assert library.get(identity) is not None
         assert "second" in (entry / "fit.json").read_text()
         assert not (entry.with_name(entry.name + ".replaced")).exists()
+
+    def test_lookup_recovers_valid_entry_left_in_replaced_directory(
+            self, tmp_path):
+        library = dl.DayLibrary(tmp_path / "library")
+        identity = self._identity()
+        library.put(identity, self._artifacts(tmp_path, "original"))
+        entry = library.path_for(identity)
+        replaced = entry.with_name(entry.name + ".replaced")
+        os.replace(entry, replaced)
+
+        result = library.lookup(identity)
+
+        assert result.outcome == "hit"
+        assert result.manifest is not None
+        assert entry.is_dir()
+        assert not replaced.exists()
+
+    def test_replaced_directory_is_not_used_as_an_identity_sibling(
+            self, tmp_path):
+        library = dl.DayLibrary(tmp_path / "library")
+        stored = self._identity(pool_composition=("weekend",))
+        library.put(stored, self._artifacts(tmp_path, "stored"))
+        entry = library.path_for(stored)
+        os.replace(entry, entry.with_name(entry.name + ".replaced"))
+        wanted = self._identity(pool_composition=("weekday",))
+
+        result = library.lookup(wanted)
+
+        assert result.outcome == "miss"
+        assert result.compared_key is None
+        assert result.differing_fields == ()
 
 
 class TestDayLookupExplainsEveryOutcome:

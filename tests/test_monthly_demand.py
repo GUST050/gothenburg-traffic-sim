@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import shutil
 from datetime import date, timedelta
 from pathlib import Path
@@ -10,6 +11,7 @@ from traffic_sim.core.closure_calendar import generate_closure_schedules
 from traffic_sim.core.contracts import (
     ClosureSearchSpec,
     DailyTimeBand,
+    DemandBuildSpec,
 )
 from traffic_sim.simulation.finalist_decision import CandidateEvidence
 from traffic_sim.simulation.monthly_demand import (
@@ -1422,3 +1424,91 @@ def test_resolver_prepare_rejects_when_no_archive_matches_the_manifest(
     )
     with pytest.raises(FileNotFoundError, match="qualified-demand manifest"):
         gated_resolver.prepare(schedules[:1])
+
+
+class TestSpecBasedArchiveIndex:
+    @staticmethod
+    def _write_candidate(root, name, spec, *, metadata_key=None):
+        archive = root / name
+        archive.mkdir()
+        (archive / "demand_build_spec.json").write_text(
+            json.dumps(spec.to_dict()))
+        (archive / "demand_meta.json").write_text(json.dumps({
+            "demand_build_key": metadata_key or spec.build_key,
+        }))
+        return archive
+
+    def test_index_uses_spec_without_opening_large_metadata(
+            self, tmp_path, monkeypatch):
+        spec = DemandBuildSpec(start_date="2027-07-15", source="forecast")
+        archive = self._write_candidate(tmp_path, "demand-a", spec)
+        real_read = monthly_demand._read
+
+        def forbid_metadata(path):
+            if Path(path).name == "demand_meta.json":
+                raise AssertionError("archive index opened large metadata")
+            return real_read(path)
+
+        monthly_demand._ARCHIVE_METADATA_INDEX.clear()
+        monkeypatch.setattr(monthly_demand, "_read", forbid_metadata)
+
+        indexed = monthly_demand._archives_for_build_key(tmp_path)
+
+        assert indexed == {spec.build_key: (archive,)}
+
+    def test_invalid_or_missing_spec_is_not_indexed(self, tmp_path):
+        spec = DemandBuildSpec(start_date="2027-07-15", source="forecast")
+        invalid = self._write_candidate(tmp_path, "demand-invalid", spec)
+        (invalid / "demand_build_spec.json").write_text("{not-json")
+        missing = self._write_candidate(tmp_path, "demand-missing", spec)
+        (missing / "demand_build_spec.json").unlink()
+        inconsistent = self._write_candidate(
+            tmp_path, "demand-inconsistent", spec)
+        inconsistent_spec = spec.to_dict()
+        inconsistent_spec["build_key"] = "0" * 16
+        (inconsistent / "demand_build_spec.json").write_text(
+            json.dumps(inconsistent_spec))
+        monthly_demand._ARCHIVE_METADATA_INDEX.clear()
+
+        assert monthly_demand._archives_for_build_key(tmp_path) == {}
+
+    def test_spec_change_invalidates_cached_index(self, tmp_path):
+        before = DemandBuildSpec(start_date="2027-07-15", source="forecast")
+        after = DemandBuildSpec(start_date="2027-07-16", source="forecast")
+        archive = self._write_candidate(tmp_path, "demand-a", before)
+        spec_path = archive / "demand_build_spec.json"
+        monthly_demand._ARCHIVE_METADATA_INDEX.clear()
+        first = monthly_demand._archives_for_build_key(tmp_path)
+        original_mtime = spec_path.stat().st_mtime_ns
+
+        spec_path.write_text(json.dumps(after.to_dict()))
+        os.utime(spec_path, ns=(original_mtime + 1_000_000,
+                                original_mtime + 1_000_000))
+        second = monthly_demand._archives_for_build_key(tmp_path)
+
+        assert first == {before.build_key: (archive,)}
+        assert second == {after.build_key: (archive,)}
+
+    def test_same_key_keeps_sorted_archive_order(self, tmp_path):
+        spec = DemandBuildSpec(start_date="2027-07-15", source="forecast")
+        later = self._write_candidate(tmp_path, "demand-z", spec)
+        earlier = self._write_candidate(tmp_path, "demand-a", spec)
+        monthly_demand._ARCHIVE_METADATA_INDEX.clear()
+
+        indexed = monthly_demand._archives_for_build_key(tmp_path)
+
+        assert indexed[spec.build_key] == (earlier, later)
+
+
+def test_empty_archive_accounting_is_explicitly_incomplete():
+    result = aggregate_day_library_accounting([])
+
+    assert result == {
+        "schema_version": 1,
+        "status": "incomplete",
+        "builds": 0,
+        "requested_days": 0,
+        "incomplete_builds": [
+            {"build_key": "", "reason": "no_archives"},
+        ],
+    }

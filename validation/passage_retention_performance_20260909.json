@@ -1,0 +1,123 @@
+{
+  "date": "2026-09-09T21:10:33.779705+00:00",
+  "status": "diagnostic_pass_search_restarted",
+  "root_cause": "Synchronous default gzip level9 evidence compression; earlier 3-day window timings were also compared to a 1-day diagnostic.",
+  "change": "Explicit gzip level3, deterministic headers, owned output descriptor closed before round-trip SHA256 verification. Persist separate variant/retention timings. No cache identity bypass.",
+  "before_evidence": "runs/automatic-passage-042f3e1dca9b4f849bb1fbf4dee51191",
+  "after_evidence": "runs/automatic-passage-0a9ebd00582f474cb521cd05be1e414f",
+  "timings_s": {
+    "evidence_retention_before": 42.299573458,
+    "evidence_retention_after": 5.449724083,
+    "dynamic_passage_before": 91.4,
+    "dynamic_passage_after": 54.7,
+    "core_demand_before": 100.3,
+    "core_demand_after": 63.9
+  },
+  "checks": {
+    "q50": {
+      "source_inputs": true,
+      "validation": true,
+      "routes_sha256": true,
+      "agents_sha256": true,
+      "structural_repair": true,
+      "learning_hashes_verified_after_decompression": true
+    },
+    "_v1": {
+      "source_inputs": true,
+      "validation": true,
+      "routes_sha256": true,
+      "agents_sha256": true,
+      "structural_repair": true,
+      "learning_hashes_verified_after_decompression": true
+    },
+    "_v2": {
+      "source_inputs": true,
+      "validation": true,
+      "routes_sha256": true,
+      "agents_sha256": true,
+      "structural_repair": true,
+      "learning_hashes_verified_after_decompression": true
+    }
+  },
+  "tests": "95 passed in2.25s; scoped pylint and git diff --check passed",
+  "gzip_microbenchmark": [
+    {
+      "level": 9,
+      "seconds": 1.424350916,
+      "bytes": 3373060,
+      "source_bytes": 26420813,
+      "source_sha256": "1839662e936c0013b0267b21e8ba591bb94452c0d9904d5448b2ef2250f19735"
+    },
+    {
+      "level": 1,
+      "seconds": 0.08767000000000014,
+      "bytes": 5213833,
+      "source_bytes": 26420813,
+      "source_sha256": "1839662e936c0013b0267b21e8ba591bb94452c0d9904d5448b2ef2250f19735"
+    },
+    {
+      "level": 3,
+      "seconds": 0.13494320799999993,
+      "bytes": 4691250,
+      "source_bytes": 26420813,
+      "source_sha256": "1839662e936c0013b0267b21e8ba591bb94452c0d9904d5448b2ef2250f19735"
+    }
+  ],
+  "evidence_bytes_before": 168032490,
+  "evidence_bytes_after": 206738504,
+  "search": {
+    "id": "ui-monthly-198410y",
+    "stop_verified": true,
+    "same_spec_restart_http": "started",
+    "spec": {
+      "allowed_weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "blackout_dates": [],
+      "closure_type": "full",
+      "content_key": "af7ad2338339cee1b212",
+      "demand_build_id": "ui-monthly-release-198410y",
+      "directed_edges": [
+        "96527131_26842526_0"
+      ],
+      "dst_policy": "exclude_transition_dates",
+      "duration_basis": "required_work_time",
+      "interday_policy": "independent_daily_reset_v1",
+      "kind": "closure_search",
+      "max_consecutive_start_days": 3,
+      "min_consecutive_start_days": 3,
+      "objective_profile": "closure_cost_v1",
+      "period_comparison_policy": "rolling_period_v1",
+      "permitted_daily_band": {
+        "earliest_start": "00:00",
+        "latest_end": "24:00"
+      },
+      "permitted_date_end": "2027-06-01",
+      "permitted_date_start": "2027-04-01",
+      "policy_status": "user_supplied_unverified",
+      "required_work_minutes": 4320,
+      "resolution_minutes": 15,
+      "same_daily_window": true,
+      "schema_version": 1,
+      "search_id": "ui-monthly-198410y",
+      "source": "forecast",
+      "timezone": "Europe/Stockholm",
+      "work_allocation_policy": "exact_equal_daily_v1",
+      "work_to_closure_assumption": "one_to_one"
+    }
+  },
+  "limitations": [
+    "One paired full-day diagnostic, not a full two-month completion or latency distribution.",
+    "Existing scientific warnings remain; no targets, routes, seeds or validation criteria changed.",
+    "Lossless evidence files grow about23 percent.",
+    "Source identity remains strict; this code change invalidates older day entries once. No further source changes during restart.",
+    "Independent SUMO XML headers can differ between runs; decompressed recorded hashes verified and actual validation counts/vehicle artifacts identical."
+  ],
+  "source_sha256": "4eac0f9bd8f1f98dcdfb94b4b294f6854827852271d5f98a1dde97b3cbfc0dc5"
+}

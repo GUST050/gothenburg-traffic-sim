@@ -1,0 +1,50 @@
+{
+  "base_revision": "fb089b9",
+  "checks": {
+    "dependent_modules": {
+      "failed": 0,
+      "module_count": 16,
+      "passed": 610,
+      "warning": "pre-existing urllib3 LibreSSL warning",
+      "warnings": 1
+    },
+    "focused": {
+      "command_scope": [
+        "tests/test_retention_profile.py",
+        "tests/test_passage_evidence_pruning.py",
+        "tests/test_automatic_passage.py",
+        "tests/test_io_phases.py"
+      ],
+      "failed": 0,
+      "passed": 80
+    },
+    "git_diff_check": "passed"
+  },
+  "date": "2026-09-13",
+  "effect_on_ab_evidence": {
+    "affected": false,
+    "improvement_percent": 28.08,
+    "reason": "the A/B/B/A design used one process and one output root per arm, so process-global state was not shared across arms",
+    "saving_per_finished_three_variant_root_s": 1.5295,
+    "timing_verdict_unchanged": true
+  },
+  "finding": {
+    "component": "tools.profile_passage_replay.profile_retention",
+    "problem": "experimental max_workers temporarily mutated the process-global automatic_passage.RETENTION_MAX_WORKERS constant",
+    "risk": "concurrent profiles in one process could observe or overwrite each other's diagnostic worker cap",
+    "severity": "medium"
+  },
+  "release_evidence": false,
+  "repair": {
+    "concurrent_profiles_isolated": true,
+    "error_path_isolated": true,
+    "global_mutation_removed": true,
+    "production_default": "RETENTION_MAX_WORKERS remains 6",
+    "source_identity_effect": "automatic_passage.py is part of demand_source_paths, so archives built against prior source bytes remain correctly invalidated",
+    "strategy": "private call-local worker cap",
+    "warming_action": "none; freeze the final performance-plan source bytes before a later targeted warm"
+  },
+  "schema_version": 1,
+  "scope": "Codex review of fb089b9 retention worker implementation",
+  "verdict": "accepted_after_review_fix"
+}

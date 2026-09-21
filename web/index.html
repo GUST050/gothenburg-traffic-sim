@@ -16,7 +16,7 @@
       --panel-line: #364452;
       --ink:        #f3f5f7;
       --ink-2:      #b8c1ca;
-      --ink-3:      #818d99;
+      --ink-3:      #a4afba;
       --accent:     #39749e;
       --accent-2:   #86a9c1;
       --sim:        #39749e;
@@ -37,6 +37,11 @@
        hardcoded height to keep in sync. */
     body { display: flex; flex-direction: column; }
     #map { flex: 1 1 auto; min-height: 0; position: relative; background: #f2f2f0; }
+    body[data-task="history"] #controls,
+    body[data-task="history"] #brand,
+    body[data-task="history"] #legend,
+    body[data-task="history"] #workspace-nav,
+    body[data-task="history"] #task-grid,
     body[data-task="home"] #controls,
     body[data-task="home"] #brand,
     body[data-task="home"] #legend { display: none; }
@@ -905,6 +910,52 @@
       #monthly-results-table th { padding: 9px 10px; }
       #monthly-results-table td { padding: 9px 10px; }
     }
+
+    /* Readable, bounded controls on both map and light result surfaces. */
+    #task-home { overflow-y: auto; }
+    #scen-select, #sim-panel, #sim-panel > * { min-width: 0; }
+    #scen-select { width: 100%; }
+    #sim-panel > span { overflow-wrap: anywhere; }
+    .action-btn, .seg button, .sr-load-btn { min-height: 36px; }
+    #legend { pointer-events: auto; max-height: calc(100dvh - 220px); overflow-y: auto; }
+    #legend-toggle {
+      width: 100%; min-height: 36px; background: transparent; border: 0;
+      color: var(--ink); text-align: left; font: inherit; font-weight: 650;
+      cursor: pointer; display: flex; justify-content: space-between; gap: 8px;
+    }
+    #legend-toggle[aria-expanded="false"] span { transform: rotate(-90deg); }
+    #legend-content { padding-top: 8px; }
+    #history-panel .action-btn, #resume-monthly-result {
+      color: #234a64; background: #eef4f8; border-color: #9bb1c1;
+      white-space: normal;
+    }
+    #resume-monthly-result { margin-top: 16px; }
+    #history-body th { text-align: left; padding: 8px; color: #435563; }
+    #history-body .history-open {
+      border: 0; background: transparent; color: #24577a; font: inherit;
+      text-align: left; text-decoration: underline; cursor: pointer;
+      min-height: 36px; overflow-wrap: anywhere;
+    }
+    #history-detail-body dt { color: #52616e; }
+    #monthly-results-table { font-size: 0.82rem; }
+    #monthly-results-method summary { padding-block: 8px; cursor: pointer; }
+    :where(button, input, select, summary, a, [tabindex]):focus-visible {
+      outline: 3px solid #1678b8; outline-offset: 3px;
+      box-shadow: 0 0 0 2px #fff;
+    }
+    @media (max-width: 720px) {
+      #legend { width: 154px; padding: 5px 10px; max-height: 40dvh; }
+      #legend-toggle { min-height: 40px; font-size: 0.7rem; white-space: nowrap; }
+      #scen-select { max-width: 100%; }
+      #monthly-results-summary { display: grid; grid-template-columns: 1fr; }
+      .monthly-summary-card { border-left: 0; border-top: 1px solid var(--result-line); }
+      .monthly-summary-card:first-child { border-top: 0; }
+      #history-detail-body dl { grid-template-columns: 1fr; gap: 4px; }
+      #history-detail-body dd { margin-bottom: 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
   </style>
 </head>
 <body data-task="home">
@@ -918,6 +969,7 @@
     <div class="task-home-inner">
       <h1 class="task-home-title">Göteborgs trafikmodell</h1>
       <p class="task-home-subtitle">Analys, prognos och simulering för innerstaden</p>
+      <button id="resume-monthly-result" class="action-btn" hidden>Visa senaste periodanalys</button>
       <div id="task-grid">
         <button class="task-card" data-task="traffic"><span class="task-card-icon">Data</span><strong>Historisk trafik</strong><span>Observerade flöden 2025</span></button>
         <button class="task-card" data-task="forecast"><span class="task-card-icon">Prognos</span><strong>Framtida trafik</strong><span>Beräknade flöden 2027</span></button>
@@ -947,6 +999,8 @@
   </div>
 
   <div id="legend">
+    <button id="legend-toggle" aria-controls="legend-content" aria-expanded="true">Teckenförklaring <span aria-hidden="true">▾</span></button>
+    <div id="legend-content">
     <div id="legend-flow">
       <div class="legend-title">Trafikflöde</div>
       <div class="legend-sub">jämfört med lugn dagtrafik (sensorer: septembersnitt; simulerade vägar: egen middagsnivå)</div>
@@ -1016,6 +1070,7 @@
       Hovra en väg → <b>simuleringskonfidens</b>.<br>
       Vägarnas ljusstyrka avtar med avstånd från sensor.
     </div>
+    </div>
   </div>
 
   <div id="controls">
@@ -1045,7 +1100,7 @@
          Simulering mode — no floating buttons that mean nothing elsewhere. -->
     <div id="sim-panel">
       <span class="label">Simulering</span>
-      <select id="scen-select"></select>
+      <select id="scen-select" aria-label="Välj scenario"></select>
       <span class="hint" id="sim-day-hint" title="Byt med knappen till höger — kräver ny kalibrering, ~6 min"></span>
       <span id="sim-agent-hint" hidden></span>
       <span class="hint" id="sim-uncertainty-hint" hidden></span>
@@ -1076,7 +1131,7 @@
               title="Optimera trafikljusen för det valda scenariot (~2-5 min, syntetiska ljusprogram)">Optimera signaler</button>
       <!-- G3: assembled validation report (web/data/validation.json) —
            every gate the pipeline runs, visible without reading logs. -->
-      <button id="validation-btn" class="action-btn" hidden
+      <button id="validation-btn" class="action-btn" aria-controls="validation-panel" aria-expanded="false" hidden
               title="Alla valideringsgrindar för det aktiva bygget">Validering</button>
       <button id="sensor-audit-btn" class="action-btn" hidden
               title="Jämför sensorunderlag, kalibreringsmål och SUMO-passager per riktning">Sensorflöden</button>

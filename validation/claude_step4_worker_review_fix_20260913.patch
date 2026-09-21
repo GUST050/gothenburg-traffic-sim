@@ -1,0 +1,341 @@
+diff --git a/AGENT_NOTES.md b/AGENT_NOTES.md
+index bb9d463..7f0d970 100644
+--- a/AGENT_NOTES.md
++++ b/AGENT_NOTES.md
+@@ -77,6 +77,8 @@ which model may continue. See `AGENTS.md`.
+ - Exactness across all twelve repeats: source root paths, sizes and SHA-256 unchanged after every repeat; all 114 gz files decompress to the original digest with zero mismatches; the entire retained tree of 137 files is byte-identical between three and six workers; identical counts, retained_tree_ratio 0.192312 and gzip_payload_ratio 0.173675; identical contract outcomes; ranked wall never exceeded the measured root wall, maximum difference 0.000000 s.
+ - Production change: RETENTION_MAX_WORKERS 3 -> 6, locked by a RED/GREEN test that cites the evidence. Gzip level, mtime, verification, temp-file publication and cleanup semantics untouched. Saving is about 1.53 s per finished three-variant root. Eight or more workers were not measured.
+ - Evidence: validation/passage_step4_retention_workers_ab_20260913.json, release_evidence false. Step 4 is CLOSED. _tracked_main stays instrumented with its production timing deferred to the next already-justified demand canary. No process cache for source_trace_xml. Step 5 not started.
++- Step 4 Codex review after `fb089b9`: the accepted A/B remains valid because each arm ran in its own process, but the profiler temporarily mutated `automatic_passage.RETENTION_MAX_WORKERS` to select an arm. That process-global diagnostic override was unsafe for concurrent in-process profiles. The review fix threads a private call-local cap through `_retention_repeat` and `prune_evidence`; normal production calls still read the constant. Tests cover explicit/default caps, the exception path and two profiles synchronised concurrently at retention. The sixteen dependent modules pass 610 tests with the existing urllib3/LibreSSL warning. The edit changes `automatic_passage.py`, which is part of `demand_source_paths`, so current-source archive reuse moves once more; do not re-warm between performance-plan steps. Freeze the final source bytes before the eventual targeted warm.
++- Next: apply and commit the worker-isolation review fix separately, then start Step 5 with measurement only on existing archives/snapshots. Do not infer a cache from repeated profiler reads and do not launch SUMO, demand, catalog, warming or monthly work solely to obtain Step 5 timings.
+ <!-- CURRENT_HANDOFF_END -->
+ 
+ <!-- CURRENT_HANDOFF_HISTORY_START -->
+diff --git a/IMPROVEMENT_PLAN.md b/IMPROVEMENT_PLAN.md
+index 4b35ec9..2477999 100644
+--- a/IMPROVEMENT_PLAN.md
++++ b/IMPROVEMENT_PLAN.md
+@@ -784,6 +784,19 @@ produktionstid är uppskjuten till nästa redan motiverade demand-canary; ingen
+ separat dyr körning startas för den timern. Processcachen för
+ `source_trace_xml` implementeras inte.
+ 
++Eftergranskning av profileraren hittade en isoleringslucka: dess experimentella
++worker-tak ändrade tillfälligt den processglobala produktionskonstanten. Det
++påverkade inte A/B-resultatet eftersom varje arm kördes i en separat process,
++men två samtidiga profiler i samma process kunde påverka varandra. Taket skickas
++nu som en privat, anropslokal parameter genom profileraren till
++`prune_evidence`; produktionsanrop använder fortfarande exakt
++`RETENTION_MAX_WORKERS`. Ett samtidighetstest låser att 3- och 6-workerprofiler
++ser sina egna tak medan produktionspolicyn förblir oförändrad, även vid fel.
++Steg 4:s verdict och tidsvärden är oförändrade. Eftersom
++`automatic_passage.py` ingår i `demand_source_paths` flyttar reparationen
++arkivens källidentitet igen; ingen mellanliggande re-warm ska göras enbart för
++denna fix. Bygg biblioteket först när den avsedda kodserien är frusen.
++
+ 
+ 
+ ### Steg 5 — underlag, arkiv och kostnadsberäkning
+diff --git a/TASKS.md b/TASKS.md
+index f912dc8..2ab074a 100644
+--- a/TASKS.md
++++ b/TASKS.md
+@@ -9,12 +9,12 @@ owners, states and approval formulas are not active workflow rules. See
+ ## WORKFLOW_CONTROL
+ 
+ - Mode: `FLEXIBLE — simulation quality and performance research`
+-- Current focus: `Step 3 is complete and reviewed. Step 4 replay and full three-variant retention are measured with corrected concurrent accounting. _tracked_main is now instrumented; its production timing is deferred to the next authorized real demand canary. No step-4 optimisation is implemented.`
+-- Status: `Step 3 accepted. Review fixes (7e1a976): the diagnostic phase observer is a contextvars.ContextVar set and reset by token, and passage_solver.py is bound into replay_source_sha256(). departure_bound_constraints now reuses the incidence of a repeated (departure quarter, route) within one call: warm median 0.400201 -> 0.192282 s (51.95%), warm fit_integer_flows 0.762698 -> 0.575360 s (24.56%), with the worst candidate measurement still 51.61% under the best baseline one. All 11 solver request arrays, the whole request.npz and the published routes/agents/selection are identical in all four arms, and selection_reproduced is identical in all 12 replays. Column-equivalence reduction was deliberately left alone. PREVIOUS: step 2 accepted (b270087) after five review fixes: postponed annotations for Python 3.9, a StructureContext that derives its SHA-256 and its arrays from ONE read so a same-size same-mtime rewrite invalidates it, a pool report keyed on the content of the route file plus its sidecar and the generation target, demand/structure.py added to replay_source_sha256(), and one profiler context shared by the source and candidate reports with route_facts_cache: operation_scoped_content_bound. Codex's counterbalanced A/B/B/A accepted it: warm replay median 6.6376895 -> 5.956609 s (10.26%), warm structure 1.3972755 -> 0.749738 s (46.34%), cold replay 9.943896 -> 9.233191 s (7.15%), all 11 solver request arrays equal and identical selection/route/agent hashes; with the fixes, 5.8138625 s and 0.651292 s. Step 3 adds a private diagnostic solver hook measuring nine phases with exclusive time; a cache hit reports milp_solve at 0 calls and milp_executed false. Verified request.npz byte-identical and state.json keys unchanged. The cache KEY moves because solve_checkpointed hashes the solver source bytes, so every existing passage-solver cache entry is invalid from this commit.`
+-- Suggested next action: `Run a counterbalanced 3-worker versus 6-worker retention A/B/B/A on owned copies of the same complete q50/_v1/_v2 root. Keep 3 unless 6 improves retention root wall by at least 15%, preserves byte-identical compressed outputs and source integrity, and does not create excessive memory or load. Do not implement the proposed trace parse cache: repeat-profile hits do not establish a dagsbygge speedup.`
++- Current focus: `Steps 0-4 of the passage-speed plan are complete. Step 4 accepted six retention workers after a counterbalanced A/B/B/A with byte-identical outputs. The profiler's experimental worker cap is call-local, so concurrent profiles cannot mutate or observe a temporary production policy. Step 5 measurement is next.`
++- Status: `Step 4 accepted: retention root wall median 5.4473 -> 3.9178 s (28.08%) on the complete three-variant root, no distribution overlap, source unchanged, all 114 gzip payloads verified and retained trees byte-identical. The saving is about 1.53 s per completed root. Codex review repaired the profiler's process-global worker override without changing the measured production policy or the A/B verdict; 610 dependent tests pass.`
++- Suggested next action: `Apply the call-local worker-cap review fix, commit and push it separately, then perform Step 5 measurement only on existing archives and saved outputs. Count actual archive reads and validations, route parsing and resolver work, and assemble_window time before proposing any cache or optimisation. Do not start SUMO, a monthly search, a demand build, catalog generation or warming for this measurement.`
+ - Eligible actors: `Any capable actor.`
+ - Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation or expensive catalog/demand run without explicit scope; keep unrelated local changes outside this delivery.`
+-- Updated: `2026-09-13. Step 4 closed: reporting corrected, retention workers measured and raised to 6.`
++- Updated: `2026-09-13. Step 4 closed after worker-cap isolation review; Step 5 measurement is next.`
+ <!-- WORKFLOW_CONTROL_END -->
+ 
+ <!-- WORKFLOW_HISTORY_START -->
+diff --git a/tests/test_retention_profile.py b/tests/test_retention_profile.py
+index c7d5287..bfa7161 100644
+--- a/tests/test_retention_profile.py
++++ b/tests/test_retention_profile.py
+@@ -9,7 +9,9 @@ ranked wall cannot exceed the wall that really elapsed.
+ import gzip
+ import hashlib
+ import json
++from concurrent.futures import ThreadPoolExecutor
+ from pathlib import Path
++import threading
+ 
+ import pytest
+ 
+@@ -263,7 +265,8 @@ class TestTheWorkerPolicyIsExplicit:
+ 
+ 
+ class TestTheProfilerCanMeasureADifferentCap:
+-    def test_the_override_is_reported_and_restored(self, tmp_path):
++    def test_the_override_is_reported_without_mutating_production_policy(
++            self, tmp_path):
+         from traffic_sim.demand import automatic_passage as auto
+ 
+         before = auto.RETENTION_MAX_WORKERS
+@@ -275,14 +278,18 @@ class TestTheProfilerCanMeasureADifferentCap:
+         assert report['runs'][0]['workers_actual'] >= 1
+         assert auto.RETENTION_MAX_WORKERS == before
+ 
+-    def test_the_override_is_restored_even_when_a_repeat_raises(self, tmp_path,
+-                                                               monkeypatch):
++    def test_the_override_never_mutates_policy_even_when_a_repeat_raises(
++            self, tmp_path, monkeypatch):
+         from traffic_sim.demand import automatic_passage as auto
+ 
+         before = auto.RETENTION_MAX_WORKERS
+-        monkeypatch.setattr(
+-            auto, 'prune_evidence',
+-            lambda *a, **k: (_ for _ in ()).throw(RuntimeError('boom')))
++        seen = []
++
++        def explode(*args, **kwargs):
++            seen.append(kwargs.get('_worker_cap'))
++            raise RuntimeError('boom')
++
++        monkeypatch.setattr(auto, 'prune_evidence', explode)
+ 
+         with pytest.raises(RuntimeError):
+             profiler.profile_retention(_root(tmp_path / 'evidence'),
+@@ -290,6 +297,38 @@ class TestTheProfilerCanMeasureADifferentCap:
+                                        max_workers=6)
+ 
+         assert auto.RETENTION_MAX_WORKERS == before
++        assert seen == [6]
++
++    def test_concurrent_explicit_caps_do_not_share_global_state(
++            self, tmp_path, monkeypatch):
++        from traffic_sim.demand import automatic_passage as auto
++
++        seen = []
++        lock = threading.Lock()
++        both_profiles_reached_retention = threading.Barrier(2)
++
++        def record(_root, *, _worker_cap=None, **_kwargs):
++            both_profiles_reached_retention.wait(timeout=5)
++            with lock:
++                seen.append((_worker_cap, auto.RETENTION_MAX_WORKERS))
++
++        monkeypatch.setattr(auto, 'prune_evidence', record)
++        before = auto.RETENTION_MAX_WORKERS
++
++        with ThreadPoolExecutor(max_workers=2) as pool:
++            profiles = [
++                pool.submit(profiler.profile_retention,
++                            _root(tmp_path / 'a'), tmp_path / 'out-a',
++                            repeats=1, max_workers=3),
++                pool.submit(profiler.profile_retention,
++                            _root(tmp_path / 'b'), tmp_path / 'out-b',
++                            repeats=1, max_workers=6),
++            ]
++            for profile in profiles:
++                profile.result(timeout=10)
++
++        assert sorted(seen) == [(3, before), (6, before)]
++        assert auto.RETENTION_MAX_WORKERS == before
+ 
+     def test_the_default_profile_still_requests_the_production_cap(self,
+                                                                   tmp_path):
+diff --git a/tools/profile_passage_replay.py b/tools/profile_passage_replay.py
+index 7dfef01..6804ebe 100644
+--- a/tools/profile_passage_replay.py
++++ b/tools/profile_passage_replay.py
+@@ -1144,7 +1144,7 @@ def _decompressed_digest(path: Path) -> str:
+ 
+ 
+ def _retention_repeat(root: Path, original: dict, work: Path,
+-                      index: int) -> dict:
++                      index: int, worker_cap: int | None = None) -> dict:
+     """One measured retention pass over an owned copy of ``root``.
+ 
+     The copy is timed and reported SEPARATELY: it is this tool's own cost, not
+@@ -1163,7 +1163,7 @@ def _retention_repeat(root: Path, original: dict, work: Path,
+                     and any(part.startswith(automatic_passage._COMPRESSED)
+                             for part in path.relative_to(copy).parts)]
+     requested, workers_actual = automatic_passage._retention_worker_count(
+-        len(compressible))
++        len(compressible), worker_cap)
+     raw_before = sum(1 for path in files if path.suffix == '.xml')
+     bytes_before = sum(path.stat().st_size for path in files)
+ 
+@@ -1172,7 +1172,7 @@ def _retention_repeat(root: Path, original: dict, work: Path,
+     started = time.perf_counter()
+     with io_phases.observe(collector):
+         with io_phases.phase('retention_root'):
+-            automatic_passage.prune_evidence(copy)
++            automatic_passage.prune_evidence(copy, _worker_cap=worker_cap)
+     wall = time.perf_counter() - started
+     measurement = collector.report(root='retention_root')
+ 
+@@ -1272,25 +1272,18 @@ def profile_retention(root: Path, out: Path, *, repeats: int = 3,
+ 
+     original = _retention_fingerprint(root)
+     runs_out = []
+-    # A diagnostic override, never an environment contract: the production
+-    # constant is set for the duration of this profile and restored whatever
+-    # happens, so an experiment can measure a different cap without shipping
+-    # a second way to configure retention.
+-    previous_cap = automatic_passage.RETENTION_MAX_WORKERS
+-    if max_workers is not None:
+-        automatic_passage.RETENTION_MAX_WORKERS = int(max_workers)
+-    try:
+-        for index in range(repeats):
+-            work = out / f'repeat-{index + 1}'
+-            work.mkdir(parents=True, exist_ok=False)
+-            try:
+-                runs_out.append(_retention_repeat(root, original, work, index))
+-            finally:
+-                # Only this tool's own copy is removed, and only after its
+-                # numbers are in hand.
+-                shutil.rmtree(work / 'copy', ignore_errors=True)
+-    finally:
+-        automatic_passage.RETENTION_MAX_WORKERS = previous_cap
++    if max_workers is not None and int(max_workers) < 1:
++        raise ReplayRefused('retention worker cap must be positive')
++    for index in range(repeats):
++        work = out / f'repeat-{index + 1}'
++        work.mkdir(parents=True, exist_ok=False)
++        try:
++            runs_out.append(_retention_repeat(
++                root, original, work, index, max_workers))
++        finally:
++            # Only this tool's own copy is removed, and only after its numbers
++            # are in hand.
++            shutil.rmtree(work / 'copy', ignore_errors=True)
+ 
+     def spread(key):
+         return _spread([run[key] for run in runs_out[1:]]) if len(runs_out) > 1 else {}
+@@ -1304,7 +1297,8 @@ def profile_retention(root: Path, out: Path, *, repeats: int = 3,
+         'source_evidence_root': str(root),
+         'output_root': str(out),
+         'repeats': repeats,
+-        'workers_requested': (previous_cap if max_workers is None
++        'workers_requested': (automatic_passage.RETENTION_MAX_WORKERS
++                              if max_workers is None
+                               else int(max_workers)),
+         'peak_rss_bytes': resource.getrusage(
+             resource.RUSAGE_SELF).ru_maxrss * (
+diff --git a/traffic_sim/demand/automatic_passage.py b/traffic_sim/demand/automatic_passage.py
+index 08be453..9cbede0 100644
+--- a/traffic_sim/demand/automatic_passage.py
++++ b/traffic_sim/demand/automatic_passage.py
+@@ -461,13 +461,16 @@ _COMPRESSED = ('input', 'evidence', 'before-', 'after-')
+ RETENTION_MAX_WORKERS = 6
+ 
+ 
+-def _retention_worker_count(path_count: int) -> tuple[int, int]:
++def _retention_worker_count(path_count: int,
++                            worker_cap: int | None = None) -> tuple[int, int]:
+     """The requested cap and the count actually usable for ``path_count``.
+ 
+     Both are reported so a measurement can never confuse "we asked for six"
+     with "six ran": fewer files or fewer cores silently lower the second.
+     """
+-    requested = RETENTION_MAX_WORKERS
++    requested = RETENTION_MAX_WORKERS if worker_cap is None else int(worker_cap)
++    if requested < 1:
++        raise ValueError('retention worker cap must be positive')
+     return requested, max(1, min(requested, path_count, os.cpu_count() or 1))
+ 
+ 
+@@ -521,7 +524,8 @@ def _gzip_verified(source: Path) -> bool:
+         temporary.unlink(missing_ok=True)
+ 
+ 
+-def prune_evidence(evidence_root: Path, *, keep_all: bool = False) -> None:
++def prune_evidence(evidence_root: Path, *, keep_all: bool = False,
++                   _worker_cap: int | None = None) -> None:
+     """Shrink one finished evidence root without weakening its record.
+ 
+     Nothing here is read by the pipeline: ``evidence_directory`` is written and
+@@ -551,7 +555,8 @@ def prune_evidence(evidence_root: Path, *, keep_all: bool = False) -> None:
+         # report into the collector that is measuring this call.
+         with io_phases.phase('retention_compress', concurrent=True):
+             worker = io_phases.in_current_context(_gzip_verified)
+-            _requested, workers = _retention_worker_count(len(paths))
++            _requested, workers = _retention_worker_count(
++                len(paths), _worker_cap)
+             with ThreadPoolExecutor(max_workers=workers) as pool:
+                 for path, verified in zip(paths, pool.map(worker, paths)):
+                     if not verified:
+diff --git a/validation/passage_step4_retention_workers_ab_20260913.json b/validation/passage_step4_retention_workers_ab_20260913.json
+index 93f0fd8..bd57fc7 100644
+--- a/validation/passage_step4_retention_workers_ab_20260913.json
++++ b/validation/passage_step4_retention_workers_ab_20260913.json
+@@ -189,6 +189,13 @@
+   ],
+   "measurement_revision": "27238f71a12692d1965f187e2c1c577772442c53",
+   "note_on_revisions": "both arms ran at the same code except the worker cap, which the profiler sets explicitly and restores; no environment variable is involved",
++  "post_measurement_review": {
++    "effect_on_measurement": "none: every A/B arm ran in a separate process and output root, so no arm could observe another arm's temporary process-global value",
++    "finding": "the profiler selected an experimental cap by temporarily mutating automatic_passage.RETENTION_MAX_WORKERS",
++    "repair": "pass the diagnostic worker cap call-locally through profile_retention, _retention_repeat and prune_evidence; production calls still use RETENTION_MAX_WORKERS",
++    "source_identity_effect": "the repair edits traffic_sim/demand/automatic_passage.py, which is in demand_source_paths; freeze final source bytes before a later targeted warm",
++    "verdict_changed": false
++  },
+   "purpose": "Bounded A/B/B/A: three versus six retention compression workers",
+   "release_evidence": false,
+   "result": {
+diff --git a/validation/passage_step4_worker_review_20260913.json b/validation/passage_step4_worker_review_20260913.json
+new file mode 100644
+index 0000000..c33f219
+--- /dev/null
++++ b/validation/passage_step4_worker_review_20260913.json
+@@ -0,0 +1,50 @@
++{
++  "base_revision": "fb089b9",
++  "checks": {
++    "dependent_modules": {
++      "failed": 0,
++      "module_count": 16,
++      "passed": 610,
++      "warning": "pre-existing urllib3 LibreSSL warning",
++      "warnings": 1
++    },
++    "focused": {
++      "command_scope": [
++        "tests/test_retention_profile.py",
++        "tests/test_passage_evidence_pruning.py",
++        "tests/test_automatic_passage.py",
++        "tests/test_io_phases.py"
++      ],
++      "failed": 0,
++      "passed": 80
++    },
++    "git_diff_check": "passed"
++  },
++  "date": "2026-09-13",
++  "effect_on_ab_evidence": {
++    "affected": false,
++    "improvement_percent": 28.08,
++    "reason": "the A/B/B/A design used one process and one output root per arm, so process-global state was not shared across arms",
++    "saving_per_finished_three_variant_root_s": 1.5295,
++    "timing_verdict_unchanged": true
++  },
++  "finding": {
++    "component": "tools.profile_passage_replay.profile_retention",
++    "problem": "experimental max_workers temporarily mutated the process-global automatic_passage.RETENTION_MAX_WORKERS constant",
++    "risk": "concurrent profiles in one process could observe or overwrite each other's diagnostic worker cap",
++    "severity": "medium"
++  },
++  "release_evidence": false,
++  "repair": {
++    "concurrent_profiles_isolated": true,
++    "error_path_isolated": true,
++    "global_mutation_removed": true,
++    "production_default": "RETENTION_MAX_WORKERS remains 6",
++    "source_identity_effect": "automatic_passage.py is part of demand_source_paths, so archives built against prior source bytes remain correctly invalidated",
++    "strategy": "private call-local worker cap",
++    "warming_action": "none; freeze the final performance-plan source bytes before a later targeted warm"
++  },
++  "schema_version": 1,
++  "scope": "Codex review of fb089b9 retention worker implementation",
++  "verdict": "accepted_after_review_fix"
++}

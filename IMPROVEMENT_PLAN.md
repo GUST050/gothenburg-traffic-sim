@@ -114,6 +114,18 @@ utan timers ska fortfarande betecknas rekonstruerade, inte nyuppmätta.
 **Forskningsstöd:** [Python cProfile/pstats](https://docs.python.org/3/library/profile.html).
 Profilering identifierar arbete men dess overhead gör den olämplig som ensam A/B-klocka.
 
+**Lokalt checkpoint 2026-09-13:** En isolerad q50-kalibrering för helgdagen
+2027-06-25 slutfördes på 26,405 s med en verifierad weekend-katalogträff;
+`dynamic_passage` tog 13,155 s. Tre replay-försök reproducerade selection-,
+route- och agentfiler byteidentiskt. Granskningen upptäckte att profileraren gav
+varje repeat en ny tom solver-cache och därför felaktigt beskrev tre kalla
+lösningar som återanvänd process. Den testade korrigeringen delar en ny,
+utmatningslokal cache: kall solve 3,513 s, därefter cacheträffar på 0,754 och
+0,762 s. Full mätdata och fix finns i
+`validation/passage_profile_local_20260913.json` respektive
+`validation/profile_passage_solver_cache_fix_20260913.patch`. Checkpointen är
+diagnostisk; vardag och svår boundary-dag återstår innan hela steg 0 är stängt.
+
 ### Steg 1 — återanvänd verifierat passagesystem
 
 **Filer:** `tools/trial_dynamic_passage.py:load_source`,
@@ -140,6 +152,20 @@ Profilering identifierar arbete men dess overhead gör den olämplig som ensam A
 **Vinstområde:** del av prepare_systems 556 s; hela posten kan inte elimineras.
 **Stöd:** konkret dubbelarbete i repot. [SciPy sparse](https://docs.scipy.org/doc/scipy/reference/sparse.html)
 stöder formatvalet; CSR och delade observationer används REDAN och är inte nya förslag.
+
+**Lokalt granskningscheckpoint 2026-09-13:** Claude commit `c3a5b2e` byggde
+återanvändningen men hade två H1-gränsfel: den verifierade supportvägen var
+publik trots att `PassageSystem` kan konstrueras direkt, och ett direkt
+`replay()`-anrop kunde placera solver-cache i källevidensen. Den lokala
+granskningspatchen gör snabbvägen privat och validerar cacheisolering i
+`replay()` före alla skrivningar. Efter korrigering passerar 144 fokuserade och
+489 bredare relaterade tester. Tre kontrollerade A-profiler mot tre B-profiler
+ger varm median 3,387834 -> 3,0411445 s (10,23 %) och kall median 4,975038 ->
+4,653363 s (6,47 %). Alla elva arrayer i solverförfrågan samt selection-, route-
+och agenthashar är exakta över A/B. Resultatet godkänner ändringens diagnostiska
+prestanda och likhet, men inte ännu ett helt produktionsdagsbygge. Evidens och
+reparationspatch: `validation/passage_step1_ab_20260913.json` och
+`validation/claude_step1_review_fix_20260913.patch`.
 
 ### Steg 2 — beräkna fasta ruttegenskaper per unik rutt
 
@@ -171,6 +197,40 @@ den med `rg -n 'calibrated_structure_report|under_1km' tests`; kör även
 [ElementTree](https://docs.python.org/3/library/xml.etree.elementtree.html) dokumenterar
 parseralternativen; streaming ger inte automatiskt mindre CPU-tid.
 
+**Lokalt mätcheckpoint 2026-09-13:** Den granskade instrumenteringen kördes på
+den bevarade q50-roten för 2027-06-25. 9 675 fordon använder 296 unika fulla
+edge-tupler och 296 endpoint-par, eller 32,686 fordon per unik rutt. De två
+varma strukturfasernas median är 0,342577 + 0,349164 = 0,691741 s och de gör
+tillsammans 108 094 `gravity_distance_km`- samt 20 220
+`route_od_distance_km`-anrop. Detta motiverar ett avgränsat experiment med
+oföränderliga ruttfakta per operation, bundna till geometrins innehåll och den
+sorterade sensoruppsättningen. Hela 0,691741 s är samtidigt det observerade
+taket i denna replay; någon större vinst får inte tillskrivas steget utan en ny
+mätning. Instrumenteringen behövde före körningen få namngivna rutter,
+geometri-/sensoridentitet, explicita nollanrop och cacheägarskap reparerade.
+Efter korrigering passerar 159 fokuserade och 504 bredare relaterade tester;
+selection-, route- och agenthashar är oförändrade. Evidens och patch:
+`validation/passage_step2_measurement_20260913.json` och
+`validation/claude_step2_review_fix_20260913.patch`.
+
+**Implementationsgranskning 2026-09-13:** Claude commit `b375c3c` byggde den
+operationsbundna route-facts-cachen. En motviktad lokal A/B/B/A mot `d10361b`
+på samma q50-evidens gav varm replaymedian 6,6376895 -> 5,956609 s (10,26 %)
+och varm sammanlagd strukturtid 1,3972755 -> 0,749738 s (46,34 %). Kall
+replaymedian föll 9,943896 -> 9,233191 s (7,15 %). Alla 11 arrayer i
+solverförfrågan och selection-, route- och agenthasharna var exakt lika.
+
+Granskningen fann fem korrigeringar före integration: Python 3.9-kompatibilitet
+i testet, geometriarray och digest från samma bytes även vid oförändrad
+mtime/storlek, innehållsbunden poolcache, `demand/structure.py` i replaykontraktet
+samt en delad kontext och sann cacheetikett i profilern. Med dessa rättelser gav
+en slutlig tre-replaykontroll varm median 5,8138625 s och varm strukturtid
+0,651292 s; 507 tester passerade i den valda breda sviten med ett oförändrat,
+fristående valideringsrapportfel. Steg 2 godkänns efter att reparationspatchen
+applicerats. Ett helt produktionsdagsbygge och månadssökning är fortfarande
+omätta. Evidens och patch: `validation/passage_step2_cache_ab_20260913.json`
+och `validation/claude_step2_cache_review_fix_20260913.patch`.
+
 ### Steg 3 — lösar- och supportkostnad, endast efter mätning
 
 **Filer:** `dynamic_assignment.py:fit_integer_flows`,
@@ -188,6 +248,27 @@ parseralternativen; streaming ger inte automatiskt mindre CPU-tid.
 **Tester:** dynamic_assignment, passage_solver_checkpoint och automatic_passage.
 **Vinsttak:** hela den nuvarande posten är 234 s för månaden. Det är inte rimligt
 att prioritera en riskfylld solvermigration som lösning på en timmes körtid.
+
+**Lokalt mätcheckpoint 2026-09-13:** Claude commit `450de9b` delar
+`fit_integer_flows` i 13 redovisade delfaser. Granskningen ersatte den
+processglobala observeraren med en `ContextVar`, så samtidiga profiler inte kan
+blanda eller läcka mätdata, och band replaykontraktet även till
+`passage_solver.py`. Den valda breda sviten ger 578 passerade tester och samma
+fristående valideringsrapportfel som före ändringen.
+
+Tre replays på samma 2027-06-25-q50-underlag reproducerar selection-, route- och
+agenthashar och har solver-cache `[false, true, true]`. Kall
+`fit_integer_flows` är 1,971947 s, varav själva MILP-anropet tar 1,576139 s
+(79,93 %). Vid varm cache körs ingen MILP; fit-medianen är 0,3868705 s. Då tar
+`departure_bound_constraints` 0,206246 s (53,31 %) och
+kolumnekvivalens/reduktion 0,126166 s (32,61 %). De mätta delfaserna täcker
+99,69 % av den kalla fit-tiden. `request.npz` är byteidentisk med steg 2; dess
+cache key ändras avsiktligt eftersom solverns cache binder de två ändrade
+källfilerna. Nästa avgränsade experiment ska därför börja med att återanvända
+unik rutt-/kvartincidens i avgångsgränsmatrisen och kräva exakt CSR/request- och
+outputlikhet. Evidens och patch:
+`validation/passage_step3_solver_measurement_20260913.json` och
+`validation/claude_step3_review_fix_20260913.patch`.
 
 ### Steg 4 — bevisfiler, parsing och serialization
 

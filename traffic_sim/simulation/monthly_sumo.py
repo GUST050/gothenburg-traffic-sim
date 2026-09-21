@@ -2225,7 +2225,7 @@ class ArchivedDemandSumoRunner:
                 edge_data, self.n_intervals,
                 measured_empty_edges=tuple(self.close_edges))
             active_throughput = closure_metrics.active_closure_throughput(
-                seed_flows, closures, window_begin_s=plan.warm_point_s)
+                seed_flows, closures)
             if active_throughput is None:
                 return None
         else:

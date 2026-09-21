@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-09T14:45:00+02:00",
+  "status": "diagnostic_pass",
+  "problem": {
+    "failed_search_id": "ui-monthly-198410y",
+    "failed_demand_run": "demand-20260909-114236-870a99b0-063d",
+    "error": "ValueError: new structural warnings: ['trips_under_1km_cap']",
+    "observed_failure": {
+      "arm": "_v1",
+      "quarter": 2,
+      "actual_short_trips": 10,
+      "integer_limit": 9,
+      "excess_vehicles": 1
+    }
+  },
+  "root_cause": {
+    "classification": "time_support_representation_gap",
+    "route_multiset_changed_by_failing_initial_fit": false,
+    "explanation": "The fixed 300-second departure-shift grid could match passage counts but concentrated one unchanged short route in departure quarter 2. The route set itself was not the source of the new warning."
+  },
+  "implementation": {
+    "policy": "automatic_dynamic_passage_v3",
+    "initial_support": "fixed shifts from -900 to +900 seconds",
+    "adaptive_repair": "add exact departure-group constraints only for observed violating quarters",
+    "fallback_support": "route-specific sensor-passage and departure-quarter boundary times, deduplicated by full observation signature",
+    "shared_cap_semantics": "traffic_sim.demand.structure_caps.integer_structure_cap",
+    "shared_distance_semantics": "demand.structure.route_od_distance_km",
+    "preserved": [
+      "sensor passage targets",
+      "physical route multiset",
+      "OD/purpose totals",
+      "retained PFE edge bounds",
+      "per-arm vehicle population"
+    ],
+    "relaxed": []
+  },
+  "verification": {
+    "diagnostic_demand_run": "demand-20260909-123257-2abe4ce3-c315",
+    "diagnostic_build_id": "aadfa81564f5cc97687d",
+    "date": "2027-04-28",
+    "variants": [
+      "q50",
+      "q10",
+      "q90"
+    ],
+    "exit_code": 0,
+    "dynamic_passage_elapsed_s": 231.635,
+    "whole_build_core_elapsed_s": 240.046,
+    "arms": {
+      "q50": {
+        "structural_repair": {
+          "passes": 0,
+          "quarters": [],
+          "support": "fixed_shift_grid",
+          "boundary_fallback": false
+        },
+        "source_absolute_sensor_error": 4367,
+        "candidate_absolute_sensor_error": 10,
+        "independent_validation_seeds": [
+          4000,
+          4001,
+          4002
+        ],
+        "passage_accuracy_ok": true
+      },
+      "_v1": {
+        "structural_repair": {
+          "passes": 1,
+          "quarters": [
+            2
+          ],
+          "support": "passage_boundaries",
+          "boundary_fallback": true
+        },
+        "source_absolute_sensor_error": 4405,
+        "candidate_absolute_sensor_error": 30,
+        "independent_validation_seeds": [
+          4000,
+          4001,
+          4002
+        ],
+        "passage_accuracy_ok": true
+      },
+      "_v2": {
+        "structural_repair": {
+          "passes": 0,
+          "quarters": [],
+          "support": "fixed_shift_grid",
+          "boundary_fallback": false
+        },
+        "source_absolute_sensor_error": 4578,
+        "candidate_absolute_sensor_error": 28,
+        "independent_validation_seeds": [
+          4000,
+          4001,
+          4002
+        ],
+        "passage_accuracy_ok": true
+      }
+    },
+    "failed_arm_route_multiset_preserved": true,
+    "failed_arm_od_purpose_multiset_preserved": true,
+    "failed_arm_vehicle_count": 18889,
+    "failed_arm_final_short_trip_violating_quarters": 0,
+    "candidate_pool_hash_matches_restored_catalog": true,
+    "focused_tests": "317 passed in 2.91s",
+    "pylint": "pass",
+    "git_diff_check": "pass"
+  },
+  "operational_state": {
+    "monthly_search_restarted": false,
+    "current_monthly_status": "error and resumable workspace retained",
+    "shared_sumo_build_restored": "fc873d158dd808b6cc15",
+    "latest_demand_pointer_restored": "demand-20260909-113534-5947cef2-7cea",
+    "web_od_and_validation_regenerated_from_restored_live_demand": true
+  },
+  "remaining_evidence_limits": [
+    "This is a one-day replay of the exact previously failing date, not a completed monthly closure search.",
+    "The pre-existing purpose_length_ordering warning remains on all three arms.",
+    "The q10 PFE source report relaxed two unmeasured edge-quarter structural values before passage fitting; the passage repair added no relaxation.",
+    "The window-policy provenance correction was added after this diagnostic run and is covered by unit tests."
+  ],
+  "research_basis": [
+    {
+      "title": "SUMO routes from observation points",
+      "url": "https://sumo.dlr.de/docs/Demand/Routes_from_Observation_Points.html"
+    },
+    {
+      "title": "SUMO routeSampler and interval semantics",
+      "url": "https://sumo.dlr.de/docs/Tools/Turns.html"
+    },
+    {
+      "title": "OD estimation with counts, paths, conservation, similarity and non-negativity",
+      "url": "https://arxiv.org/abs/1604.00391"
+    }
+  ]
+}

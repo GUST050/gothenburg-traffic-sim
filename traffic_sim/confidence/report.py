@@ -302,6 +302,9 @@ def _exact_sensor_output_section(baseline: dict | None) -> dict:
         "representative_constraints": representative.get("constraints"),
         "per_seed": per_seed,
         "standard": accuracy["standard"],
+        **{key: accuracy[key] for key in (
+            "hourly_geh_cells", "hourly_geh_within", "hourly_geh_pct",
+            "hourly_geh_max", "standard_aggregation_minutes", "volume_policy")},
         "geh_limit": accuracy["geh_limit"],
         "geh_guideline_pct": accuracy["geh_guideline_pct"],
         "geh_cells": accuracy["geh_cells"],
@@ -317,8 +320,9 @@ def _exact_sensor_output_section(baseline: dict | None) -> dict:
         "exact_any_seed": accuracy["exact_any_seed"],
         "non_integer_ensemble_cells": accuracy["non_integer_ensemble_cells"],
         "gate": "rå SUMO-passage bedöms mot DfT TAG Unit M3.1 Tabell 2: "
-                "GEH<5 på fler än 85 % av riktade sensor × 15-minutersceller "
-                "och dygnsvolym per riktning inom 10 %; exakt heltalsträff "
+                "GEH<5 på fler än 85 % av riktade sensor × timceller. "
+                "Separata projektkrav: kvartvis GEH och totalvolym per riktning "
+                "inom 10 %; exakt heltalsträff "
                 "redovisas som information, inte som krav",
     }
     if integrity_errors:
@@ -353,10 +357,14 @@ def _multi_day_section(meta: dict | None, baseline: dict | None) -> dict:
     }
 
 
-def _held_out_section(loso: dict | None) -> dict:
+def _held_out_section(loso: dict | None, meta: dict | None = None) -> dict:
     if not loso or not loso.get("stations"):
         return {"status": "missing", "reason": "loso_report.json saknas — "
                 "kör validate_sim.py"}
+    stale = _holdout_stale_reasons(loso, meta)
+    if stale:
+        return {"status": "missing", "reason": "LOSO är inaktuellt för nuvarande release: "
+                + "; ".join(stale)}
     ratios = {}
     for sid, st in sorted(loso["stations"].items()):
         for edge, ed in st.get("edges", {}).items():
@@ -377,14 +385,7 @@ def _held_out_section(loso: dict | None) -> dict:
     }
 
 
-def _temporal_holdout_section(report: dict | None,
-                              meta: dict | None) -> dict:
-    if not report or not report.get("stations"):
-        return {
-            "status": "missing",
-            "reason": "temporal_holdout_report.json saknas — kör "
-                      "validate_sim.py --holdout-date YYYY-MM-DD",
-        }
+def _holdout_stale_reasons(report: dict, meta: dict | None) -> list[str]:
     contract = report.get("comparison_contract") or {}
     expected_reference = (meta or {}).get("epoch_sim")
     expected_through = ((meta or {}).get("build_options") or {}).get(
@@ -408,10 +409,24 @@ def _temporal_holdout_section(report: dict | None,
         if recorded is None or current is None or str(recorded) != str(current):
             stale_reasons.append(
                 f"{label}: report={recorded!r}, current={current!r}")
-    if contract.get("source") != (meta or {}).get("source"):
+    if (not contract.get("source")
+            or contract.get("source") != (meta or {}).get("source")):
         stale_reasons.append(
             f"source: report={contract.get('source')!r}, "
             f"current={(meta or {}).get('source')!r}")
+    return stale_reasons
+
+
+def _temporal_holdout_section(report: dict | None,
+                              meta: dict | None) -> dict:
+    if not report or not report.get("stations"):
+        return {
+            "status": "missing",
+            "reason": "temporal_holdout_report.json saknas — kör "
+                      "validate_sim.py --holdout-date YYYY-MM-DD",
+        }
+    contract = report.get("comparison_contract") or {}
+    stale_reasons = _holdout_stale_reasons(report, meta)
     if stale_reasons:
         return {
             "status": "missing",
@@ -466,7 +481,7 @@ def assemble() -> dict:
         "sensor_output": _sensor_output_section(meta, baseline),
         "sensor_output_exact": _exact_sensor_output_section(baseline),
         "multi_day": _multi_day_section(meta, baseline),
-        "held_out": _held_out_section(loso),
+        "held_out": _held_out_section(loso, meta),
         "temporal_holdout": _temporal_holdout_section(temporal, meta),
     }
     gated = [s for s in sections.values() if s["status"] in ("pass", "warn")]

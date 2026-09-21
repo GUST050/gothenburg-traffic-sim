@@ -164,6 +164,16 @@ def aggregate_day_library_accounting(
     entries: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     """Combine complete per-archive summaries without inventing missing data."""
+    if not entries:
+        return {
+            "schema_version": 1,
+            "status": "incomplete",
+            "builds": 0,
+            "requested_days": 0,
+            "incomplete_builds": [
+                {"build_key": "", "reason": "no_archives"},
+            ],
+        }
     requested_days = 0
     incomplete = []
     summaries: list[tuple[str, Mapping[str, Any]]] = []
@@ -271,27 +281,41 @@ def _archive_validation_state(archive: Path) -> tuple[tuple[str, int, int], ...]
     return tuple(state)
 
 
+def _archive_spec_signature(archive: Path) -> tuple[str, int, int]:
+    """Return cache state for one archive's small identity specification."""
+    spec_path = archive / "demand_build_spec.json"
+    try:
+        stat = spec_path.stat()
+    except OSError:
+        return (archive.name, -1, -1)
+    return (archive.name, int(stat.st_mtime_ns), int(stat.st_size))
+
+
+def _archive_build_key_from_spec(archive: Path) -> str | None:
+    """Derive an archive index key from its canonical demand specification."""
+    try:
+        spec = DemandBuildSpec.from_dict(
+            _read(archive / "demand_build_spec.json"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return None
+    return spec.build_key
+
+
 def _archives_for_build_key(runs_root: Path) -> dict[str, tuple[Path, ...]]:
-    """Index archive candidates from metadata before expensive validation."""
+    """Index candidates by their small spec before expensive validation."""
     root = Path(runs_root).resolve()
     archives = tuple(sorted(path for path in root.glob("demand-*")
                             if path.is_dir()))
-    signature = tuple(
-        (path.name, int(path.stat().st_mtime_ns), int(path.stat().st_size))
-        for path in archives
-    )
+    signature = tuple(_archive_spec_signature(path) for path in archives)
     cached = _ARCHIVE_METADATA_INDEX.get(str(root))
     if cached is not None and cached[0] == signature:
         return cached[1]
     by_key: dict[str, list[Path]] = {}
     for archive in archives:
-        try:
-            metadata = _read(archive / "demand_meta.json")
-            build_key = metadata.get("demand_build_key")
-        except (OSError, json.JSONDecodeError, TypeError):
+        build_key = _archive_build_key_from_spec(archive)
+        if build_key is None:
             continue
-        if isinstance(build_key, str) and build_key:
-            by_key.setdefault(build_key, []).append(archive)
+        by_key.setdefault(build_key, []).append(archive)
     result = {key: tuple(value) for key, value in by_key.items()}
     _ARCHIVE_METADATA_INDEX[str(root)] = (signature, result)
     return result

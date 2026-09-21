@@ -1,0 +1,23 @@
+{
+  "status": "pass",
+  "fixture": "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a/q50",
+  "vehicles": 18990,
+  "identical_all_system_fields": true,
+  "timings_s": {
+    "before": [
+      2.1023931250000003,
+      1.9919324170000001,
+      2.003491833
+    ],
+    "after": [
+      1.6986183750000006,
+      1.7346155840000002,
+      1.6152317499999995
+    ]
+  },
+  "median_s": {
+    "before": 2.003491833,
+    "after": 1.6986183750000006
+  },
+  "scope": "Source loading and original matrix construction only. Shared machine; not whole-day performance."
+}

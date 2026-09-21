@@ -1,0 +1,198 @@
+{
+  "protocol": "departure_to_passage_timing_diagnostic_v2",
+  "diagnostic_only": true,
+  "production_policy_changed": false,
+  "predictive_improvement_claimed": false,
+  "passage_semantics": "Matches SUMO edgeData entered: a target edge is counted when a vehicle moves into it from its preceding route edge. Vehicles emitted on a target edge are excluded because edgeData records them as departed, not entered.",
+  "evidence_provenance_caveat": "sumo/vehroutes_baseline.xml is dated 2026-07-14 (per its own SUMO config comment) and sumo/calibrated.rou.xml on disk was rebuilt 2026-09-08 for the current 2027-08-12 forecast release -- this evidence does NOT correspond to the currently published release's exact demand vector. It is still valid evidence for the TIMING question (route travel time to a sensor edge is primarily a function of route geometry/network speeds, not which specific demand vector generated the route population), but it must not be read as a current-release accuracy claim.",
+  "input_sha256": {
+    "sumo/vehroutes_baseline.xml": "7880806d00c69bb36e5436e28ef091df34efcbaa08d48aa45d0e6e54fbb2bb9e",
+    "sumo/edgedata_baseline_1000.xml": "c5ec3b08f938411039aa3da0000a0a3ec491105bd7064acdba6fbbaa0f5d8da0"
+  },
+  "n_intervals": 96,
+  "quarter_seconds": 900,
+  "n_vehicles_total": 21600,
+  "n_target_edges": 7,
+  "n_target_edge_passages": 24746,
+  "n_target_edge_missing": 0,
+  "per_edge_timing": [
+    {
+      "edge_id": "1455801464_18241874_0",
+      "sensor_id": "107",
+      "n_passages": 3219,
+      "n_missing": 0,
+      "cross_quarter_fraction": 0.2752407579993787,
+      "median_lag_quarters": 0,
+      "mean_lag_quarters": 0.2752407579993787,
+      "median_lag_s": 223.0,
+      "out_of_window_passages": 1,
+      "lag_histogram": {
+        "0": 2333,
+        "1": 886
+      },
+      "missing_by_reason": {}
+    },
+    {
+      "edge_id": "26355153_91615277_0",
+      "sensor_id": "2276",
+      "n_passages": 4279,
+      "n_missing": 0,
+      "cross_quarter_fraction": 0.17831268988081328,
+      "median_lag_quarters": 0,
+      "mean_lag_quarters": 0.17831268988081328,
+      "median_lag_s": 181.0,
+      "out_of_window_passages": 0,
+      "lag_histogram": {
+        "0": 3516,
+        "1": 763
+      },
+      "missing_by_reason": {}
+    },
+    {
+      "edge_id": "26355153_96523321_0",
+      "sensor_id": "134",
+      "n_passages": 3140,
+      "n_missing": 0,
+      "cross_quarter_fraction": 0.2464968152866242,
+      "median_lag_quarters": 0.0,
+      "mean_lag_quarters": 0.2464968152866242,
+      "median_lag_s": 204.0,
+      "out_of_window_passages": 0,
+      "lag_histogram": {
+        "0": 2366,
+        "1": 774
+      },
+      "missing_by_reason": {}
+    },
+    {
+      "edge_id": "26842525_26355153_0",
+      "sensor_id": "133",
+      "n_passages": 3570,
+      "n_missing": 0,
+      "cross_quarter_fraction": 0.21428571428571427,
+      "median_lag_quarters": 0.0,
+      "mean_lag_quarters": 0.21428571428571427,
+      "median_lag_s": 191.0,
+      "out_of_window_passages": 0,
+      "lag_histogram": {
+        "0": 2805,
+        "1": 765
+      },
+      "missing_by_reason": {}
+    },
+    {
+      "edge_id": "30420757_30421744_0",
+      "sensor_id": "1076",
+      "n_passages": 4481,
+      "n_missing": 0,
+      "cross_quarter_fraction": 0.15933943316224058,
+      "median_lag_quarters": 0,
+      "mean_lag_quarters": 0.15933943316224058,
+      "median_lag_s": 143.0,
+      "out_of_window_passages": 2,
+      "lag_histogram": {
+        "0": 3767,
+        "1": 714
+      },
+      "missing_by_reason": {}
+    },
+    {
+      "edge_id": "60786979_3575001205_0",
+      "sensor_id": "107",
+      "n_passages": 3182,
+      "n_missing": 0,
+      "cross_quarter_fraction": 0.36486486486486486,
+      "median_lag_quarters": 0.0,
+      "mean_lag_quarters": 0.36486486486486486,
+      "median_lag_s": 358.0,
+      "out_of_window_passages": 0,
+      "lag_histogram": {
+        "0": 2021,
+        "1": 1161
+      },
+      "missing_by_reason": {}
+    },
+    {
+      "edge_id": "60790252_60790253_0",
+      "sensor_id": "1074",
+      "n_passages": 2875,
+      "n_missing": 0,
+      "cross_quarter_fraction": 0.14226086956521738,
+      "median_lag_quarters": 0,
+      "mean_lag_quarters": 0.14226086956521738,
+      "median_lag_s": 113.0,
+      "out_of_window_passages": 2,
+      "lag_histogram": {
+        "0": 2466,
+        "1": 409
+      },
+      "missing_by_reason": {}
+    }
+  ],
+  "sumo_edgedata_cross_check": [
+    {
+      "edge_id": "1455801464_18241874_0",
+      "sensor_id": "107",
+      "sumo_edgedata_entered_present": true,
+      "sumo_edgedata_entered_sum": 3218,
+      "derived_passage_quarter_sum_in_window": 3218,
+      "derived_tail_beyond_window": 1,
+      "exact_per_quarter_match": true
+    },
+    {
+      "edge_id": "26355153_91615277_0",
+      "sensor_id": "2276",
+      "sumo_edgedata_entered_present": true,
+      "sumo_edgedata_entered_sum": 4279,
+      "derived_passage_quarter_sum_in_window": 4279,
+      "derived_tail_beyond_window": 0,
+      "exact_per_quarter_match": true
+    },
+    {
+      "edge_id": "26355153_96523321_0",
+      "sensor_id": "134",
+      "sumo_edgedata_entered_present": true,
+      "sumo_edgedata_entered_sum": 3140,
+      "derived_passage_quarter_sum_in_window": 3140,
+      "derived_tail_beyond_window": 0,
+      "exact_per_quarter_match": true
+    },
+    {
+      "edge_id": "26842525_26355153_0",
+      "sensor_id": "133",
+      "sumo_edgedata_entered_present": true,
+      "sumo_edgedata_entered_sum": 3570,
+      "derived_passage_quarter_sum_in_window": 3570,
+      "derived_tail_beyond_window": 0,
+      "exact_per_quarter_match": true
+    },
+    {
+      "edge_id": "30420757_30421744_0",
+      "sensor_id": "1076",
+      "sumo_edgedata_entered_present": true,
+      "sumo_edgedata_entered_sum": 4479,
+      "derived_passage_quarter_sum_in_window": 4479,
+      "derived_tail_beyond_window": 2,
+      "exact_per_quarter_match": true
+    },
+    {
+      "edge_id": "60786979_3575001205_0",
+      "sensor_id": "107",
+      "sumo_edgedata_entered_present": true,
+      "sumo_edgedata_entered_sum": 3182,
+      "derived_passage_quarter_sum_in_window": 3182,
+      "derived_tail_beyond_window": 0,
+      "exact_per_quarter_match": true
+    },
+    {
+      "edge_id": "60790252_60790253_0",
+      "sensor_id": "1074",
+      "sumo_edgedata_entered_present": true,
+      "sumo_edgedata_entered_sum": 2873,
+      "derived_passage_quarter_sum_in_window": 2873,
+      "derived_tail_beyond_window": 2,
+      "exact_per_quarter_match": true
+    }
+  ],
+  "sumo_edgedata_cross_check_finding": "The corrected vehroute-derived entered vectors match saved SUMO edgeData exactly in every one of 96 quarters for all 7 target edges. The prior v1 mismatches equalled the number of vehicles emitted on each affected target edge; those events belong to edgeData departed and are excluded in v2. The files came from separate SUMO invocations, so this establishes deterministic parity for the saved baseline evidence, not current-release predictive improvement."
+}

@@ -123,6 +123,32 @@ PROGRESS_PHASES = (
 )
 
 
+def _accounted_detail(
+    detail: Mapping[str, Any] | None,
+    day_library_accounting: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Attach validated day accounting without discarding phase telemetry."""
+    result = dict(detail or {})
+    if isinstance(day_library_accounting, Mapping):
+        result["day_library_accounting"] = dict(day_library_accounting)
+    return result
+
+
+def _progress_reporter(
+    workspace: SearchWorkspace,
+    day_library_accounting: Mapping[str, Any] | None,
+) -> Callable[..., None]:
+    """Return a progress writer that preserves prepared-day accounting."""
+    def report(phase: str, **kwargs: Any) -> None:
+        detail = kwargs.pop("detail", None)
+        merged = _accounted_detail(detail, day_library_accounting)
+        if merged:
+            kwargs["detail"] = merged
+        workspace.update_progress(phase, **kwargs)
+
+    return report
+
+
 class ActiveBudgetExceeded(RuntimeError):
     """The registered awake active-time budget was exhausted."""
 
@@ -1781,8 +1807,10 @@ def _exhaustive_pilot(
     compact_pilot: bool,
     phase: str = "pilot",
     active_controller: ActiveTimeController | None = None,
+    progress: Callable[..., None] | None = None,
 ) -> list[CandidateEvidence]:
     """Simulate every shortlisted candidate. The reference path, unchanged."""
+    report_progress = progress or workspace.update_progress
     pilot_evidence: list[CandidateEvidence] = []
     for index, candidate_id in enumerate(shortlist_ids):
         # A broad independent search can contain tens of thousands of
@@ -1793,7 +1821,7 @@ def _exhaustive_pilot(
         if not compact_pilot or index % progress_stride == 0:
             detail = _runner_timing_snapshot(runner)
             detail["candidate_index"] = index
-            workspace.update_progress(
+            report_progress(
                 phase,
                 completed=index,
                 total=len(shortlist_ids),
@@ -1826,7 +1854,7 @@ def _exhaustive_pilot(
                 "unresolved_timeout_count": len(
                     evidence.timeout_undecided),
             })
-            workspace.update_progress(
+            report_progress(
                 phase,
                 completed=index + 1,
                 total=len(shortlist_ids),
@@ -1852,6 +1880,7 @@ def _cost_ordered_pilot(
     max_verifications: int | None = None,
     max_exact_launches: int | None = None,
     active_controller: ActiveTimeController | None = None,
+    progress: Callable[..., None] | None = None,
 ) -> tuple[list[CandidateEvidence], Any, list[dict[str, Any]]]:
     """Price every candidate, then simulate only the boundary set.
 
@@ -1865,11 +1894,12 @@ def _cost_ordered_pilot(
     at the band.
     """
     from traffic_sim.simulation import cost_ordered_execution as coe
+    report_progress = progress or workspace.update_progress
 
     def report(phase: str, completed: int, total: int,
                detail: Mapping[str, Any]) -> None:
         if workspace.status == "running":
-            workspace.update_progress(
+            report_progress(
                 phase, completed=completed, total=total, detail=dict(detail))
         if active_controller is not None:
             active_controller.checkpoint(
@@ -2095,6 +2125,7 @@ def run_monthly_search(
     spec = ClosureSearchSpec.from_dict(spec.to_dict())
     policy = MonthlySearchPolicy.from_dict(policy.to_dict())
     workspace, _ = open_search_workspace(spec, root=root)
+    report_progress = workspace.update_progress
 
     def check_active(phase: str, *, publication: bool = False,
                      completed: int | None = None,
@@ -2200,11 +2231,15 @@ def run_monthly_search(
         backend_provenance = _backend_provenance(workspace, runner)
         day_library_accounting = backend_provenance.get(
             "day_library_accounting")
+        report_progress = _progress_reporter(
+            workspace,
+            day_library_accounting if isinstance(
+                day_library_accounting, Mapping) else None,
+        )
         if workspace.status == "running" and isinstance(
                 day_library_accounting, Mapping):
             detail = _runner_timing_snapshot(runner)
-            detail["day_library_accounting"] = dict(day_library_accounting)
-            workspace.update_progress(
+            report_progress(
                 phase, completed=len(shortlist_ids), total=len(shortlist_ids),
                 detail=detail)
         final_records = _artifact_records(
@@ -2272,6 +2307,7 @@ def run_monthly_search(
                 max_verifications=max_verifications,
                 max_exact_launches=max_exact_launches,
                 active_controller=active_controller,
+                progress=report_progress,
             )
         else:
             pilot_evidence = _exhaustive_pilot(
@@ -2285,6 +2321,7 @@ def run_monthly_search(
                 compact_pilot=compact_pilot,
                 phase=phase,
                 active_controller=active_controller,
+                progress=report_progress,
             )
 
         pilot_selection = select_pilot_finalists(
@@ -2347,7 +2384,7 @@ def run_monthly_search(
                 check_active(
                     phase, completed=index,
                     total=len(pilot_selection.selected_ids))
-                workspace.update_progress(
+                report_progress(
                     phase, completed=index,
                     total=len(pilot_selection.selected_ids))
                 existing_rounds = finalist_records.get(candidate_id, [])
@@ -2375,7 +2412,7 @@ def run_monthly_search(
             )
             while True:
                 phase = "decide"
-                workspace.update_progress(phase, completed=decision_round)
+                report_progress(phase, completed=decision_round)
                 decision = decide_finalists(
                     [
                         current[candidate_id]
@@ -2435,7 +2472,7 @@ def run_monthly_search(
                     check_active(
                         phase, completed=index,
                         total=len(pilot_selection.selected_ids))
-                    workspace.update_progress(
+                    report_progress(
                         phase, completed=index,
                         total=len(pilot_selection.selected_ids))
                     next_round = round_by_candidate[candidate_id] + 1
@@ -2456,10 +2493,7 @@ def run_monthly_search(
         phase = "publish"
         check_active(phase, publication=True)
         publish_detail = _runner_timing_snapshot(runner)
-        if isinstance(day_library_accounting, Mapping):
-            publish_detail["day_library_accounting"] = dict(
-                day_library_accounting)
-        workspace.update_progress(phase, detail=publish_detail)
+        report_progress(phase, detail=publish_detail)
         result = _final_result(
             spec,
             policy,
@@ -2507,5 +2541,5 @@ def run_monthly_search(
         return result
     except BaseException as exc:
         if workspace.status == "running":
-            workspace.update_progress(phase, error=str(exc))
+            report_progress(phase, error=str(exc))
         raise

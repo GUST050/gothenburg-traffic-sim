@@ -164,24 +164,13 @@ def active_closure_throughput(flows: Mapping[str, Sequence[float]],
     vehicles that entered before closure start while making measured active
     closure flow a hard integrity signal.
 
-    ``closures[*].begin_s``/``end_s`` are absolute seconds from the run's
-    shared epoch (see ``monthly_sumo._closure_seconds``), but ``flows``
-    (from ``parse_edgedata``) is indexed from 0 at whatever wall-clock second
-    the SUMO run itself was started with ``--begin`` — array index 0 is the
-    first *measured* interval, not necessarily second 0 of the epoch. A
-    trimmed observation window (independent-daily cold windows start at the
-    work day's own midnight, not the archive epoch) therefore starts SUMO at
-    a nonzero ``begin_s``, and the array must be indexed relative to THAT,
-    not to the closure's absolute time. Without ``window_begin_s`` a trimmed
-    window's closure quarters index past the end of ``series`` (or land on
-    the wrong quarter entirely), so ``measured`` never turns True and a
-    genuinely clean closure is indistinguishable from "never measured" —
-    found 2026-08-30 replaying real frozen units through the actual
-    independent-daily cold window (`active_closed_edge_throughput` reported
-    null on every variant despite `measured_empty_edges` forcing a zero-
-    filled series to exist).  Pass the same ``begin_s`` the run itself used
-    to align them; the default of 0 preserves every existing caller that
-    runs from epoch zero (e.g. run_scenario.py's whole-day scenarios).
+    Closure times are absolute seconds from the shared simulation epoch.
+    ``window_begin_s`` is the origin of the supplied ARRAY, not the SUMO
+    process start time. Leave it at zero for ``run_scenario.parse_edgedata``:
+    that parser indexes absolute XML interval begin times even for trimmed
+    and resumed runs. Set it only for arrays explicitly rebased by a caller.
+    Confusing process start with array origin double-shifts the window and
+    can count pre-closure traffic or miss real entries on a later day.
     """
     total = 0.0
     measured = False

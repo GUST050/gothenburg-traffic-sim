@@ -265,6 +265,47 @@ def test_decomposition_deduplicates_units_shared_by_overlapping_schedules():
     assert middle.identity["directed_edges"] == ["a_b_0"]
 
 
+@pytest.mark.parametrize("isolated", [False, True])
+def test_independent_backend_provenance_preserves_day_library_accounting(
+        tmp_path, isolated):
+    spec = _spec(
+        permitted_date_start="2027-01-01",
+        permitted_date_end="2027-01-01",
+        required_work_minutes=60,
+        max_consecutive_start_days=1,
+    )
+    schedule = next(iter(generate_closure_schedules(spec)))
+    accounting = {
+        "schema_version": 1,
+        "status": "complete",
+        "requested_days": 1,
+        "hits": 1,
+        "misses": 0,
+        "rejected_entries": 0,
+        "full_calibrations": 0,
+        "q50_aliases": 0,
+        "lookup_outcomes": {"hit": 1},
+        "lookup_reasons": {"hit": 1},
+        "identity_causes": {},
+        "q50_alias_statuses": {"not_requested": 1},
+    }
+    child = FakeDailyRunner()
+    child.provenance = lambda: {
+        "kind": "fake-daily-sumo",
+        "identity": "v1",
+        "day_library_accounting": accounting,
+    }
+    daily_runner = (
+        IsolatedDailySumoRunner(child, unit_workers=2)
+        if isolated else child
+    )
+    runner = IndependentDailyRunner(
+        spec, daily_runner=daily_runner, cache_root=tmp_path / "cache")
+    runner.prepare((schedule,))
+
+    assert runner.provenance()["day_library_accounting"] == accounting
+
+
 def test_decomposition_rejects_duplicate_parent_identity():
     spec = _spec()
     schedule = generate_closure_schedules(spec)[0]

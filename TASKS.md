@@ -9,12 +9,12 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — simulation quality and performance research`
-- Current focus: `Obtain independent review of delivered Stage 1-4, then restore current route-catalog adoption before any demand rebuild.`
-- Status: `Priority 1 Stages 1-4 and their required passage-calibration dependencies are committed and pushed as 5b9a3e9. Stage 4 carries strictly reconciled day-library accounting through archive validation, monthly backend provenance, progress and result.json; incomplete records remain explicitly incomplete. The clean staged snapshot passed 400 tests with 1 environment skip. The adopted route-catalog artifacts verify, but implicit selection currently falls back because the expected keys drifted at source_files.build_sumo_demand.`
-- Suggested next action: `Review commit 5b9a3e9 against 2b482dd. Repair any concrete review findings, then run one route-catalog qualification/adoption pass locally, verify implicit catalog selection, and only then run the planned demand re-warm.`
+- Current focus: `Measure and reduce automatic passage-calibration time without changing sensor, route, population or validation semantics.`
+- Status: `Step 2 is accepted after its review patch. Step 3 instrumentation on Claude commit 450de9b was locally reviewed and measured on retained q50 evidence. Cold fit is 1.971947 s with MILP at 1.576139 s; hot-cache fit is 0.3868705 s with no MILP, dominated by departure bounds at 0.206246 s and column reduction at 0.126166 s. Exact request bytes and output hashes are preserved. Two concurrency/provenance defects are fixed in validation/claude_step3_review_fix_20260913.patch; neither Claude implementation is integrated into this dirty worktree.`
+- Suggested next action: `Apply the Step-3 review patch, then run one bounded departure-bound incidence-reuse experiment with exact CSR, request and output equality. Use validation/claude_passage_step3_optimization_prompt_20260913.md. Do not change MILP semantics, launch a monthly search or pre-warm dates.`
 - Eligible actors: `Any capable actor.`
-- Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation or expensive catalog/demand run without explicit scope; keep unrelated local changes outside this delivery.`
-- Updated: `2026-09-12. Stages 1-4 are pushed as 5b9a3e9; unrelated local changes remain outside that commit.`
+- Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. Do not pre-warm a month, horizon or year. The authorized June run may build only the dates its warmup/recovery envelopes request. Keep unrelated local changes outside this delivery.`
+- Updated: `2026-09-13. Step-3 timing is measured on one production-shape q50 replay; optimization and production-day acceptance remain.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- WORKFLOW_HISTORY_START -->
@@ -688,7 +688,7 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### SIM-RESEARCH-2026-09-10 — Performance and generalization roadmap
 
-- Status: `ITEM 1 IMPLEMENTATION PLAN READY; implementation not started.`
+- Status: `STAGES 1-4 DELIVERED; EXACT JUNE SEARCH COMPLETE; PASSAGE SPEED STEP 0 PARTIALLY MEASURED AND PROFILER CACHE DEFECT REPAIRED LOCALLY.`
 - Objective and scope: `Identify robust, evidence-preserving improvements to heldag build speed, physical sensor matching, unseen-sensor/day generalization and closure decision fidelity.`
 - Completion outcome: `Item 1 now separates zero-risk offline diagnosis, structured in-build lookup reasons, a bounded context-independent pool experiment and job-level accounting. A pool policy can be promoted only with exact output equivalence; otherwise the current context-aware identity remains.`
 - Evidence: `validation/codebase_simulation_improvement_research_20260910.md; direct reproductions of map-validator IndexError and merge AttributeError; exact clockBegin/clockEnd unions from54 archived stats files; nested builder call inspection; active catalog-hit cadence; metadata and NumPy measurements; local timing, solver, source-reuse, LOSO, structure and libsumo preflight artifacts; official SUMO and FHWA primary guidance.`

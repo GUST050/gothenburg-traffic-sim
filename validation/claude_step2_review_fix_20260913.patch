@@ -1,0 +1,286 @@
+diff --git a/tests/test_profile_passage_replay.py b/tests/test_profile_passage_replay.py
+index 2420885..1387632 100644
+--- a/tests/test_profile_passage_replay.py
++++ b/tests/test_profile_passage_replay.py
+@@ -601,19 +601,20 @@ class TestDirectReplayCacheIsolation:
+ 
+         with pytest.raises(profiler.ReplayRefused, match='solver cache'):
+             profiler.replay(source, tmp_path / 'out',
+-                            solver_cache_dir=source / 'stolen-cache')
++                            _solver_cache_dir=source / 'stolen-cache')
+ 
+     def test_a_cache_containing_the_evidence_is_refused(self, tmp_path):
+         source = evidence_root(tmp_path)
+ 
+         with pytest.raises(profiler.ReplayRefused, match='solver cache'):
+-            profiler.replay(source, tmp_path / 'out', solver_cache_dir=source.parent)
++            profiler.replay(source, tmp_path / 'out',
++                            _solver_cache_dir=source.parent)
+ 
+     def test_the_cache_may_not_be_the_evidence_root_itself(self, tmp_path):
+         source = evidence_root(tmp_path)
+ 
+         with pytest.raises(profiler.ReplayRefused, match='solver cache'):
+-            profiler.replay(source, tmp_path / 'out', solver_cache_dir=source)
++            profiler.replay(source, tmp_path / 'out', _solver_cache_dir=source)
+ 
+     def test_the_refusal_happens_before_anything_is_written(self, tmp_path):
+         source = evidence_root(tmp_path)
+@@ -621,11 +622,22 @@ class TestDirectReplayCacheIsolation:
+ 
+         with pytest.raises(profiler.ReplayRefused):
+             profiler.replay(source, tmp_path / 'out',
+-                            solver_cache_dir=source / 'input')
++                            _solver_cache_dir=source / 'input')
+ 
+         assert not (tmp_path / 'out').exists()
+         assert _tree_state(source) == before
+ 
++    def test_a_shared_cache_must_belong_to_the_profile_output(self, tmp_path):
++        source = evidence_root(tmp_path)
++        out = tmp_path / 'profile' / 'repeat-1'
++
++        with pytest.raises(profiler.ReplayRefused, match='belong to profile output'):
++            profiler.replay(
++                source, out, _solver_cache_dir=tmp_path / 'unowned-cache')
++
++        assert not out.exists()
++        assert not (tmp_path / 'unowned-cache').exists()
++
+ 
+ class TestStructureMeasurement:
+     """Step 2 instrumentation ONLY: measure the structure cost, change nothing.
+@@ -648,6 +660,54 @@ class TestStructureMeasurement:
+         assert report['structure_measurement']['candidate_route']['vehicles'] \
+             == len(DEPARTURES)
+ 
++    def test_route_shape_inventory_supports_inline_and_named_routes(self, tmp_path):
++        route = tmp_path / 'mixed.rou.xml'
++        route.write_text(
++            '<routes><route id="shared" edges="a b c"/>'
++            '<vehicle id="named" depart="1" route="shared"/>'
++            '<vehicle id="inline" depart="2"><route edges="a x c"/></vehicle>'
++            '</routes>')
++
++        shape = profiler.route_shape_inventory(route)
++
++        assert shape['vehicles'] == 2
++        assert shape['unique_edge_tuples'] == 2
++        assert shape['unique_endpoint_pairs'] == 1
++        assert shape['route_representation'] == {
++            'inline_vehicles': 1,
++            'named_reference_vehicles': 1,
++            'named_route_definitions': 1,
++        }
++
++    def test_every_named_function_is_reported_even_when_never_called(self):
++        rows = profiler.CallCostProfiler().report()
++
++        assert set(rows) == set(profiler.STRUCTURE_CALL_NAMES)
++        assert all(row == {'calls': 0, 'cumulative_s': 0.0, 'exclusive_s': 0.0}
++                   for row in rows.values())
++
++    def test_structure_identity_binds_geometry_and_sensor_edges(
++            self, tmp_path, monkeypatch):
++        from demand import structure
++        geometry = tmp_path / 'network.geojson'
++        geometry.write_text(json.dumps({'features': [
++            {'properties': {'id': 'a', 'sensor_id': 'sensor-a'}},
++            {'properties': {'id': 'b'}},
++        ]}))
++        monkeypatch.setattr(structure, 'GEO_PATH', geometry)
++
++        before = profiler.structure_input_identity()
++        geometry.write_text(json.dumps({'features': [
++            {'properties': {'id': 'a', 'sensor_id': 'sensor-a'}},
++            {'properties': {'id': 'b', 'sensor_id': 'sensor-b'}},
++        ]}))
++        after = profiler.structure_input_identity()
++
++        assert before['geometry_sha256'] != after['geometry_sha256']
++        assert before['sensor_edges_sha256'] != after['sensor_edges_sha256']
++        assert before['sensor_edge_count'] == 1
++        assert after['sensor_edge_count'] == 2
++
+     def test_the_route_and_distance_functions_are_counted_and_timed(self, tmp_path):
+         report = profiler.replay(evidence_root(tmp_path), tmp_path / 'out')
+ 
+diff --git a/tools/profile_passage_replay.py b/tools/profile_passage_replay.py
+index 79c7563..1c09759 100644
+--- a/tools/profile_passage_replay.py
++++ b/tools/profile_passage_replay.py
+@@ -18,19 +18,21 @@ import argparse
+ from collections import Counter
+ from contextlib import contextmanager
+ import gzip
++import hashlib
+ import json
+ import os
+ from pathlib import Path
+ import shutil
+ import time
++import xml.etree.ElementTree as ET
+ 
+ import numpy as np
+ 
++from demand import structure as demand_structure
+ from demand.structure import calibrated_structure_report
+ from traffic_sim.core.fingerprint import sha256_file
+ from traffic_sim.demand import automatic_passage
+ from traffic_sim.experimental import dynamic_assignment as dynamic
+-from tools import departure_reconciliation as passage
+ from tools import trial_dynamic_passage as trial
+ 
+ SCHEMA_VERSION = 2
+@@ -75,7 +77,10 @@ class CallCostProfiler:
+     """
+ 
+     def __init__(self):
+-        self._totals: dict[str, dict] = {}
++        self._totals: dict[str, dict] = {
++            name: {'calls': 0, 'cumulative_s': 0.0, 'exclusive_s': 0.0}
++            for name in STRUCTURE_CALL_NAMES
++        }
+         self._children_s: list[float] = []
+ 
+     def wrap(self, name: str, function):
+@@ -129,16 +134,67 @@ def route_shape_inventory(route_path: Path) -> dict:
+     computing once per unique route if the repetition is real. Measured here,
+     not cached — no route-facts table exists yet.
+     """
+-    vehicles = passage.read_route_vehicles(route_path)
+-    edge_tuples = {vehicle.edges for vehicle in vehicles}
+-    endpoints = {(vehicle.edges[0], vehicle.edges[-1])
+-                 for vehicle in vehicles if vehicle.edges}
++    try:
++        root = ET.parse(route_path).getroot()
++    except (OSError, ET.ParseError) as error:
++        raise ReplayRefused(f'unreadable structure route inventory: {error}') from error
++    named_routes = {
++        route.get('id'): tuple(route.get('edges', '').split())
++        for route in root.iter('route') if route.get('id')
++    }
++    routes = []
++    inline_vehicles = 0
++    named_vehicles = 0
++    for vehicle in root.iter('vehicle'):
++        inline = vehicle.find('route')
++        if inline is not None and inline.get('edges'):
++            edges = tuple(inline.get('edges').split())
++            inline_vehicles += 1
++        else:
++            route_id = vehicle.get('route')
++            edges = named_routes.get(route_id, ())
++            named_vehicles += 1
++        if not edges:
++            raise ReplayRefused(
++                f'vehicle {vehicle.get("id")!r} has no resolvable route')
++        routes.append(edges)
++    if not routes:
++        raise ReplayRefused('structure route inventory contains no vehicles')
++    edge_tuples = set(routes)
++    endpoints = {(edges[0], edges[-1]) for edges in routes}
+     return {
+-        'vehicles': len(vehicles),
++        'vehicles': len(routes),
+         'unique_edge_tuples': len(edge_tuples),
+         'unique_endpoint_pairs': len(endpoints),
++        'route_representation': {
++            'inline_vehicles': inline_vehicles,
++            'named_reference_vehicles': named_vehicles,
++            'named_route_definitions': len(named_routes),
++        },
+         'vehicles_per_unique_edge_tuple': (
+-            round(len(vehicles) / len(edge_tuples), 3) if edge_tuples else None),
++            round(len(routes) / len(edge_tuples), 3) if edge_tuples else None),
++    }
++
++
++def structure_input_identity() -> dict:
++    """Bind prospective route facts to the geometry and measured sensors."""
++    path = demand_structure.GEO_PATH.resolve()
++    try:
++        payload = json.loads(path.read_text())
++    except (OSError, ValueError) as error:
++        raise ReplayRefused(f'unreadable structure geometry identity: {error}') from error
++    sensors = sorted(
++        str(feature.get('properties', {}).get('id'))
++        for feature in payload.get('features', [])
++        if feature.get('properties', {}).get('sensor_id')
++        and feature.get('properties', {}).get('id') is not None
++    )
++    sensor_bytes = ('\n'.join(sensors) + ('\n' if sensors else '')).encode()
++    return {
++        'geometry_path': str(path),
++        'geometry_sha256': sha256_file(path),
++        'sensor_edge_count': len(sensors),
++        'sensor_edges_sha256': hashlib.sha256(sensor_bytes).hexdigest(),
+     }
+ 
+ 
+@@ -457,18 +513,23 @@ def replay(source: Path, out: Path, *, label: str | None = None,
+            solver_time_limit_s: float = 60, archive: Path | None = None,
+            demand_spec: Path | None = None, archive_repeats: int = 3,
+            preparation_only: bool = False,
+-           solver_cache_dir: Path | None = None) -> dict:
++           _solver_cache_dir: Path | None = None) -> dict:
+     """Replay preparation, solving, staging and structure over saved traces."""
+     source, out = _resolve_isolation(source, out)
+     # Checked by the call that will WRITE it, before any directory is created:
+     # profile() guards the cache it makes, but a direct replay() accepts one
+     # from its caller and must not be the hole in that guarantee.
+-    if solver_cache_dir is not None:
+-        solver_cache_dir = Path(solver_cache_dir).resolve()
+-        if _overlaps(solver_cache_dir, source):
++    cache_root = (out / 'solver-cache' if _solver_cache_dir is None
++                  else Path(_solver_cache_dir).resolve())
++    if _overlaps(cache_root, source):
++        raise ReplayRefused(
++            f'solver cache {cache_root} must be outside '
++            f'the source evidence root {source}')
++    if _solver_cache_dir is not None:
++        if cache_root.parent != out.parent:
+             raise ReplayRefused(
+-                f'solver cache {solver_cache_dir} must be outside '
+-                f'the source evidence root {source}')
++                f'shared solver cache {cache_root} must belong to '
++                f'profile output {out.parent}')
+     out.mkdir(parents=True, exist_ok=False)
+     variant = source.name
+     context = {'variant': variant, 'date': None, 'input_identity': None}
+@@ -588,6 +649,9 @@ def replay(source: Path, out: Path, *, label: str | None = None,
+                     'this replay path cannot reproduce that solver branch')
+ 
+             source_route = replay_root / 'input/calibrated.rou.xml'
++            with recorder.phase('structure_input_identity') as identity_phase:
++                structure_identity = structure_input_identity()
++                identity_phase.update(structure_identity)
+             with recorder.phase('route_shape_inventory', route='source') as shape:
+                 source_shape = route_shape_inventory(source_route)
+                 shape.update(source_shape)
+@@ -601,8 +665,6 @@ def replay(source: Path, out: Path, *, label: str | None = None,
+             # profile, so repeat 1 is cold and later repeats reproduce the
+             # cache hit production itself gets. A lone replay keeps a private
+             # cache under its own output.
+-            cache_root = (Path(solver_cache_dir) if solver_cache_dir is not None
+-                          else out / 'solver-cache')
+             cache_root.mkdir(parents=True, exist_ok=True)
+             with recorder.phase('solver') as solver:
+                 with recorder.phase('fit_integer_flows'):
+@@ -641,6 +703,7 @@ def replay(source: Path, out: Path, *, label: str | None = None,
+                 'basis': ('observational; measured outside every semantic '
+                           'fingerprint and never fed back into a report'),
+                 'route_facts_cache': 'not_implemented',
++                'input_identity': structure_identity,
+                 'source_route': source_shape,
+                 'candidate_route': candidate_shape,
+                 'structure_source_calls': source_calls.report(),
+@@ -758,7 +821,7 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
+             f'shared solver cache {cache_root} must be outside {source}')
+     cache_root.mkdir(parents=True, exist_ok=False)
+     runs = [replay(source, out / f'repeat-{index + 1}',
+-                   solver_cache_dir=cache_root, **options)
++                   _solver_cache_dir=cache_root, **options)
+             for index in range(repeats)]
+     walls = [_phase_walls(run) for run in runs]
+     names = sorted({name for row in walls for name in row})

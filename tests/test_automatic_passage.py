@@ -53,6 +53,17 @@ def test_automatic_fit_collects_fresh_evidence_and_preserves_day_assembly(tmp_pa
     inputs, reports, network, calls = fixture(tmp_path, monkeypatch)
     result = auto.refine_variants(inputs, reports, network, tmp_path / 'evidence')
     record = result['']['passage_calibration']
+    replay_contract = tmp_path / 'evidence/q50/input/passage_replay_contract.json'
+    contract = json.loads(replay_contract.read_text())
+    manifest = json.loads((tmp_path / 'evidence/q50/report.json').read_text())
+    assert contract['schema_version'] == 1
+    assert contract['policy'] == auto.POLICY
+    assert contract['retained_bounds_pq'] == [{}, {}, {}, {}]
+    assert set(contract['source_sha256']) == {
+        'automatic_passage', 'dynamic_assignment',
+        'trial_dynamic_passage', 'departure_reconciliation',
+    }
+    assert manifest['input_sha256'][replay_contract.name] == auto.sha256_file(replay_contract)
     assert record['status'] == 'validated'
     assert record['validation']['candidate_absolute_error'] == 0
     assert record['validation']['accuracy']['exact_any_seed'] == 4
@@ -333,6 +344,21 @@ def test_passage_timings_separate_calibration_from_retention(tmp_path, monkeypat
     assert timing['variant_s']['q50'] >= 0
     assert timing['evidence_retention_s'] >= 0
     assert timing['total_s'] >= sum(timing['variant_s'].values()) + timing['evidence_retention_s']
+
+
+def test_passage_timings_expose_costly_subphases(tmp_path, monkeypatch):
+    inputs, reports, network, _ = fixture(tmp_path, monkeypatch)
+    auto.refine_variants(inputs, reports, network, tmp_path/'evidence')
+
+    timing = json.loads((tmp_path/'evidence/timings.json').read_text())
+    phases = timing['variant_phase_s']['q50']
+    assert set(phases) == {
+        'prepare_inputs', 'learning_sumo', 'prepare_system',
+        'solve_integer_flows', 'stage_and_structure', 'validation_sumo',
+        'report_serialization',
+    }
+    assert all(value >= 0 for value in phases.values())
+    assert sum(phases.values()) <= timing['variant_s']['q50']
 
 
 @pytest.mark.parametrize('cpus,expected', [(12, 6), (2, 2), (None, 1)])

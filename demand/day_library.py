@@ -45,6 +45,7 @@ DAY_SECONDS = 86400
 # reader falls back to the plain name when the .gz is absent, and the
 # manifest always records whichever bytes are actually on disk.
 COMPRESSED_SUFFIXES = (".rou.xml", ".agents.json")
+REPLACED_SUFFIX = ".replaced"
 
 
 def _day_file(directory: Path, name: str) -> Path:
@@ -343,7 +344,11 @@ class DayLibrary:
         except OSError:
             return None, ()
         for entry in candidates:
-            if entry.name == identity.key or entry.name.endswith(".staging"):
+            if (
+                entry.name == identity.key
+                or entry.name.endswith(".staging")
+                or entry.name.endswith(REPLACED_SUFFIX)
+            ):
                 continue
             try:
                 manifest = json.loads(
@@ -363,14 +368,9 @@ class DayLibrary:
             return None, ()
         return best[1], best[2]
 
-    def lookup(self, identity: DayIdentity) -> DayLookup:
-        """Verify one stored day and say exactly what was found.
-
-        Verification is unchanged and still fails closed; what is new is that
-        each way of failing has its own name, so a build can report why a day
-        was rebuilt instead of only that it was.
-        """
-        manifest_path = self.manifest_path(identity)
+    def _verify(self, identity: DayIdentity, directory: Path) -> DayLookup:
+        """Verify ``identity`` against one explicit on-disk directory."""
+        manifest_path = directory / "manifest.json"
         if not manifest_path.is_file():
             return self._miss(identity, LookupReason.ENTRY_ABSENT)
         try:
@@ -393,7 +393,6 @@ class DayLibrary:
         ):
             if predicate:
                 return self._rejected(identity, reason)
-        directory = self.path_for(identity)
         for name, record in manifest["artifacts"].items():
             if not isinstance(record, Mapping):
                 return self._rejected(
@@ -428,6 +427,38 @@ class DayLibrary:
         return DayLookup(manifest=manifest, outcome="hit",
                          reason=LookupReason.HIT, expected_key=identity.key)
 
+    def _reconcile_replaced(self, identity: DayIdentity) -> None:
+        """Recover a complete entry left between the two atomic swap steps."""
+        directory = self.path_for(identity)
+        replaced = directory.with_name(directory.name + REPLACED_SUFFIX)
+        if not replaced.is_dir():
+            return
+        if directory.is_dir():
+            if self._verify(identity, directory).manifest is not None:
+                shutil.rmtree(replaced, ignore_errors=True)
+            return
+        if self._verify(identity, replaced).manifest is None:
+            return
+        try:
+            os.replace(replaced, directory)
+        except OSError:
+            # Another writer may have completed the same entry after the
+            # checks above. Leave both paths untouched unless the live entry
+            # is now independently verifiable.
+            if directory.is_dir() \
+                    and self._verify(identity, directory).manifest is not None:
+                shutil.rmtree(replaced, ignore_errors=True)
+
+    def lookup(self, identity: DayIdentity) -> DayLookup:
+        """Verify one stored day and say exactly what was found.
+
+        Verification is unchanged and still fails closed; what is new is that
+        each way of failing has its own name, so a build can report why a day
+        was rebuilt instead of only that it was.
+        """
+        self._reconcile_replaced(identity)
+        return self._verify(identity, self.path_for(identity))
+
     def put(
         self,
         identity: DayIdentity,
@@ -444,6 +475,7 @@ class DayLibrary:
         directory = self.path_for(identity)
         staging = directory.with_name(directory.name + ".staging")
         shutil.rmtree(staging, ignore_errors=True)
+        self._reconcile_replaced(identity)
         staging.mkdir(parents=True)
         self._sweep_abandoned_staging(directory.parent, keep=staging)
         records: dict[str, Any] = {}

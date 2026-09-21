@@ -146,6 +146,24 @@ class TestPurposeMarginAfterRouteFiltering:
 
 
 class TestB1DateRangeContract:
+    def test_demand_metadata_writer_is_compact_atomic_and_lossless(
+            self, tmp_path):
+        path = tmp_path / "demand_meta.json"
+        payload = {
+            "large": [{"quarter": quarter, "counts": [1, 2, 3]}
+                      for quarter in range(20)],
+            "unicode": "Göteborg",
+        }
+
+        bsd.write_demand_metadata(path, payload)
+
+        raw = path.read_text()
+        assert raw.endswith("\n")
+        assert raw.count("\n") == 1
+        assert ': ' not in raw
+        assert json.loads(raw) == payload
+        assert not path.with_name(path.name + ".tmp").exists()
+
     def test_mixed_catalog_rebuilds_one_shared_strict_sensor_basis(
             self, tmp_path, monkeypatch):
         source = tmp_path / "source.rou.xml"

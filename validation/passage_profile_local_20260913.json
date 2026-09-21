@@ -1,0 +1,356 @@
+{
+  "build_command": "TRAFFIC_SIM_KEEP_PASSAGE_EVIDENCE=1 PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR=/tmp/gs-mpl python3 build_sumo_demand.py --date 2027-06-25 --source forecast --begin 00:00 --end 24:00 --engine pfe --candidate-source catalog --day-library-root /tmp/gs-passage-profile-day-library-20260913-codex-1 --keep-scenarios",
+  "build_wall_s": 26.405088375,
+  "cache_aware_replay": {
+    "runs": [
+      {
+        "phase_wall_s": {
+          "baseline_reproduction": 1.548151,
+          "build_passage_system_base": 0.344839,
+          "build_passage_system_expanded": 0.795082,
+          "departure_bound_constraints": 0.06057,
+          "expand_departure_support": 1.017569,
+          "fit_integer_flows": 3.512568,
+          "gzip_verified": 0.085654,
+          "inventory": 0.057268,
+          "load_source": 1.548135,
+          "replay": 9.590637,
+          "retention": 0.091525,
+          "solver": 3.51287,
+          "staging": 0.780543,
+          "structure_candidate": 0.589636,
+          "structure_source": 0.752317,
+          "system_construction": 2.218142
+        },
+        "repeat": 1,
+        "report": "/Users/gt/Documents/gs-project/runs/profile-passage-20260913-codex-q50-cache-aware/repeat-1/replay_report.json",
+        "residual_s": 0.040185,
+        "root_wall_s": 9.590637,
+        "solver_cache_hit": false,
+        "status": "replayed"
+      },
+      {
+        "phase_wall_s": {
+          "baseline_reproduction": 1.559514,
+          "build_passage_system_base": 0.350439,
+          "build_passage_system_expanded": 0.744296,
+          "departure_bound_constraints": 0.063551,
+          "expand_departure_support": 1.03922,
+          "fit_integer_flows": 0.753935,
+          "gzip_verified": 0.08621,
+          "inventory": 0.059994,
+          "load_source": 1.559502,
+          "replay": 6.661501,
+          "retention": 0.090887,
+          "solver": 0.75416,
+          "staging": 0.773582,
+          "structure_candidate": 0.588166,
+          "structure_source": 0.598142,
+          "system_construction": 2.197588
+        },
+        "repeat": 2,
+        "report": "/Users/gt/Documents/gs-project/runs/profile-passage-20260913-codex-q50-cache-aware/repeat-2/replay_report.json",
+        "residual_s": 0.039467,
+        "root_wall_s": 6.661501,
+        "solver_cache_hit": true,
+        "status": "replayed"
+      },
+      {
+        "phase_wall_s": {
+          "baseline_reproduction": 1.552499,
+          "build_passage_system_base": 0.34705,
+          "build_passage_system_expanded": 0.799199,
+          "departure_bound_constraints": 0.063367,
+          "expand_departure_support": 1.030822,
+          "fit_integer_flows": 0.762228,
+          "gzip_verified": 0.086123,
+          "inventory": 0.059341,
+          "load_source": 1.552486,
+          "replay": 6.721532,
+          "retention": 0.091523,
+          "solver": 0.762485,
+          "staging": 0.797885,
+          "structure_candidate": 0.585495,
+          "structure_source": 0.590801,
+          "system_construction": 2.240528
+        },
+        "repeat": 3,
+        "report": "/Users/gt/Documents/gs-project/runs/profile-passage-20260913-codex-q50-cache-aware/repeat-3/replay_report.json",
+        "residual_s": 0.040974,
+        "root_wall_s": 6.721532,
+        "solver_cache_hit": true,
+        "status": "replayed"
+      }
+    ],
+    "solver_cache_basis": "empty_output_local_cache_then_shared_across_repeats",
+    "warm_process_medians": {
+      "baseline_reproduction": {
+        "max_s": 1.559514,
+        "median_s": 1.556007,
+        "min_s": 1.552499,
+        "n": 2
+      },
+      "build_passage_system_base": {
+        "max_s": 0.350439,
+        "median_s": 0.348745,
+        "min_s": 0.34705,
+        "n": 2
+      },
+      "build_passage_system_expanded": {
+        "max_s": 0.799199,
+        "median_s": 0.771748,
+        "min_s": 0.744296,
+        "n": 2
+      },
+      "departure_bound_constraints": {
+        "max_s": 0.063551,
+        "median_s": 0.063459,
+        "min_s": 0.063367,
+        "n": 2
+      },
+      "expand_departure_support": {
+        "max_s": 1.03922,
+        "median_s": 1.035021,
+        "min_s": 1.030822,
+        "n": 2
+      },
+      "fit_integer_flows": {
+        "max_s": 0.762228,
+        "median_s": 0.758082,
+        "min_s": 0.753935,
+        "n": 2
+      },
+      "gzip_verified": {
+        "max_s": 0.08621,
+        "median_s": 0.086167,
+        "min_s": 0.086123,
+        "n": 2
+      },
+      "inventory": {
+        "max_s": 0.059994,
+        "median_s": 0.059667,
+        "min_s": 0.059341,
+        "n": 2
+      },
+      "load_source": {
+        "max_s": 1.559502,
+        "median_s": 1.555994,
+        "min_s": 1.552486,
+        "n": 2
+      },
+      "replay": {
+        "max_s": 6.721532,
+        "median_s": 6.691517,
+        "min_s": 6.661501,
+        "n": 2
+      },
+      "retention": {
+        "max_s": 0.091523,
+        "median_s": 0.091205,
+        "min_s": 0.090887,
+        "n": 2
+      },
+      "solver": {
+        "max_s": 0.762485,
+        "median_s": 0.758323,
+        "min_s": 0.75416,
+        "n": 2
+      },
+      "staging": {
+        "max_s": 0.797885,
+        "median_s": 0.785733,
+        "min_s": 0.773582,
+        "n": 2
+      },
+      "structure_candidate": {
+        "max_s": 0.588166,
+        "median_s": 0.586831,
+        "min_s": 0.585495,
+        "n": 2
+      },
+      "structure_source": {
+        "max_s": 0.598142,
+        "median_s": 0.594472,
+        "min_s": 0.590801,
+        "n": 2
+      },
+      "system_construction": {
+        "max_s": 2.240528,
+        "median_s": 2.219058,
+        "min_s": 2.197588,
+        "n": 2
+      }
+    }
+  },
+  "catalog_gate": {
+    "candidate_source": "catalog",
+    "candidate_source_implicit": false,
+    "catalog_cache_events": {
+      "weekend": "hit"
+    },
+    "catalog_fallback": null,
+    "passed": true
+  },
+  "diagnostic_only": true,
+  "environment": {
+    "git_head": "a64315f6b7908bfdd345d4204b36fe1f1fb96d60",
+    "git_worktree": "dirty; exact passage source hashes are bound below",
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python": "3.9.6",
+    "sumo": "Eclipse SUMO 1.27.1 Darwin arm64"
+  },
+  "next_measured_target": {
+    "expected_ceiling_this_sample_s": {
+      "duplicate_base_system_build": 0.348745,
+      "support_validation_dummy_system_is_included_in_expand_support": 1.035021
+    },
+    "gate": "byte-identical selection, route and agent hashes plus identical sparse base and boundary matrices",
+    "reason": "load_source validates by building the base PassageSystem, then _refine rebuilds the identical base system; expand_departure_support also invokes a validation-only dummy system",
+    "step": 1
+  },
+  "production": {
+    "dynamic_passage_s": 13.155,
+    "passage_accuracy": {
+      "complete": true,
+      "exact_any_seed": 672,
+      "exact_ensemble": 670,
+      "geh_cells": 672,
+      "geh_guideline_pct": 85.0,
+      "geh_limit": 5.0,
+      "geh_max": 0.0669,
+      "geh_median": 0.0,
+      "geh_pct": 100.0,
+      "geh_within": 672,
+      "hourly_geh_cells": 168,
+      "hourly_geh_max": 0.029,
+      "hourly_geh_pct": 100.0,
+      "hourly_geh_within": 168,
+      "non_integer_ensemble_cells": 2,
+      "ok": true,
+      "relative_error_cells": 545,
+      "relative_error_median_pct": 0.0,
+      "relative_error_p95_pct": 0.0,
+      "standard": "DfT TAG Unit M3.1 Table 2",
+      "standard_aggregation_minutes": 60,
+      "volume_limit_pct": 10.0,
+      "volume_max_abs_pct": 0.0,
+      "volume_policy": "project_aggregate_volume_guard_v1"
+    },
+    "passage_status": "validated",
+    "pfe_variants_and_rounding_s": 19.939,
+    "prediction_exact": true,
+    "solver_checkpoint": {
+      "cache_hit": true,
+      "columns": 43965,
+      "cpu_s": 0.010309000000001234,
+      "has_incumbent": true,
+      "key": "ddcc3eadb17bbf82802b7dbf9b58396ca63ecc2f2113b9c286b6b3635c0603a8",
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "rows": 6912,
+      "status": "optimal",
+      "wall_s": 0.010923124999997924
+    },
+    "structure_flags": [
+      "purpose_length_ordering: fritid median 2.1 km < arbete median 2.19 km \u2014 RVU (Trafikanalys Tabell 3) orders fritid longest; P(length|purpose) decohered in calibration"
+    ],
+    "variant_phase_s": {
+      "q50": {
+        "learning_sumo": 2.3063206669999996,
+        "prepare_inputs": 0.19822029100000016,
+        "prepare_system": 3.8296968330000016,
+        "report_serialization": 0.1728813750000029,
+        "solve_integer_flows": 1.436825749999997,
+        "stage_and_structure": 1.3663624580000011,
+        "validation_sumo": 3.6630143749999995
+      }
+    },
+    "variant_s": {
+      "q50": 13.048074957999999
+    }
+  },
+  "reason_not_release_evidence": [
+    "the build-wide validation status is WARN with two warnings and two missing sections",
+    "the calibrated structure retains the purpose_length_ordering flag",
+    "this is one holiday/weekend-pool day rather than the complete sample matrix"
+  ],
+  "release_evidence": false,
+  "replay_equivalence": {
+    "agents_sha256": [
+      "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+      "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860",
+      "fe1b670c9bf68121fc8c8142a613b32d1191d6f6fd8a95c42badb7156bcc3860"
+    ],
+    "measurement_reconstruction_verified": [
+      true,
+      true,
+      true
+    ],
+    "routes_sha256": [
+      "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+      "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274",
+      "69fad88f09e8dbaac672ad27f973db5c6852e09640b03b48d452dbe7d9cc6274"
+    ],
+    "selection_reproduced": [
+      {
+        "fields": {
+          "agents_sha256": true,
+          "routes_sha256": true,
+          "selection_sha256": true
+        },
+        "state": "identical"
+      },
+      {
+        "fields": {
+          "agents_sha256": true,
+          "routes_sha256": true,
+          "selection_sha256": true
+        },
+        "state": "identical"
+      },
+      {
+        "fields": {
+          "agents_sha256": true,
+          "routes_sha256": true,
+          "selection_sha256": true
+        },
+        "state": "identical"
+      }
+    ],
+    "selection_sha256": [
+      "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+      "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af",
+      "6aab5ed7b216cb7db78e8609bcc0bb8a489007efcea68a5a2e44f0ab19e1e8af"
+    ],
+    "statuses": [
+      "replayed",
+      "replayed",
+      "replayed"
+    ]
+  },
+  "review_finding": {
+    "fix": "use one new output-local solver cache across repeats and record cache_hit in every replay and summary",
+    "original_problem": "each repeat used a separate empty solver cache, so all repeats were cold while the report described reused-process timings",
+    "patch": "/Users/gt/Documents/gs-project/validation/profile_passage_solver_cache_fix_20260913.patch",
+    "severity": "H1_measurement_integrity",
+    "tests": "51 passed in tests/test_profile_passage_replay.py; main integration 43 passed in test_automatic_passage.py plus test_passage_timing.py"
+  },
+  "sample": {
+    "calendar_classification": "holiday",
+    "date": "2027-06-25",
+    "day_library_root": "/tmp/gs-passage-profile-day-library-20260913-codex-1",
+    "evidence_root": "/Users/gt/Documents/gs-project/runs/automatic-passage-8cae0ea6442b427db04a46d2b4108430/q50",
+    "pool_composition": "weekend",
+    "profile_report": "/Users/gt/Documents/gs-project/runs/profile-passage-20260913-codex-q50-cache-aware/profile_report.json",
+    "quarters": 96,
+    "source": "forecast",
+    "vehicles": 9675
+  },
+  "schema_version": 1,
+  "source_sha256": {
+    "automatic_passage": "e138623f5ec6ab1c8d0b10b2e4f1ec1400259ac2730a8aa529d615bf7add6746",
+    "departure_reconciliation": "9abd801d4ac6b786e173d4eb09e9b42877f0f27e17a0d5efe7cc27020f696437",
+    "dynamic_assignment": "fa76d4b9e3c00dd23fcffefb48726a24faf63371046583210e1d6318ec06bf03",
+    "trial_dynamic_passage": "ba04a2b771f2fb293fc752ef72a464b628c362abbe807fee69fde31fbb5d4115"
+  },
+  "status": "diagnostic_complete"
+}

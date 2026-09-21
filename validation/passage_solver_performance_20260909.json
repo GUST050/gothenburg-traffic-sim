@@ -1,0 +1,199 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-09T15:34:33.118070+00:00",
+  "status": "diagnostic_pass",
+  "evidence_directory": "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a",
+  "implementation": {
+    "equations": "A0*x=b and (Ai-A0)*x=0 replace repeated Ai*x=b. Original rows still verify expanded integer solution.",
+    "constraints": "Complete retained PFE bounds, OD/purpose conservation, capacity and objective unchanged.",
+    "recovery": "Persist complete numeric request before solving; cache only independently feasible status-0 results keyed by complete model, runtime and solver code. Fresh SUMO checks on retry. Timeout is unknown feasibility, not proof of infeasibility.",
+    "parallelism": "Native HiGHS threads=1 retained to protect subsequent PFE fork pools."
+  },
+  "full_day": {
+    "date": "2027-04-28",
+    "quarters": 96,
+    "variants": {
+      "q50": {
+        "vehicles": 18990,
+        "route_multiset_preserved": true,
+        "source_error": 4367,
+        "candidate_error": 14,
+        "accuracy_ok": true,
+        "new_relaxations": 0,
+        "structural_repair": {
+          "passes": 0,
+          "quarters": [],
+          "support": "fixed_shift_grid",
+          "boundary_fallback": false
+        }
+      },
+      "_v1": {
+        "vehicles": 18889,
+        "route_multiset_preserved": true,
+        "source_error": 4405,
+        "candidate_error": 2,
+        "accuracy_ok": true,
+        "new_relaxations": 0,
+        "structural_repair": {
+          "passes": 1,
+          "quarters": [
+            2
+          ],
+          "support": "fixed_shift_grid",
+          "boundary_fallback": false
+        }
+      },
+      "_v2": {
+        "vehicles": 18917,
+        "route_multiset_preserved": true,
+        "source_error": 4578,
+        "candidate_error": 10,
+        "accuracy_ok": true,
+        "new_relaxations": 0,
+        "structural_repair": {
+          "passes": 0,
+          "quarters": [],
+          "support": "fixed_shift_grid",
+          "boundary_fallback": false
+        }
+      }
+    },
+    "cache_hits": 0,
+    "dynamic_passage_s": 63.9,
+    "core_demand_s": 72.7,
+    "previous_dynamic_passage_s": 231.635,
+    "previous_core_demand_s": 240.046,
+    "previous_report": "validation/automatic_passage_structural_repair_20260909.json",
+    "all_snapshots_restored": true,
+    "monthly_search_restarted": false,
+    "validation_seeds": [
+      4000,
+      4001,
+      4002
+    ]
+  },
+  "paired_complete_problems": [
+    {
+      "request": "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a/q50/solver-candidate/request.npz",
+      "formulation": "original",
+      "wall_s": 9.970325915999998,
+      "status": 0,
+      "objective": -12759.63,
+      "nodes": 1,
+      "nnz": 899577,
+      "valid_original": true,
+      "valid_differences": true
+    },
+    {
+      "request": "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a/q50/solver-candidate/request.npz",
+      "formulation": "differences",
+      "wall_s": 3.551550333,
+      "status": 0,
+      "objective": -12759.63,
+      "nodes": 1,
+      "nnz": 538797,
+      "valid_original": true,
+      "valid_differences": true
+    },
+    {
+      "request": "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a/_v1/solver-candidate/request.npz",
+      "formulation": "original",
+      "wall_s": 13.027793459000002,
+      "status": 0,
+      "objective": -12664.633333333333,
+      "nodes": 1,
+      "nnz": 730607,
+      "valid_original": true,
+      "valid_differences": true
+    },
+    {
+      "request": "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a/_v1/solver-candidate/request.npz",
+      "formulation": "differences",
+      "wall_s": 3.0712323749999975,
+      "status": 0,
+      "objective": -12664.633333333333,
+      "nodes": 1,
+      "nnz": 388089,
+      "valid_original": true,
+      "valid_differences": true
+    },
+    {
+      "request": "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a/_v1/solver-candidate-repair-1/request.npz",
+      "formulation": "original",
+      "wall_s": 75.904282583,
+      "status": 0,
+      "objective": -12664.633333333333,
+      "nodes": 1,
+      "nnz": 833716,
+      "valid_original": true,
+      "valid_differences": true
+    },
+    {
+      "request": "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a/_v1/solver-candidate-repair-1/request.npz",
+      "formulation": "differences",
+      "wall_s": 5.237103749999989,
+      "status": 0,
+      "objective": -12664.633333333333,
+      "nodes": 1,
+      "nnz": 483890,
+      "valid_original": true,
+      "valid_differences": true
+    },
+    {
+      "request": "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a/_v2/solver-candidate/request.npz",
+      "formulation": "original",
+      "wall_s": 31.727289,
+      "status": 0,
+      "objective": -12568.423333333332,
+      "nodes": 1,
+      "nnz": 872551,
+      "valid_original": true,
+      "valid_differences": true
+    },
+    {
+      "request": "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a/_v2/solver-candidate/request.npz",
+      "formulation": "differences",
+      "wall_s": 3.6272715830000095,
+      "status": 0,
+      "objective": -12568.423333333332,
+      "nodes": 1,
+      "nnz": 528411,
+      "valid_original": true,
+      "valid_differences": true
+    }
+  ],
+  "limitations": [
+    "One cold three-arm day; not a full monthly run or a multi-day p95 guarantee.",
+    "Paired equations use identical full numerical requests including departure bounds; one pair per solve, original then differences. Brief focused tests overlapped part of the benchmark.",
+    "Post-build changes tightened infeasibility/timeout distinction and added replay CLI and cache-state tests; successful build paths and equations are unchanged.",
+    "Existing purpose-length warning and two q10 source PFE relaxations remain. No passage relaxation added.",
+    "SUMO validation still costs time; this does not establish parity with pre-passage counts-only demand builds.",
+    "Numeric replay is not a saved native search tree or release evidence."
+  ],
+  "checks": {
+    "pytest": "301 passed in 4.01s",
+    "pylint": "three changed source modules passed",
+    "git_diff_check": "passed",
+    "real_numeric_replay": {
+      "key": "bf9de3238a6bb02c6727d779bb6f943c6e8ab5d7bc732d3757528e24d659cf71",
+      "status": "optimal",
+      "cache_hit": false,
+      "columns": 80199,
+      "rows": 6111,
+      "has_incumbent": true,
+      "wall_s": 4.367947083,
+      "cpu_s": 4.359678,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+    },
+    "real_numeric_replay_directory": "runs/passage-replay-final-20260909"
+  },
+  "files_sha256": {
+    "traffic_sim/demand/automatic_passage.py": "7a56411a35d9aaf7c2c3df9053e842bfa27042bcf7c4d7fa386ef98a1937bede",
+    "traffic_sim/demand/passage_solver.py": "369714d65bc2f8c261eb8ad5fb85a9b0090f8736496a36a15ccc2c59993ae608",
+    "traffic_sim/experimental/dynamic_assignment.py": "79c27013ca7907e30e770470476540de5da025e5ef8208b235eaeda1e57f7a42",
+    "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a/_v2/solver-candidate/request.npz": "4b20b74d93403106032abccd8f867146f024e20e93449327cb4984a95d2bbd31",
+    "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a/q50/solver-candidate/request.npz": "38b6dc38b31865f0d44d19694c34f6e7329eaa92d9baf77f02388d99d0422c94",
+    "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a/_v1/solver-candidate/request.npz": "35d69799c38cdf913f797f74ea3c7fa97078558a3529fefaa1c745128b7bc21a",
+    "runs/automatic-passage-97f1ab116a8e48d8a05621247431715a/_v1/solver-candidate-repair-1/request.npz": "acab4f33651aa34dbe065ea648a985ebc21e5d229adf9b71da276f2d54b8bded"
+  }
+}

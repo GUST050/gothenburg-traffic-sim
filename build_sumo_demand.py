@@ -102,6 +102,26 @@ def _digest_payload(payload) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def write_demand_metadata(path: Path, payload: dict) -> None:
+    """Atomically write lossless compact demand metadata.
+
+    Whole-day metadata is dominated by repeated per-vehicle evidence. Compact
+    JSON preserves the parsed document and its fingerprint contract while
+    avoiding tens of megabytes of indentation in every archived build.
+    """
+    path = Path(path)
+    temporary = path.with_name(path.name + ".tmp")
+    try:
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"))
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def record_day_library_lookup(
     library: DayLibrary,
     identity: DayIdentity,
@@ -2255,13 +2275,7 @@ def main() -> None:
     )
     meta["build_id"] = meta["build_fingerprint"]["build_id"]
     meta_path = SUMO_DIR / "demand_meta.json"
-    meta_tmp = meta_path.with_name(meta_path.name + ".tmp")
-    with open(meta_tmp, "w") as f:
-        json.dump(meta, f, indent=2)
-        f.write("\n")
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(meta_tmp, meta_path)
+    write_demand_metadata(meta_path, meta)
     print(f"\nWrote {calib_path} + demand_meta.json")
 
     if args.keep_scenarios:

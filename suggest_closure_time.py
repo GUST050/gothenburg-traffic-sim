@@ -555,13 +555,10 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
             seed_flows = rs.parse_edgedata(
                 job["ed_file"], n_intervals,
                 measured_empty_edges=tuple(close_edges))
-            # `begin_s` is this call's own trimmed-window start (0 for a
-            # whole-day search, nonzero for an independent-daily cold
-            # window) -- see active_closure_throughput's docstring for why
-            # the flows array must be indexed relative to it, not to the
-            # closures' absolute epoch time.
+            # parse_edgedata indexes absolute XML begin times, including
+            # trimmed runs. Subtracting begin_s again counts the wrong day.
             active_throughput = cm.active_closure_throughput(
-                seed_flows, closures, window_begin_s=begin_s)
+                seed_flows, closures)
         # `seed_truncated` is always 0 under the closure-origin-routing
         # policy; `seed_dropped` is the real denied-departure count. The
         # successful reroute count (`seed_rerouted`) is completed traffic

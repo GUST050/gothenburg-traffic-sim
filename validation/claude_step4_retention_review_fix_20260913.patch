@@ -1,0 +1,234 @@
+diff --git a/AGENT_NOTES.md b/AGENT_NOTES.md
+index a2ba27e..2988f2e 100644
+--- a/AGENT_NOTES.md
++++ b/AGENT_NOTES.md
+@@ -65,11 +65,12 @@ which model may continue. See `AGENTS.md`.
+ - Correction to the record: the previous report listed build_sumo_demand._tracked_main among the instrumented sites. That was FALSE; 90c0675 does not touch the file and it contained no io_phases use. It is now genuinely instrumented (main under preserve_demand_on_failure, product listing, the add_output loop, the demand_meta read, the validation report, and run.finish for success and failure), with tests pinning that run status, output manifest, latest pointer and the never-fail-the-build rule for a broken report are all unchanged. It remains UNMEASURED: exercising it needs a real demand build.
+ - Concurrent ranking defect, measured: a region contributed its slowest child AND every descendant contributed its own exclusive time to the same total. Three 50 ms children under a 0.0553 s region ranked 0.2165 s, 3.91x the wall that elapsed, so every phase's share was wrong. Phases now carry wall_contribution_s; descendants keep calls, inclusive, exclusive, bytes, parent, children sum and max but contribute zero wall, and a name appearing both inside and outside a concurrent region keeps its real sequential contribution.
+ - Cache identity: build_sumo_demand.py is in demand_source_paths, so 6d76ffe changes demand source identity. Measured on the tracked day library: 0 of 1451 entries match the instrumented tree, and 0 matched before that edit either, because steps 1-3 on this branch had already invalidated all of them. The edit adds no new cost and the inventory was not weakened to avoid it.
+-- Full three-variant retention, measured at a08915f on runs/automatic-passage-97f1ab116a8e48d8a05621247431715a: 156 files, 1075.1 MB, 118 raw XML at 877.5 MB (all three facts re-verified before measuring). Retention root wall 4.158 s cold, 5.405 and 5.092 s after, warm median 5.248 s; copy 0.840/0.739/0.586 s, timed separately and excluded. 118 raw XML to 0, 114 .gz, compression ratio 0.1923, 114 verified against the ORIGINAL by decompressed digest, zero mismatches. Bytes read 805.3 MB, written 139.9 MB, hashed 805.3 MB, verified 805.3 MB. Candidate stages, rollback files and source_reports.json confirmed gone. The original root's paths, sizes and SHA-256 were identical after every repeat, and only the tool's own copy was removed, after its numbers were in hand.
+-- Ranking, repeat 1: retention_compress 99.74% as concurrent_region_wall, retention_cleanup 0.17%, retention_inventory 0.09%, residual 0.000 s. Inside the region: 12.281 s of thread time in 4.147 s of wall, 2.96x on three workers, split gzip_compress 8.923 s, gzip_target_verify 2.334 s, gzip_source_hash 0.697 s, reads/writes/publish negligible.
++- Full three-variant retention, measured at a08915f on runs/automatic-passage-97f1ab116a8e48d8a05621247431715a: 156 files, 1075.1 MB, 118 raw XML at 877.5 MB (all three facts re-verified before measuring). Retention root wall 5.137 s in repeat 1, 5.811 and 5.709 s after, repeat-2/3 median 5.760 s; copy 0.677/0.446/0.465 s, timed separately and excluded. 118 raw XML to 0, 114 .gz, retained-tree ratio 0.1923 and gzip-payload ratio 0.1737, 114 verified against the ORIGINAL by decompressed digest, zero mismatches. Bytes read 805.3 MB, written 139.9 MB, hashed 805.3 MB, verified 805.3 MB. Candidate stages, rollback files and source_reports.json confirmed gone. The original root's paths, sizes and SHA-256 were identical after every repeat, and only the tool's own copy was removed, after its numbers were in hand.
++- Ranking, repeat 1: retention_compress 99.81% as concurrent_region_wall, retention_cleanup 0.12%, retention_inventory 0.06%, residual 0.000 s. Inside the region: 15.197 s of thread time in 5.127 s of wall, 2.96x concurrency factor on three workers, split gzip_compress 10.717 s, gzip_target_verify 2.991 s, gzip_source_hash 0.817 s, reads/writes/publish negligible.
+ - The plan's 128.5 s retention figure is NOT reproduced for one finished root. Retention is therefore not the large item, and by the plan's own rule the source_trace_xml parsing proposal is deferred rather than pursued as a cache.
+ - Two defects found by running the new mode for real, both now with regression tests: the retention branch sat below main()'s --source check so the first invocation was refused for a flag it does not use, and the block was appended after the entry guard so main() ran before the function existed.
+-- Evidence: validation/passage_step4_io_measurement_20260913.json, now schema 2 with baseline_revision 1f1f2c8 and instrumentation_revision a08915f replacing v1's ambiguous single field, q50 replay and full retention reported separately, release_evidence false. Tests: 598 passed across sixteen modules. The one failure in test_validation_report.py is the pre-existing passage-accuracy test, untouched.
++- Evidence: validation/passage_step4_io_measurement_20260913.json, now schema 2 with baseline_revision 1f1f2c8 and instrumentation_revision a08915f replacing v1's ambiguous single field, q50 replay and full retention reported separately, release_evidence false. Codex independently reran the sixteen named modules: 598 passed with no failures and the existing urllib3/LibreSSL warning. A separate previously known passage-accuracy failure in test_validation_report.py is outside that command and remains untouched.
++- Step 4 evidence review correction: the committed v2 artifact was generated by a rerun at a08915f, but its prose and coordination notes retained timings from the earlier uncommitted run. The authoritative per-repeat rows are 5.137/5.811/5.709 s retention wall and 0.677/0.446/0.465 s copy; repeat-2/3 median is 5.760 s. The former `compression_ratio` is explicitly a retained-tree ratio (0.1923); actual gzip payload bytes divided by their original XML bytes is 0.1737. Code and tests now expose both bases.
+ <!-- CURRENT_HANDOFF_END -->
+ 
+ <!-- CURRENT_HANDOFF_HISTORY_START -->
+diff --git a/IMPROVEMENT_PLAN.md b/IMPROVEMENT_PLAN.md
+index f705600..74a14c2 100644
+--- a/IMPROVEMENT_PLAN.md
++++ b/IMPROVEMENT_PLAN.md
+@@ -722,25 +722,26 @@ repeat, aldrig hårdlänkad, originalet orört). Roten
+ 
+ | Repeat | Kopiering | Retention root wall | Residual |
+ |---|---|---|---|
+-| 1 (kall) | 0,840 s | **4,158 s** | 0,000 s |
+-| 2 | 0,739 s | 5,405 s | 0,000 s |
+-| 3 | 0,586 s | 5,092 s | 0,000 s |
++| 1 | 0,677 s | **5,137 s** | 0,000 s |
++| 2 | 0,446 s | 5,811 s | 0,000 s |
++| 3 | 0,465 s | 5,709 s | 0,000 s |
+ 
+-118 råa XML → 0, 114 `.gz` skrivna, kompressionsgrad 0,1923, 114 verifierade
++118 råa XML → 0, 114 `.gz` skrivna, kvarvarande trädkvot 0,1923 och
++gzip-payloadkvot 0,1737, 114 verifierade
+ mot ORIGINALET via dekomprimerad digest, noll avvikelser. Bytes: 805,3 MB
+ lästa, 139,9 MB skrivna, 805,3 MB hashade, 805,3 MB verifierade.
+ Originalrotens alla paths, storlekar och SHA-256 var identiska efter varje
+ repeat.
+ 
+-Rankingen för repeat 1: `retention_compress` 99,74 %
+-(`concurrent_region_wall`), `retention_cleanup` 0,17 %,
+-`retention_inventory` 0,09 %. Inuti regionen: 12,281 s trådtid komprimerad
+-till 4,147 s väggtid — **2,96× parallell effektivitet på tre arbetare**, med
+-`gzip_compress` 8,923 s, `gzip_target_verify` 2,334 s och `gzip_source_hash`
+-0,697 s av trådtiden.
++Rankingen för repeat 1: `retention_compress` 99,81 %
++(`concurrent_region_wall`), `retention_cleanup` 0,12 %,
++`retention_inventory` 0,06 %. Inuti regionen: 15,197 s trådtid i
++5,127 s väggtid — **2,96× samtidighetsfaktor på tre arbetare**, med
++`gzip_compress` 10,717 s, `gzip_target_verify` 2,991 s och
++`gzip_source_hash` 0,817 s av trådtiden.
+ 
+ **Planens 128,5 s för retention reproduceras inte.** En färdig trevariantsrot
+-retentioneras på 4,16 s kallt och 5,25 s varm median. Vad den siffran än
++retentioneras på 5,14 s i repeat 1 och 5,76 s median i repeat 2–3. Vad den siffran än
+ aggregerar är det inte detta. Retention är alltså INTE den stora posten, och
+ parsingförslaget skjuts därmed upp enligt planens egen regel.
+ 
+diff --git a/TASKS.md b/TASKS.md
+index a8a251a..52b8b69 100644
+--- a/TASKS.md
++++ b/TASKS.md
+@@ -9,12 +9,12 @@ owners, states and approval formulas are not active workflow rules. See
+ ## WORKFLOW_CONTROL
+ 
+ - Mode: `FLEXIBLE — simulation quality and performance research`
+-- Current focus: `Step 3 is complete and reviewed. Step 4 instrumentation and its q50 replay baseline exist, but the concurrent ranking needs the review fix, full three-variant retention remains unmeasured, and _tracked_main lacks the instrumentation named by the plan. No step-4 optimisation is implemented.`
++- Current focus: `Step 3 is complete and reviewed. Step 4 replay and full three-variant retention are measured with corrected concurrent accounting. _tracked_main is now instrumented; its production timing is deferred to the next authorized real demand canary. No step-4 optimisation is implemented.`
+ - Status: `Step 3 accepted. Review fixes (7e1a976): the diagnostic phase observer is a contextvars.ContextVar set and reset by token, and passage_solver.py is bound into replay_source_sha256(). departure_bound_constraints now reuses the incidence of a repeated (departure quarter, route) within one call: warm median 0.400201 -> 0.192282 s (51.95%), warm fit_integer_flows 0.762698 -> 0.575360 s (24.56%), with the worst candidate measurement still 51.61% under the best baseline one. All 11 solver request arrays, the whole request.npz and the published routes/agents/selection are identical in all four arms, and selection_reproduced is identical in all 12 replays. Column-equivalence reduction was deliberately left alone. PREVIOUS: step 2 accepted (b270087) after five review fixes: postponed annotations for Python 3.9, a StructureContext that derives its SHA-256 and its arrays from ONE read so a same-size same-mtime rewrite invalidates it, a pool report keyed on the content of the route file plus its sidecar and the generation target, demand/structure.py added to replay_source_sha256(), and one profiler context shared by the source and candidate reports with route_facts_cache: operation_scoped_content_bound. Codex's counterbalanced A/B/B/A accepted it: warm replay median 6.6376895 -> 5.956609 s (10.26%), warm structure 1.3972755 -> 0.749738 s (46.34%), cold replay 9.943896 -> 9.233191 s (7.15%), all 11 solver request arrays equal and identical selection/route/agent hashes; with the fixes, 5.8138625 s and 0.651292 s. Step 3 adds a private diagnostic solver hook measuring nine phases with exclusive time; a cache hit reports milp_solve at 0 calls and milp_executed false. Verified request.npz byte-identical and state.json keys unchanged. The cache KEY moves because solve_checkpointed hashes the solver source bytes, so every existing passage-solver cache entry is invalid from this commit.`
+-- Suggested next action: `Apply the concurrent-ranking review fix, then profile prune_evidence on an isolated copy of an already-complete q50/_v1/_v2 evidence root. This needs no new SUMO or demand build. Do not implement the proposed trace parse cache yet: the three measured trace files have distinct digests and production reads each only once per _refine, so repeat-profile cache hits do not establish a dagsbygge speedup.`
++- Suggested next action: `Run a counterbalanced 3-worker versus 6-worker retention A/B/B/A on owned copies of the same complete q50/_v1/_v2 root. Keep 3 unless 6 improves retention root wall by at least 15%, preserves byte-identical compressed outputs and source integrity, and does not create excessive memory or load. Do not implement the proposed trace parse cache: repeat-profile hits do not establish a dagsbygge speedup.`
+ - Eligible actors: `Any capable actor.`
+ - Safety boundary: `Preserve prior campaign evidence and exact sensor/provenance gates. No full search restart, production activation or expensive catalog/demand run without explicit scope; keep unrelated local changes outside this delivery.`
+-- Updated: `2026-09-13. Step 3 closed and reviewed; step 4 replay baseline measured, concurrent accounting repair and full retention baseline pending.`
++- Updated: `2026-09-13. Step 3 closed; step 4 replay and full retention measured, reporting corrections reviewed, bounded worker-count A/B next.`
+ <!-- WORKFLOW_CONTROL_END -->
+ 
+ <!-- WORKFLOW_HISTORY_START -->
+diff --git a/tests/test_retention_profile.py b/tests/test_retention_profile.py
+index f56bac6..5542f60 100644
+--- a/tests/test_retention_profile.py
++++ b/tests/test_retention_profile.py
+@@ -146,6 +146,12 @@ class TestTheMeasurementIsHonest:
+         assert run['bytes']['written'] > 0
+         assert run['bytes']['verified'] > 0
+         assert 0 < run['compression_ratio'] < 1
++        assert run['compression_ratio'] == run['retained_tree_ratio']
++        assert run['compression_ratio_basis'] == \
++            'retained_tree_bytes/original_tree_bytes'
++        assert run['gzip_payload_ratio'] == pytest.approx(
++            run['compressed_payload_bytes'] / run['compressed_source_bytes'],
++            abs=1e-6)
+ 
+     def test_every_compressed_file_matches_the_original_when_decompressed(
+             self, report):
+diff --git a/tools/profile_passage_replay.py b/tools/profile_passage_replay.py
+index a126914..b680459 100644
+--- a/tools/profile_passage_replay.py
++++ b/tools/profile_passage_replay.py
+@@ -1175,6 +1175,8 @@ def _retention_repeat(root: Path, original: dict, work: Path,
+     # the ORIGINAL root, not against the copy it was made from, so a copy that
+     # was already wrong cannot certify itself.
+     mismatches, verified = [], 0
++    compressed_source_bytes = 0
++    compressed_payload_bytes = 0
+     for path in packed:
+         relative = str(path.relative_to(copy))[:-len('.gz')]
+         expected = original.get(relative)
+@@ -1185,6 +1187,8 @@ def _retention_repeat(root: Path, original: dict, work: Path,
+             mismatches.append({'file': relative, 'reason': 'digest differs'})
+             continue
+         verified += 1
++        compressed_source_bytes += expected[0]
++        compressed_payload_bytes += path.stat().st_size
+ 
+     result = {
+         'repeat': index + 1,
+@@ -1201,8 +1205,19 @@ def _retention_repeat(root: Path, original: dict, work: Path,
+                   for key, value in measurement['phases'][name]['bytes'].items()},
+         'bytes_on_disk_before': bytes_before,
+         'bytes_on_disk_after': bytes_after,
++        # Preserve the original field with an explicit basis, and separately
++        # report the actual gzip payload ratio. The retained tree also contains
++        # manifests and solver evidence that are never gzip inputs.
+         'compression_ratio': round(bytes_after / bytes_before, 6)
+         if bytes_before else None,
++        'compression_ratio_basis': 'retained_tree_bytes/original_tree_bytes',
++        'retained_tree_ratio': round(bytes_after / bytes_before, 6)
++        if bytes_before else None,
++        'gzip_payload_ratio': round(
++            compressed_payload_bytes / compressed_source_bytes, 6)
++        if compressed_source_bytes else None,
++        'compressed_source_bytes': compressed_source_bytes,
++        'compressed_payload_bytes': compressed_payload_bytes,
+         'gz_verified_against_original': verified,
+         'gz_digest_mismatches': mismatches,
+         'candidate_dirs_removed': not list(copy.glob('*/candidate*')),
+diff --git a/validation/passage_step4_io_measurement_20260913.json b/validation/passage_step4_io_measurement_20260913.json
+index 9e381b4..c65cacf 100644
+--- a/validation/passage_step4_io_measurement_20260913.json
++++ b/validation/passage_step4_io_measurement_20260913.json
+@@ -59,6 +59,7 @@
+       "worker_cap": "min(3, len(paths), os.cpu_count())"
+     },
+     "evidence_root": "/Users/gt/Documents/gs-project/runs/automatic-passage-97f1ab116a8e48d8a05621247431715a",
++    "gzip_payload_ratio": 0.173675,
+     "per_repeat": [
+       {
+         "bytes": {
+@@ -69,14 +70,19 @@
+         },
+         "candidate_dirs_removed": true,
+         "compressed_files_after": 114,
++        "compressed_payload_bytes": 139865918,
++        "compressed_source_bytes": 805331251,
+         "compression_ratio": 0.192312,
++        "compression_ratio_basis": "retained_tree_bytes/original_tree_bytes",
+         "copy_s": 0.677043,
+         "gz_digest_mismatches": [],
+         "gz_verified_against_original": 114,
++        "gzip_payload_ratio": 0.173675,
+         "raw_xml_files_after": 0,
+         "raw_xml_files_before": 118,
+         "repeat": 1,
+         "residual_s": 0.000183,
++        "retained_tree_ratio": 0.192312,
+         "retention_root_wall_s": 5.137247,
+         "rollback_files_removed": true,
+         "source_reports_removed": true,
+@@ -91,14 +97,19 @@
+         },
+         "candidate_dirs_removed": true,
+         "compressed_files_after": 114,
++        "compressed_payload_bytes": 139865918,
++        "compressed_source_bytes": 805331251,
+         "compression_ratio": 0.192312,
++        "compression_ratio_basis": "retained_tree_bytes/original_tree_bytes",
+         "copy_s": 0.446238,
+         "gz_digest_mismatches": [],
+         "gz_verified_against_original": 114,
++        "gzip_payload_ratio": 0.173675,
+         "raw_xml_files_after": 0,
+         "raw_xml_files_before": 118,
+         "repeat": 2,
+         "residual_s": 0.000426,
++        "retained_tree_ratio": 0.192312,
+         "retention_root_wall_s": 5.811303,
+         "rollback_files_removed": true,
+         "source_reports_removed": true,
+@@ -113,21 +124,31 @@
+         },
+         "candidate_dirs_removed": true,
+         "compressed_files_after": 114,
++        "compressed_payload_bytes": 139865918,
++        "compressed_source_bytes": 805331251,
+         "compression_ratio": 0.192312,
++        "compression_ratio_basis": "retained_tree_bytes/original_tree_bytes",
+         "copy_s": 0.464685,
+         "gz_digest_mismatches": [],
+         "gz_verified_against_original": 114,
++        "gzip_payload_ratio": 0.173675,
+         "raw_xml_files_after": 0,
+         "raw_xml_files_before": 118,
+         "repeat": 3,
+         "residual_s": 0.000235,
++        "retained_tree_ratio": 0.192312,
+         "retention_root_wall_s": 5.708821,
+         "rollback_files_removed": true,
+         "source_reports_removed": true,
+         "source_unchanged": true
+       }
+     ],
++    "ratio_basis": {
++      "gzip_payload_ratio": "gzip payload bytes / original bytes for the 114 compressed XML files",
++      "retained_tree_ratio": "all tree bytes after prune / all tree bytes before prune"
++    },
+     "repeats": 3,
++    "retained_tree_ratio": 0.192312,
+     "scope": "the complete prune_evidence contract on a real finished three-variant root, measured on an owned copy",
+     "source_inventory": {
+       "bytes": 1075071455,
+@@ -160,7 +181,7 @@
+   "instrumentation_revision_note": "the exact revision the retention profile below was run at; it includes the concurrent-ranking review fix 34f989d and the _tracked_main instrumentation 6d76ffe",
+   "measurement_only": true,
+   "optimization_implemented": false,
+-  "plan_expectation_vs_measurement": "IMPROVEMENT_PLAN named retention as a 128.5 s win area. One finished three-variant root, 1075.1 MB with 877.5 MB of raw XML, retains in 4.16 s cold and a 5.25 s median warm. The measurement does not reproduce 128.5 s for a single root; whatever that figure aggregates, it is not this.",
++  "plan_expectation_vs_measurement": "IMPROVEMENT_PLAN named retention as a 128.5 s win area. One finished three-variant root, 1075.1 MB with 877.5 MB of raw XML, retained in 5.137247 s on repeat 1 and a 5.760062 s median on repeats 2-3. The measurement does not reproduce 128.5 s for a single root; whatever that figure aggregates, it is not this.",
+   "purpose": "Step 4: evidence I/O, parsing, serialization and real retention",
+   "q50_replay_measurement": {
+     "evidence": "runs/automatic-passage-8cae0ea6442b427db04a46d2b4108430/q50",

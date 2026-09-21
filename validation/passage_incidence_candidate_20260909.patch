@@ -1,0 +1,66 @@
+--- a/traffic_sim/experimental/dynamic_assignment.py
++++ b/traffic_sim/experimental/dynamic_assignment.py
+@@ -123,9 +123,9 @@
+         raise ValueError('named travel-time scenarios are required')
+     lookup = {edge: i for i, edge in enumerate(sensor_ids)}
+     rows, columns, boundary_rows, boundary_columns = [], [], [], []
++    observations = {}
+     for column, option in enumerate(options):
+-        if not option.option_id or not option.group or not option.edges \
+-                or any(not isinstance(edge, str) or not edge for edge in option.edges):
++        if not option.option_id or not option.group or not option.edges:
+             raise ValueError('each alternative needs identity, group and physical edges')
+         if not math.isfinite(option.preference_cost) or option.preference_cost < 0:
+             raise ValueError('preference cost must be finite and nonnegative')
+@@ -135,25 +135,32 @@
+         if isinstance(option.capacity, bool) or not isinstance(option.capacity, int) \
+                 or option.capacity < 0:
+             raise ValueError('capacity must be a nonnegative integer')
+-        if tuple(sorted(option.entry_offsets_s)) != scenarios:
+-            raise ValueError('every alternative must have every travel-time scenario')
+-        for arm, scenario in enumerate(scenarios):
+-            offsets = option.entry_offsets_s[scenario]
+-            if len(offsets) != len(option.edges) or any(
+-                    not math.isfinite(value) or value < 0 for value in offsets) \
+-                    or any(a > b for a, b in zip(offsets, offsets[1:])):
+-                raise ValueError('complete finite monotone entry offsets are required')
+-            for edge, offset in zip(option.edges[1:], offsets[1:]):
+-                if edge not in lookup:
+-                    continue
+-                base = arm * len(sensor_ids) + lookup[edge]
+-                quarter = math.floor((option.departure_s + offset) / interval_s)
+-                if 0 <= quarter < n_intervals:
+-                    rows.append(base * n_intervals + quarter)
+-                    columns.append(column)
+-                else:
+-                    boundary_rows.append(base * 2 + int(quarter >= n_intervals))
+-                    boundary_columns.append(column)
++        key = (id(option.edges), id(option.entry_offsets_s))
++        observed = observations.get(key)
++        if observed is None:
++            if any(not isinstance(edge, str) or not edge for edge in option.edges):
++                raise ValueError('each alternative needs identity, group and physical edges')
++            if tuple(sorted(option.entry_offsets_s)) != scenarios:
++                raise ValueError('every alternative must have every travel-time scenario')
++            observed = []
++            for arm, scenario in enumerate(scenarios):
++                offsets = option.entry_offsets_s[scenario]
++                if len(offsets) != len(option.edges) or any(
++                        not math.isfinite(value) or value < 0 for value in offsets) \
++                        or any(a > b for a, b in zip(offsets, offsets[1:])):
++                    raise ValueError('complete finite monotone entry offsets are required')
++                observed.extend((arm * len(sensor_ids) + lookup[edge], offset)
++                                for edge, offset in zip(option.edges[1:], offsets[1:])
++                                if edge in lookup)
++            observations[key] = observed
++        for base, offset in observed:
++            quarter = math.floor((option.departure_s + offset) / interval_s)
++            if 0 <= quarter < n_intervals:
++                rows.append(base * n_intervals + quarter)
++                columns.append(column)
++            else:
++                boundary_rows.append(base * 2 + int(quarter >= n_intervals))
++                boundary_columns.append(column)
+     shape = (len(scenarios) * len(sensor_ids) * n_intervals, len(options))
+     matrix = coo_matrix((np.ones(len(rows)), (rows, columns)), shape=shape).tocsr()
+     boundary = coo_matrix((np.ones(len(boundary_rows)), (boundary_rows, boundary_columns)),

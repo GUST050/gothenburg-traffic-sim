@@ -1,0 +1,55 @@
+{
+  "status": "tested_candidate_not_activated",
+  "reason": "Avoid invalidating day and numeric caches during the live user-requested search for a kernel-only gain. Full-build few-second claim is unsupported.",
+  "source_sha256": "79c27013ca7907e30e770470476540de5da025e5ef8208b235eaeda1e57f7a42",
+  "rows": [
+    {
+      "arm": "q50",
+      "repeat": 0,
+      "old_s": 3.797433334,
+      "new_s": 0.9049225830000003
+    },
+    {
+      "arm": "q50",
+      "repeat": 1,
+      "old_s": 3.9854407499999995,
+      "new_s": 0.7949917500000012
+    },
+    {
+      "arm": "_v1",
+      "repeat": 0,
+      "old_s": 3.5646535000000004,
+      "new_s": 0.8238229170000011
+    },
+    {
+      "arm": "_v1",
+      "repeat": 1,
+      "old_s": 3.617318749999999,
+      "new_s": 0.9281825000000019
+    },
+    {
+      "arm": "_v2",
+      "repeat": 0,
+      "old_s": 3.6278094590000016,
+      "new_s": 0.8309199590000027
+    },
+    {
+      "arm": "_v2",
+      "repeat": 1,
+      "old_s": 3.5424719159999967,
+      "new_s": 0.7881695000000022
+    }
+  ],
+  "median_before_s": 3.6225641045000003,
+  "median_after_s": 0.8273714380000019,
+  "matrix_and_boundary_exactly_equal": true,
+  "scope": "Frozen archived three-arm options, two repetitions each; other simulation running, no full-build speed claim.",
+  "live_completed_build": {
+    "id": "demand-20260909-211016-24699e7c-7277",
+    "days": 3,
+    "pfe_variants_and_rounding_s": 153.95,
+    "dynamic_passage_s": 127.026
+  },
+  "candidate_patch": "validation/passage_incidence_candidate_20260909.patch",
+  "tests": "47 passed in1.15s with candidate builder injected in-process; subprocess tests use unchanged source"
+}

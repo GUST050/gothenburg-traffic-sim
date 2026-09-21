@@ -1,0 +1,148 @@
+{
+  "artifacts": {
+    "report": "validation/passage_step2_measurement_20260913.json",
+    "review_patch": "validation/claude_step2_review_fix_20260913.patch"
+  },
+  "candidate_route_shape": {
+    "route_representation": {
+      "inline_vehicles": 9675,
+      "named_reference_vehicles": 0,
+      "named_route_definitions": 0
+    },
+    "unique_edge_tuples": 296,
+    "unique_endpoint_pairs": 296,
+    "vehicles": 9675,
+    "vehicles_per_unique_edge_tuple": 32.686
+  },
+  "claude_commits_reviewed": [
+    "a7e1dbc5a061122d497b73a390a713032589a826",
+    "fcedfc29aa3dd1cd760bb1cbc0302c41f0ee6dcb"
+  ],
+  "correctness": {
+    "all_output_hashes_equal": true,
+    "all_saved_selections_reproduced": true,
+    "cache_hit_pattern": [
+      false,
+      true,
+      true
+    ],
+    "matches_step1_output_hashes": true
+  },
+  "date": "2026-09-13",
+  "decision": {
+    "constraint": "Preserve every per-vehicle observation and aggregation order; cache immutable facts by full edge tuple plus geometry and sensor identities. Recompute departure-quarter and purpose aggregation after staging.",
+    "maximum_observed_scope_s": 0.691741,
+    "no_claim": "This is one holiday/weekend q50 replay. It does not establish a full-day or monthly gain.",
+    "reason": "9675 vehicles reuse 296 full edge tuples and endpoint pairs (32.686 vehicles per route), while the two hot structure phases cost 0.691741 s and execute 108094 gravity-distance plus 20220 route-OD calls in total.",
+    "route_facts_experiment": "proceed_bounded"
+  },
+  "hot_process_measurement": {
+    "candidate_calls": {
+      "_route_structure_metrics": {
+        "calls": 2.0,
+        "exclusive_s": 0.130724
+      },
+      "gravity_distance_km": {
+        "calls": 54047.0,
+        "exclusive_s": 0.136031
+      },
+      "load_edge_geometry": {
+        "calls": 5.0,
+        "exclusive_s": 1.45e-05
+      },
+      "purpose_length_bins": {
+        "calls": 2.0,
+        "exclusive_s": 0.0436845
+      },
+      "purpose_lengths_km": {
+        "calls": 1.0,
+        "exclusive_s": 0.026783
+      },
+      "route_od_distance_km": {
+        "calls": 10110.0,
+        "exclusive_s": 0.0118535
+      }
+    },
+    "combined_structure_wall_s": 0.691741,
+    "identity_wall_s": 0.040843,
+    "route_inventory_wall_s": 0.12002,
+    "source_calls": {
+      "_route_structure_metrics": {
+        "calls": 2.0,
+        "exclusive_s": 0.132222
+      },
+      "gravity_distance_km": {
+        "calls": 54047.0,
+        "exclusive_s": 0.136583
+      },
+      "load_edge_geometry": {
+        "calls": 5.0,
+        "exclusive_s": 1.55e-05
+      },
+      "purpose_length_bins": {
+        "calls": 2.0,
+        "exclusive_s": 0.0353285
+      },
+      "purpose_lengths_km": {
+        "calls": 1.0,
+        "exclusive_s": 0.0263865
+      },
+      "route_od_distance_km": {
+        "calls": 10110.0,
+        "exclusive_s": 0.011963999999999999
+      }
+    },
+    "structure_candidate_wall_s": 0.349164,
+    "structure_source_wall_s": 0.342577
+  },
+  "input_identity": {
+    "geometry_path": "/Users/gt/Documents/gs-project/web/data/network.geojson",
+    "geometry_sha256": "92cbcf3895b3d1428d3713a0e919cf6679f00a8e5d00e7974182345d088a1dbf",
+    "sensor_edge_count": 7,
+    "sensor_edges_sha256": "030d9fa9573193cd53a426fabca1a07f096e8eccc48fb236eb080e16adc8019a"
+  },
+  "release_evidence": false,
+  "review_findings_fixed": [
+    {
+      "finding": "The direct replay cache parameter remained public and a supplied cache was not required to belong to the profile output.",
+      "fix": "Rename it _solver_cache_dir and require the resolved cache parent to equal the profile output root before writing.",
+      "severity": "H1"
+    },
+    {
+      "finding": "The route inventory used an inline-only parser although production structure metrics support named route references.",
+      "fix": "Resolve both inline and named routes and report their representation counts.",
+      "severity": "M1"
+    },
+    {
+      "finding": "The instrumentation omitted geometry/sensor identity and omitted zero-call functions from its table.",
+      "fix": "Record content-bound geometry and sensor hashes and initialise all named counters to explicit zeros.",
+      "severity": "M1"
+    }
+  ],
+  "route_shape": {
+    "route_representation": {
+      "inline_vehicles": 9675,
+      "named_reference_vehicles": 0,
+      "named_route_definitions": 0
+    },
+    "unique_edge_tuples": 296,
+    "unique_endpoint_pairs": 296,
+    "vehicles": 9675,
+    "vehicles_per_unique_edge_tuple": 32.686
+  },
+  "sample": {
+    "date": "2027-06-25",
+    "pool": "weekend/holiday",
+    "variant": "q50",
+    "vehicles": 9675
+  },
+  "schema_version": 1,
+  "source_evidence": "runs/automatic-passage-8cae0ea6442b427db04a46d2b4108430/q50",
+  "source_profile": "runs/profile-structure-reviewed-20260913/profile_report.json",
+  "status": "step2_measurement_supports_bounded_route_facts_experiment",
+  "verification": {
+    "broader_after_review_fix": "504 passed, 1 warning",
+    "diff_check": "clean",
+    "focused_after_review_fix": "159 passed"
+  }
+}

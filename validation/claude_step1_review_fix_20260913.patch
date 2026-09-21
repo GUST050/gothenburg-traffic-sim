@@ -1,0 +1,189 @@
+diff --git a/tests/test_automatic_passage.py b/tests/test_automatic_passage.py
+index 8ad8422..49f4aa2 100644
+--- a/tests/test_automatic_passage.py
++++ b/tests/test_automatic_passage.py
+@@ -454,7 +454,7 @@ def test_the_solver_request_key_is_unchanged_by_reuse(tmp_path):
+     for index, support in enumerate((
+             dynamic.expand_departure_support(
+                 options, shifts, begin_s=0, end_s=quarters * 900, guard_s=guard_s),
+-            dynamic.expand_departure_support_verified(
++            dynamic._expand_departure_support_from_system(
+                 verified.system, shifts, begin_s=0, end_s=quarters * 900,
+                 guard_s=guard_s))):
+         work = tmp_path / f'solve-{index}'
+diff --git a/tests/test_dynamic_assignment.py b/tests/test_dynamic_assignment.py
+index 5425e1e..dffb857 100644
+--- a/tests/test_dynamic_assignment.py
++++ b/tests/test_dynamic_assignment.py
+@@ -372,7 +372,7 @@ class TestVerifiedExpansion:
+ 
+         public = dynamic.expand_departure_support(
+             options, [-900, 0, 900], begin_s=0, end_s=3600, guard_s=60)
+-        verified = dynamic.expand_departure_support_verified(
++        verified = dynamic._expand_departure_support_from_system(
+             system, [-900, 0, 900], begin_s=0, end_s=3600, guard_s=60)
+ 
+         assert self._fields(verified) == self._fields(public)
+@@ -383,7 +383,7 @@ class TestVerifiedExpansion:
+         public = dynamic.build_passage_system(dynamic.expand_departure_support(
+             options, [-900, 0, 900], begin_s=0, end_s=3600, guard_s=60), ['s'], 4)
+         verified = dynamic.build_passage_system(
+-            dynamic.expand_departure_support_verified(
++            dynamic._expand_departure_support_from_system(
+                 system, [-900, 0, 900], begin_s=0, end_s=3600, guard_s=60), ['s'], 4)
+ 
+         for name in ('matrix', 'boundary_matrix'):
+@@ -397,17 +397,20 @@ class TestVerifiedExpansion:
+         options = self._options()
+ 
+         with pytest.raises(ValueError, match='built passage system'):
+-            dynamic.expand_departure_support_verified(
++            dynamic._expand_departure_support_from_system(
+                 options, [0], begin_s=0, end_s=3600)
+ 
++    def test_the_verified_fast_path_is_not_a_public_validation_bypass(self):
++        assert not hasattr(dynamic, 'expand_departure_support_verified')
++
+     def test_the_verified_expansion_still_checks_shifts_and_horizon(self):
+         system = dynamic.build_passage_system(self._options(), ['s'], 4)
+ 
+         with pytest.raises(ValueError, match='shifts including zero'):
+-            dynamic.expand_departure_support_verified(
++            dynamic._expand_departure_support_from_system(
+                 system, [300], begin_s=0, end_s=3600)
+         with pytest.raises(ValueError, match='finite horizon'):
+-            dynamic.expand_departure_support_verified(
++            dynamic._expand_departure_support_from_system(
+                 system, [0], begin_s=3600, end_s=0)
+ 
+     def test_the_verified_expansion_still_checks_the_per_option_envelope(self):
+@@ -415,7 +418,7 @@ class TestVerifiedExpansion:
+         system = dynamic.build_passage_system(options, ['s'], 4)
+ 
+         with pytest.raises(ValueError, match='unit capacity'):
+-            dynamic.expand_departure_support_verified(
++            dynamic._expand_departure_support_from_system(
+                 system, [0], begin_s=0, end_s=3600)
+ 
+     def test_the_public_expansion_still_validates_unverified_options(self):
+diff --git a/tests/test_profile_passage_replay.py b/tests/test_profile_passage_replay.py
+index 2ded803..9916d71 100644
+--- a/tests/test_profile_passage_replay.py
++++ b/tests/test_profile_passage_replay.py
+@@ -549,6 +549,15 @@ class TestSharedSolverCache:
+         assert report['solver_cache_hit'] is False
+         assert (tmp_path / 'out/solver-cache').is_dir()
+ 
++    def test_direct_replay_cannot_write_a_cache_inside_source_evidence(self, tmp_path):
++        source = evidence_root(tmp_path)
++
++        with pytest.raises(profiler.ReplayRefused, match='solver cache'):
++            profiler.replay(
++                source, tmp_path / 'out', _solver_cache_dir=source / 'cache')
++
++        assert not (source / 'cache').exists()
++
+     def test_a_missing_solver_state_is_refused(self, tmp_path, monkeypatch):
+         source = evidence_root(tmp_path)
+         real = profiler.dynamic.fit_integer_flows
+diff --git a/tools/profile_passage_replay.py b/tools/profile_passage_replay.py
+index 562a6a1..7b95734 100644
+--- a/tools/profile_passage_replay.py
++++ b/tools/profile_passage_replay.py
+@@ -365,9 +365,18 @@ def replay(source: Path, out: Path, *, label: str | None = None,
+            solver_time_limit_s: float = 60, archive: Path | None = None,
+            demand_spec: Path | None = None, archive_repeats: int = 3,
+            preparation_only: bool = False,
+-           solver_cache_dir: Path | None = None) -> dict:
++           _solver_cache_dir: Path | None = None) -> dict:
+     """Replay preparation, solving, staging and structure over saved traces."""
+     source, out = _resolve_isolation(source, out)
++    cache_root = (out / 'solver-cache' if _solver_cache_dir is None
++                  else Path(_solver_cache_dir).resolve())
++    if source == cache_root or source in cache_root.parents \
++            or cache_root in source.parents:
++        raise ReplayRefused(
++            f'solver cache {cache_root} must be outside source evidence {source}')
++    if _solver_cache_dir is not None and cache_root.parent != out.parent:
++        raise ReplayRefused(
++            f'shared solver cache {cache_root} must belong to profile output {out.parent}')
+     out.mkdir(parents=True, exist_ok=False)
+     variant = source.name
+     context = {'variant': variant, 'date': None, 'input_identity': None}
+@@ -454,7 +463,7 @@ def replay(source: Path, out: Path, *, label: str | None = None,
+                             raise ReplayRefused(
+                                 'source violates the retained PFE structural bounds')
+                 with recorder.phase('expand_departure_support'):
+-                    expanded = dynamic.expand_departure_support_verified(
++                    expanded = dynamic._expand_departure_support_from_system(
+                         base, SHIFT_SUPPORT_S, begin_s=0, end_s=quarters * 900,
+                         guard_s=GUARD_S)
+                 with recorder.phase('build_passage_system_expanded'):
+@@ -496,8 +505,6 @@ def replay(source: Path, out: Path, *, label: str | None = None,
+             # profile, so repeat 1 is cold and later repeats reproduce the
+             # cache hit production itself gets. A lone replay keeps a private
+             # cache under its own output.
+-            cache_root = (Path(solver_cache_dir) if solver_cache_dir is not None
+-                          else out / 'solver-cache')
+             cache_root.mkdir(parents=True, exist_ok=True)
+             with recorder.phase('solver') as solver:
+                 with recorder.phase('fit_integer_flows'):
+@@ -640,7 +647,7 @@ def profile(source: Path, out: Path, *, repeats: int = 1, **options) -> dict:
+             f'shared solver cache {cache_root} must be outside {source}')
+     cache_root.mkdir(parents=True, exist_ok=False)
+     runs = [replay(source, out / f'repeat-{index + 1}',
+-                   solver_cache_dir=cache_root, **options)
++                   _solver_cache_dir=cache_root, **options)
+             for index in range(repeats)]
+     walls = [_phase_walls(run) for run in runs]
+     names = sorted({name for row in walls for name in row})
+diff --git a/traffic_sim/demand/automatic_passage.py b/traffic_sim/demand/automatic_passage.py
+index 26bcf7c..0188ad1 100644
+--- a/traffic_sim/demand/automatic_passage.py
++++ b/traffic_sim/demand/automatic_passage.py
+@@ -269,7 +269,7 @@ def _refine(data, source_report, network, work, candidate_pool):
+     counts = matrix @ np.ones(len(options))
+     if np.any(counts < lower) or np.any(counts > upper):
+         raise ValueError('source violates retained PFE structural bounds')
+-    expanded = dynamic.expand_departure_support_verified(
++    expanded = dynamic._expand_departure_support_from_system(
+         original, [-900, -600, -300, 0, 300, 600, 900],
+         begin_s=0, end_s=quarters*900, guard_s=60)
+     before_structure = calibrated_structure_report(route, pool_path=candidate_pool)
+diff --git a/traffic_sim/experimental/dynamic_assignment.py b/traffic_sim/experimental/dynamic_assignment.py
+index 8f4009a..a2e5471 100644
+--- a/traffic_sim/experimental/dynamic_assignment.py
++++ b/traffic_sim/experimental/dynamic_assignment.py
+@@ -384,7 +384,7 @@ def expand_departure_support(
+     All generated alternatives have capacity one to avoid point-mass cloning.
+ 
+     Callers holding a system that already validated these exact options use
+-    ``expand_departure_support_verified`` instead of paying for the throwaway
++    ``_expand_departure_support_from_system`` instead of paying for the throwaway
+     validation system below.
+     """
+     shifts = _validated_shift_grid(shifts_s, begin_s, end_s, guard_s)
+@@ -396,11 +396,11 @@ def expand_departure_support(
+                                  end_s=end_s, guard_s=guard_s)
+ 
+ 
+-def expand_departure_support_verified(
++def _expand_departure_support_from_system(
+     system: PassageSystem, shifts_s: Sequence[int], *,
+     begin_s: float, end_s: float, guard_s: float = 0,
+ ) -> list[RouteDeparture]:
+-    """Expand the options a built system has ALREADY validated.
++    """Internal fast path for options validated by this pipeline's built system.
+ 
+     ``build_passage_system`` checks every option it accepts — identity, group,
+     physical edges, complete finite monotone offsets per named scenario,
+@@ -409,7 +409,8 @@ def expand_departure_support_verified(
+     rather than a skip flag makes that proof unforgeable: a ``PassageSystem``
+     cannot exist without its options having passed. Every per-option envelope
+     rule that belongs to the EXPANSION (unit capacity, declared horizon,
+-    reserved scenario names) is still enforced here.
++    reserved scenario names) is still enforced here. This remains private so
++    arbitrary callers cannot select a validation-skipping API.
+     """
+     if not isinstance(system, PassageSystem):
+         raise ValueError('a built passage system is required')
