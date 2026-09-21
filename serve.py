@@ -124,6 +124,24 @@ Endpoints:
                                 ALWAYS carries the result's claim_boundary
                                 verbatim — global-best/UI claims stay
                                 disabled until the new held-out gate passes.
+  POST /api/monthly_search/delay_profile with {"search_id": ..., "top": 2}
+                              — replays the best candidates of a FINISHED
+                                search as per-vehicle added-travel-time
+                                distributions (the curve the panel draws
+                                beside the two best dates). Starts no SUMO:
+                                it reprices the same deterministic detour
+                                the ranking used, over the same archives,
+                                and refuses to publish a curve whose totals
+                                do not reproduce the ranked closure cost.
+                                Async/poll like the rest, but it takes no
+                                simulation slot — it only declines to start
+                                while a search is running, so a read-only
+                                chart cannot steal CPU from real work.
+  GET /api/monthly_search/delay_profile?search_id=…
+                              — {"status": "idle"|"running"|"done"|"error"};
+                                on "done" the stored profile, which lives in
+                                the workspace as a diagnostic beside the
+                                immutable artifacts, never inside them.
 
 WHY ASYNC (found from a real failure): a multi-minute job tied to a single
 blocking HTTP GET is fragile — a browser's own request timeout, a closed
@@ -253,6 +271,11 @@ MONTHLY_PERIOD_ANALYSIS_POLICY_PATH = (
     ROOT / "validation" / "monthly_search_policy_v2.json"
 )
 MONTHLY_SEARCH_ROOT = ROOT / "runs" / "closure-search"
+# The most candidates one request may reprice. A cap only: how many curves
+# to draw by default is `closure_delay_run.DEFAULT_TOP_N`, and repeating that
+# number here would give it two owners. The cap exists because repricing a
+# whole shortlist is a search, not a chart.
+DELAY_PROFILE_MAX_TOP_N = 5
 CLOSURE_SEARCH_SPEC_DIR = ROOT / "runs" / "closure_search_specs"
 # Frozen with the golden monthly benchmark (its workspace's backend
 # provenance records exactly this value); a longer p99 only lengthens
@@ -677,6 +700,12 @@ _optimize_lock = threading.Lock()  # guards _optimize_state below
 _optimize_state: dict = {"status": "idle"}
 _monthly_lock = threading.Lock()   # guards _monthly_state below
 _monthly_state: dict = {"status": "idle"}
+# The delay-profile replay is deliberately NOT in _STATE_BY_KIND below and
+# never takes _sim_lock: it starts no SUMO and produces nothing the search's
+# evidence depends on. Giving a read-only chart a simulation slot would let it
+# block an interactive closure, which is the opposite of the trade it makes.
+_delay_profile_lock = threading.Lock()   # guards _delay_profile_state below
+_delay_profile_state: dict = {"status": "idle"}
 
 # Per-kind live state, one map — the durable job layer below reads a
 # kind's terminal status through this instead of four hardcoded branches.
@@ -1727,6 +1756,11 @@ class Handler(SimpleHTTPRequestHandler):
             return self._optimize_signals_status()
         if self.path.startswith("/api/monthly_search/status"):
             return self._monthly_search_status()
+        # Read-only sibling of the job endpoint, so it must be matched before
+        # the _MUTATING prefix check below refuses everything under
+        # /api/monthly_search on GET.
+        if self.path.startswith("/api/monthly_search/delay_profile"):
+            return self._delay_profile_status()
         if self.path.startswith("/api/jobs"):
             return self._jobs()
         if any(self.path.startswith(p) for p in self._MUTATING):
@@ -1763,6 +1797,11 @@ class Handler(SimpleHTTPRequestHandler):
         # the very search the estimate exists to let the user reconsider.
         if self.path.startswith("/api/monthly_search/preflight"):
             return self._monthly_search_preflight()
+        # Same reason as preflight: a sibling path under the generic prefix.
+        # Falling through would start a whole new search instead of charting
+        # the one that just finished.
+        if self.path.startswith("/api/monthly_search/delay_profile"):
+            return self._delay_profile()
         if self.path.startswith("/api/monthly_search"):
             return self._monthly_search()
         return self._json(404, {"error": "okänd endpoint"})
@@ -3010,6 +3049,160 @@ class Handler(SimpleHTTPRequestHandler):
             if adopted is not None:
                 return self._json(200, adopted)
         return self._json(200, state)
+
+    # ── Delay profile: the distribution behind the ranked cost ─────────
+    #
+    # The search ranks on added vehicle-hours, which cannot say whether the
+    # cost is ten thousand drivers losing four seconds or two hundred losing
+    # three minutes. The per-vehicle seconds that total is built from are
+    # computed and discarded, so the panel's curve is a REPLAY: same archives,
+    # same detour costing, verified to reproduce the ranked cost exactly.
+
+    @staticmethod
+    def _delay_profile_workspace(search_id: str) -> Path | None:
+        """A client-supplied search id resolved to its workspace directory.
+
+        The contract's safe-key alphabet permits dots, so ".." passes a
+        pattern check. Containment is therefore decided by the resolved path,
+        not by the string: the workspace must be a direct child of the search
+        root and must exist.
+        """
+        if not search_id or not re.fullmatch(r"[A-Za-z0-9_.+-]{1,128}", search_id):
+            return None
+        directory = (MONTHLY_SEARCH_ROOT / search_id).resolve()
+        if directory.parent != MONTHLY_SEARCH_ROOT.resolve():
+            return None
+        return directory if directory.is_dir() else None
+
+    @staticmethod
+    def _delay_profile_content_key(directory: Path) -> str | None:
+        """The content key of the spec this workspace was created from."""
+        try:
+            raw = json.loads(
+                (directory / "input" / "closure_search.json").read_text(
+                    encoding="utf-8"))
+            return ClosureSearchSpec.from_dict(raw).content_key
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return None
+
+    @staticmethod
+    def _set_delay_profile(**kw) -> None:
+        with _delay_profile_lock:
+            _delay_profile_state.update(**kw)
+
+    def _delay_profile_status(self) -> None:
+        query = urllib.parse.parse_qs(
+            urllib.parse.urlparse(self.path).query)
+        search_id = (query.get("search_id") or [""])[0]
+        with _delay_profile_lock:
+            state = dict(_delay_profile_state)
+        same_search = state.get("search_id") == search_id
+        if state.get("status") == "running" and same_search:
+            state["elapsed_s"] = round(time.time() - state.get("started_at", 0))
+            return self._json(200, state)
+
+        directory = self._delay_profile_workspace(search_id)
+        if directory is not None:
+            # Imported here, not at module scope: this pulls the costing stack
+            # (pandas/numpy through run_scenario). serve.py must keep starting
+            # and serving the MAP on a machine where the scientific stack is
+            # missing — see TestStaticServingNeedsNoScientificStack.
+            from traffic_sim.analysis.closure_delay_run import (
+                profile_matches_search, read_delay_profile)
+            payload = read_delay_profile(directory)
+            content_key = self._delay_profile_content_key(directory)
+            if (payload is not None and content_key is not None
+                    and profile_matches_search(payload, search_id, content_key)):
+                return self._json(200, {"status": "done",
+                                        "search_id": search_id,
+                                        "profile": payload})
+        if state.get("status") == "error" and same_search:
+            return self._json(200, state)
+        return self._json(200, {"status": "idle", "search_id": search_id})
+
+    def _delay_profile(self) -> None:
+        try:
+            body = self._json_body()
+        except ValueError as exc:
+            return self._json(400, {"error": str(exc)})
+        search_id = str(body.get("search_id") or "")
+        directory = self._delay_profile_workspace(search_id)
+        if directory is None:
+            return self._json(404, {"error": "okänd sökning — kör en "
+                                             "månadssökning först"})
+        requested = body.get("top")
+        top_n = None
+        if requested is not None:
+            try:
+                top_n = int(requested)
+            except (TypeError, ValueError):
+                return self._json(400, {"error": "top måste vara ett heltal"})
+            if not 1 <= top_n <= DELAY_PROFILE_MAX_TOP_N:
+                return self._json(400, {
+                    "error": f"top måste vara mellan 1 och "
+                             f"{DELAY_PROFILE_MAX_TOP_N}"})
+
+        with _monthly_lock:
+            monthly_busy = _monthly_state.get("status") in {
+                "running", "cancelling"}
+        if monthly_busy:
+            # Not a lock, a courtesy: the replay is pure CPU over the same
+            # archives the running search is reading, and finishing the search
+            # is worth more than drawing a chart of an older one.
+            return self._json(409, {"error": "en månadssökning pågår — "
+                                             "fördelningen beräknas när den "
+                                             "är klar"})
+        with _delay_profile_lock:
+            if _delay_profile_state.get("status") == "running":
+                return self._json(409, {
+                    "error": "en fördelning beräknas redan",
+                    "search_id": _delay_profile_state.get("search_id")})
+            _delay_profile_state.clear()
+            _delay_profile_state.update(status="running", search_id=search_id,
+                                        started_at=time.time(), step=0,
+                                        total=0, label="")
+        threading.Thread(target=self._run_delay_profile,
+                         args=(search_id, directory, top_n),
+                         daemon=True).start()
+        return self._json(202, {"status": "started", "search_id": search_id})
+
+    def _run_delay_profile(self, search_id: str, directory: Path,
+                           top_n: int | None) -> None:
+        try:
+            from traffic_sim.analysis.closure_delay_run import (
+                build_delay_profile, write_delay_profile)
+            from traffic_sim.analysis.delay_profile import DelayProfileError
+
+            def progress(step: int, total: int, label: str) -> None:
+                self._set_delay_profile(step=step, total=total, label=label)
+
+            payload = build_delay_profile(
+                directory,
+                # Omitted rather than defaulted here: the number of curves is
+                # the replay module's to choose, and a copy of it in this file
+                # is one edit away from the two disagreeing.
+                **({} if top_n is None else {"top_n": top_n}),
+                # Absolute, never CWD-relative: the server may be started from
+                # anywhere, and a relative root would silently resolve to an
+                # empty directory and report "no archives" instead of drawing.
+                release_root=ROOT / "runs" / "monthly-demand-releases",
+                runs_root=ROOT / "runs",
+                network_path=ROOT / "sumo" / "net.net.xml",
+                progress=progress,
+            )
+            write_delay_profile(directory, payload)
+            self._set_delay_profile(status="done", search_id=search_id)
+        except DelayProfileError as exc:
+            self._set_delay_profile(status="error", search_id=search_id,
+                                    error=str(exc))
+        except Exception as exc:                      # noqa: BLE001
+            # Surfaced rather than swallowed: a chart that silently never
+            # appears is the same class of failure as the recalibration that
+            # finished with nobody watching.
+            print(f"delay profile failed: {exc!r}")
+            self._set_delay_profile(
+                status="error", search_id=search_id,
+                error="fördelningen kunde inte beräknas — se serverloggen")
 
 
 class ServeOptions(NamedTuple):

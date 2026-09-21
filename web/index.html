@@ -320,6 +320,69 @@
     #suggest-results-table td, #monthly-results-table td { padding: 6px 8px; color: var(--ink-2); border-top: 1px solid var(--panel-line); }
     #suggest-results-table tr.disqualified td, #monthly-results-table tr.disqualified td { opacity: 0.5; }
     #suggest-results-table tr.outside-topk td:first-child { color: var(--ink-3); }
+
+    /* ── Delay-profile chart ────────────────────────────────────────────
+       Two series (the two best dates) on the panel's DARK surface, so the
+       hues are the dark steps of the categorical palette, not the light
+       ones the map's traffic ramp uses. The area fill is not decoration:
+       it is the q10–q90 direction-split spread, with the q50 line on top. */
+    #delay-profile {
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --grid: #2c3946;
+      padding: 10px 8px 4px;
+    }
+    #delay-profile-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 0 0 6px;
+    }
+    #delay-profile-title { font-size: 0.74rem; font-weight: 700; color: var(--ink); }
+    #delay-profile-note {
+      font-size: 0.68rem; color: var(--ink-3); line-height: 1.5; margin: 0 0 8px;
+    }
+    #delay-profile-legend {
+      display: flex; flex-wrap: wrap; gap: 14px; padding: 0 0 6px;
+      font-size: 0.68rem; color: var(--ink-2);
+    }
+    #delay-profile-legend .key { display: flex; align-items: center; gap: 6px; }
+    #delay-profile-legend .stroke {
+      width: 16px; height: 2px; border-radius: 1px; display: inline-block;
+    }
+    #delay-profile-plot { position: relative; }
+    #delay-profile-plot svg { width: 100%; height: auto; display: block; }
+    #delay-profile-plot .axis { stroke: var(--grid); stroke-width: 1; }
+    #delay-profile-plot .tick-label { fill: var(--ink-3); font-size: 10px; }
+    #delay-profile-plot .axis-title { fill: var(--ink-3); font-size: 10px; }
+    #delay-profile-plot .peak-label { fill: var(--ink-2); font-size: 10px; font-weight: 600; }
+    #delay-profile-tip {
+      position: absolute; pointer-events: none; z-index: 2; display: none;
+      background: rgba(15, 23, 42, 0.96); border: 1px solid var(--panel-line);
+      border-radius: 4px; padding: 6px 8px; font-size: 0.68rem;
+      color: var(--ink-3); white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    }
+    #delay-profile-tip .tip-head { color: var(--ink); font-weight: 700; padding-bottom: 3px; }
+    #delay-profile-tip .tip-row { display: flex; align-items: center; gap: 6px; }
+    #delay-profile-tip .tip-row b { color: var(--ink); font-weight: 700; }
+    #delay-profile-tip .stroke { width: 12px; height: 2px; border-radius: 1px; }
+    /* Ties a results row to its curve above. Colour alone never carries the
+       identity — the legend names the dates and the tooltip repeats them. */
+    .series-dot {
+      display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+      margin-right: 6px; vertical-align: middle;
+    }
+    .linklike {
+      background: none; border: none; padding: 4px 0; cursor: pointer;
+      color: var(--sim-2); font-size: 0.68rem; text-decoration: underline;
+    }
+    #delay-profile-table-wrap table { width: 100%; border-collapse: collapse; font-size: 0.68rem; }
+    #delay-profile-table-wrap th, #delay-profile-table-wrap td {
+      padding: 3px 6px; text-align: right; color: var(--ink-2);
+      border-top: 1px solid var(--panel-line);
+    }
+    #delay-profile-table-wrap th:first-child,
+    #delay-profile-table-wrap td:first-child { text-align: left; }
+    #delay-profile-table-wrap th { color: var(--ink-3); font-weight: 600; }
     .sr-load-btn {
       background: var(--sim); color: #fff; border: none; border-radius: 3px;
       padding: 3px 9px; font-size: 0.68rem; font-weight: 600; cursor: pointer;
@@ -852,6 +915,22 @@
       </div>
       <div id="monthly-results-meta"></div>
       <div id="monthly-results-body-wrap">
+        <!-- The ranked cost says how much delay a closure creates; only the
+             distribution says how it is shared out. Drawn for the two best
+             dates, directly above the table that ranks them. -->
+        <section id="delay-profile" hidden>
+          <div id="delay-profile-head">
+            <span id="delay-profile-title">Fördelning av extra restid</span>
+            <button id="delay-profile-btn" class="action-btn">Visa diagram</button>
+          </div>
+          <p id="delay-profile-note"></p>
+          <div id="delay-profile-chart" hidden>
+            <div id="delay-profile-legend"></div>
+            <div id="delay-profile-plot"></div>
+            <button id="delay-profile-table-btn" class="linklike">Visa tabell</button>
+            <div id="delay-profile-table-wrap" hidden></div>
+          </div>
+        </section>
         <table id="monthly-results-table">
           <thead>
             <tr>

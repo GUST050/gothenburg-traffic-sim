@@ -476,6 +476,52 @@ Goal arc, in order:
   generator, which reproduces the target well, from PFE's selection, which
   over-selects the 5-10 km bin (21.6% against a 6.1% target). That is the gate
   working, not the gate being wrong.
+- DELAY PROFILE IS A REPLAY, NEVER EVIDENCE (2026-09-21,
+  `traffic_sim/analysis/`, `tools/build_closure_delay_profile.py`, the
+  Simulering panel's curve above the monthly results table). The ranking
+  objective already computes, per affected vehicle, how many seconds the
+  closure adds — `disruption._report` builds `added_seconds` and then
+  collapses it into `added_vehicle_hours` plus a median and drops the list.
+  Both survivors hide the shape, and the project's own docstring says why it
+  matters: "The MEDIAN is often zero even for a heavily used edge, because a
+  dense grid gives most drivers a free parallel street; the cost lands on a
+  tail, which only the total captures." A total cannot separate ten thousand
+  drivers losing four seconds from two hundred losing three minutes. The
+  profile bins that discarded list (frozen buckets: an exact-0 bucket, then
+  15 s steps to 300 s, then an overflow) for the two best-ranked candidates.
+  FOUR RULES MAKE IT SAFE, each pinned by a test:
+  * **It lives outside `COSTING_SOURCES`.** That tuple hashes `disruption.py`,
+    `closure_ranking.py`, `deterministic_disruption.py` and `run_scenario.py`
+    into every daily-cost cache key, so emitting one more field from the
+    search itself would invalidate every cached cost a finished run owns —
+    hours of work destroyed to improve a chart. `traffic_sim/analysis/` must
+    therefore never appear in that set, and the module reuses
+    `disruption`'s private helpers rather than copying or re-exporting them.
+  * **It must reproduce the cost it illustrates.** Its per-variant sums are
+    reduced by the production `worst_variant_cost` and compared field-wise to
+    the candidate's published `closure_cost`; a mismatch RAISES instead of
+    drawing. A curve that cannot reproduce the number printed beside it is
+    describing other demand, another network or an older result.
+  * **The archives come from the search's own demand release**
+    (`runs/monthly-demand-releases/*.json` carries the
+    `baseline_trip_duration_p99_s` and `EnvelopePolicy` that decide which
+    archive a schedule resolves to), never from today's defaults, and a
+    pinned archive that has since been deleted is reported rather than
+    silently replaced by a scan.
+  * **It is written beside the workspace, not into `artifacts/`** — the same
+    standing as `cost-ordered-shadow.json`. A succeeded workspace is closed to
+    publication, and nothing about the result, ranking, finalists or claim
+    boundary depends on this file.
+  THE MEASURE IS THE DETOUR, NOT SUMO TIME LOSS, and that is not an apology:
+  `closure_ranking` exists because simulated time loss moved +0.050 s and
+  −0.100 s per vehicle across arms on this network — a closure cannot REDUCE
+  time loss, so both are noise around zero, there being no congestion for a
+  closure to disturb at free flow. A per-vehicle histogram of SUMO time loss
+  would be a picture of that noise, and would additionally need a rerun with
+  `--tripinfo-output` because every batch run deletes its temporary directory.
+  `serve.py`'s endpoint therefore starts no SUMO and takes no `_sim_lock`; it
+  only declines to start while a search is running, so a read-only chart can
+  never block an interactive closure.
 - One ID space across data/model/sim/map. One coordinate system (WGS84). Time = ISO datetime / abstract index — never "row in the 2025 file".
 - `NormalProfile.flowAt/calmAt(edgeId, qi, dayOfWeek)`: dayOfWeek (0=Mon) MUST be derived from the ACTIVE provider's epoch (2025 starts Wednesday, 2027 Friday) — never from qi alone.
 

@@ -204,6 +204,8 @@ def base_url(tmp_path, monkeypatch):
     serve._optimize_state.update(status="idle")
     serve._monthly_state.clear()
     serve._monthly_state.update(status="idle")
+    serve._delay_profile_state.clear()
+    serve._delay_profile_state.update(status="idle")
     serve.finish_active_job("close")
     serve.finish_active_job("recalibrate")
     serve.finish_active_job("suggest")
@@ -473,6 +475,23 @@ class TestStaticServingNeedsNoScientificStack:
         """Lazy must not mean copied: the constant has one owner (D2)."""
         assert serve.optimize_signal_conditions() == so.SIGNAL_CONDITION_COUNT
         assert serve.OPTIMIZE_SIGNAL_CONDITIONS == len(so.SIGNAL_CONDITION_NAMES)
+
+    def test_the_delay_profile_replay_is_not_on_the_file_servers_import_path(self):
+        """Same rule, newest tenant: the delay-profile replay reaches the
+        costing stack through run_scenario, so importing it at module level
+        would put pandas back on the path of the FILE SERVER."""
+        source = (Path(__file__).parent.parent / "serve.py").read_text()
+        for line in source.splitlines():
+            if line.startswith(("import ", "from ")):
+                assert "traffic_sim.analysis" not in line, line
+        assert "from traffic_sim.analysis.closure_delay_run import" in source
+
+    def test_how_many_curves_to_draw_has_one_owner(self):
+        """serve.py caps the request; it must not carry its own copy of the
+        default, which is the replay module's to choose."""
+        from traffic_sim.analysis.closure_delay_run import DEFAULT_TOP_N
+        assert not hasattr(serve, "DELAY_PROFILE_TOP_N")
+        assert DEFAULT_TOP_N <= serve.DELAY_PROFILE_MAX_TOP_N
 
 
 class TestClose:
@@ -2911,3 +2930,191 @@ class TestSecurityHardening:
     def test_status_endpoints_stay_get(self, base_url):
         status, _ = get_json(f"{base_url}/api/recalibrate/status")
         assert status == 200
+
+
+class TestDelayProfile:
+    """The distribution behind the ranked cost, served to the panel.
+
+    Read-only by construction: it starts no SUMO, takes no simulation slot,
+    and its stored replay lives beside a workspace rather than inside the
+    immutable artifacts. What these tests protect is that it can only ever
+    describe the search it claims to.
+    """
+
+    def _workspace(self, tmp_path, monkeypatch, *, search_id="s1",
+                   profile=None, spec=None):
+        from traffic_sim.core.contracts import ClosureSearchSpec, DailyTimeBand
+
+        spec = spec or ClosureSearchSpec(
+            search_id=search_id,
+            directed_edges=("a_b_0",),
+            demand_build_id="demand-key",
+            source="forecast",
+            permitted_date_start="2027-07-15",
+            permitted_date_end="2027-07-16",
+            required_work_minutes=60,
+            max_consecutive_start_days=1,
+            permitted_daily_band=DailyTimeBand("06:00", "18:00"),
+            objective_profile="displaced_vehicles_and_detour_v1",
+        )
+        root = tmp_path / "closure-search"
+        directory = root / search_id
+        (directory / "input").mkdir(parents=True, exist_ok=True)
+        (directory / "input" / "closure_search.json").write_text(
+            json.dumps(spec.to_dict()), encoding="utf-8")
+        if profile is not None:
+            (directory / "delay-profile.json").write_text(
+                json.dumps(profile), encoding="utf-8")
+        monkeypatch.setattr(serve, "MONTHLY_SEARCH_ROOT", root)
+        return spec, directory
+
+    def _profile(self, spec, search_id="s1", **overrides):
+        payload = {
+            "kind": "closure_delay_profile",
+            "schema_version": 1,
+            "measure": "deterministic_detour_seconds_v1",
+            "search_id": search_id,
+            "search_content_key": spec.content_key,
+            "bins": [{"index": 0, "from_s": 0, "to_s": 0, "label": "0 s"}],
+            "candidates": [],
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_a_stored_profile_is_served_for_its_own_search(
+            self, base_url, tmp_path, monkeypatch):
+        spec, _dir = self._workspace(
+            tmp_path, monkeypatch, profile=None)
+        profile = self._profile(spec)
+        (tmp_path / "closure-search" / "s1" / "delay-profile.json").write_text(
+            json.dumps(profile), encoding="utf-8")
+        status, body = get_json(
+            f"{base_url}/api/monthly_search/delay_profile?search_id=s1")
+        assert status == 200
+        assert body["status"] == "done"
+        assert body["profile"]["search_content_key"] == spec.content_key
+
+    def test_a_profile_from_another_search_is_not_served(
+            self, base_url, tmp_path, monkeypatch):
+        """A replay carries the identity of the search it replayed. Showing
+        it beside a different result is the same class of lie as a stale
+        scenario on the map."""
+        spec, _dir = self._workspace(tmp_path, monkeypatch)
+        stale = self._profile(spec, search_id="s1")
+        stale["search_content_key"] = "ffffffffffffffffffff"
+        (tmp_path / "closure-search" / "s1" / "delay-profile.json").write_text(
+            json.dumps(stale), encoding="utf-8")
+        _status, body = get_json(
+            f"{base_url}/api/monthly_search/delay_profile?search_id=s1")
+        assert body["status"] == "idle"
+
+    def test_an_unknown_search_reads_idle_and_refuses_to_start(
+            self, base_url, tmp_path, monkeypatch):
+        self._workspace(tmp_path, monkeypatch)
+        _status, body = get_json(
+            f"{base_url}/api/monthly_search/delay_profile?search_id=nope")
+        assert body["status"] == "idle"
+        status, _body = post_json_or_error(
+            f"{base_url}/api/monthly_search/delay_profile",
+            payload={"search_id": "nope"})
+        assert status == 404
+
+    def test_a_traversing_search_id_cannot_escape_the_search_root(
+            self, base_url, tmp_path, monkeypatch):
+        """The contract's safe-key alphabet allows dots, so ".." passes a
+        pattern check; containment is decided by the resolved path."""
+        self._workspace(tmp_path, monkeypatch)
+        (tmp_path / "delay-profile.json").write_text("{}", encoding="utf-8")
+        for attempt in ("..", "../..", ".%2E/"):
+            status, body = get_json_or_error(
+                f"{base_url}/api/monthly_search/delay_profile"
+                f"?search_id={urllib.parse.quote(attempt)}")
+            assert status == 200, attempt
+            assert body["status"] == "idle", attempt
+
+    def test_it_declines_while_a_search_is_running(
+            self, base_url, tmp_path, monkeypatch):
+        """Pure CPU over the archives the running search is reading. The
+        search finishing is worth more than a chart of an older one."""
+        self._workspace(tmp_path, monkeypatch)
+        serve._monthly_state.update(status="running", search_id="s1",
+                                    started_at=time.time())
+        try:
+            status, body = post_json_or_error(
+                f"{base_url}/api/monthly_search/delay_profile",
+                payload={"search_id": "s1"})
+        finally:
+            serve._monthly_state.clear()
+            serve._monthly_state.update(status="idle")
+        assert status == 409
+        assert "månadssökning" in body["error"]
+
+    def test_starting_it_takes_no_simulation_slot(
+            self, base_url, tmp_path, monkeypatch):
+        """A read-only chart must never be able to block an interactive
+        closure; only real simulation jobs hold _sim_lock."""
+        spec, directory = self._workspace(tmp_path, monkeypatch)
+        import traffic_sim.analysis.closure_delay_run as delay_run
+        holding = threading.Event()
+        release = threading.Event()
+
+        def fake_build(search_dir, **kwargs):
+            holding.set()
+            release.wait(timeout=5)
+            return self._profile(spec)
+
+        monkeypatch.setattr(delay_run, "build_delay_profile", fake_build)
+        status, _body = post_json(
+            f"{base_url}/api/monthly_search/delay_profile",
+            payload={"search_id": "s1"})
+        assert status == 202
+        assert holding.wait(timeout=5)
+        assert not serve._sim_lock.locked()
+        release.set()
+        for _ in range(50):
+            _status, body = get_json(
+                f"{base_url}/api/monthly_search/delay_profile?search_id=s1")
+            if body["status"] == "done":
+                break
+            time.sleep(0.1)
+        assert body["status"] == "done"
+        assert (directory / "delay-profile.json").is_file()
+
+    def test_a_refused_replay_surfaces_its_reason(
+            self, base_url, tmp_path, monkeypatch):
+        """A chart that silently never appears is the same failure as the
+        recalibration that finished with nobody watching."""
+        self._workspace(tmp_path, monkeypatch)
+        import traffic_sim.analysis.closure_delay_run as delay_run
+        from traffic_sim.analysis.delay_profile import DelayProfileError
+
+        def refuse(search_dir, **kwargs):
+            raise DelayProfileError("the demand archive this search used is gone")
+
+        monkeypatch.setattr(delay_run, "build_delay_profile", refuse)
+        post_json(f"{base_url}/api/monthly_search/delay_profile",
+                  payload={"search_id": "s1"})
+        for _ in range(50):
+            _status, body = get_json(
+                f"{base_url}/api/monthly_search/delay_profile?search_id=s1")
+            if body["status"] == "error":
+                break
+            time.sleep(0.1)
+        assert body["status"] == "error"
+        assert "gone" in body["error"]
+
+    def test_the_get_is_read_only_and_the_start_is_post_only(self, base_url):
+        status, _body = get_json(
+            f"{base_url}/api/monthly_search/delay_profile?search_id=s1")
+        assert status == 200
+        request = urllib.request.Request(
+            f"{base_url}/api/monthly_search/delay_profile", method="POST",
+            data=json.dumps({"search_id": "s1"}).encode(),
+            headers={"Content-Type": "application/json",
+                     "Origin": "http://evil.example"})
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                code = response.status
+        except urllib.error.HTTPError as error:
+            code = error.code
+        assert code == 403

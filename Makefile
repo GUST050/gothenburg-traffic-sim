@@ -55,6 +55,13 @@ scenario:
 	python3 run_scenario.py
 	python3 run_scenario.py --close 60786979_3575001205_0 1455801464_18241874_0
 
+# How the ranked closure cost is SHARED OUT: the per-vehicle added-travel-time
+# distribution for the two best candidates of the newest finished search,
+# written to delay-profile.json in its workspace and drawn by the web panel.
+# Starts no SUMO — it reprices the same deterministic detour the ranking used.
+delay-profile:
+	python3 tools/build_closure_delay_profile.py
+
 # Frozen cross-date validation for the trusted 2025-09-16 release. The
 # evaluation date was not used to select the deployed through-share target.
 validate-temporal:

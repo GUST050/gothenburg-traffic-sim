@@ -1212,6 +1212,21 @@
         const monthlyColPrimary   = document.getElementById('monthly-col-primary');
         const monthlyColSecondary = document.getElementById('monthly-col-secondary');
         const btnMonthlyResultsClose = document.getElementById('monthly-results-close');
+        const delayProfile        = document.getElementById('delay-profile');
+        const delayProfileBtn     = document.getElementById('delay-profile-btn');
+        const delayProfileNote    = document.getElementById('delay-profile-note');
+        const delayProfileChart   = document.getElementById('delay-profile-chart');
+        const delayProfileLegend  = document.getElementById('delay-profile-legend');
+        const delayProfilePlot    = document.getElementById('delay-profile-plot');
+        const delayProfileTableBtn = document.getElementById('delay-profile-table-btn');
+        const delayProfileTable   = document.getElementById('delay-profile-table-wrap');
+        let delayProfileSearchId  = null;
+        let delayProfilePolling   = false;
+        // Declared with the elements they draw into, so nothing can reach
+        // them from a handler that fires before this point in the module.
+        const SVG_NS = 'http://www.w3.org/2000/svg';
+        const DELAY_SERIES = ['var(--series-1)', 'var(--series-2)'];
+        const sv = (n) => Number(n).toLocaleString('sv-SE');
         let monthlyJobRunning = false;
         // A restarted server can observe a CLI search through its durable
         // workspace without owning that process.  Preserve that distinction:
@@ -2312,6 +2327,9 @@
           const scheduleRows = () => (result.shortlisted_schedules || []).map(schedule => {
               const stats = statsById[schedule.schedule_id];
               const tr = document.createElement('tr');
+              // The delay curves are keyed back to their own rows by this id,
+              // so the reader can see which line belongs to which date.
+              tr.dataset.scheduleId = schedule.schedule_id || '';
               const failed = stats?.hard_failures?.length;
               if (failed) tr.classList.add('disqualified');
 
@@ -2360,6 +2378,7 @@
             });
           const periodRows = () => (periodComparison?.periods || []).map(period => {
             const tr = document.createElement('tr');
+            tr.dataset.scheduleId = period.best_schedule?.schedule_id || '';
             if (period.status === 'no_viable') tr.classList.add('disqualified');
             const periodTd = document.createElement('td');
             periodTd.textContent = period.best_schedule
@@ -2395,7 +2414,428 @@
           monthlyResultsBody.replaceChildren(
             ...(periodComparison ? periodRows() : scheduleRows()));
           monthlyResults.classList.add('show');
+          prepareDelayProfile(result, boundary);
         }
+
+        // ── Fördelning av extra restid ────────────────────────────────────
+        //
+        // The table ranks on added vehicle-hours, which is a SUM: it cannot
+        // tell ten thousand drivers losing four seconds from two hundred
+        // losing three minutes, and those are different closures to live
+        // next to. The seconds behind that sum exist per vehicle — the
+        // ranking builds them and throws them away — so the server replays
+        // the same detour costing for the two best dates and returns the
+        // distribution. Same measure as the ranking, same archives, and the
+        // server refuses to publish a curve whose totals do not reproduce
+        // the ranked cost.
+        function svgEl(name, attrs = {}) {
+          const node = document.createElementNS(SVG_NS, name);
+          for (const [key, value] of Object.entries(attrs)) {
+            node.setAttribute(key, value);
+          }
+          return node;
+        }
+
+        function delayCandidateLabel(candidate) {
+          const window = `${candidate.daily_start}–${candidate.daily_end}`;
+          return candidate.day_count > 1
+            ? `${candidate.first_work_date} … ${candidate.period_end} ${window}`
+            : `${candidate.first_work_date} ${window}`;
+        }
+
+        function prepareDelayProfile(result, boundary) {
+          // Tied to the search being displayed: a stored profile belongs to
+          // one search_id, and showing an older one beside a new result is
+          // the same class of lie as a stale scenario on the map.
+          delayProfileSearchId = result.search_id || null;
+          delayProfileChart.hidden = true;
+          delayProfileTable.hidden = true;
+          delayProfileTableBtn.textContent = 'Visa tabell';
+          const usable = Boolean(delayProfileSearchId)
+            && boundary.ui_exposure_allowed !== false;
+          delayProfile.hidden = !usable;
+          if (!usable) return;
+          delayProfileBtn.disabled = false;
+          delayProfileBtn.textContent = 'Visa diagram';
+          delayProfileNote.textContent =
+            'Hur många fordon som får hur mycket extra restid av omvägen, '
+            + 'för de två bäst rankade datumen. Samma mått som rangordningen: '
+            + 'billigaste lagliga väg med avstängningen jämfört med utan, i '
+            + 'friflöde. Ingen kö- eller trängselfördröjning ingår.';
+          // A finished replay is already on disk for most searches; asking
+          // for it costs one GET and saves the user a button press.
+          loadDelayProfile({ start: false });
+        }
+
+        async function loadDelayProfile({ start }) {
+          if (!delayProfileSearchId || delayProfilePolling) return;
+          const searchId = delayProfileSearchId;
+          const url = '/api/monthly_search/delay_profile?search_id='
+            + encodeURIComponent(searchId);
+          try {
+            if (start) {
+              delayProfilePolling = true;
+              delayProfileBtn.disabled = true;
+              delayProfileBtn.textContent = 'Beräknar…';
+              const started = await fetch(
+                '/api/monthly_search/delay_profile',
+                { method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ search_id: searchId }) });
+              if (!started.ok) {
+                const body = await started.json().catch(() => ({}));
+                throw new Error(body.error || 'kunde inte starta beräkningen');
+              }
+            }
+            for (;;) {
+              const res = await fetch(url);
+              if (!res.ok) throw new Error('statusfel ' + res.status);
+              const state = await res.json();
+              // The panel may have moved on to another search while this
+              // loop was waiting; its answer is no longer about what is
+              // on screen.
+              if (delayProfileSearchId !== searchId) return;
+              if (state.status === 'done') {
+                renderDelayProfile(state.profile);
+                return;
+              }
+              if (state.status === 'error') {
+                delayProfileNote.textContent = 'Fördelningen kunde inte '
+                  + 'beräknas: ' + (state.error || 'okänt fel');
+                return;
+              }
+              if (state.status !== 'running') return;   // idle: wait for a click
+              delayProfilePolling = true;
+              delayProfileBtn.disabled = true;
+              delayProfileBtn.textContent = state.total
+                ? `Beräknar… (${state.step}/${state.total})`
+                : `Beräknar… (${state.elapsed_s || 0}s)`;
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          } catch (error) {
+            delayProfileNote.textContent =
+              'Fördelningen kunde inte hämtas: ' + error.message;
+          } finally {
+            delayProfilePolling = false;
+            delayProfileBtn.disabled = false;
+            if (delayProfileChart.hidden) {
+              delayProfileBtn.textContent = 'Visa diagram';
+            }
+          }
+        }
+
+        function delayProfileSeries(profile) {
+          const variants = profile.variants || ['q10', 'q50', 'q90'];
+          return (profile.candidates || []).filter(
+            candidate => candidate.variants?.q50?.vehicles?.length
+          ).map((candidate, index) => {
+            const mid = candidate.variants.q50.vehicles;
+            const columns = variants
+              .map(name => candidate.variants[name]?.vehicles)
+              .filter(Boolean);
+            return {
+              scheduleId: candidate.schedule_id,
+              label: delayCandidateLabel(candidate),
+              color: DELAY_SERIES[index % DELAY_SERIES.length],
+              mid,
+              // The band is the q10/q90 direction-split spread, not styling:
+              // three plausible directional assignments, drawn as the range
+              // they disagree over with the central one on top.
+              low: mid.map((_, bin) => Math.min(
+                ...columns.map(column => column[bin] || 0))),
+              high: mid.map((_, bin) => Math.max(
+                ...columns.map(column => column[bin] || 0))),
+              affected: candidate.variants.q50.vehicles_affected,
+              noDetour: candidate.variants.q50.vehicles_no_detour,
+              hours: candidate.closure_cost.added_vehicle_hours,
+            };
+          });
+        }
+
+        function niceCeiling(value) {
+          if (value <= 5) return 5;
+          const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+          return Math.ceil(value / (magnitude / 2)) * (magnitude / 2);
+        }
+
+        function renderDelayProfile(profile) {
+          const bins = profile.bins || [];
+          const series = delayProfileSeries(profile);
+          if (!bins.length || !series.length) return;
+          delayProfileChart.hidden = false;
+          delayProfileBtn.textContent = 'Uppdatera diagram';
+
+          delayProfileLegend.replaceChildren(...series.map(item => {
+            const key = document.createElement('span');
+            key.className = 'key';
+            const stroke = document.createElement('span');
+            stroke.className = 'stroke';
+            stroke.style.background = item.color;
+            const text = document.createElement('span');
+            // Untrusted-by-habit: dates and windows come from a payload, so
+            // they are inserted as text, never as markup.
+            text.textContent = item.label;
+            key.append(stroke, text);
+            return key;
+          }), (() => {
+            const hint = document.createElement('span');
+            hint.className = 'key';
+            hint.textContent = 'linje = q50 · band = q10–q90 (riktningssplit)';
+            return hint;
+          })());
+
+          const width = 680, height = 240;
+          const left = 46, right = 14, top = 16, bottom = 38;
+          const plotWidth = width - left - right;
+          const plotHeight = height - top - bottom;
+          const maxValue = niceCeiling(Math.max(1, ...series.flatMap(
+            item => item.high)));
+          const x = (bin) => left + (bins.length === 1 ? plotWidth / 2
+            : bin * plotWidth / (bins.length - 1));
+          const y = (value) => top + plotHeight - (value / maxValue) * plotHeight;
+
+          const svg = svgEl('svg', {
+            viewBox: `0 0 ${width} ${height}`,
+            role: 'img',
+            'aria-label': 'Antal fordon per intervall av extra restid för '
+              + series.map(item => item.label).join(' och '),
+          });
+
+          // Gridlines first, hairline and recessive, so the data sits on top.
+          for (let step = 0; step <= 4; step += 1) {
+            const value = maxValue * step / 4;
+            svg.append(svgEl('line', {
+              class: 'axis', x1: left, x2: width - right,
+              y1: y(value), y2: y(value),
+              opacity: step === 0 ? 1 : 0.45,
+            }));
+            const label = svgEl('text', {
+              class: 'tick-label', x: left - 6, y: y(value) + 3,
+              'text-anchor': 'end',
+            });
+            label.textContent = sv(Math.round(value));
+            svg.append(label);
+          }
+          bins.forEach((bin, index) => {
+            const isMinute = bin.to_s != null && bin.to_s % 60 === 0;
+            // The overflow bucket always gets its label; a whole-minute tick
+            // immediately before it would print "5 min" under "> 5 min".
+            const crowdsOverflow = index >= bins.length - 2;
+            if (index === 0 || index === bins.length - 1) {
+              // always labelled
+            } else if (!isMinute || crowdsOverflow) { return; }
+            const label = svgEl('text', {
+              class: 'tick-label', x: x(index), y: height - bottom + 14,
+              'text-anchor': index === bins.length - 1 ? 'end'
+                : index === 0 ? 'start' : 'middle',
+            });
+            label.textContent = index === 0 ? '0 s'
+              : index === bins.length - 1 ? bin.label
+              : `${bin.to_s / 60} min`;
+            svg.append(label);
+          });
+          const axisTitle = svgEl('text', {
+            class: 'axis-title', x: left + plotWidth / 2, y: height - 6,
+            'text-anchor': 'middle',
+          });
+          axisTitle.textContent = 'extra restid per fordon (omväg, friflöde)';
+          svg.append(axisTitle);
+          const yTitle = svgEl('text', {
+            class: 'axis-title', x: left - 6, y: top - 5, 'text-anchor': 'end',
+          });
+          yTitle.textContent = 'fordon';
+          svg.append(yTitle);
+
+          series.forEach(item => {
+            const forward = item.high.map((value, bin) =>
+              `${x(bin)},${y(value)}`).join(' L ');
+            const back = item.low.map((value, bin) =>
+              `${x(bin)},${y(value)}`).reverse().join(' L ');
+            svg.append(svgEl('path', {
+              d: `M ${forward} L ${back} Z`,
+              fill: item.color, 'fill-opacity': 0.1, stroke: 'none',
+            }));
+            svg.append(svgEl('polyline', {
+              points: item.mid.map((value, bin) =>
+                `${x(bin)},${y(value)}`).join(' '),
+              fill: 'none', stroke: item.color, 'stroke-width': 2,
+              'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+            }));
+          });
+
+          // One direct label per series — its peak. A number on every point
+          // is unreadable; the crosshair and the table carry the rest.
+          const usedPeaks = [];
+          series.forEach(item => {
+            const peak = item.mid.indexOf(Math.max(...item.mid));
+            if (peak < 0 || !item.mid[peak]) return;
+            // Both series usually peak in the same bucket — very often the
+            // "0 s" one, because most affected drivers have a free parallel
+            // street. Stack the second label instead of printing it on top
+            // of the first, and push a label off the left axis rather than
+            // letting it sit on the y-tick numbers.
+            const stacked = usedPeaks.filter(used => used === peak).length;
+            usedPeaks.push(peak);
+            const nearLeft = peak < 3;
+            const label = svgEl('text', {
+              class: 'peak-label',
+              x: x(peak) + (nearLeft ? 6 : 0),
+              y: Math.max(top + 9,
+                          y(item.mid[peak]) - 8 - stacked * 13),
+              'text-anchor': peak > bins.length - 4 ? 'end'
+                : nearLeft ? 'start' : 'middle',
+            });
+            label.textContent = sv(item.mid[peak]);
+            svg.append(label);
+          });
+
+          const crosshair = svgEl('line', {
+            class: 'axis', x1: 0, x2: 0, y1: top, y2: top + plotHeight,
+            opacity: 0, 'stroke-width': 1,
+          });
+          svg.append(crosshair);
+          const dots = series.map(item => {
+            const dot = svgEl('circle', {
+              r: 4, fill: item.color, stroke: 'var(--panel)',
+              'stroke-width': 2, opacity: 0,
+            });
+            svg.append(dot);
+            return dot;
+          });
+
+          const tip = document.createElement('div');
+          tip.id = 'delay-profile-tip';
+          delayProfilePlot.replaceChildren(svg, tip);
+
+          const hit = svgEl('rect', {
+            x: left, y: top, width: plotWidth, height: plotHeight,
+            fill: 'transparent',
+          });
+          svg.append(hit);
+
+          const showAt = (index, clientX) => {
+            crosshair.setAttribute('opacity', 0.9);
+            crosshair.setAttribute('x1', x(index));
+            crosshair.setAttribute('x2', x(index));
+            dots.forEach((dot, order) => {
+              dot.setAttribute('opacity', 1);
+              dot.setAttribute('cx', x(index));
+              dot.setAttribute('cy', y(series[order].mid[index]));
+            });
+            const head = document.createElement('div');
+            head.className = 'tip-head';
+            head.textContent = bins[index].label + ' extra restid';
+            const rows = series.map(item => {
+              const row = document.createElement('div');
+              row.className = 'tip-row';
+              const stroke = document.createElement('span');
+              stroke.className = 'stroke';
+              stroke.style.background = item.color;
+              const value = document.createElement('b');
+              value.textContent = sv(item.mid[index]);
+              const name = document.createElement('span');
+              name.textContent = `fordon · ${item.label}`;
+              row.append(stroke, value, name);
+              return row;
+            });
+            tip.replaceChildren(head, ...rows);
+            tip.style.display = 'block';
+            const box = delayProfilePlot.getBoundingClientRect();
+            const offset = clientX - box.left;
+            tip.style.left = Math.min(
+              Math.max(offset + 12, 0), box.width - tip.offsetWidth - 4) + 'px';
+            tip.style.top = '4px';
+          };
+          const hide = () => {
+            crosshair.setAttribute('opacity', 0);
+            dots.forEach(dot => dot.setAttribute('opacity', 0));
+            tip.style.display = 'none';
+          };
+          // The reader aims at a delay bucket, never at a 2px line: snap to
+          // the nearest bin across the whole plot rather than hit-testing
+          // the curve itself.
+          hit.addEventListener('pointermove', (event) => {
+            const box = svg.getBoundingClientRect();
+            const scale = width / box.width;
+            const local = (event.clientX - box.left) * scale;
+            const index = Math.round(
+              (local - left) / plotWidth * (bins.length - 1));
+            showAt(Math.min(Math.max(index, 0), bins.length - 1),
+                   event.clientX);
+          });
+          hit.addEventListener('pointerleave', hide);
+
+          const table = document.createElement('table');
+          const head = document.createElement('tr');
+          ['Extra restid', ...series.map(item => item.label)]
+            .forEach(text => {
+              const cell = document.createElement('th');
+              cell.textContent = text;
+              head.append(cell);
+            });
+          table.append(head);
+          bins.forEach((bin, index) => {
+            if (!series.some(item => item.mid[index])) return;
+            const row = document.createElement('tr');
+            const name = document.createElement('td');
+            name.textContent = bin.label;
+            row.append(name);
+            series.forEach(item => {
+              const cell = document.createElement('td');
+              cell.textContent = sv(item.mid[index]);
+              row.append(cell);
+            });
+            table.append(row);
+          });
+          if (series.some(item => item.noDetour)) {
+            const row = document.createElement('tr');
+            const name = document.createElement('td');
+            name.textContent = 'utan omväg (diskvalificerande)';
+            row.append(name);
+            series.forEach(item => {
+              const cell = document.createElement('td');
+              cell.textContent = sv(item.noDetour);
+              row.append(cell);
+            });
+            table.append(row);
+          }
+          delayProfileTable.replaceChildren(table);
+
+          // Connect each curve to its own row in the table below, so "the two
+          // best dates" is something the reader can see rather than infer:
+          // the table is in CALENDAR order, and the best dates are wherever
+          // in it they happen to fall.
+          monthlyResultsBody.querySelectorAll('.series-dot')
+            .forEach(dot => dot.remove());
+          series.forEach(item => {
+            if (!item.scheduleId) return;
+            const row = monthlyResultsBody.querySelector(
+              `tr[data-schedule-id="${CSS.escape(item.scheduleId)}"]`);
+            const cell = row && row.firstElementChild;
+            if (!cell) return;
+            const marker = document.createElement('span');
+            marker.className = 'series-dot';
+            marker.style.background = item.color;
+            marker.title = 'Ritad i diagrammet ovan';
+            cell.prepend(marker);
+          });
+
+          const totals = series.map(item =>
+            `${item.label}: ${sv(item.affected)} berörda fordon, `
+            + `${Number(item.hours).toLocaleString('sv-SE',
+                { maximumFractionDigits: 2 })} fordonstimmar`);
+          delayProfileNote.textContent = totals.join(' · ')
+            + '. Stapeln "0 s" är fordon som korsar avstängningen men har en '
+            + 'gratis parallellgata — kostnaden ligger i svansen.';
+        }
+
+        delayProfileBtn.addEventListener('click',
+          () => loadDelayProfile({ start: true }));
+        delayProfileTableBtn.addEventListener('click', () => {
+          delayProfileTable.hidden = !delayProfileTable.hidden;
+          delayProfileTableBtn.textContent = delayProfileTable.hidden
+            ? 'Visa tabell' : 'Dölj tabell';
+        });
 
         // Exact-schedule handoff: the loaded scenario is built from the
         // schedule's OWN intervals, never re-derived. If the live demand

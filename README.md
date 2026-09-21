@@ -211,6 +211,29 @@ for a closure (`closure_metrics.py`) is scored primarily by Δ total
 vehicles as hard disqualifying guards — GEH (sensor-fit) is deliberately
 **not** used here, since it's blind to waiting time.
 
+### How the cost is shared out (delay profile)
+
+The monthly closure search ranks candidates on added vehicle-hours, which is a
+sum: it cannot tell ten thousand drivers losing four seconds from two hundred
+losing three minutes. The seconds behind that sum exist per vehicle — the
+ranking builds them and discards them — so
+
+```bash
+make delay-profile          # newest finished search
+python3 tools/build_closure_delay_profile.py --search-id <id> --top 3
+```
+
+replays the same deterministic detour costing over the same demand archives
+and writes `delay-profile.json` into the search workspace. The Simulering
+panel draws it as a curve per date above the results table, or computes it on
+demand via `/api/monthly_search/delay_profile`. It starts no SUMO, takes no
+simulation slot, and **refuses to publish a curve whose totals do not
+reproduce the ranked closure cost exactly** — a chart that cannot reproduce
+the number printed beside it is describing a different run. The x axis is
+detour time at free flow, not congestion delay: simulated time loss was
+measured as noise around zero on this network, which is why the deployed
+objective is the detour in the first place.
+
 Every SUMO network build also writes `sumo/network_audit.json`, a provenance
 sidecar showing imported versus defaulted speed/lane values, movement and
 restriction tags, roundabouts, and the TLS membership produced by netconvert.
