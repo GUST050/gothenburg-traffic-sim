@@ -7,11 +7,11 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: Optional WSL launcher implemented; actual Windows acceptance remains open.
-- Summary: `start-wsl.sh` runs only under WSL, installs requirements into `.venv` when their hash changes, creates missing network and direction-split inputs, and starts `serve.py` on loopback without opening a Linux browser. README has a compact Windows setup section; Mac/Linux startup is unchanged.
-- Files changed: `start-wsl.sh`, `README.md`, and current coordination blocks.
-- Checks: Bash syntax/help passed; on macOS the launcher refused clearly. An isolated mock run prepared dependencies and artifacts once, then reused them on the second start. An incomplete pre-existing network was refused without being overwritten. README local links resolve and `git diff --check` passes.
-- Decisions and evidence: Ubuntu 24.04 provides Python 3.12; Microsoft documents WSL localhost forwarding and recommends Linux-side project storage; SUMO documents `eclipse-sumo` Linux wheels. This is an onboarding path, not proof that the simulation or closure analysis passes on Windows hardware.
+- Focus and status: Optional WSL launcher and usable-CPU worker cap implemented; actual Windows acceptance remains open.
+- Summary: `start-wsl.sh` runs only under WSL, installs requirements into `.venv` when their hash changes, creates missing network and direction-split inputs, detects CPUs available to the WSL process, and starts `serve.py` on loopback. The cap covers date and closure-demand PFE, scenario seeds, monthly daily workers and SUMO slots; Mac/Linux defaults are unchanged.
+- Files changed: `start-wsl.sh`, `serve.py`, `traffic_sim/simulation/monthly_demand.py`, their focused tests, `README.md`, `ARCHITECTURE.md`, and current coordination blocks.
+- Checks: Bash syntax/help passed; on macOS the launcher refused clearly. An isolated mock run prepared dependencies and artifacts once, then reused them on the second start with a fake two-CPU affinity. An incomplete pre-existing network was refused without being overwritten. `tests/test_serve.py`: 198 passed; `tests/test_monthly_demand.py`: 51 passed, with the final worker-cap edit rechecked by its two focused tests. Focused Pylint, compile and `git diff --check` pass.
+- Decisions and evidence: Ubuntu 24.04 provides Python 3.12; Microsoft documents WSL localhost forwarding, Linux-side project storage and its default memory allocation. The CPU cap changes process parallelism, not evidence gates, and does not prove the simulation or closure analysis passes on Windows hardware.
 - Blockers or risks: No Windows/WSL machine is available in this workspace for end-to-end date and closure checks. The existing clean-clone Ubuntu CI and held-out validation limitations remain separate.
 - Suggested next action: On Windows, install Ubuntu 24.04 in WSL, run `./start-wsl.sh`, open the printed localhost URL, then exercise both main workflows and record the result.
 - Actor notes: No real dependency installation, network rebuild, or SUMO simulation was launched during this implementation.

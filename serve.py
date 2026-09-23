@@ -349,11 +349,32 @@ MONTHLY_TIMEOUT_S = _positive_env_seconds(
 # (validation/a2_parallel_seed_benchmark_v1.json) approves up to 8 with
 # 2.3 GB peak RSS, so this stays well inside proven ground.
 SCENARIO_SEED_WORKERS = 3
+INTERACTIVE_WORKER_CAP_ENV = "TRAFFIC_SIM_INTERACTIVE_WORKER_CAP"
 PORT     = 8000
 # How far past a busy default port to look for a free one. Enough for a
 # handful of forgotten servers, small enough that the printed URL stays
 # recognisably "the traffic app".
 PORT_SEARCH_SPAN = 20
+
+
+def interactive_worker_cap() -> int | None:
+    """Optional process cap supplied by the WSL launcher, absent elsewhere."""
+    raw = os.environ.get(INTERACTIVE_WORKER_CAP_ENV, "").strip()
+    if not raw:
+        return None
+    try:
+        cap = int(raw)
+    except ValueError:
+        cap = 0
+    if cap < 1:
+        raise SystemExit(f"{INTERACTIVE_WORKER_CAP_ENV} must be a positive integer")
+    return cap
+
+
+def interactive_workers(default: int) -> int:
+    """Keep the existing approved ceiling while respecting a smaller host."""
+    cap = interactive_worker_cap()
+    return default if cap is None else min(default, cap)
 
 
 def _scenario_cache_identity(spec: ScenarioSpec) -> tuple[str, dict]:
@@ -584,9 +605,10 @@ def monthly_screening_cli_args(spec: ClosureSearchSpec) -> list[str]:
         return [
             "--screening-mode", "independent-cost-ordered-exact",
             "--operational-no-evidence",
-            "--daily-workers", str(MONTHLY_DAILY_WORKERS),
+            "--daily-workers", str(interactive_workers(MONTHLY_DAILY_WORKERS)),
             "--seed-workers", str(MONTHLY_SEED_WORKERS),
-            "--max-active-sumo-slots", str(MONTHLY_MAX_ACTIVE_SUMO_SLOTS),
+            "--max-active-sumo-slots",
+            str(interactive_workers(MONTHLY_MAX_ACTIVE_SUMO_SLOTS)),
             "--daily-unit-budget", str(MONTHLY_DAILY_UNIT_BUDGET),
             "--daily-unit-total-cap", str(MONTHLY_TOTAL_DAILY_UNIT_CAP),
             "--independent-exhaustive-candidate-cap",
@@ -2218,7 +2240,8 @@ class Handler(SimpleHTTPRequestHandler):
                            json.dumps({"edge_id": e, "begin": begin, "end": end})]
             else:
                 cmd = [sys.executable, "run_scenario.py", "--close", *edges]
-            cmd += ["--seed-workers", str(SCENARIO_SEED_WORKERS)]
+            cmd += ["--seed-workers",
+                    str(interactive_workers(SCENARIO_SEED_WORKERS))]
             res = run_in_new_session(cmd, cwd=str(ROOT), timeout=600)
             if active_job_cancelled("close"):
                 self._set_close(status="cancelled")
@@ -2420,6 +2443,9 @@ class Handler(SimpleHTTPRequestHandler):
             build_cmd += ["--start-date", date, "--days", str(days)]
         else:
             build_cmd += ["--date", date, "--begin", "00:00", "--end", "24:00"]
+        cap = interactive_worker_cap()
+        if cap is not None:
+            build_cmd += ["--pfe-workers", str(min(cap, os.cpu_count() or cap))]
         build_timeout = 1700 + 700 * days
         try:
             res = run_in_new_session(build_cmd, cwd=str(ROOT),
@@ -2441,7 +2467,8 @@ class Handler(SimpleHTTPRequestHandler):
             res2 = run_in_new_session(
                 [sys.executable, "run_scenario.py",
                  "--out-dir", str(SCEN_STAGING_DIR),
-                 "--seed-workers", str(SCENARIO_SEED_WORKERS)],
+                 "--seed-workers",
+                 str(interactive_workers(SCENARIO_SEED_WORKERS))],
                 cwd=str(ROOT), timeout=300 + 60 * (days - 1),
             )
             if active_job_cancelled("recalibrate"):
@@ -2932,9 +2959,10 @@ class Handler(SimpleHTTPRequestHandler):
                 MONTHLY_DAILY_UNIT_BUDGET),
             "maximum_total_daily_units": MONTHLY_TOTAL_DAILY_UNIT_CAP,
             "maximum_parent_schedules": MONTHLY_PARENT_SCHEDULE_CAP,
-            "daily_workers": MONTHLY_DAILY_WORKERS,
+            "daily_workers": interactive_workers(MONTHLY_DAILY_WORKERS),
             "seed_workers": MONTHLY_SEED_WORKERS,
-            "maximum_active_sumo_slots": MONTHLY_MAX_ACTIVE_SUMO_SLOTS,
+            "maximum_active_sumo_slots": interactive_workers(
+                MONTHLY_MAX_ACTIVE_SUMO_SLOTS),
         }
         return self._json(200, payload)
 
@@ -3468,6 +3496,7 @@ def bind_server(port: int, port_is_explicit: bool
 
 
 def main(argv: Sequence[str] = ()) -> None:
+    interactive_worker_cap()  # reject a malformed cap before binding the API
     options = resolve_options(argv)
     try:
         known_edges()   # fail fast if data is missing

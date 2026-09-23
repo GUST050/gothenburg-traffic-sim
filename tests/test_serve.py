@@ -29,6 +29,12 @@ import signal_optimize as so
 import validation_report
 
 
+def test_interactive_worker_cap_rejects_invalid_value(monkeypatch):
+    monkeypatch.setenv(serve.INTERACTIVE_WORKER_CAP_ENV, "0")
+    with pytest.raises(SystemExit, match="must be a positive integer"):
+        serve.interactive_worker_cap()
+
+
 @pytest.fixture(autouse=True)
 def _validation_report_writes_to_tmp(monkeypatch, tmp_path):
     """serve's recalibrate success path refreshes the live validation report.
@@ -735,6 +741,20 @@ class TestClose:
         _, final = get_json(f"{base_url}/api/close/status")
         assert final["name"] == "close_a_b_0"
         assert final["file"] == "close_a_b_0.json"
+
+    def test_wsl_worker_cap_limits_close_seeds(self, base_url, monkeypatch):
+        monkeypatch.setenv(serve.INTERACTIVE_WORKER_CAP_ENV, "2")
+        seen = {}
+
+        def fake_run(cmd, **_kw):
+            seen["cmd"] = cmd
+            return FakeCompletedProcess(returncode=1, stderr="stop after capture")
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        assert post_json(f"{base_url}/api/close?edges=a_b_0")[0] == 202
+        assert wait_until(lambda: "cmd" in seen)
+        cmd = seen["cmd"]
+        assert cmd[cmd.index("--seed-workers") + 1] == "2"
 
     def test_close_with_unverified_integrity_is_never_reported_done(
             self, base_url, monkeypatch):
@@ -1484,6 +1504,19 @@ class TestMonthlySearchPreflight:
         assert seed_workers == serve.MONTHLY_SEED_WORKERS == 1
         assert daily_workers * seed_workers <= slots
 
+    def test_wsl_worker_cap_matches_preflight_and_search(self, base_url, monkeypatch):
+        monkeypatch.setenv(serve.INTERACTIVE_WORKER_CAP_ENV, "2")
+        spec = serve.ClosureSearchSpec.from_dict(self._preflight_spec())
+        args = serve.monthly_screening_cli_args(spec)
+        assert args[args.index("--daily-workers") + 1] == "2"
+        assert args[args.index("--max-active-sumo-slots") + 1] == "2"
+        status, body = post_json_or_error(
+            f"{base_url}/api/monthly_search/preflight",
+            payload={"closure_search_spec": self._preflight_spec()})
+        assert status == 200
+        assert body["resource_policy"]["daily_workers"] == 2
+        assert body["resource_policy"]["maximum_active_sumo_slots"] == 2
+
     def test_the_six_month_case_is_no_longer_rejected_by_the_old_cap(
             self, base_url):
         """The plan's named case fits the versioned cumulative policy."""
@@ -2183,6 +2216,21 @@ class TestRecalibrateValidation:
         archived = json.loads(spec_path.read_text())
         assert archived["source"] == "forecast"
         assert archived["build_key"] == response["demand_build_key"]
+
+    def test_wsl_worker_cap_limits_pfe(self, base_url, monkeypatch):
+        monkeypatch.setenv(serve.INTERACTIVE_WORKER_CAP_ENV, "2")
+        seen = {}
+
+        def fake_run(cmd, **_kw):
+            seen["cmd"] = cmd
+            return FakeCompletedProcess(returncode=1, stderr="stop after capture")
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        assert post_json(f"{base_url}/api/recalibrate?date=2025-09-16")[0] == 202
+        assert wait_until(lambda: "cmd" in seen)
+        cmd = seen["cmd"]
+        assert int(cmd[cmd.index("--pfe-workers") + 1]) == min(
+            2, serve.os.cpu_count() or 2)
 
     def test_structured_demand_spec_cannot_mix_query_parameters(self, base_url):
         status, _ = post_json_or_error(

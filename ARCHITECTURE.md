@@ -3175,6 +3175,13 @@ defaults: independent-day jobs started by the web server pass eight daily
 workers, one seed worker and an eight-process active-SUMO ceiling. The CLI
 still validates that width against the recorded isolated-worker resource gate;
 the policy is an admitted resource setting, not a linear speed claim.
+The optional WSL launcher sets `TRAFFIC_SIM_INTERACTIVE_WORKER_CAP` from the
+Linux CPU affinity. PFE calibration uses it for date simulation and closure
+demand archives. Scenario and monthly jobs also stay within their existing
+three-seed, eight-daily-worker and eight-SUMO-slot ceilings. Monthly preflight
+reports the effective width. Without this variable, the established
+macOS/Linux behavior is unchanged; the CPU cap does not
+qualify another machine's memory capacity or simulation results.
 
 Every search workspace accumulates `active_elapsed_s` across resumed process
 segments with an awake monotonic clock (`CLOCK_UPTIME_RAW` on macOS), while UTC

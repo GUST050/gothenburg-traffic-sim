@@ -38,6 +38,19 @@ if ! python3 -c 'import sys; sys.exit(0 if sys.version_info[:2] in ((3, 11), (3,
     exit 2
 fi
 
+# Python 3.12 os.cpu_count() reports system CPUs, which can exceed the CPUs
+# assigned to this WSL process. Pass the usable count to the interactive jobs.
+usable_cpus=$(python3 -c 'import os; print(len(os.sched_getaffinity(0)))' 2>/dev/null) || {
+    echo 'Could not determine the usable WSL CPU count; the server was not started.' >&2
+    exit 2
+}
+if [[ ! "$usable_cpus" =~ ^[1-9][0-9]*$ ]]; then
+    echo 'Could not determine the usable WSL CPU count; the server was not started.' >&2
+    exit 2
+fi
+export TRAFFIC_SIM_INTERACTIVE_WORKER_CAP="$usable_cpus"
+echo "WSL exposes $usable_cpus usable logical CPUs; interactive workers are capped accordingly."
+
 venv_python="$repo_root/.venv/bin/python"
 if [[ ! -x "$venv_python" ]]; then
     echo 'Creating the project virtual environment...'

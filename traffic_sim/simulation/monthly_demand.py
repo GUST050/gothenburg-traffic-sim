@@ -1093,6 +1093,15 @@ def build_demand_archive(required: DemandBuildSpec, *, runs_root: Path | None = 
                 "TRAFFIC_SIM_DEMAND_CANDIDATE_SOURCE")
             extra_args = ([] if candidate_source not in {"catalog", "legacy"}
                           else ["--candidate-source", candidate_source])
+            # The optional WSL launcher limits PFE in both date simulation
+            # and demand archives built during a closure search. Other launch
+            # paths retain the demand builder's existing CPU-count default.
+            worker_cap = environment.get("TRAFFIC_SIM_INTERACTIVE_WORKER_CAP")
+            if worker_cap is not None:
+                if not worker_cap.isdecimal() or int(worker_cap) < 1:
+                    raise ValueError("interactive worker cap must be positive")
+                extra_args += ["--pfe-workers", str(min(
+                    int(worker_cap), os.cpu_count() or 1))]
             completed = subprocess.run(
                 [
                     sys.executable,

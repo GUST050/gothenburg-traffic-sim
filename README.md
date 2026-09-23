@@ -104,6 +104,13 @@ and [recommends storing Linux projects in the WSL filesystem](https://learn.micr
 This route is prepared in the repository but has not yet been tested on a
 Windows machine.
 
+The launcher caps interactive worker processes to the logical CPUs actually
+available inside WSL. PFE calibration uses that cap; scenario checks use at
+most three workers, and independent daily closure search at most eight. WSL
+normally gets all Windows logical CPUs but [defaults to half the host RAM](https://learn.microsoft.com/en-us/windows/wsl/wsl-config),
+so a large analysis can still run out of memory on another computer. The
+worker cap changes parallelism, not the simulation or validation rules.
+
 </details>
 
 | Environment | Current support |

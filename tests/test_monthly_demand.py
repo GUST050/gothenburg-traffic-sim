@@ -316,6 +316,29 @@ def test_demand_builder_is_independent_of_process_working_directory(monkeypatch,
     assert "--candidate-source" not in seen["command"]
 
 
+def test_wsl_worker_cap_reaches_closure_demand_builder(monkeypatch):
+    required = MonthlyDemandResolverRunner(
+        _spec(end_date="2027-07-15"),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+    )._required(generate_closure_schedules(_spec(end_date="2027-07-15"))[0])
+    seen = {}
+
+    class Completed:
+        returncode = 0
+
+    def fake_run(command, **kwargs):
+        seen["command"] = command
+        return Completed()
+
+    monkeypatch.setenv("TRAFFIC_SIM_INTERACTIVE_WORKER_CAP", "2")
+    monkeypatch.setattr(monthly_demand.subprocess, "run", fake_run)
+    monthly_demand.build_demand_archive(required)
+    command = seen["command"]
+    assert int(command[command.index("--pfe-workers") + 1]) == min(
+        2, os.cpu_count() or 1)
+
+
 def test_archive_validation_checks_contract_and_manifest_hashes(tmp_path):
     schedules = generate_closure_schedules(_spec(end_date="2027-07-15"))
     resolver = MonthlyDemandResolverRunner(
