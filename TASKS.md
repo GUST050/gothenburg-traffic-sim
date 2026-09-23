@@ -9,9 +9,9 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: Repository presentation and delivery.
-- Current focus: Make the GitHub landing page, images and current project summaries accurately present the two local desktop workflows.
-- Status: Presentation verified locally; README images and links resolve, static and local API modes behave correctly, and focused checks pass.
-- Suggested next action: Confirm the default-branch and Pages publication, then investigate model generalization separately.
+- Current focus: Publish a concise, consistent GitHub landing page with accurate setup and platform support.
+- Status: README and in-app setup link verified locally; documentation ready for default-branch publication.
+- Suggested next action: Verify the published default-branch README and hosted page, then investigate model generalization separately.
 - Eligible actors: Any capable actor.
 - Safety boundary: Keep exact validation results in historical research and evidence files. Current public summaries describe limitations without LOSO scores. Do not publish a scientific release claim or launch a new SUMO campaign.
 - Updated: 2026-09-23.
@@ -707,16 +707,16 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### REPO-PRESENTATION-2026-09-23 — GitHub landing page and images
+### REPO-PRESENTATION-2026-09-23 — GitHub landing page and platform support
 
-- Status: Presentation changes verified locally; the underlying UI and code review was verified on the feature branch.
-- Objective and scope: Present Simulera datum and Vägavstängning clearly on GitHub, check that images and links work, and bring the reviewed changes to the repository's default branch.
-- Completion outcome: The README leads with the two real desktop workflows, distinguishes the hosted static map from local SUMO features, and shows two genuine tracked data charts with accurate captions. The hosted static home labels and disables local-only workspaces while the local API enables them. Current summaries communicate validation limits without LOSO scores.
-- Context or checkpoints: The previous feature-branch review passed the full Python suite and JS checks. No new simulation or scientific validation run is part of this documentation pass.
-- Primary files: `README.md`, `TASKS.md`, `AGENT_NOTES.md`, `IMPROVEMENT_PLAN.md`, `web/index.html`, `web/app.js`, `.github/workflows/pages.yml`, tracked plots and GitHub repository metadata.
+- Status: Documentation and in-app setup link verified locally; ready for publication.
+- Objective and scope: Give GitHub readers a compact guide to Simulera datum, Vägavstängning, setup, images, and platform limits.
+- Completion outcome: README distinguishes the hosted preview from local SUMO workflows, links two tracked data charts, and describes tested versus unverified systems. The app's setup link targets the current README heading. Current public text has no numeric LOSO scores.
+- Context or checkpoints: This pass changes documentation, `.gitignore`, and one link. It does not run a new simulation or scientific validation campaign.
+- Primary files: `README.md`, `.gitignore`, `web/index.html`, `TASKS.md`, `AGENT_NOTES.md`.
 - Constraints and safety: Preserve historical validation evidence and all scientific gates. Do not present the hosted static map as a live simulator.
-- Acceptance criteria: README image paths and links resolve; current summaries contain no LOSO values; default-branch GitHub view and repository metadata reflect the reviewed branch; Git state is clean.
-- Useful checks: Both README plots and local links exist. Static browser: local-only cards disabled, guide visible, no console errors or horizontal overflow; local API browser: cards enabled and guide hidden. Focused Python: 16 passed; eight JS test files pass; JS syntax and `git diff --check` pass. Prior full suite result remains 6,946 passed, 52 skipped, 2 warnings.
+- Acceptance criteria: README images and links resolve; platform claims match actual support; default-branch README is published; Git state is clean.
+- Useful checks: Ten local README links resolve; both images are tracked; `/api/ping` returns `{"ok": true}` and `/` returns HTTP 200 with `/usr/bin/python3 -S serve.py`; `git diff --check` passes. Previous code checks are recorded in `AGENT_NOTES.md`.
 <!-- ACTIVE_TASK_END -->
 
 ### Historical passage research task incorporated on 2026-09-21

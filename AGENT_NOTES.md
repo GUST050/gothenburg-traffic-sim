@@ -7,14 +7,14 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: GitHub presentation refresh verified locally after the reviewed desktop branch was pushed; scientific release is still unapproved.
-- Summary: The previous review fixed desktop layout and copy, overnight schedule loading, q50 diagrams and saved-result/archive verification. The current pass leads the README with Simulera datum and Vägavstängning, captions two genuine charts, and disables local-only actions on the hosted static home while keeping them available with a local API.
-- Files changed: README, current coordination summaries, static/local workspace cards in `web/index.html` and `web/app.js`, bundle pin test and Pages workflow comment. Historical validation files are preserved.
-- Checks: Previous full `/usr/bin/python3 -m pytest -q tests`: 6,946 passed, 52 skipped, 2 warnings in 847 s. This pass: 16 focused Python tests, eight JS test files, JS syntax and diff check pass; both README images and local links exist. Static browser shows disabled local cards and a guide with no console errors or overflow; live local browser enables them.
-- Decisions and evidence: Current public summaries omit numeric LOSO scores at the user's request while retaining the qualitative validation limitation. Exact historical results remain in research and evidence files. No new SUMO or monthly search was launched.
-- Blockers or risks: The held-out validation gate remains unmet. The 25 archive-backed tests could not execute without external demand files; a new profile replay needs the scientific packages in `requirements.txt`.
-- Suggested next action: Confirm the default-branch and Pages publication, then investigate model generalization separately.
-- Actor notes: Local server remains available for read-only UI checks.
+- Focus and status: Concise GitHub guide and platform support verified locally; ready for publication.
+- Summary: README now leads with the two local workflows, gives a fresh-clone setup path, keeps two genuine data charts, and distinguishes hosted preview, macOS, Ubuntu CI, and unsupported native Windows. The app's setup link points to the new heading.
+- Files changed: `README.md`, `.gitignore`, `web/index.html`, and current coordination blocks. Historical validation files are preserved.
+- Checks: Ten local README links resolve; both chart files exist; Python standard-library server returned HTTP 200 for `/` and `{"ok": true}` for `/api/ping`; `git diff --check` passes. Prior desktop review: 6,946 Python tests passed, 52 skipped, 2 warnings, plus focused JS checks. No new code suite was run for this documentation pass.
+- Decisions and evidence: Current public summaries omit numeric LOSO scores while retaining the validation limitation. Native Windows is unsupported by the POSIX server/process implementation; WSL and full Linux interaction have not been verified.
+- Blockers or risks: Held-out validation remains below the project's guideline; this documentation pass does not change model evidence.
+- Suggested next action: Verify the published default branch and hosted page.
+- Actor notes: The temporary port-8012 smoke-test server was stopped.
 <!-- CURRENT_HANDOFF_END -->
 
 ### Historical passage-speed handoff incorporated on 2026-09-21
