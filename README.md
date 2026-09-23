@@ -99,4 +99,6 @@ simulation, and evidence contracts.
 | Tests and contribution conventions | [Agent guide](AGENTS.md) |
 
 Run `python -m pytest -q tests` in the installed environment for the Python
-suite. [GitHub Actions](.github/workflows/ci.yml) runs the Ubuntu checks.
+suite. [GitHub Actions](.github/workflows/ci.yml) runs Ubuntu checks, but the
+full clean-clone suite currently fails, including tests that require generated
+or archived SUMO artifacts. A green cross-platform release gate is not yet in place.

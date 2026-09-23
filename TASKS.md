@@ -10,7 +10,7 @@ owners, states and approval formulas are not active workflow rules. See
 
 - Mode: Repository presentation and delivery.
 - Current focus: Publish a concise, consistent GitHub landing page with accurate setup and platform support.
-- Status: README and in-app setup link verified locally; documentation ready for default-branch publication.
+- Status: Documentation published to GitHub and Pages; clean-clone CI limitations are disclosed.
 - Suggested next action: Verify the published default-branch README and hosted page, then investigate model generalization separately.
 - Eligible actors: Any capable actor.
 - Safety boundary: Keep exact validation results in historical research and evidence files. Current public summaries describe limitations without LOSO scores. Do not publish a scientific release claim or launch a new SUMO campaign.
@@ -709,14 +709,14 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### REPO-PRESENTATION-2026-09-23 — GitHub landing page and platform support
 
-- Status: Documentation and in-app setup link verified locally; ready for publication.
+- Status: Documentation and in-app setup link published; clean-clone CI limitation documented.
 - Objective and scope: Give GitHub readers a compact guide to Simulera datum, Vägavstängning, setup, images, and platform limits.
 - Completion outcome: README distinguishes the hosted preview from local SUMO workflows, links two tracked data charts, and describes tested versus unverified systems. The app's setup link targets the current README heading. Current public text has no numeric LOSO scores.
 - Context or checkpoints: This pass changes documentation, `.gitignore`, and one link. It does not run a new simulation or scientific validation campaign.
 - Primary files: `README.md`, `.gitignore`, `web/index.html`, `TASKS.md`, `AGENT_NOTES.md`.
 - Constraints and safety: Preserve historical validation evidence and all scientific gates. Do not present the hosted static map as a live simulator.
 - Acceptance criteria: README images and links resolve; platform claims match actual support; default-branch README is published; Git state is clean.
-- Useful checks: Ten local README links resolve; both images are tracked; `/api/ping` returns `{"ok": true}` and `/` returns HTTP 200 with `/usr/bin/python3 -S serve.py`; `git diff --check` passes. Previous code checks are recorded in `AGENT_NOTES.md`.
+- Useful checks: Ten local README links resolve; both images are tracked and public; `/api/ping` returns `{"ok": true}` and `/` returns HTTP 200 with `/usr/bin/python3 -S serve.py`; Pages deployment succeeded. Prior local code checks and the clean-clone CI limitation are recorded in `AGENT_NOTES.md`.
 <!-- ACTIVE_TASK_END -->
 
 ### Historical passage research task incorporated on 2026-09-21

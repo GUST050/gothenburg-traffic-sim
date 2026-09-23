@@ -7,13 +7,13 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: Concise GitHub guide and platform support verified locally; ready for publication.
+- Focus and status: Concise GitHub guide and platform support published; clean-clone CI limitation documented.
 - Summary: README now leads with the two local workflows, gives a fresh-clone setup path, keeps two genuine data charts, and distinguishes hosted preview, macOS, Ubuntu CI, and unsupported native Windows. The app's setup link points to the new heading.
 - Files changed: `README.md`, `.gitignore`, `web/index.html`, and current coordination blocks. Historical validation files are preserved.
-- Checks: Ten local README links resolve; both chart files exist; Python standard-library server returned HTTP 200 for `/` and `{"ok": true}` for `/api/ping`; `git diff --check` passes. Prior desktop review: 6,946 Python tests passed, 52 skipped, 2 warnings, plus focused JS checks. No new code suite was run for this documentation pass.
+- Checks: Ten local README links resolve; both chart files exist; Python standard-library server returned HTTP 200 for `/` and `{"ok": true}` for `/api/ping`; `git diff --check` passes. Prior local desktop review: 6,946 Python tests passed, 52 skipped, 2 warnings, plus focused JS checks. Clean-clone Ubuntu CI has failed its full suites, including tests that require generated or archived SUMO artifacts.
 - Decisions and evidence: Current public summaries omit numeric LOSO scores while retaining the validation limitation. Native Windows is unsupported by the POSIX server/process implementation; WSL and full Linux interaction have not been verified.
-- Blockers or risks: Held-out validation remains below the project's guideline; this documentation pass does not change model evidence.
-- Suggested next action: Verify the published default branch and hosted page.
+- Blockers or risks: Held-out validation remains below the project's guideline. Clean-clone Ubuntu CI is not green; this documentation pass does not change model evidence or test fixtures.
+- Suggested next action: Address the separate clean-clone CI failures, then investigate model generalization.
 - Actor notes: The temporary port-8012 smoke-test server was stopped.
 <!-- CURRENT_HANDOFF_END -->
 
