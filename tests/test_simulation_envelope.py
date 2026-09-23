@@ -14,8 +14,10 @@ from traffic_sim.simulation.envelope import (
     envelope_demand_spec,
     envelope_scenario_spec,
     evaluate_recovery,
+    independent_daily_demand_spec,
     read_edgedata_time_loss,
 )
+from traffic_sim.simulation.independent_daily import decompose_schedules
 from traffic_sim.simulation.trajectory_contract import (
     validate_multiday_trajectory,
 )
@@ -79,6 +81,43 @@ def test_two_day_envelope_is_continuous_and_projects_to_scenario_contract():
         for left, right in zip(
             scenario.closures[::2], scenario.closures[2::2])
     )
+
+
+def test_overnight_daily_unit_keeps_one_interval_and_a_covering_archive():
+    search = _search(
+        permitted_date_start="2027-05-01",
+        permitted_date_end="2027-05-03",
+        required_work_minutes=4 * 60,
+        min_consecutive_start_days=2,
+        max_consecutive_start_days=2,
+        permitted_daily_band=DailyTimeBand("23:00", "01:00"),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_equal_daily_v1",
+    )
+    parent = next(
+        item for item in generate_closure_schedules(search)
+        if item.first_work_date == "2027-05-01"
+    )
+    units, relationships = decompose_schedules(search, (parent,))
+    first = next(
+        item for item in units
+        if item.schedule.first_work_date == "2027-05-01"
+    )
+
+    interval = first.schedule.intervals[0]
+    assert interval.start_time == "2027-05-01T23:00:00"
+    assert interval.end_time == "2027-05-02T01:00:00"
+    assert relationships[parent.schedule_id][0] == first.unit_id
+
+    envelope = build_simulation_envelope(
+        search, first.schedule, baseline_trip_duration_p99_s=1800
+    )
+    demand = independent_daily_demand_spec(search, first.schedule, envelope)
+
+    assert envelope.scenario_start == "2027-05-01T00:00:00"
+    assert envelope.scenario_end == "2027-05-03T00:00:00"
+    assert demand.start_date == "2027-04-30"
+    assert demand.days == 3
 
 
 def test_seven_workdays_can_stay_inside_seven_calendar_demand_days():

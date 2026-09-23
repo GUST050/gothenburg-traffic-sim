@@ -94,6 +94,29 @@ Efter granskning och aktivering passerade katalogsviten 58 tester, den färska
 suite-grinden 132 tester, syntaxkontroll och
 `git diff --check`. Ingen commit eller push gjordes.
 
+### Förnyad kvalificering och aktivering — 2026-09-22
+
+Senare ändringar i både `build_sumo_demand.py` och katalogbundna
+`closure_disruption` gjorde adoptionen inaktuell och aktiverade den avsedda
+legacy-fallbacken. Eftersom driften inte var begränsad till orkestratorn kunde
+den snäva byte-identiska återvalideringen inte användas; en ny operativ
+fyrfallskvalificering kördes mot aktuella källbytes.
+
+Den färska sviten passerade 192 tester. Fyra kalla parade q50-fall passerade
+alla hårda grindar: 260,29→34,47 s vardag, 255,54→39,06 s helg,
+258,82→61,45 s helgdag och 477,88→66,41 s blandad tvådagarsperiod.
+Medianparspeedup var 6,87x, största fordonsdifferensen 0,234 %, maximalt RSS
+cirka 1,40 GiB och katalogen var snabbare i samtliga fyra klasser. Detta är
+ett operativt korrekthets- och icke-regressionsbevis, inte en ny generell
+statistisk prestandaclaim.
+
+Den atomiskt adopterade aktuella katalogen använder vardagsnyckel
+`474e8e30b1ef5bab6334158a70218afa` och helgnyckel
+`a4120b11b5432c4e1bc481ad4d7601a8`. En verklig implicit UI/API-körning för
+2027-04-06 registrerade katalogträff utan fallback; katalogåterställning och
+kandidatmaterialisering tog 0,673 s. Evidensen finns i
+`validation/route_catalog_{suite_gates,build,trials,qualification}_q50_operational_20260922-v1.json`.
+
 ### Implementationsplan: operativ fyrfallskvalificering
 
 > **För agentiskt arbete:** kör planen sekventiellt med RED/GREEN och verifiera
@@ -3948,6 +3971,17 @@ Research basis: [DfT TAG M3.1](https://assets.publishing.service.gov.uk/media/6a
 and [route-choice modelling](https://transp-or.epfl.ch/documents/technicalReports/KazBierFloe_2015.pdf).
 
 ## Current verified status — 2026-08-24
+
+- CURRENT LOSO RE-EVALUATION (2026-09-22). The current
+  `loso_pfe_meso_v11_observability_gate` implementation was run across all six
+  held stations with the adopted weekday catalog and compared only with the
+  unchanged strict >85% hourly GEH<5 guideline. It fails: 71/143 = 49.7%.
+  Station results are 107 37.5%, 1074 29.2%, 1076 12.5%, 133 30.4%, 134
+  87.5%, and 2276 100.0%. The only populated historical date is 2025-09-16;
+  sensor 133 lacks 00:00–00:15, which remained missing rather than being
+  imputed as zero, so 143 hourly cases were evaluated. Evidence is under
+  `runs/loso-current-v11-20260922-v2/`. This is negative generalization
+  evidence, not permission to lower the guideline or tune on the same folds.
 
 - FASTEST-SENSOR-ROUTE LOSO DIAGNOSTIC (added 2026-09-01). The corrected
   demand contract now emits only deterministic global fastest OD routes for

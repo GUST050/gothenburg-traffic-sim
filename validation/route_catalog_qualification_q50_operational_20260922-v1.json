@@ -1,0 +1,151 @@
+{
+ "amortized_days": 0.0035994353209486017,
+ "catalog_build_s": 0.796,
+ "claim_boundary": {
+  "current_catalog_correctness": true,
+  "current_four_class_non_regression": true,
+  "general_performance_claim": false,
+  "new_statistical_performance_claim": false
+ },
+ "day_class_results": {
+  "holiday": {
+   "catalog_s": 61.453808,
+   "legacy_s": 258.823166
+  },
+  "mixed": {
+   "catalog_s": 66.407185,
+   "legacy_s": 477.884652
+  },
+  "weekday": {
+   "catalog_s": 34.472057,
+   "legacy_s": 260.286262
+  },
+  "weekend": {
+   "catalog_s": 39.064069,
+   "legacy_s": 255.541462
+  }
+ },
+ "evidence_binding": {
+  "candidate_n_total": 6000,
+  "catalog_build_path": "validation/route_catalog_build_q50_operational_20260922-v1.json",
+  "catalog_build_sha256": "67e6d1faad9e2596e459dcb9b2c7d3587ef330cb57871b2d0fd8ff995ea3e932",
+  "catalog_keys": {
+   "weekday": "474e8e30b1ef5bab6334158a70218afa",
+   "weekend": "a4120b11b5432c4e1bc481ad4d7601a8"
+  },
+  "catalog_selected_n_total": {
+   "weekday": 6000,
+   "weekend": 6000
+  },
+  "suite_gates_path": "validation/route_catalog_suite_gates_q50_operational_20260922-v1.json",
+  "suite_gates_sha256": "1d66be2f04f413fd95c8a7b2d7f2925401b1a172ed8931d81981eac99edfc208",
+  "trials_path": "validation/route_catalog_trials_q50_operational_20260922-v1.json",
+  "trials_sha256": "b827c4e58fa99490dfbaa39ce1250f4fa9bb4276393665ef58c3d2b9f2b4c38a"
+ },
+ "gates": {
+  "both_arm_orders": true,
+  "catalog_amortizes_within_3_days": true,
+  "catalog_faster_in_every_class": true,
+  "four_bound_day_classes": true,
+  "hard_correctness": true,
+  "paired_vehicle_population_delta_le_1pct": true,
+  "positive_median_saving": true,
+  "rss_within_8gib": true
+ },
+ "median_saving_s": 221.145799,
+ "metrics": {
+  "catalog": {
+   "adapter_s": {
+    "max": 4.634,
+    "median": 0.4505,
+    "min": 0.442,
+    "p95": 4.634
+   },
+   "peak_rss_bytes": {
+    "max": 1396588544.0,
+    "median": 1310130176.0,
+    "min": 1219313664.0,
+    "p95": 1396588544.0
+   },
+   "pfe_s": {
+    "max": 55.113,
+    "median": 43.6515,
+    "min": 28.427,
+    "p95": 55.113
+   },
+   "vehicles": {
+    "max": 37415.0,
+    "median": 20866.0,
+    "min": 17927.0,
+    "p95": 37415.0
+   },
+   "wall_s": {
+    "max": 66.407185,
+    "median": 50.2589385,
+    "min": 34.472057,
+    "p95": 66.407185
+   }
+  },
+  "legacy": {
+   "adapter_s": {
+    "max": 0.0,
+    "median": 0.0,
+    "min": 0.0,
+    "p95": 0.0
+   },
+   "peak_rss_bytes": {
+    "max": 1396588544.0,
+    "median": 1246019584.0,
+    "min": 1219313664.0,
+    "p95": 1396588544.0
+   },
+   "pfe_s": {
+    "max": 337.455,
+    "median": 145.95499999999998,
+    "min": 143.345,
+    "p95": 337.455
+   },
+   "vehicles": {
+    "max": 37497.0,
+    "median": 20859.0,
+    "min": 17969.0,
+    "p95": 37497.0
+   },
+   "wall_s": {
+    "max": 477.884652,
+    "median": 259.554714,
+    "min": 255.541462,
+    "p95": 477.884652
+   }
+  }
+ },
+ "paired_speedup": 6.868938996500271,
+ "paired_speedup_stats": {
+  "max": 7.550644917998366,
+  "median": 6.868938996500271,
+  "min": 4.211670105130019,
+  "p95": 7.550644917998366
+ },
+ "paired_vehicle_population_relative_delta": {
+  "max": 0.002337358784573432,
+  "median": 0.0019472932338417959,
+  "min": 0.001147017753840016,
+  "p95": 0.002337358784573432
+ },
+ "qualification_mode": "operational_four_class_q50_v1",
+ "schema_version": 3,
+ "suite_hard_failures": [],
+ "suite_hard_gates": {
+  "day_library_restore": true,
+  "deterministic_repeat": true,
+  "malformed_catalog_rejected": true,
+  "purpose_route_compatibility": true,
+  "singleflight_recovery": true,
+  "sumo_runtime_no_regression": true,
+  "warm_state_identity": true
+ },
+ "trial_hard_failures": [],
+ "trials": 4,
+ "variant_mode": "q50_only",
+ "verdict": "adopt"
+}

@@ -62,8 +62,9 @@ MEDIAN = "demand-20260913-224643-2bbcf31e-3b33"
 LARGE = "demand-20260913-224959-e136d191-ae06"
 
 pytestmark = pytest.mark.skipif(
-    not OLD_ARCHIVE_ROOT.is_dir(),
-    reason="real qualified demand archives not present in this environment")
+    not all((OLD_ARCHIVE_ROOT / name / "demand_build_spec.json").is_file()
+            for name in (SMALL, MEDIAN, LARGE)),
+    reason="the three real qualified demand archives are not present")
 
 _MATCHING_DAILY_UNITS: dict[str, tuple[Any, ...]] = {}
 

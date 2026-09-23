@@ -60,8 +60,11 @@ SCHEMA = "independent_vs_continuous_preregistration_v1"
 #: extrapolate into.
 WORKDAY_COUNTS = (1, 3, 7, 14, 21, 45, 90)
 
-#: Time-of-day bands. Each is a same-day band so the independent policy can
-#: express it; an overnight band is recorded as unpairable rather than dropped.
+#: Time-of-day bands frozen by the 2026-08-10 v1 preregistration.  The
+#: independent policy could not express its overnight case at that time, so
+#: `build_case` must preserve that historical verdict even if the live product
+#: contract later gains overnight support.  A preregistration cannot silently
+#: acquire new paired cases after its outcome has been observed.
 TIME_BANDS = {
     "morning": ("06:00", "10:00"),
     "midday": ("10:00", "15:00"),
@@ -206,14 +209,20 @@ def build_case(case_id: str, *, road: str, workdays: int, band_name: str,
 
     independent = continuous = None
     reasons: list[str] = []
-    try:
-        independent = _spec(
-            case_id=f"{case_id}-independent", edges=edges, workdays=workdays,
-            band=band, source=source,
-            interday="independent_daily_reset_v1",
-            allocation="exact_equal_daily_v1", weekdays=weekdays)
-    except ValueError as error:
-        reasons.append(f"independent policy refuses this case: {error}")
+    if band_name == "overnight":
+        reasons.append(
+            "independent policy refuses this case: independent daily reset "
+            "requires a same-day permitted band"
+        )
+    else:
+        try:
+            independent = _spec(
+                case_id=f"{case_id}-independent", edges=edges,
+                workdays=workdays, band=band, source=source,
+                interday="independent_daily_reset_v1",
+                allocation="exact_equal_daily_v1", weekdays=weekdays)
+        except ValueError as error:
+            reasons.append(f"independent policy refuses this case: {error}")
     try:
         continuous = _spec(
             case_id=f"{case_id}-continuous", edges=edges, workdays=workdays,

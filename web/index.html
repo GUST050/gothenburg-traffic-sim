@@ -254,8 +254,12 @@
       background: rgba(148,163,184,0.24);
     }
     #recal-progress-fill {
-      height: 100%; width: 4%; border-radius: inherit; background: var(--sim-2);
-      transition: width 0.8s ease;
+      height: 100%; width: 35%; border-radius: inherit; background: var(--sim-2);
+      animation: recal-activity 1.6s ease-in-out infinite alternate;
+    }
+    @keyframes recal-activity {
+      from { transform: translateX(0); }
+      to { transform: translateX(185%); }
     }
 
     #suggest-banner {
@@ -534,6 +538,73 @@
     .monthly-status.best::before { background: #3b9568; }
     .monthly-status.failed { color: #a04c4c; }
     .monthly-status.failed::before { background: #bd5c5c; }
+    /* ── Delay-profile chart ────────────────────────────────────────────
+       Two series (the two best dates) on the light result surface. The
+       series hues stay saturated while axes and copy use that surface's
+       established ink scale. The area fill is not decoration:
+       when available it is the q10–q90 direction-split spread, with the
+       q50 line on top; ordinary q50-only runs draw no uncertainty band. */
+    #delay-profile {
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --grid: #cfd7de;
+      padding: 10px 8px 4px;
+    }
+    #delay-profile-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 0 0 6px;
+    }
+    #delay-profile-title {
+      margin: 0; font-size: 0.74rem; font-weight: 700;
+      color: var(--result-ink);
+    }
+    #delay-profile-note {
+      font-size: 0.68rem; color: var(--result-muted);
+      line-height: 1.5; margin: 0 0 8px;
+    }
+    #delay-profile-legend {
+      display: flex; flex-wrap: wrap; gap: 14px; padding: 0 0 6px;
+      font-size: 0.68rem; color: #52616e;
+    }
+    #delay-profile-legend .key { display: flex; align-items: center; gap: 6px; }
+    #delay-profile-legend .stroke {
+      width: 16px; height: 2px; border-radius: 1px; display: inline-block;
+    }
+    #delay-profile-plot { position: relative; }
+    #delay-profile-plot svg { width: 100%; height: auto; display: block; }
+    #delay-profile-plot .axis { stroke: var(--grid); stroke-width: 1; }
+    #delay-profile-plot .tick-label { fill: #65727d; font-size: 10px; }
+    #delay-profile-plot .axis-title { fill: #52616e; font-size: 10px; }
+    #delay-profile-plot .peak-label { fill: #34434f; font-size: 10px; font-weight: 600; }
+    #delay-profile-tip {
+      position: absolute; pointer-events: none; z-index: 2; display: none;
+      background: rgba(15, 23, 42, 0.96); border: 1px solid var(--panel-line);
+      border-radius: 4px; padding: 6px 8px; font-size: 0.68rem;
+      color: var(--ink-3); white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    }
+    #delay-profile-tip .tip-head { color: var(--ink); font-weight: 700; padding-bottom: 3px; }
+    #delay-profile-tip .tip-row { display: flex; align-items: center; gap: 6px; }
+    #delay-profile-tip .tip-row b { color: var(--ink); font-weight: 700; }
+    #delay-profile-tip .stroke { width: 12px; height: 2px; border-radius: 1px; }
+    /* Ties a results row to its curve above. Colour alone never carries the
+       identity — the legend names the dates and the tooltip repeats them. */
+    .series-dot {
+      display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+      margin-right: 6px; vertical-align: middle;
+    }
+    .linklike {
+      background: none; border: none; padding: 4px 0; cursor: pointer;
+      color: var(--accent); font-size: 0.68rem; text-decoration: underline;
+    }
+    #delay-profile-table-wrap table { width: 100%; border-collapse: collapse; font-size: 0.68rem; }
+    #delay-profile-table-wrap th, #delay-profile-table-wrap td {
+      padding: 3px 6px; text-align: right; color: #34434f;
+      border-top: 1px solid var(--result-line);
+    }
+    #delay-profile-table-wrap th:first-child,
+    #delay-profile-table-wrap td:first-child { text-align: left; }
+    #delay-profile-table-wrap th { color: #52616e; font-weight: 600; }
     .sr-load-btn {
       background: transparent; color: var(--result-accent);
       border: 1px solid #b9cedb; border-radius: 4px;
@@ -916,6 +987,12 @@
     #scen-select, #sim-panel, #sim-panel > * { min-width: 0; }
     #scen-select { width: 100%; }
     #sim-panel > span { overflow-wrap: anywhere; }
+    @media (min-width: 721px) {
+      #scen-select { min-width: 240px; flex: 0 1 280px; }
+      #pick-banner.show, #day-banner.show, #suggest-banner.show {
+        flex: 1 1 100%; flex-wrap: wrap;
+      }
+    }
     .action-btn, .seg button, .sr-load-btn { min-height: 36px; }
     #legend { pointer-events: auto; max-height: calc(100dvh - 220px); overflow-y: auto; }
     #legend-toggle {
@@ -955,6 +1032,7 @@
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+      #recal-progress-fill { animation: none; }
     }
   </style>
 </head>
@@ -1014,14 +1092,14 @@
     </div>
 
     <div id="legend-sim">
-      <div class="legend-title">Säkerhet</div>
-      <div class="legend-sub">vägfärgen visar hur säker simuleringen är på varje väg (närhet till mätpunkt) — bilarna visar trafiken</div>
+      <div class="legend-title">Datastöd</div>
+      <div class="legend-sub">vägfärgen visar ett stödindex från sensoravstånd och, i scenarier, spridning mellan körningar. Det är inte uppmätt träffsäkerhet — bilarna visar trafiken.</div>
 
       <div class="legend-bar"></div>
       <div class="legend-bar-labels">
-        <span>Säker<br>nära sensor</span>
+        <span>Mer stöd<br>nära sensor</span>
         <span></span>
-        <span>Osäker<br>längre bort</span>
+        <span>Mindre stöd<br>längre bort</span>
       </div>
     </div>
 
@@ -1067,7 +1145,7 @@
 
     <div class="legend-divider"></div>
     <div class="legend-note">
-      Hovra en väg → <b>simuleringskonfidens</b>.<br>
+      Hovra en väg → <b>stödindex</b>.<br>
       Vägarnas ljusstyrka avtar med avstånd från sensor.
     </div>
     </div>
@@ -1101,7 +1179,7 @@
     <div id="sim-panel">
       <span class="label">Simulering</span>
       <select id="scen-select" aria-label="Välj scenario"></select>
-      <span class="hint" id="sim-day-hint" title="Byt med knappen till höger — kräver ny kalibrering, ~6 min"></span>
+      <span class="hint" id="sim-day-hint" title="Byt datum för att bygga en ny simulering. Tiden varierar med antal dagar och återanvända data."></span>
       <span id="sim-agent-hint" hidden></span>
       <span class="hint" id="sim-uncertainty-hint" hidden></span>
       <!-- Road colours are an ensemble mean while the animated cars come
@@ -1122,13 +1200,13 @@
       <button id="close-mode-btn" class="action-btn"
               title="Klicka på vägar i kartan för att simulera en avstängning">Simulera vald tid</button>
       <button id="change-day-btn" class="action-btn"
-              title="Kalibrera om simuleringen mot ett annat datum (tar ~6 min)">Byt dag</button>
+              title="Bygg en ny simulering för ett annat datum. Tiden varierar med antal dagar och återanvända data.">Byt dag</button>
       <button id="suggest-mode-btn" class="action-btn"
-              title="Klicka på en väg för att hitta den bästa tiden att stänga den">Optimera aktiv dag</button>
+              title="Välj väg och få ett tidsförslag baserat på beräknad avstängningspåverkan">Föreslå tid i dag</button>
       <button id="monthly-mode-btn" class="action-btn"
-              title="Jämför alla rullande arbetsperioder med q50-kostnad och SUMO-verifiera toppkandidaterna">Bästa arbetsperiod</button>
+              title="Jämför arbetsperioder med q50-baserad kostnad och SUMO-kontroll av utvalda kandidater">Jämför arbetsperioder</button>
       <button id="optimize-signals-btn" class="action-btn"
-              title="Optimera trafikljusen för det valda scenariot (~2-5 min, syntetiska ljusprogram)">Optimera signaler</button>
+              title="Analysera syntetiska trafikljusprogram för det valda scenariot">Optimera signaler</button>
       <!-- G3: assembled validation report (web/data/validation.json) —
            every gate the pipeline runs, visible without reading logs. -->
       <button id="validation-btn" class="action-btn" aria-controls="validation-panel" aria-expanded="false" hidden
@@ -1154,7 +1232,7 @@
         <label class="hint" for="new-days-input">dagar</label>
         <input type="number" id="new-days-input" value="1" min="1" max="7"
                title="Antal sammanhängande dagar att simulera, 1-7 (en vecka max — kostnaden växer med antalet dagar)">
-        <button id="day-run-btn" class="action-btn primary">Räkna om (~6 min)</button>
+        <button id="day-run-btn" class="action-btn primary">Starta simulering</button>
         <button id="day-cancel-btn" class="action-btn">Avbryt</button>
       </div>
 
@@ -1163,14 +1241,14 @@
         <span id="suggest-pick-count">0 valda</span>
         <label class="hint" for="suggest-duration-input">timmar avstängd</label>
         <input type="number" id="suggest-duration-input" value="6" min="0.25" max="24" step="0.25">
-        <button id="suggest-run-btn" class="action-btn primary" disabled>Sök bästa tid</button>
+        <button id="suggest-run-btn" class="action-btn primary" disabled>Sök lämplig tid</button>
         <button id="suggest-cancel-btn" class="action-btn">Avbryt</button>
       </div>
 
       <div id="monthly-banner">
         <div class="monthly-banner-head">
-          <span class="monthly-banner-title">Hitta bästa arbetsperiod</span>
-          <span class="monthly-banner-help">Välj väg i kartan. Alla möjliga rullande perioder i intervallet jämförs automatiskt.</span>
+          <span class="monthly-banner-title">Jämför arbetsperioder</span>
+          <span class="monthly-banner-help">Välj väg i kartan och ange ett datumintervall för jämförelsen.</span>
           <span id="monthly-pick-count">0 valda</span>
         </div>
         <div class="monthly-fields">
@@ -1374,11 +1452,29 @@
         <div id="monthly-results-meta"></div>
       </details>
       <div id="monthly-results-body-wrap">
+        <section id="delay-profile" aria-labelledby="delay-profile-title" hidden>
+          <div id="delay-profile-head">
+            <h2 id="delay-profile-title">Fördelning av extra restid</h2>
+            <button id="delay-profile-btn" class="action-btn" type="button"
+                    aria-describedby="delay-profile-note">Visa diagram</button>
+          </div>
+          <p id="delay-profile-note" role="status" aria-live="polite"
+             aria-atomic="true"></p>
+          <div id="delay-profile-chart" hidden>
+            <div id="delay-profile-legend" aria-label="Diagramförklaring"></div>
+            <div id="delay-profile-plot"></div>
+            <button id="delay-profile-table-btn" class="linklike" type="button"
+                    aria-expanded="false" aria-controls="delay-profile-table-wrap">
+              Visa tabell
+            </button>
+            <div id="delay-profile-table-wrap" hidden></div>
+          </div>
+        </section>
         <table id="monthly-results-table">
           <thead>
             <tr>
-              <th id="monthly-col-period" scope="col">Startdatum</th>
-              <th id="monthly-col-end" scope="col">Slutdatum</th>
+              <th id="monthly-col-period" scope="col">Första arbetsdag</th>
+              <th id="monthly-col-end" scope="col">Sista arbetsdag</th>
               <th id="monthly-col-start-time" scope="col">Start/dag</th>
               <th id="monthly-col-end-time" scope="col">Slut/dag</th>
               <th id="monthly-col-primary" scope="col">ΔTid p50 (värsta variant)</th>
@@ -1400,10 +1496,10 @@
   <script src="provider.js?v=17"></script>
   <script src="text.js?v=2"></script>
   <script src="animation.js?v=1"></script>
-  <script src="render.js?v=17"></script>
+  <script src="render.js?v=18"></script>
   <script src="controls.js?v=12"></script>
   <script src="clock.js?v=11"></script>
   <script src="polling.js?v=1"></script>
-  <script src="app.js?v=37"></script>
+  <script src="app.js?v=43"></script>
 </body>
 </html>

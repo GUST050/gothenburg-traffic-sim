@@ -188,7 +188,7 @@ class TestTheUiRendersTheDetail:
         html = INDEX_HTML.read_text(encoding="utf-8")
         source = APP_JS.read_text(encoding="utf-8")
         assert 'id="monthly-period-mode"' not in html
-        assert "jämförs automatiskt" in html
+        assert "Välj väg i kartan och ange ett datumintervall för jämförelsen." in html
         assert "objective_profile: 'closure_cost_v1'" in source
         assert "period_comparison_policy: 'rolling_period_v1'" in source
         assert "monthlyPeriodMode" not in source

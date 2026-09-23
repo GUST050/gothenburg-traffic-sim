@@ -569,13 +569,13 @@ const Render = (() => {
         const line = L.polyline(latlngs, baseStyle).addTo(isSensor ? fg : bg);
         line.on('click', () => { if (_onEdgeClick) _onEdgeClick(id); });
 
-        // Confidence = proximity to the nearest sensor (0–1, computed offline).
-        // Shown as % so users see how trustworthy a simulation is on this edge.
+        // This is a relative support index, not a calibrated probability of
+        // correctness. Scenario values also reflect spread between runs.
         const confHtml = (c) => {
           if (c === null || c === undefined) return '';
           const pct = Math.round(c * 100);
           const col = pct >= 70 ? '#16a34a' : pct >= 30 ? '#d97706' : '#dc2626';
-          return `<br><span style="color:${col}">Simuleringskonfidens: ${pct} %</span>`;
+          return `<br><span style="color:${col}">Stödindex: ${pct}/100 (inte träffsäkerhet)</span>`;
         };
 
         // Per-scenario confidence (from the provider) beats the static prior

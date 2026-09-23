@@ -338,12 +338,61 @@ def test_independent_daily_exact_allocation_never_overshoots_work():
     assert ClosureSchedule.from_dict(nine_day[0].to_dict()) == nine_day[0]
 
 
-def test_independent_daily_policy_rejects_overnight_or_unaligned_work():
-    with pytest.raises(ValueError, match="same-day permitted band"):
-        _spec(
-            permitted_daily_band=DailyTimeBand("22:00", "06:00"),
-            interday_policy="independent_daily_reset_v1",
-        )
+def test_independent_daily_policy_accepts_an_overnight_work_window():
+    spec = _spec(
+        permitted_date_start="2027-05-01",
+        permitted_date_end="2027-05-03",
+        required_work_minutes=4 * 60,
+        min_consecutive_start_days=2,
+        max_consecutive_start_days=2,
+        permitted_daily_band=DailyTimeBand("23:00", "01:00"),
+        allowed_weekdays=(0, 1, 2, 3, 4, 5, 6),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_equal_daily_v1",
+    )
+
+    schedule = next(
+        item for item in generate_closure_schedules(spec)
+        if item.first_work_date == "2027-05-01"
+    )
+
+    assert schedule.daily_start == "23:00"
+    assert schedule.daily_end == "01:00"
+    assert [item.work_date for item in schedule.intervals] == [
+        "2027-05-01", "2027-05-02"
+    ]
+    assert [item.end_time for item in schedule.intervals] == [
+        "2027-05-02T01:00:00", "2027-05-03T01:00:00"
+    ]
+
+
+def test_overnight_balanced_allocation_orders_ends_across_midnight():
+    spec = _spec(
+        permitted_date_start="2027-05-01",
+        permitted_date_end="2027-05-03",
+        required_work_minutes=45,
+        min_consecutive_start_days=2,
+        max_consecutive_start_days=2,
+        permitted_daily_band=DailyTimeBand("23:45", "00:15"),
+        allowed_weekdays=(0, 1, 2, 3, 4, 5, 6),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_balanced_daily_v1",
+    )
+
+    schedules = tuple(
+        item for item in generate_closure_schedules(spec)
+        if item.first_work_date == "2027-05-01"
+    )
+
+    assert len(schedules) == 2
+    assert {item.daily_end for item in schedules} == {"00:15"}
+    assert {
+        tuple(interval.duration_minutes for interval in item.intervals)
+        for item in schedules
+    } == {(15, 30), (30, 15)}
+
+
+def test_independent_daily_policy_still_rejects_unaligned_work():
     with pytest.raises(ValueError, match="align to the 15-minute"):
         _spec(
             required_work_minutes=61,

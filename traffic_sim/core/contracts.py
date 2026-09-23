@@ -520,15 +520,6 @@ class ClosureSearchSpec:
             raise ValueError(
                 "more than 21 workdays requires exact_equal_daily_v1"
             )
-        if self.interday_policy == "independent_daily_reset_v1":
-            band_start = _clock_minutes(
-                self.permitted_daily_band.earliest_start
-            )
-            band_end = _clock_minutes(self.permitted_daily_band.latest_end)
-            if band_end <= band_start:
-                raise ValueError(
-                    "independent daily reset requires a same-day permitted band")
-
     def _content_payload(self) -> dict[str, Any]:
         payload = {
             "directed_edges": sorted(self.directed_edges),
@@ -759,7 +750,7 @@ class ClosureSchedule:
         previous_date = None
         durations: set[int] = set()
         duration_total = 0
-        end_labels: list[str] = []
+        duration_end_labels: list[tuple[int, str]] = []
         for index, interval in enumerate(self.intervals):
             interval_date = date.fromisoformat(interval.work_date)
             if self.allocation_policy == "equal_daily_rounded_v1":
@@ -801,7 +792,7 @@ class ClosureSchedule:
                     "closure_schedule interval durations must align to 15 minutes")
             durations.add(duration)
             duration_total += duration
-            end_labels.append(end_label)
+            duration_end_labels.append((duration, end_label))
         if duration_total != closed:
             raise ValueError(
                 "closure_schedule intervals must match total closure minutes")
@@ -830,10 +821,10 @@ class ClosureSchedule:
                 raise ValueError(
                     "exact equal daily schedules require identical durations"
                 )
-            # Compare clock labels, not absolute datetimes, because intervals
-            # span consecutive work dates. Independent-day schedules are
-            # contractually same-day, so ordinary HH:MM ordering is sound.
-            latest_label = max(end_labels)
+            # Every interval has the same daily start.  Compare elapsed
+            # durations rather than HH:MM labels, whose lexical order wraps
+            # at midnight (23:45 is earlier than the following 00:15).
+            latest_label = max(duration_end_labels, key=lambda item: item[0])[1]
             if latest_label != self.daily_end:
                 raise ValueError(
                     "exact schedule daily_end must be its latest daily end")

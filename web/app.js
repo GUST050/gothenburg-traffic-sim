@@ -635,9 +635,8 @@
         let closureJobRunning = false;
         let apiAvailable = false;
 
-        // ── Byt simuleringsdag — den andra halvan av "vilka dagar vill jag
-        // simulera": en långsammare, uppenbart annorlunda åtgärd (~6 min,
-        // kalibrerar om HELA dygnets efterfrågan) än att bara stänga en väg.
+        // ── Byt simuleringsdag — kalibrerar om hela periodens efterfrågan.
+        // Körlängden beror på antal dagar och om underlaget redan är byggt.
         const btnDay     = document.getElementById('change-day-btn');
         const dayBanner  = document.getElementById('day-banner');
         const dateInput  = document.getElementById('new-date-input');
@@ -645,7 +644,6 @@
         const btnDayRun  = document.getElementById('day-run-btn');
         const btnDayCancel = document.getElementById('day-cancel-btn');
         const recalProgress = document.getElementById('recal-progress');
-        const recalProgressFill = document.getElementById('recal-progress-fill');
         const recalProgressLabel = document.getElementById('recal-progress-label');
         const simDayHint = document.getElementById('sim-day-hint');
         const simAgentHint = document.getElementById('sim-agent-hint');
@@ -1150,30 +1148,20 @@
                  Number(pending.days || 1) === Number(status.days || 1);
         }
 
-        // Linear interpolation between the two measured/documented anchor
-        // points (B3, IMPROVEMENT_PLAN.md): 1 day ~6 min, a full week ~45 min.
-        function estimatedMinutes(days) {
-          return Math.round(6 + (45 - 6) / 6 * (Math.max(1, days) - 1));
-        }
-        function showJobProgress(label, elapsedS = 0, expectedS = 90) {
-          // This is deliberately an estimate, capped below 100 until the
-          // server reports completion. It communicates work without claiming
-          // an exact percentage for a multi-stage simulation job.
-          const pct = Math.min(92, Math.max(4, 4 + elapsedS / expectedS * 88));
+        function showJobProgress(label, elapsedS = 0) {
+          // The server reports elapsed time, not a reliable completion fraction.
           recalProgress.classList.add('show');
-          recalProgressFill.style.width = `${pct.toFixed(0)}%`;
-          recalProgressLabel.textContent = `${label} · ${elapsedS}s`;
+          recalProgressLabel.textContent =
+            `${label} · ${Math.max(0, Math.floor(Number(elapsedS) || 0))} s hittills`;
         }
         function showRecalibrationProgress(elapsedS = 0) {
-          showJobProgress('Bygger simulering', elapsedS,
-                          estimatedMinutes(Number(daysInput.value) || 1) * 60);
+          showJobProgress('Bygger simulering', elapsedS);
         }
         function hideRecalibrationProgress() {
           recalProgress.classList.remove('show');
-          recalProgressFill.style.width = '4%';
         }
         function updateDayRunLabel() {
-          btnDayRun.textContent = `Räkna om (~${estimatedMinutes(Number(daysInput.value))} min)`;
+          btnDayRun.textContent = 'Starta simulering';
         }
         function selectedDemandDate(source) {
           const range = DATE_RANGES[source];
@@ -1304,6 +1292,19 @@
         const monthlyColPrimary   = document.getElementById('monthly-col-primary');
         const monthlyColSecondary = document.getElementById('monthly-col-secondary');
         const btnMonthlyResultsClose = document.getElementById('monthly-results-close');
+        const delayProfile        = document.getElementById('delay-profile');
+        const delayProfileBtn     = document.getElementById('delay-profile-btn');
+        const delayProfileNote    = document.getElementById('delay-profile-note');
+        const delayProfileChart   = document.getElementById('delay-profile-chart');
+        const delayProfileLegend  = document.getElementById('delay-profile-legend');
+        const delayProfilePlot    = document.getElementById('delay-profile-plot');
+        const delayProfileTableBtn = document.getElementById('delay-profile-table-btn');
+        const delayProfileTable   = document.getElementById('delay-profile-table-wrap');
+        let delayProfileSearchId  = null;
+        let delayProfilePolling   = false;
+        const SVG_NS = 'http://www.w3.org/2000/svg';
+        const DELAY_SERIES = ['var(--series-1)', 'var(--series-2)'];
+        const sv = (n) => Number(n).toLocaleString('sv-SE');
         let monthlyJobRunning = false;
         // A restarted server can observe a CLI search through its durable
         // workspace without owning that process.  Preserve that distinction:
@@ -1868,7 +1869,7 @@
           btnRun.disabled = true;
           btnCancel.disabled = false;
           btnRun.textContent = 'Startar…';
-          showJobProgress('Startar simulering', 0, 90);
+          showJobProgress('Startar simulering', 0);
           try {
             const scenario_spec = await closureScenarioSpec([...selected]);
             const status = await runRoadClosureOperation(
@@ -1876,7 +1877,7 @@
               const elapsed = state.elapsed_s || 0;
               btnRun.textContent = state.status === 'cancelling'
                 ? 'Avbryter…' : `Simulerar… (${elapsed}s)`;
-              showJobProgress('Simulerar avstängning', elapsed, 90);
+              showJobProgress('Simulerar avstängning', elapsed);
             });
             if (status.status === 'error') throw new Error(status.error);
             if (status.status === 'cancelled') {
@@ -2131,7 +2132,7 @@
             btnSuggestRun.disabled = selected.size === 0;
             btnSuggestCancel.disabled = false;
             btnSuggestCancel.textContent = 'Avbryt';
-            btnSuggestRun.textContent = 'Sök bästa tid';
+            btnSuggestRun.textContent = 'Sök lämplig tid';
             refreshCloseUI();
           }
         });
@@ -2339,9 +2340,20 @@
           const intervals = schedule.intervals || [];
           const parts = intervals.slice(0, 2).map(iv =>
             `${iv.start_time.slice(0, 10)} ${iv.start_time.slice(11, 16)}–` +
-            `${iv.end_time.slice(11, 16)}`);
+            `${schedule.daily_end || iv.end_time.slice(11, 16)}`);
           return intervals.length > 2
             ? `${parts[0]} … (${intervals.length} dagar)` : parts.join(', ');
+        }
+
+        function scheduleCalendarSpanDays(intervals) {
+          const firstDate = intervals[0].start_time.slice(0, 10);
+          const finalEnd = intervals[intervals.length - 1].end_time;
+          const endDate = finalEnd.slice(0, 10);
+          // A 00:00 end is exclusive: it needs no demand for the new day.
+          const completeDays = Math.round((
+            Date.parse(`${endDate}T00:00:00Z`) -
+            Date.parse(`${firstDate}T00:00:00Z`)) / 86400000);
+          return completeDays + (finalEnd.slice(11, 16) === '00:00' ? 0 : 1);
         }
 
         function scheduleTableFields(schedule) {
@@ -2436,15 +2448,15 @@
           const noticeLines = [];
           renderMonthlySummary(result, periodComparison, winner);
           if (periodComparison) {
-            monthlyColPeriod.textContent = 'Startdatum';
-            monthlyColEnd.textContent = 'Slutdatum';
+            monthlyColPeriod.textContent = 'Första arbetsdag';
+            monthlyColEnd.textContent = 'Sista arbetsdag';
             monthlyColStartTime.textContent = 'Start/dag';
             monthlyColEndTime.textContent = 'Slut/dag';
             monthlyColPrimary.textContent = 'Ford.timmar (q50)';
             monthlyColSecondary.textContent = 'Extra km';
           } else {
-            monthlyColPeriod.textContent = 'Startdatum';
-            monthlyColEnd.textContent = 'Slutdatum';
+            monthlyColPeriod.textContent = 'Första arbetsdag';
+            monthlyColEnd.textContent = 'Sista arbetsdag';
             monthlyColStartTime.textContent = 'Start/dag';
             monthlyColEndTime.textContent = 'Slut/dag';
             monthlyColPrimary.textContent =
@@ -2521,6 +2533,7 @@
               const stats = statsById[schedule.schedule_id];
               const fields = scheduleTableFields(schedule);
               const tr = document.createElement('tr');
+              tr.dataset.scheduleId = schedule.schedule_id || '';
               const failed = stats?.hard_failures?.length;
               if (failed) tr.classList.add('disqualified');
 
@@ -2579,6 +2592,7 @@
             });
           const periodRows = () => (periodComparison?.periods || []).map(period => {
             const tr = document.createElement('tr');
+            tr.dataset.scheduleId = period.best_schedule?.schedule_id || '';
             if (period.status === 'no_viable') tr.classList.add('disqualified');
             if (period.status === 'best_period') tr.classList.add('best-period');
             else if (period.best_sumo_verified) tr.classList.add('sumo-verified');
@@ -2633,12 +2647,492 @@
           document.body.classList.add('monthly-results-open');
           document.getElementById('map').setAttribute('aria-hidden', 'true');
           monthlyResults.focus();
+          prepareDelayProfile(result, boundary);
         }
+
+        // ── Fördelning av extra restid ────────────────────────────────────
+        //
+        // The table ranks on added vehicle-hours, which is a SUM: it cannot
+        // tell ten thousand drivers losing four seconds from two hundred
+        // losing three minutes, and those are different closures to live
+        // next to. The seconds behind that sum exist per vehicle — the
+        // ranking builds them and throws them away — so the server replays
+        // the same detour costing for the two best dates and returns the
+        // distribution. Same measure as the ranking, same archives, and the
+        // server refuses to publish a curve whose totals do not reproduce
+        // the ranked cost.
+        function svgEl(name, attrs = {}) {
+          const node = document.createElementNS(SVG_NS, name);
+          for (const [key, value] of Object.entries(attrs)) {
+            node.setAttribute(key, value);
+          }
+          return node;
+        }
+
+        function delayCandidateLabel(candidate) {
+          const window = `${candidate.daily_start}–${candidate.daily_end}`;
+          return candidate.day_count > 1
+            ? `${candidate.first_work_date} … ${candidate.period_end} ${window}`
+            : `${candidate.first_work_date} ${window}`;
+        }
+
+        function prepareDelayProfile(result, boundary) {
+          // Tied to the search being displayed: a stored profile belongs to
+          // one search_id, and showing an older one beside a new result is
+          // the same class of lie as a stale scenario on the map.
+          delayProfileSearchId = result.search_id || null;
+          delayProfileChart.hidden = true;
+          delayProfileTable.hidden = true;
+          delayProfileTableBtn.textContent = 'Visa tabell';
+          const usable = Boolean(delayProfileSearchId)
+            && boundary.ui_exposure_allowed !== false;
+          delayProfile.hidden = !usable;
+          if (!usable) return;
+          delayProfileBtn.disabled = false;
+          delayProfileBtn.textContent = 'Visa diagram';
+          delayProfileNote.textContent =
+            'Hur många fordon som får hur mycket extra restid av omvägen, '
+            + 'för de två bäst rankade datumen. Samma mått som rangordningen: '
+            + 'billigaste lagliga väg med avstängningen jämfört med utan, i '
+            + 'friflöde. Ingen kö- eller trängselfördröjning ingår.';
+          // A finished replay is already on disk for most searches; asking
+          // for it costs one GET and saves the user a button press.
+          loadDelayProfile({ start: false });
+        }
+
+        async function loadDelayProfile({ start }) {
+          if (!delayProfileSearchId || delayProfilePolling) return;
+          const searchId = delayProfileSearchId;
+          const url = '/api/monthly_search/delay_profile?search_id='
+            + encodeURIComponent(searchId);
+          try {
+            if (start) {
+              delayProfilePolling = true;
+              delayProfileBtn.disabled = true;
+              delayProfileBtn.textContent = 'Beräknar…';
+              const started = await fetch(
+                '/api/monthly_search/delay_profile',
+                { method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ search_id: searchId }) });
+              if (!started.ok) {
+                const body = await started.json().catch(() => ({}));
+                throw new Error(body.error || 'kunde inte starta beräkningen');
+              }
+            }
+            for (;;) {
+              const res = await fetch(url);
+              if (!res.ok) throw new Error('statusfel ' + res.status);
+              const state = await res.json();
+              // The panel may have moved on to another search while this
+              // loop was waiting; its answer is no longer about what is
+              // on screen.
+              if (delayProfileSearchId !== searchId) return;
+              if (state.status === 'done') {
+                renderDelayProfile(state.profile);
+                return;
+              }
+              if (state.status === 'error') {
+                delayProfileNote.textContent = 'Fördelningen kunde inte '
+                  + 'beräknas: ' + (state.error || 'okänt fel');
+                return;
+              }
+              if (state.status !== 'running') return;   // idle: wait for a click
+              delayProfilePolling = true;
+              delayProfileBtn.disabled = true;
+              delayProfileBtn.setAttribute('aria-busy', 'true');
+              delayProfileBtn.textContent = state.total
+                ? `Beräknar… (${state.step}/${state.total})`
+                : `Beräknar… (${state.elapsed_s || 0}s)`;
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          } catch {
+            delayProfileNote.textContent =
+              'Fördelningen kunde inte hämtas. Kontrollera den lokala servern '
+              + 'och försök igen.';
+          } finally {
+            delayProfilePolling = false;
+            delayProfileBtn.disabled = false;
+            delayProfileBtn.removeAttribute('aria-busy');
+            if (delayProfileChart.hidden) {
+              delayProfileBtn.textContent = 'Visa diagram';
+            }
+          }
+        }
+
+        function delayProfileSeries(profile) {
+          const variants = profile.variants || ['q50'];
+          const hasDirectionBand = profile.direction_sensitivity_evaluated === true
+            && ['q10', 'q50', 'q90'].every(name => variants.includes(name));
+          return (profile.candidates || []).filter(
+            candidate => candidate.variants?.q50?.vehicles?.length
+          ).map((candidate, index) => {
+            const mid = candidate.variants.q50.vehicles;
+            const columns = variants
+              .map(name => candidate.variants[name]?.vehicles)
+              .filter(Boolean);
+            return {
+              scheduleId: candidate.schedule_id,
+              label: delayCandidateLabel(candidate),
+              color: DELAY_SERIES[index % DELAY_SERIES.length],
+              mid,
+              hasDirectionBand,
+              // The band is the q10/q90 direction-split spread, not styling:
+              // three plausible directional assignments, drawn as the range
+              // they disagree over with the central one on top.
+              low: mid.map((_, bin) => Math.min(
+                ...columns.map(column => column[bin] || 0))),
+              high: mid.map((_, bin) => Math.max(
+                ...columns.map(column => column[bin] || 0))),
+              affected: candidate.variants.q50.vehicles_affected,
+              noDetour: candidate.variants.q50.vehicles_no_detour,
+              hours: candidate.variants.q50.added_vehicle_hours,
+            };
+          });
+        }
+
+        function delayProfileVisibleBinCount(profile, series) {
+          const bins = profile.bins || [];
+          if (!bins.length) return 0;
+          const overflowIndex = bins.length - 1;
+          let lastNonEmpty = 0;
+          series.forEach(item => item.high.forEach((value, index) => {
+            if (value > 0) lastNonEmpty = Math.max(lastNonEmpty, index);
+          }));
+          // An occupied overflow bin means the long tail is real and the
+          // complete axis must remain visible.
+          if (lastNonEmpty >= overflowIndex) return bins.length;
+
+          // Empty five-minute tails crush the useful first seconds into the
+          // y-axis. Keep one bin beyond the data, show at least one minute,
+          // and finish on a whole-minute tick. No occupied bin is removed.
+          const lastFinite = Math.max(0, overflowIndex - 1);
+          let visibleEnd = Math.min(
+            Math.max(lastNonEmpty + 1, Math.min(4, lastFinite)), lastFinite);
+          while (visibleEnd < lastFinite
+                 && Number(bins[visibleEnd]?.to_s) % 60 !== 0) {
+            visibleEnd += 1;
+          }
+          return visibleEnd + 1;
+        }
+
+        function delayProfileUncertaintyLabel(profile) {
+          return profile.direction_sensitivity_evaluated === true
+            && ['q10', 'q50', 'q90'].every(
+              name => (profile.variants || []).includes(name))
+            ? 'linje = q50 · band = q10–q90 (riktningssplit)'
+            : 'endast q50 · riktningskänslighet inte utvärderad';
+        }
+
+        function niceCeiling(value) {
+          if (value <= 5) return 5;
+          const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+          return Math.ceil(value / (magnitude / 2)) * (magnitude / 2);
+        }
+
+        function renderDelayProfile(profile) {
+          const allBins = profile.bins || [];
+          const allSeries = delayProfileSeries(profile);
+          if (!allBins.length || !allSeries.length) return;
+          const visibleCount = delayProfileVisibleBinCount(profile, allSeries);
+          const bins = allBins.slice(0, visibleCount);
+          const series = allSeries.map(item => ({
+            ...item,
+            mid: item.mid.slice(0, visibleCount),
+            low: item.low.slice(0, visibleCount),
+            high: item.high.slice(0, visibleCount),
+          }));
+          const axisIsTrimmed = visibleCount < allBins.length;
+          delayProfileChart.hidden = false;
+          delayProfileBtn.textContent = 'Uppdatera diagram';
+
+          delayProfileLegend.replaceChildren(...series.map(item => {
+            const key = document.createElement('span');
+            key.className = 'key';
+            const stroke = document.createElement('span');
+            stroke.className = 'stroke';
+            stroke.style.background = item.color;
+            const text = document.createElement('span');
+            // Untrusted-by-habit: dates and windows come from a payload, so
+            // they are inserted as text, never as markup.
+            text.textContent = item.label;
+            key.append(stroke, text);
+            return key;
+          }), (() => {
+            const hint = document.createElement('span');
+            hint.className = 'key';
+            hint.textContent = delayProfileUncertaintyLabel(profile);
+            return hint;
+          })());
+
+          const width = 680, height = 240;
+          const left = 46, right = 14, top = 16, bottom = 38;
+          const plotWidth = width - left - right;
+          const plotHeight = height - top - bottom;
+          const maxValue = niceCeiling(Math.max(1, ...series.flatMap(
+            item => item.high)));
+          const x = (bin) => left + (bins.length === 1 ? plotWidth / 2
+            : bin * plotWidth / (bins.length - 1));
+          const y = (value) => top + plotHeight - (value / maxValue) * plotHeight;
+
+          const svg = svgEl('svg', {
+            viewBox: `0 0 ${width} ${height}`,
+            role: 'img',
+            'aria-label': 'Antal fordon per intervall av extra restid för '
+              + series.map(item => item.label).join(' och '),
+          });
+
+          // Gridlines first, hairline and recessive, so the data sits on top.
+          for (let step = 0; step <= 4; step += 1) {
+            const value = maxValue * step / 4;
+            svg.append(svgEl('line', {
+              class: 'axis', x1: left, x2: width - right,
+              y1: y(value), y2: y(value),
+              opacity: step === 0 ? 1 : 0.45,
+            }));
+            const label = svgEl('text', {
+              class: 'tick-label', x: left - 6, y: y(value) + 3,
+              'text-anchor': 'end',
+            });
+            label.textContent = sv(Math.round(value));
+            svg.append(label);
+          }
+          bins.forEach((bin, index) => {
+            const isMinute = bin.to_s != null && bin.to_s % 60 === 0;
+            const detailedAxis = bins.length <= 8;
+            // The overflow bucket always gets its label; a whole-minute tick
+            // immediately before it would print "5 min" under "> 5 min".
+            const crowdsOverflow = index >= bins.length - 2;
+            if (index === 0 || index === bins.length - 1 || detailedAxis) {
+              // always labelled
+            } else if (!isMinute || crowdsOverflow) { return; }
+            const label = svgEl('text', {
+              class: 'tick-label', x: x(index), y: height - bottom + 14,
+              'text-anchor': index === bins.length - 1 ? 'end'
+                : index === 0 ? 'start' : 'middle',
+            });
+            label.textContent = index === 0 ? '0 s'
+              : bin.to_s == null ? bin.label
+                : bin.to_s < 60 ? `${bin.to_s} s`
+                : `${bin.to_s / 60} min`;
+            svg.append(label);
+          });
+          const axisTitle = svgEl('text', {
+            class: 'axis-title', x: left + plotWidth / 2, y: height - 6,
+            'text-anchor': 'middle',
+          });
+          axisTitle.textContent = 'extra restid per fordon (omväg, friflöde)';
+          svg.append(axisTitle);
+          const yTitle = svgEl('text', {
+            class: 'axis-title', x: left - 6, y: top - 5, 'text-anchor': 'end',
+          });
+          yTitle.textContent = 'fordon';
+          svg.append(yTitle);
+
+          series.forEach(item => {
+            if (item.hasDirectionBand) {
+              const forward = item.high.map((value, bin) =>
+                `${x(bin)},${y(value)}`).join(' L ');
+              const back = item.low.map((value, bin) =>
+                `${x(bin)},${y(value)}`).reverse().join(' L ');
+              svg.append(svgEl('path', {
+                d: `M ${forward} L ${back} Z`,
+                fill: item.color, 'fill-opacity': 0.1, stroke: 'none',
+              }));
+            }
+            svg.append(svgEl('polyline', {
+              points: item.mid.map((value, bin) =>
+                `${x(bin)},${y(value)}`).join(' '),
+              fill: 'none', stroke: item.color, 'stroke-width': 2,
+              'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+            }));
+          });
+
+          // One direct label per series — its peak. A number on every point
+          // is unreadable; the crosshair and the table carry the rest.
+          const usedPeaks = [];
+          series.forEach(item => {
+            const peak = item.mid.indexOf(Math.max(...item.mid));
+            if (peak < 0 || !item.mid[peak]) return;
+            // Both series usually peak in the same bucket — very often the
+            // "0 s" one, because most affected drivers have a free parallel
+            // street. Stack the second label instead of printing it on top
+            // of the first, and push a label off the left axis rather than
+            // letting it sit on the y-tick numbers.
+            const stacked = usedPeaks.filter(used => used === peak).length;
+            usedPeaks.push(peak);
+            const nearLeft = peak < 3;
+            const label = svgEl('text', {
+              class: 'peak-label',
+              x: x(peak) + (nearLeft ? 6 : 0),
+              y: Math.max(top + 9,
+                          y(item.mid[peak]) - 8 - stacked * 13),
+              'text-anchor': peak > bins.length - 4 ? 'end'
+                : nearLeft ? 'start' : 'middle',
+            });
+            label.textContent = sv(item.mid[peak]);
+            svg.append(label);
+          });
+
+          const crosshair = svgEl('line', {
+            class: 'axis', x1: 0, x2: 0, y1: top, y2: top + plotHeight,
+            opacity: 0, 'stroke-width': 1,
+          });
+          svg.append(crosshair);
+          const dots = series.map(item => {
+            const dot = svgEl('circle', {
+              r: 4, fill: item.color, stroke: 'var(--panel)',
+              'stroke-width': 2, opacity: 0,
+            });
+            svg.append(dot);
+            return dot;
+          });
+
+          const tip = document.createElement('div');
+          tip.id = 'delay-profile-tip';
+          delayProfilePlot.replaceChildren(svg, tip);
+
+          const hit = svgEl('rect', {
+            x: left, y: top, width: plotWidth, height: plotHeight,
+            fill: 'transparent',
+          });
+          svg.append(hit);
+
+          const showAt = (index, clientX) => {
+            crosshair.setAttribute('opacity', 0.9);
+            crosshair.setAttribute('x1', x(index));
+            crosshair.setAttribute('x2', x(index));
+            dots.forEach((dot, order) => {
+              dot.setAttribute('opacity', 1);
+              dot.setAttribute('cx', x(index));
+              dot.setAttribute('cy', y(series[order].mid[index]));
+            });
+            const head = document.createElement('div');
+            head.className = 'tip-head';
+            head.textContent = bins[index].label + ' extra restid';
+            const rows = series.map(item => {
+              const row = document.createElement('div');
+              row.className = 'tip-row';
+              const stroke = document.createElement('span');
+              stroke.className = 'stroke';
+              stroke.style.background = item.color;
+              const value = document.createElement('b');
+              value.textContent = sv(item.mid[index]);
+              const name = document.createElement('span');
+              name.textContent = `fordon · ${item.label}`;
+              row.append(stroke, value, name);
+              return row;
+            });
+            tip.replaceChildren(head, ...rows);
+            tip.style.display = 'block';
+            const box = delayProfilePlot.getBoundingClientRect();
+            const offset = clientX - box.left;
+            tip.style.left = Math.min(
+              Math.max(offset + 12, 0), box.width - tip.offsetWidth - 4) + 'px';
+            tip.style.top = '4px';
+          };
+          const hide = () => {
+            crosshair.setAttribute('opacity', 0);
+            dots.forEach(dot => dot.setAttribute('opacity', 0));
+            tip.style.display = 'none';
+          };
+          // The reader aims at a delay bucket, never at a 2px line: snap to
+          // the nearest bin across the whole plot rather than hit-testing
+          // the curve itself.
+          hit.addEventListener('pointermove', (event) => {
+            const box = svg.getBoundingClientRect();
+            const scale = width / box.width;
+            const local = (event.clientX - box.left) * scale;
+            const index = Math.round(
+              (local - left) / plotWidth * (bins.length - 1));
+            showAt(Math.min(Math.max(index, 0), bins.length - 1),
+                   event.clientX);
+          });
+          hit.addEventListener('pointerleave', hide);
+
+          const table = document.createElement('table');
+          const head = document.createElement('tr');
+          ['Extra restid', ...series.map(item => item.label)]
+            .forEach(text => {
+              const cell = document.createElement('th');
+              cell.textContent = text;
+              cell.scope = 'col';
+              head.append(cell);
+            });
+          table.append(head);
+          bins.forEach((bin, index) => {
+            if (!series.some(item => item.mid[index])) return;
+            const row = document.createElement('tr');
+            const name = document.createElement('td');
+            name.textContent = bin.label;
+            row.append(name);
+            series.forEach(item => {
+              const cell = document.createElement('td');
+              cell.textContent = sv(item.mid[index]);
+              row.append(cell);
+            });
+            table.append(row);
+          });
+          if (series.some(item => item.noDetour)) {
+            const row = document.createElement('tr');
+            const name = document.createElement('td');
+            name.textContent = 'utan omväg (diskvalificerande)';
+            row.append(name);
+            series.forEach(item => {
+              const cell = document.createElement('td');
+              cell.textContent = sv(item.noDetour);
+              row.append(cell);
+            });
+            table.append(row);
+          }
+          delayProfileTable.replaceChildren(table);
+
+          // Connect each curve to its own row in the table below, so "the two
+          // best dates" is something the reader can see rather than infer:
+          // the table is in CALENDAR order, and the best dates are wherever
+          // in it they happen to fall.
+          monthlyResultsBody.querySelectorAll('.series-dot')
+            .forEach(dot => dot.remove());
+          series.forEach(item => {
+            if (!item.scheduleId) return;
+            const row = monthlyResultsBody.querySelector(
+              `tr[data-schedule-id="${CSS.escape(item.scheduleId)}"]`);
+            const cell = row && row.firstElementChild;
+            if (!cell) return;
+            const marker = document.createElement('span');
+            marker.className = 'series-dot';
+            marker.style.background = item.color;
+            marker.title = 'Ritad i diagrammet ovan';
+            cell.prepend(marker);
+          });
+
+          const totals = series.map(item =>
+            `${item.label}: ${sv(item.affected)} berörda fordon, `
+            + `${Number(item.hours).toLocaleString('sv-SE',
+                { maximumFractionDigits: 2 })} fordonstimmar`);
+          delayProfileNote.textContent = totals.join(' · ')
+            + '. Stapeln "0 s" är fordon som korsar avstängningen men har en '
+            + 'gratis parallellgata — kostnaden ligger i svansen. '
+            + delayProfileUncertaintyLabel(profile) + '.'
+            + (axisIsTrimmed
+              ? ' Tomma slutintervall på x-axeln är avkortade.' : '');
+        }
+
+        delayProfileBtn.addEventListener('click',
+          () => loadDelayProfile({ start: true }));
+        delayProfileTableBtn.addEventListener('click', () => {
+          delayProfileTable.hidden = !delayProfileTable.hidden;
+          delayProfileTableBtn.setAttribute(
+            'aria-expanded', String(!delayProfileTable.hidden));
+          delayProfileTableBtn.textContent = delayProfileTable.hidden
+            ? 'Visa tabell' : 'Dölj tabell';
+        });
 
         // Exact-schedule handoff: the loaded scenario is built from the
         // schedule's OWN intervals, never re-derived. If the live demand
         // does not cover the schedule's dates it is recalibrated first via
-        // the ordinary "Byt dag" pipeline (the honest ~6 min/day cost),
+        // the ordinary "Byt dag" pipeline (whose duration depends on the
+        // number of days and already-built demand),
         // then the closure runs as a normal windowed scenario.
         async function loadMonthlySchedule(schedule, btn) {
           const edges = (lastMonthlySpec &&
@@ -2650,10 +3144,7 @@
           }
           const source = lastMonthlySpec?.source || monthlySource;
           const firstDate = intervals[0].start_time.slice(0, 10);
-          const lastDate = intervals[intervals.length - 1]
-            .start_time.slice(0, 10);
-          const spanDays = Math.round(
-            (Date.parse(lastDate) - Date.parse(firstDate)) / 86400000) + 1;
+          const spanDays = scheduleCalendarSpanDays(intervals);
           // Interactive load recalibrates via the standard demand path,
           // which is capped at 7 days. A longer winning schedule is still a
           // valid RECOMMENDATION — it just can't be played back as an
@@ -2677,8 +3168,8 @@
             if (!covered) {
               if (!confirm(`Kartan är kalibrerad för ${currentSimDate} ` +
                   `(${currentSimSource === 'forecast' ? 'prognos' : 'historik'}). ` +
-                  `Kalibrera om för ${firstDate} (${days} dag(ar), ` +
-                  `~${estimatedMinutes(days)} min) och ladda schemat?`)) return;
+                  `Kalibrera om för ${firstDate} (${days} dag(ar)) och ` +
+                  'ladda schemat? Tiden beror på antal dagar och återanvända data.')) return;
               btn.textContent = 'Kalibrerar…';
               rememberPendingRecal(firstDate, source, days);
               await requestRecalibration(firstDate, source, days, {
@@ -2848,18 +3339,19 @@
           const band = spec.permitted_daily_band;
           const start = monthlyBandMinutes(band.earliest_start);
           const end = monthlyBandMinutes(band.latest_end);
-          if (end <= start) {
-            return 'Tidsbandet måste ha en positiv längd — sätt sluttiden '
-              + 'efter starttiden, eller kryssa i Heldag.';
+          if (end === start) {
+            return 'Tidsbandet måste ha en positiv längd — välj olika '
+              + 'start- och sluttider, eller kryssa i Heldag.';
           }
+          const bandDuration = end > start ? end - start : end + 1440 - start;
           // Work distributes across up to max_consecutive_start_days days,
           // each day's closure bounded by the band — so the necessary
           // condition is total work ≤ days × band length.
-          const capacity = (end - start) * spec.max_consecutive_start_days;
+          const capacity = bandDuration * spec.max_consecutive_start_days;
           if (spec.required_work_minutes > capacity) {
             return `Arbetstiden (${spec.required_work_minutes / 60} h) ryms `
               + `inte i ${spec.max_consecutive_start_days} dag(ar) × `
-              + `${(end - start) / 60} h tidsband. Vidga bandet (eller Heldag), `
+              + `${bandDuration / 60} h tidsband. Vidga bandet (eller Heldag), `
               + 'öka dagar i följd, eller minska arbetstiden.';
           }
           return null;
@@ -3137,7 +3629,7 @@
             suggestJobRunning = false;
             monthlyJobRunning = false;
             btnRun.textContent = 'Simulera avstängning';
-            btnSuggestRun.textContent = 'Sök bästa tid';
+            btnSuggestRun.textContent = 'Sök lämplig tid';
             btnMonthlyRun.textContent = 'Sök arbetsperiod';
             refreshCloseUI();
           } catch (e) {
@@ -3151,8 +3643,8 @@
           }
         })();
 
-        // The recalibration takes ~6 min — a single held-open fetch for
-        // that long is fragile (browser timeout, closed tab, sleeping
+        // Recalibration can take long enough that a single held-open fetch is
+        // fragile (browser timeout, closed tab, sleeping
         // laptop, dropped wifi all abandon the CLIENT while the SERVER
         // keeps computing regardless). This is what actually happened
         // during testing: a job outlived the request that started it and
@@ -3180,7 +3672,7 @@
           const status = await Polling.pollStatus('/api/recalibrate/status', {
             pollMs: 4000,
             onProgress: current => {
-              btnDayRun.textContent = `Kalibrerar om… (${current.elapsed_s}s)`;
+              btnDayRun.textContent = 'Kalibrerar om…';
               showRecalibrationProgress(current.elapsed_s || 0);
               if (current.status === 'cancelling') {
                 recalProgressLabel.textContent = 'Avbryter simulering…';
@@ -3302,7 +3794,7 @@
               refreshCloseUI();
               btnDayRun.disabled = true;
               btnDayCancel.disabled = false;
-              btnDayRun.textContent = `Kalibrerar om… (${status.elapsed_s}s)`;
+              btnDayRun.textContent = 'Kalibrerar om…';
               // The poller now GIVES UP after five consecutive failures
               // instead of retrying forever, which is right — but the
               // controls have to come back when it does. Without this,
@@ -3316,7 +3808,7 @@
                 hideRecalibrationProgress();
                 btnDayRun.disabled = false;
                 btnDayCancel.disabled = false;
-                btnDayRun.textContent = 'Räkna om (~6 min)';
+                updateDayRunLabel();
               }
             } else if (status.status === 'done' && status.date !== currentSimDate &&
                       pendingRecalMatches(status)) {

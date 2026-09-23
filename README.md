@@ -26,28 +26,27 @@ repeats review until approved or a real stop condition is reached. See
 3. **Simulate** traffic after incidents / road closures with SUMO (done —
    calibrated demand, closure rerouting incl. time-windowed closures, Monte
    Carlo confidence, multi-day/week scenarios, scenario mode in the web app)
-4. **Suggest** the least-disruptive time to close a road (implemented — the
-   default proxy-ranked search is fast; `--exhaustive` evaluates every
-   feasible window before making a global-best claim)
+4. **Compare** closure times and multi-day work periods using a calculated
+   detour cost and SUMO checks for selected candidates. Current monthly
+   results are provisional decision support, not a globally validated optimum.
 
-![Web app](plots/daily_profile.png)
+![Average measured daily traffic profile for the six sensors](plots/daily_profile.png)
 
 ## Scope
 
 The canvas is Gothenburg's **inner city** (river → Krokslätt, Vallgraven →
 Gårda; ~7 100 directed edges) — not the whole city, and no longer just the
 two original sensor clusters (that scope was superseded 2026-07-05). Only 6
-sensors exist, so accuracy is a **gradient**: hard/measured near a sensor,
-prior-driven further away. Every edge carries a `confidence` value (0–1) —
-`exp(-d²/2σ²)`, with σ fitted from real leave-one-station-out validation
-(currently **119.5 m** — the value actually in the shipped `network.geojson`;
-144.0 m was the earlier fit, before the sensor-crossing baseline rule changed
-the demand and LOSO was re-run), not a guessed constant — that decays with
-distance from the nearest sensor. The web app shows it on hover; simulation
-results are presented with it rather than a false claim of citywide accuracy.
+sensors exist, so the map's `confidence` value (0–1) is a distance-based
+spatial support indicator, `exp(-d²/2σ²)`, that fades away from the nearest
+sensor. It is not a calibrated probability of correctness. The latest
+six-station leave-one-station-out check for the current model failed its fixed
+hourly GEH<5 guideline: 71/143 cells (49.7%) versus the required >85%.
+The app shows the spatial indicator and the validation warning rather than
+claiming citywide accuracy; see `IMPROVEMENT_PLAN.md` for the dated evidence.
 
-Confidence describes how well a road that carries simulated traffic is pinned
-down; it says nothing about whether a road carries any. Under the baseline rule
+The support index encodes proximity to a sensor for a road that carries simulated
+traffic; it says nothing about whether a road carries any. Under the baseline rule
 only sensor-crossing paths are calibrated, and most inner-city streets end up
 with no flow at any quarter — 5 643 of 7 147 edges on the baseline shipped
 2026-09-06. The map now draws those separately ("Ingen trafik i detta

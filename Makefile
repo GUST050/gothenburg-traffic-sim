@@ -55,6 +55,11 @@ scenario:
 	python3 run_scenario.py
 	python3 run_scenario.py --close 60786979_3575001205_0 1455801464_18241874_0
 
+# Rebuild the per-vehicle added-travel-time distribution for the two cheapest
+# candidates of the newest finished monthly search. This starts no SUMO.
+delay-profile:
+	python3 tools/build_closure_delay_profile.py
+
 # Frozen cross-date validation for the trusted 2025-09-16 release. The
 # evaluation date was not used to select the deployed through-share target.
 validate-temporal:

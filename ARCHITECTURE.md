@@ -2254,6 +2254,16 @@ days, both DST transitions, blackouts, overnight bands and the plan's
 creates up to 4096 duration patterns whose validity varies by position inside
 the window; it is REFUSED (`UnsupportedPreflightSpec`) rather than approximated.
 
+Independent-daily searches also accept an overnight daily band such as
+23:00–01:00. The work date anchors the interval start; the interval remains one
+unit through the following date and is never split at midnight. Every calendar
+date touched by the half-open interval must still be inside the permitted range,
+allowed by the weekday/DST policy and absent from blackouts. The canonical
+previous/current/next-day demand archive covers that unit's warm-up, closure and
+recovery envelope. Browser capacity validation uses the wrapped duration (two
+hours for 23:00–01:00), while equal start/end clocks remain invalid unless the
+explicit 00:00–24:00 Heldag control is selected.
+
 `POST /api/monthly_search/preflight` exposes it and is strictly read-only: it
 builds no demand, starts no SUMO, creates no job, spec file, run, cache or
 evidence artifact, and takes no simulation lock — so an estimate can be
@@ -2431,6 +2441,35 @@ one-lane edge with equal length and speed have equal per-vehicle free-flow
 cost. Capacity-aware ranking requires a separately preregistered and validated
 volume-delay or DTA model; adding `numLanes` as an uncalibrated divisor would
 not be such a model and must not silently replace `closure_cost_v1`.
+
+**The result panel can expose the distribution behind that same objective.**
+`traffic_sim.analysis.delay_profile` replays the finished search's own demand
+archives and bins the per-vehicle extra free-flow travel time that
+`closure_cost_v1` sums. It is not a new SUMO metric. Before publication it
+reduces the replayed variant totals with the search's recorded objective and
+requires exact equality with the candidate's published vehicle-hours, added
+metres and affected-vehicle count. A q50-only search therefore draws one q50
+curve and explicitly says that direction sensitivity was not evaluated; only
+a three-variant search may draw a q10–q90 band.
+
+The replay is available through `POST`/`GET
+/api/monthly_search/delay_profile` and the local `make delay-profile` command.
+It writes `delay-profile.json` beside the search workspace, not inside its
+immutable `artifacts/` directory, and does not alter the result, ranking,
+finalists or claim boundary. Archive resolution uses the search's frozen
+demand release; a profile is refused when those inputs are missing or when
+the exact cost check fails. `traffic_sim/analysis/` is deliberately outside
+`deterministic_disruption.COSTING_SOURCES`, so adding this diagnostic does not
+invalidate the multi-hour daily-cost cache it reads.
+`traffic_sim.analysis.delay_profile_store` holds the schema, measure and
+stored-result identity checks using only the standard library. The GET
+endpoint verifies the succeeded result artifact's recorded SHA-256 and checks
+the displayed candidate ids, costs and per-variant counts against that result
+before showing a saved diagram, without scientific packages. A new replay
+requires the exact demand release named by the search and verifies its content
+key plus each pinned archive's manifest, output hashes and network identity;
+it refuses to scan for a substitute. Replaying still requires the simulation
+dependencies.
 
 The runtime closure rerouter is attached within 400 m of the closed edge for
 the production arm. A vehicle already beyond that neighbourhood when the

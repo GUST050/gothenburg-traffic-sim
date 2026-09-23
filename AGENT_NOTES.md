@@ -7,14 +7,14 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: q50-only implementation plus trimmed-route population and closure-throughput time-axis fixes are integrated; the cold November search completed successfully under the provisional policy.
-- Summary: In `/Users/gt/Documents/gs-project-q50-monthly` on `codex/q50-monthly`, production scores edgeData intervals and closures directly on SUMO's absolute clock. The cold search `ui-monthly-q50-cold-november-2027-v1` started without November demand and finished in 2,912.789 s.
-- Files changed: Existing q50 demand/cache/WCI/API/UI and route-window set, plus catalog qualification, benchmark, qualification/adoption tools, runtime verification tests and three append-only catalog evidence files.
-- Checks: The integrated tree passes the full suite with 6,893 passed, 44 skipped and 0 failed in 467.43 s; the conflict-focused suite passes 338 with 8 skipped. Regression coverage proves 11 pre-closure entries are excluded while 2 in-closure entries remain. Fresh source-sealed suite gates: 132 passed. Four cold pairs passed all arm gates at 5.31x weekday, 5.49x weekend, 5.54x holiday and 3.38x mixed; max vehicle delta 0.569%, max catalog RSS 1.30 GiB.
-- Decisions and evidence: Operational qualification is explicitly q50-only and has a narrow claim boundary; it is not a new general statistical performance claim. Independent review found and blocked a shallow runtime verifier, incomplete class/pool binding and unenforced source seals. Final v3 now recomputes the complete qualification from raw trials, build timing and current suite, requires exact canonical fixtures/pools, and requires/verifies every cited test plus validator/adopter source hash. `sumo/route_catalog_adoption.json` points to qualification v3, weekday `fbb84089cf34abb8cf9fcdce02fbca9d` and weekend `1c8248d388fec388dd82749b4beca1d9`; `configured_candidate_source()` returns `catalog` after full disk revalidation.
-- Blockers or risks: The pre-fix three-day result remains invalid. The cold result is valid decision support but not a release-approved global-best claim. Ignored runtime artifacts remain outside Git.
-- Suggested next action: Create the verified integration commit and fast-forward local `main`.
-- Actor notes: The user authorized committing all visible changes and placing the integrated result on local `main`; no push was requested.
+- Focus and status: Repository and desktop review fixes on `codex/cross-midnight-delay-profile` are locally verified; scientific release remains blocked by LOSO evidence.
+- Summary: Fixed the desktop copy and layout, overnight schedule day loading and labels, q50 chart values, saved-diagram result binding, pinned archive and network verification, and the diagnostic reduction of multi-variant costs. Saved diagrams remain readable through a standard-library-only path.
+- Files changed: UI in `web/`, cached-profile GET in `serve.py`, analysis in `traffic_sim/analysis/`, diagnostic/build tools, regression tests, README and architecture/current coordination notes. Existing simulation and catalog evidence has been preserved.
+- Checks: Full `/usr/bin/python3 -m pytest -q tests`: 6,946 passed, 52 skipped, 2 warnings in 847 s. Of the skips, 25 real-archive shared-context tests lack their external files. Eight JS test files, JS syntax, Python pylint and `git diff --check` pass. Browser checks found no horizontal overflow and rendered the saved two-candidate diagram; live GET returned `done`.
+- Decisions and evidence: No new SUMO or monthly search was launched. New profiles bind the verified result bytes, pinned release and demand archives; old saved profiles pass legacy result/cost matching. The six-fold LOSO result remains a failure at 71/143 (49.7%) against the fixed >85% guideline; details stay in `IMPROVEMENT_PLAN.md` and `runs/loso-current-v11-20260922-v2/`.
+- Blockers or risks: Scientific release approval remains blocked by the LOSO result. The 25 archive-backed tests cannot execute without their external demand files. A new profile replay requires the scientific packages in `requirements.txt`.
+- Suggested next action: Investigate LOSO generalization with a separate evidence plan, and restore the external archives before relying on the skipped shared-context tests.
+- Actor notes: Local server was restarted for read-only UI checks. No new simulation was run.
 <!-- CURRENT_HANDOFF_END -->
 
 ### Historical passage-speed handoff incorporated on 2026-09-21

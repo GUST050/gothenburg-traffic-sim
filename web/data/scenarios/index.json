@@ -1,5 +1,5 @@
 {
-  "demand_signature": "fc873d158dd808b6cc15",
+  "demand_signature": "10427b5a45b3e63eb399",
   "scenarios": [
     {
       "name": "baseline",
@@ -10,10 +10,10 @@
       "closure_integrity": null,
       "scenario_spec": {
         "scenario_id": "baseline",
-        "demand_build_id": "fc873d158dd808b6cc15",
+        "demand_build_id": "10427b5a45b3e63eb399",
         "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
-        "start_time": "2027-06-23T00:00:00",
-        "end_time": "2027-06-24T00:00:00",
+        "start_time": "2027-04-06T00:00:00",
+        "end_time": "2027-04-07T00:00:00",
         "closures": [],
         "simulation_mode": "meso",
         "seed_set": [
@@ -31,9 +31,9 @@
         "analysis_window": null,
         "schema_version": 1
       },
-      "demand_signature": "fc873d158dd808b6cc15",
-      "build_id": "fc873d158dd808b6cc15",
-      "demand_build_key": "a2bff340c39ea24d",
+      "demand_signature": "10427b5a45b3e63eb399",
+      "build_id": "10427b5a45b3e63eb399",
+      "demand_build_key": "d04af536b5d9f4dc",
       "uncertainty": {
         "method": "spatial_prior_x_exp_negative_mean_cv",
         "standard_deviation": "sample",
@@ -72,7 +72,7 @@
           "982996377_982996377_1"
         ]
       },
-      "window": "2027-06-23 00:00\u201324:00 \u00b7 Prognos"
+      "window": "2027-04-06 00:00\u201324:00 \u00b7 Prognos"
     }
   ]
 }

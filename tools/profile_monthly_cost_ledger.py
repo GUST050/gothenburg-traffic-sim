@@ -323,13 +323,12 @@ def _observe_resolver_activity(collector: io_phases.PhaseCollector):
 
         @wraps(original_init)
         def measured_init(instance, *args, **kwargs):
-            result = original_init(instance, *args, **kwargs)
+            original_init(instance, *args, **kwargs)
             started = time.perf_counter()
             collector.count("closure_resolver_instances")
             io_phases.mark_measurement_only(measurement_phase)
             io_phases.record_derived(
                 measurement_phase, time.perf_counter() - started)
-            return result
 
         @wraps(original_resolve)
         def measured_resolve(instance, edges, *args, **kwargs):

@@ -8,13 +8,13 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- WORKFLOW_CONTROL_START -->
 ## WORKFLOW_CONTROL
 
-- Mode: Implementation and verification.
-- Current focus: Integrate all q50/WCI/catalog, passage-calibration, simulation and UI changes on local `main`.
-- Status: COLD_MONTH_COMPLETE; source commits integrated; focused checks 338 passed and full suite 6,893 passed with zero failures.
-- Suggested next action: Commit the verified merge and fast-forward local `main`.
+- Mode: Repository review and branch delivery.
+- Current focus: Reviewed code and desktop workflows for Simulera datum and Vägavstängning on `codex/cross-midnight-delay-profile`.
+- Status: REVIEW_FIXES_VERIFIED; full Python suite, JS tests and pylint pass. Scientific release remains blocked by LOSO evidence.
+- Suggested next action: Investigate the failed LOSO generalization with a separate, preregistered evidence plan; restore external archives before relying on the skipped shared-context tests.
 - Eligible actors: Any capable actor.
-- Safety boundary: Preserve q50 calibration, canonical seeds, catalog provenance and all health/release gates. Do not include ignored runtime caches and do not push without a separate request.
-- Updated: 2026-09-21.
+- Safety boundary: Preserve the existing simulation/evidence work and the failed 2026-09-22 LOSO result (71/143, 49.7%; see `IMPROVEMENT_PLAN.md`). Commit and push the reviewed branch as requested; do not publish a release claim or launch a new SUMO campaign.
+- Updated: 2026-09-23.
 <!-- WORKFLOW_CONTROL_END -->
 
 ### Historical passage-speed workflow snapshot incorporated on 2026-09-21
@@ -707,16 +707,16 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### MONTHLY-Q50-2026-09-20 — Median-only monthly execution
+### REVIEW-DELIVERY-2026-09-23 — Simulera datum and Vägavstängning
 
-- Status: IMPLEMENTED_FULL_SUITE_VERIFIED; current route catalog adopted; cold November month completed under provisional policy.
-- Objective and scope: User approved removing q10/q90 from current monthly execution.
-- Completion outcome: q50 implementation and closure-throughput time-axis repair full-suite verified; cold-run population bug fixed with strict real-SUMO canary evidence; new catalog qualified and active; cold November search completed in 48m32.789s.
-- Context or checkpoints: The cold October run built 31 archives, then failed its first pilot because a shortened SUMO horizon still received the full three-day route file. The fixed q50 catalog path passed four current cold classes at 3.38x-5.54x versus legacy. Historical tri-variant evidence remains distinct.
-- Primary files: `suggest_closure_time.py`, `traffic_sim/simulation/monthly_sumo.py`, their regression tests, plus the existing q50 demand/WCI changes.
-- Constraints and safety: No weaker calibration/health/release gates or expensive simulations.
-- Acceptance criteria: q50 throughout current chain; canonical seeds retained; scope-bound caches; explicit UI scope.
-- Useful checks: Integrated full suite 6,893 passed, 44 skipped, 0 failed in 467.43 s; conflict-focused suite 338 passed, 8 skipped. Closure time-axis focused set before integration: 570 passed. Catalog suite after review fixes: 58 passed; fresh source-sealed suite evidence: 132 passed. Cold November costed 1,625 schedules, SUMO-evaluated two finalists and completed without a hard failure.
+- Status: UI and review repairs verified locally; full suite passed. Scientific release remains blocked by LOSO evidence.
+- Objective and scope: Review the code and desktop program, repair in-scope UI and closure-analysis defects, verify the result, and deliver the reviewed branch.
+- Completion outcome: Desktop controls and saved diagrams render without overflow or fixed-minute promises. Overnight schedules request the required calendar days and label work dates accurately. The q50 chart uses q50 hours. Stored diagrams are checked against result identity and costs; new replays bind a pinned release, archive bytes and network bytes.
+- Context or checkpoints: Existing simulation and catalog evidence remains intact. The 2026-09-22 LOSO result is still below its gate; no new demand, SUMO or monthly search was started.
+- Primary files: `web/index.html`, `web/app.js`, `web/render.js`, `serve.py`, `traffic_sim/analysis/`, diagnostic and build tools, corresponding Python and JS tests, README and architecture notes.
+- Constraints and safety: Preserve the fixed validation and provenance gates; do not infer a global-best or release claim from provisional closure results.
+- Acceptance criteria: Desktop browser verification for both workflows and the saved result; no stale 6-minute text or 00:00–00:00 full-day tooltip; overnight and q50 labels correct; cached profile serves only its matching verified result; focused and full checks reported accurately.
+- Useful checks: `/usr/bin/python3 -m pytest -q tests`: 6,946 passed, 52 skipped, 2 warnings in 847 s. Of the skips, 25 real-archive tests lack external fixtures. Eight JS test files, JS syntax, Python pylint and `git diff --check` pass. Browser and live cached-profile GET render the saved diagram.
 <!-- ACTIVE_TASK_END -->
 
 ### Historical passage research task incorporated on 2026-09-21
