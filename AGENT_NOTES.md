@@ -7,14 +7,14 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: Repository and desktop review fixes on `codex/cross-midnight-delay-profile` are locally verified; scientific release remains blocked by LOSO evidence.
-- Summary: Fixed the desktop copy and layout, overnight schedule day loading and labels, q50 chart values, saved-diagram result binding, pinned archive and network verification, and the diagnostic reduction of multi-variant costs. Saved diagrams remain readable through a standard-library-only path.
-- Files changed: UI in `web/`, cached-profile GET in `serve.py`, analysis in `traffic_sim/analysis/`, diagnostic/build tools, regression tests, README and architecture/current coordination notes. Existing simulation and catalog evidence has been preserved.
-- Checks: Full `/usr/bin/python3 -m pytest -q tests`: 6,946 passed, 52 skipped, 2 warnings in 847 s. Of the skips, 25 real-archive shared-context tests lack their external files. Eight JS test files, JS syntax, Python pylint and `git diff --check` pass. Browser checks found no horizontal overflow and rendered the saved two-candidate diagram; live GET returned `done`.
-- Decisions and evidence: No new SUMO or monthly search was launched. New profiles bind the verified result bytes, pinned release and demand archives; old saved profiles pass legacy result/cost matching. The six-fold LOSO result remains a failure at 71/143 (49.7%) against the fixed >85% guideline; details stay in `IMPROVEMENT_PLAN.md` and `runs/loso-current-v11-20260922-v2/`.
-- Blockers or risks: Scientific release approval remains blocked by the LOSO result. The 25 archive-backed tests cannot execute without their external demand files. A new profile replay requires the scientific packages in `requirements.txt`.
-- Suggested next action: Investigate LOSO generalization with a separate evidence plan, and restore the external archives before relying on the skipped shared-context tests.
-- Actor notes: Local server was restarted for read-only UI checks. No new simulation was run.
+- Focus and status: GitHub presentation refresh verified locally after the reviewed desktop branch was pushed; scientific release is still unapproved.
+- Summary: The previous review fixed desktop layout and copy, overnight schedule loading, q50 diagrams and saved-result/archive verification. The current pass leads the README with Simulera datum and Vägavstängning, captions two genuine charts, and disables local-only actions on the hosted static home while keeping them available with a local API.
+- Files changed: README, current coordination summaries, static/local workspace cards in `web/index.html` and `web/app.js`, bundle pin test and Pages workflow comment. Historical validation files are preserved.
+- Checks: Previous full `/usr/bin/python3 -m pytest -q tests`: 6,946 passed, 52 skipped, 2 warnings in 847 s. This pass: 16 focused Python tests, eight JS test files, JS syntax and diff check pass; both README images and local links exist. Static browser shows disabled local cards and a guide with no console errors or overflow; live local browser enables them.
+- Decisions and evidence: Current public summaries omit numeric LOSO scores at the user's request while retaining the qualitative validation limitation. Exact historical results remain in research and evidence files. No new SUMO or monthly search was launched.
+- Blockers or risks: The held-out validation gate remains unmet. The 25 archive-backed tests could not execute without external demand files; a new profile replay needs the scientific packages in `requirements.txt`.
+- Suggested next action: Confirm the default-branch and Pages publication, then investigate model generalization separately.
+- Actor notes: Local server remains available for read-only UI checks.
 <!-- CURRENT_HANDOFF_END -->
 
 ### Historical passage-speed handoff incorporated on 2026-09-21

@@ -1,54 +1,49 @@
 # Gothenburg Traffic Simulation
 
-Traffic flow animation, ML forecasting and incident (road closure) simulation
-for Gothenburg's inner city. Six real traffic sensors, 15-minute vehicle
-counts for all of 2025, provided by Göteborgs Stad. Summer project at
-Chalmers (supervisor: Prof. Miroslaw Staron).
+An interactive traffic model for central Gothenburg, built as a Chalmers summer
+project with six traffic sensors and 15-minute counts supplied by Göteborgs
+Stad. Explore measured 2025 traffic, a 2027 forecast, and saved SUMO scenarios
+on the map. The local app also simulates chosen dates and analyses road
+closures.
 
-## Working with AI models
+[Explore the map and saved scenarios](https://gust050.github.io/gothenburg-traffic-sim/)
+· [Run the full app locally](#running)
+· [Read the architecture](ARCHITECTURE.md)
 
-The repository supports Codex, Claude and other models as interchangeable
-actors. Any capable actor may plan, implement, test or review; there is no fixed
-Sol/Luna routing or mandatory state machine. Start with `AGENTS.md`, then use
-the marked current blocks in `TASKS.md` and `AGENT_NOTES.md` for context.
-Historical role labels remain only for traceability.
+> The hosted map is static. New date simulations and closure analyses run on
+> your computer through `serve.py` and SUMO.
 
-For a bounded hands-off implementation loop, run `./ai-flow setup` once and
-then `./ai-flow "your task"`. It routes planning and review to Codex xhigh,
-implementation and repairs to Claude Opus high, runs configured checks, and
-repeats review until approved or a real stop condition is reached. See
-[`.ai-flow/README.md`](.ai-flow/README.md) for safety rules and configuration.
+## Main workflows
 
-## What it does
+| In the local app | What it does |
+| --- | --- |
+| **Simulera datum** | Build and view a traffic scenario for a selected date or a period of up to seven days. Runtime depends on the requested days and reusable demand data. |
+| **Vägavstängning** | Select roads and compare closure times or multi-day work periods. Candidate costs come from deterministic detour calculations, with SUMO checks for selected scenarios. Results remain provisional decision support. |
 
-1. **Animate** historical traffic on a real map of Gothenburg (done)
-2. **Forecast** normal flow with an ML model, exported as a 2027 forecast (done)
-3. **Simulate** traffic after incidents / road closures with SUMO (done —
-   calibrated demand, closure rerouting incl. time-windowed closures, Monte
-   Carlo confidence, multi-day/week scenarios, scenario mode in the web app)
-4. **Compare** closure times and multi-day work periods using a calculated
-   detour cost and SUMO checks for selected candidates. Current monthly
-   results are provisional decision support, not a globally validated optimum.
+The map also animates historical and forecast traffic. Its road-colour support
+index reflects sensor proximity and, for scenarios, variation across runs; it
+is not a measured probability of correctness. Held-out validation remains a
+limit on how confidently results can be used beyond the measured locations.
 
-![Average measured daily traffic profile for the six sensors](plots/daily_profile.png)
+![Average measured daily traffic profile for the six sensors, in vehicles per 15 minutes](plots/daily_profile.png)
+
+*Measured traffic follows different daily patterns at the six sensors. The
+chart shows the source data, not a simulation result or an app screenshot.*
 
 ## Scope
 
 The canvas is Gothenburg's **inner city** (river → Krokslätt, Vallgraven →
-Gårda; ~7 100 directed edges) — not the whole city, and no longer just the
-two original sensor clusters (that scope was superseded 2026-07-05). Only 6
-sensors exist, so the map's `confidence` value (0–1) is a distance-based
-spatial support indicator, `exp(-d²/2σ²)`, that fades away from the nearest
-sensor. It is not a calibrated probability of correctness. The latest
-six-station leave-one-station-out check for the current model failed its fixed
-hourly GEH<5 guideline: 71/143 cells (49.7%) versus the required >85%.
-The app shows the spatial indicator and the validation warning rather than
-claiming citywide accuracy; see `IMPROVEMENT_PLAN.md` for the dated evidence.
+Gårda; ~7,100 directed edges), not the whole city. Six sensors constrain the
+model directly. The map's `confidence` field is a distance-based spatial
+support index, `exp(-d²/2σ²)`; it does not measure the probability that a road's
+simulation is correct. The current held-out station check does not meet the
+project's validation guideline, so the app presents model results as
+provisional. The dated evidence is tracked in `IMPROVEMENT_PLAN.md`.
 
-The support index encodes proximity to a sensor for a road that carries simulated
-traffic; it says nothing about whether a road carries any. Under the baseline rule
-only sensor-crossing paths are calibrated, and most inner-city streets end up
-with no flow at any quarter — 5 643 of 7 147 edges on the baseline shipped
+The support index encodes proximity to a sensor for a road that carries
+simulated traffic; it says nothing about whether a road carries any. Under the
+baseline rule, only sensor-crossing paths are calibrated, and most inner-city
+streets end up with no flow at any quarter — 5 643 of 7 147 edges on the baseline shipped
 2026-09-06. The map now draws those separately ("Ingen trafik i detta
 scenario"), because a street that is empty all window and one that is empty at
 this instant are different claims. The map states the observation, not the
@@ -60,6 +55,16 @@ no sensor-crossing route reaches a given street.
 | Götaplatsen (near Viktor Rydbergsgatan) | 133, 134, 2276 | Single direction |
 | Scandinavium | 1074, 1076 | Single direction |
 | Scandinavium | 107 | Genuinely two-way (both directions measured) |
+
+<details>
+<summary>View sensor data coverage by month</summary>
+
+![Percentage of missing observations by month and sensor in 2025](plots/missing_heatmap.png)
+
+*The source series are mostly complete; the chart shows where observations
+are missing rather than filling them with simulated values.*
+
+</details>
 
 Direction is **not** recoverable from the delivered two-way totals for the
 5 single-direction sensors — every "Total" value is treated as a sum of both
@@ -86,21 +91,22 @@ the same interface without touching map/render code.
 
 ## Running
 
-**Bara titta på kartan?** Den publicerade versionen kräver ingen dator av
-dig alls: <https://gust050.github.io/gothenburg-traffic-sim/>. Karta,
-2025 års historik, 2027-prognosen och de färdigbyggda scenarierna ligger
-där (`.github/workflows/pages.yml` publicerar `web/` vid varje push till
-`main`). Att köra *nya* avstängningar kräver fortfarande en lokal server —
-den knappen döljer sig själv på den publicerade sidan, eftersom det inte
-finns någon simulator bakom den.
+The [hosted map](https://gust050.github.io/gothenburg-traffic-sim/) shows
+history, forecasts and saved scenarios. To simulate a new date or road closure,
+run the app locally with its Python API and SUMO. The hosted page labels and
+disables actions that need a simulator because GitHub Pages only serves static
+files.
 
 ```bash
-pip install -r requirements.txt
+# Open the map and existing scenarios locally
+make serve
+```
 
-# Full pipeline (auto-discovers data_in/, falls back to the original delivery)
-make all
+To run new simulations, install SUMO and the Python dependencies before
+starting the server:
 
-# Web app + scenario API → http://localhost:8000
+```bash
+python3 -m pip install -r requirements.txt
 make serve
 ```
 
@@ -124,12 +130,12 @@ webbläsaren. Stäng terminalfönstret för att stoppa servern.
 
 ### Från noll på en ny dator
 
-Ett kommando som klonar om det behövs, uppdaterar annars, och startar:
+Klona repot och starta den lokala appen:
 
 ```bash
-git clone https://github.com/GUST050/gothenburg-traffic-sim.git \
-  ~/gothenburg-traffic-sim 2>/dev/null; \
-  cd ~/gothenburg-traffic-sim && git pull --ff-only && python3 serve.py
+git clone https://github.com/GUST050/gothenburg-traffic-sim.git ~/gothenburg-traffic-sim
+cd ~/gothenburg-traffic-sim
+python3 serve.py
 ```
 
 **Om `localhost` säger ERR_CONNECTION_REFUSED:** ingen server lyssnar —
@@ -189,7 +195,7 @@ its own direction model and a place in the demand calibration automatically.
 
 Web app controls: play/scrub 2025 traffic, toggle to the 2027 forecast or a
 SUMO scenario, space = play/pause, ←/→ = ±15 min, Shift+←/→ = ±1 day. Hover
-any road for counts and simulation confidence.
+any road for counts and its support index.
 
 ## Incident simulation (SUMO)
 
@@ -357,3 +363,14 @@ Former shared root modules remain compatibility imports or CLI wrappers
 pointing at `traffic_sim/`; they are intentionally not duplicate source. Run existing
 commands from the repository root so relative artifact paths and Makefile
 contracts remain deterministic.
+
+## Working with AI models
+
+The repository supports Codex, Claude and other models as interchangeable
+actors. Start with `AGENTS.md`, then read the marked current blocks in
+`TASKS.md` and `AGENT_NOTES.md`. Historical role labels are retained only for
+traceability.
+
+For a bounded implementation loop, run `./ai-flow setup` once and then
+`./ai-flow "your task"`. Its configured planning, implementation, checks and
+review loop are described in [`.ai-flow/README.md`](.ai-flow/README.md).

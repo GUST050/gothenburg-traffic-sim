@@ -1358,6 +1358,16 @@
           Render.setPending([...selected]);
         }
 
+        function refreshApiWorkspaceCards() {
+          document.querySelectorAll('#task-grid [data-requires-api]')
+            .forEach(button => {
+              button.dataset.localTitle ||= button.title;
+              button.disabled = !apiAvailable;
+              button.title = apiAvailable ? '' : button.dataset.localTitle;
+            });
+          document.getElementById('task-home-local-note').hidden = apiAvailable;
+        }
+
         async function openWorkspace(task) {
           document.getElementById('map').inert = task === 'history';
           workspaceTask = task;
@@ -1416,14 +1426,15 @@
           refreshCloseUI();
         }
 
-        // Feature-detect the API — the "+ Ny avstängning" / "Byt dag" /
-        // "Föreslå tid" entry points are hidden entirely when served
-        // statically (no server to simulate with)
+        // Feature-detect the API. The static page keeps local-only workspaces
+        // visible for discovery but disables them and links to the local run.
         fetch('/api/ping').then(r => {
           apiAvailable = r.ok;
+          refreshApiWorkspaceCards();
           refreshCloseUI();
         }).catch(() => {
           apiAvailable = false;
+          refreshApiWorkspaceCards();
           refreshCloseUI();
         });
 

@@ -8,12 +8,12 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- WORKFLOW_CONTROL_START -->
 ## WORKFLOW_CONTROL
 
-- Mode: Repository review and branch delivery.
-- Current focus: Reviewed code and desktop workflows for Simulera datum and Vägavstängning on `codex/cross-midnight-delay-profile`.
-- Status: REVIEW_FIXES_VERIFIED; full Python suite, JS tests and pylint pass. Scientific release remains blocked by LOSO evidence.
-- Suggested next action: Investigate the failed LOSO generalization with a separate, preregistered evidence plan; restore external archives before relying on the skipped shared-context tests.
+- Mode: Repository presentation and delivery.
+- Current focus: Make the GitHub landing page, images and current project summaries accurately present the two local desktop workflows.
+- Status: Presentation verified locally; README images and links resolve, static and local API modes behave correctly, and focused checks pass.
+- Suggested next action: Confirm the default-branch and Pages publication, then investigate model generalization separately.
 - Eligible actors: Any capable actor.
-- Safety boundary: Preserve the existing simulation/evidence work and the failed 2026-09-22 LOSO result (71/143, 49.7%; see `IMPROVEMENT_PLAN.md`). Commit and push the reviewed branch as requested; do not publish a release claim or launch a new SUMO campaign.
+- Safety boundary: Keep exact validation results in historical research and evidence files. Current public summaries describe limitations without LOSO scores. Do not publish a scientific release claim or launch a new SUMO campaign.
 - Updated: 2026-09-23.
 <!-- WORKFLOW_CONTROL_END -->
 
@@ -707,16 +707,16 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### REVIEW-DELIVERY-2026-09-23 — Simulera datum and Vägavstängning
+### REPO-PRESENTATION-2026-09-23 — GitHub landing page and images
 
-- Status: UI and review repairs verified locally; full suite passed. Scientific release remains blocked by LOSO evidence.
-- Objective and scope: Review the code and desktop program, repair in-scope UI and closure-analysis defects, verify the result, and deliver the reviewed branch.
-- Completion outcome: Desktop controls and saved diagrams render without overflow or fixed-minute promises. Overnight schedules request the required calendar days and label work dates accurately. The q50 chart uses q50 hours. Stored diagrams are checked against result identity and costs; new replays bind a pinned release, archive bytes and network bytes.
-- Context or checkpoints: Existing simulation and catalog evidence remains intact. The 2026-09-22 LOSO result is still below its gate; no new demand, SUMO or monthly search was started.
-- Primary files: `web/index.html`, `web/app.js`, `web/render.js`, `serve.py`, `traffic_sim/analysis/`, diagnostic and build tools, corresponding Python and JS tests, README and architecture notes.
-- Constraints and safety: Preserve the fixed validation and provenance gates; do not infer a global-best or release claim from provisional closure results.
-- Acceptance criteria: Desktop browser verification for both workflows and the saved result; no stale 6-minute text or 00:00–00:00 full-day tooltip; overnight and q50 labels correct; cached profile serves only its matching verified result; focused and full checks reported accurately.
-- Useful checks: `/usr/bin/python3 -m pytest -q tests`: 6,946 passed, 52 skipped, 2 warnings in 847 s. Of the skips, 25 real-archive tests lack external fixtures. Eight JS test files, JS syntax, Python pylint and `git diff --check` pass. Browser and live cached-profile GET render the saved diagram.
+- Status: Presentation changes verified locally; the underlying UI and code review was verified on the feature branch.
+- Objective and scope: Present Simulera datum and Vägavstängning clearly on GitHub, check that images and links work, and bring the reviewed changes to the repository's default branch.
+- Completion outcome: The README leads with the two real desktop workflows, distinguishes the hosted static map from local SUMO features, and shows two genuine tracked data charts with accurate captions. The hosted static home labels and disables local-only workspaces while the local API enables them. Current summaries communicate validation limits without LOSO scores.
+- Context or checkpoints: The previous feature-branch review passed the full Python suite and JS checks. No new simulation or scientific validation run is part of this documentation pass.
+- Primary files: `README.md`, `TASKS.md`, `AGENT_NOTES.md`, `IMPROVEMENT_PLAN.md`, `web/index.html`, `web/app.js`, `.github/workflows/pages.yml`, tracked plots and GitHub repository metadata.
+- Constraints and safety: Preserve historical validation evidence and all scientific gates. Do not present the hosted static map as a live simulator.
+- Acceptance criteria: README image paths and links resolve; current summaries contain no LOSO values; default-branch GitHub view and repository metadata reflect the reviewed branch; Git state is clean.
+- Useful checks: Both README plots and local links exist. Static browser: local-only cards disabled, guide visible, no console errors or horizontal overflow; local API browser: cards enabled and guide hidden. Focused Python: 16 passed; eight JS test files pass; JS syntax and `git diff --check` pass. Prior full suite result remains 6,946 passed, 52 skipped, 2 warnings.
 <!-- ACTIVE_TASK_END -->
 
 ### Historical passage research task incorporated on 2026-09-21

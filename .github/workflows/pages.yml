@@ -4,7 +4,7 @@ name: publish map
 # so the map, the 2025 history, the 2027 forecast and the already-built
 # scenarios can be served from GitHub Pages with no server at all. serve.py
 # stays the way to run a NEW simulation: the closure/recalibration UI
-# feature-detects /api/ping and hides itself when there is nothing behind it.
+# feature-detects /api/ping and disables local-only workspaces without it.
 
 on:
   push:

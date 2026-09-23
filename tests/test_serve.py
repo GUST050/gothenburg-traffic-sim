@@ -127,7 +127,7 @@ def test_web_shell_is_responsive_accessible_and_uses_the_professional_palette():
     assert 'text.js?v=2' in html
     assert 'polling.js?v=1' in html
     assert 'render.js?v=18' in html
-    assert 'app.js?v=43' in html
+    assert 'app.js?v=45' in html
 
 
 def _signal_scenario_spec(*, closure=False, simulation_mode="micro",

@@ -77,6 +77,17 @@
       border-radius: 5px; padding: 17px 18px; transition: border-color .12s, background .12s;
     }
     .task-card:hover { border-color: #7d9bb1; background: #f8fafb; }
+    .task-card:disabled {
+      cursor: default; color: #5c6772; background: #f5f7f9;
+      border-color: #dce2e7;
+    }
+    .task-card:disabled:hover { border-color: #dce2e7; background: #f5f7f9; }
+    .task-card:disabled .task-card-icon { color: #75828e; }
+    .task-home-local-note {
+      color: #52616d; font-size: 0.76rem; line-height: 1.5;
+      margin: 14px 0 0;
+    }
+    .task-home-local-note[hidden] { display: none; }
     .task-card-icon {
       color: #647585; font-size: 0.62rem; font-weight: 700;
       letter-spacing: 0.09em; text-transform: uppercase;
@@ -1047,15 +1058,19 @@
     <div class="task-home-inner">
       <h1 class="task-home-title">Göteborgs trafikmodell</h1>
       <p class="task-home-subtitle">Analys, prognos och simulering för innerstaden</p>
+      <p id="task-home-local-note" class="task-home-local-note" hidden>
+        Nya simuleringar och analyser körs lokalt med server och SUMO.
+        <a href="https://github.com/GUST050/gothenburg-traffic-sim#running">Så startar du appen</a>.
+      </p>
       <button id="resume-monthly-result" class="action-btn" hidden>Visa senaste periodanalys</button>
       <div id="task-grid">
         <button class="task-card" data-task="traffic"><span class="task-card-icon">Data</span><strong>Historisk trafik</strong><span>Observerade flöden 2025</span></button>
         <button class="task-card" data-task="forecast"><span class="task-card-icon">Prognos</span><strong>Framtida trafik</strong><span>Beräknade flöden 2027</span></button>
         <button class="task-card" data-task="scenario"><span class="task-card-icon">Scenario</span><strong>Visa simulering</strong><span>Granska ett befintligt scenario</span></button>
-        <button class="task-card" data-task="demand"><span class="task-card-icon">Körning</span><strong>Simulera datum</strong><span>Beräkna en dag eller period</span></button>
-        <button class="task-card" data-task="closure"><span class="task-card-icon">Analys</span><strong>Vägavstängning</strong><span>Testa påverkan och lämplig tid</span></button>
-        <button class="task-card" data-task="signals"><span class="task-card-icon">Optimering</span><strong>Trafiksignaler</strong><span>Analysera gröntider och rödtider</span></button>
-        <button class="task-card" data-task="history"><span class="task-card-icon">Historik</span><strong>Körhistorik</strong><span>Utförda studier och jobb</span></button>
+        <button class="task-card" data-task="demand" data-requires-api disabled title="Kräver lokal server och SUMO"><span class="task-card-icon">Körning</span><strong>Simulera datum</strong><span>Beräkna en dag eller period · körs lokalt</span></button>
+        <button class="task-card" data-task="closure" data-requires-api disabled title="Kräver lokal server och SUMO"><span class="task-card-icon">Analys</span><strong>Vägavstängning</strong><span>Testa påverkan och lämplig tid · körs lokalt</span></button>
+        <button class="task-card" data-task="signals" data-requires-api disabled title="Kräver lokal server och SUMO"><span class="task-card-icon">Optimering</span><strong>Trafiksignaler</strong><span>Analysera gröntider och rödtider · körs lokalt</span></button>
+        <button class="task-card" data-task="history" data-requires-api disabled title="Kräver lokal server"><span class="task-card-icon">Historik</span><strong>Körhistorik</strong><span>Utförda studier och jobb · visas lokalt</span></button>
       </div>
       <div id="history-panel" hidden>
         <div id="history-head"><strong>Senaste körningar</strong><button id="history-back" class="action-btn">Tillbaka</button></div>
@@ -1500,6 +1515,6 @@
   <script src="controls.js?v=12"></script>
   <script src="clock.js?v=11"></script>
   <script src="polling.js?v=1"></script>
-  <script src="app.js?v=43"></script>
+  <script src="app.js?v=45"></script>
 </body>
 </html>

@@ -3974,14 +3974,12 @@ and [route-choice modelling](https://transp-or.epfl.ch/documents/technicalReport
 
 - CURRENT LOSO RE-EVALUATION (2026-09-22). The current
   `loso_pfe_meso_v11_observability_gate` implementation was run across all six
-  held stations with the adopted weekday catalog and compared only with the
-  unchanged strict >85% hourly GEH<5 guideline. It fails: 71/143 = 49.7%.
-  Station results are 107 37.5%, 1074 29.2%, 1076 12.5%, 133 30.4%, 134
-  87.5%, and 2276 100.0%. The only populated historical date is 2025-09-16;
-  sensor 133 lacks 00:00–00:15, which remained missing rather than being
-  imputed as zero, so 143 hourly cases were evaluated. Evidence is under
-  `runs/loso-current-v11-20260922-v2/`. This is negative generalization
-  evidence, not permission to lower the guideline or tune on the same folds.
+  held stations with the adopted weekday catalog against the unchanged
+  hourly GEH guideline. It did not meet the guideline. Missing observations
+  remained missing rather than being imputed as zero. The exact dated results
+  remain in `runs/loso-current-v11-20260922-v2/`; this public summary is
+  intentionally qualitative. The outcome is not permission to lower the
+  guideline or tune on the same folds.
 
 - FASTEST-SENSOR-ROUTE LOSO DIAGNOSTIC (added 2026-09-01). The corrected
   demand contract now emits only deterministic global fastest OD routes for
