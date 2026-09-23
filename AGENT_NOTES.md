@@ -7,14 +7,14 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: Concise GitHub guide and platform support published; clean-clone CI limitation documented.
-- Summary: README now leads with the two local workflows, gives a fresh-clone setup path, keeps two genuine data charts, and distinguishes hosted preview, macOS, Ubuntu CI, and unsupported native Windows. The app's setup link points to the new heading.
-- Files changed: `README.md`, `.gitignore`, `web/index.html`, and current coordination blocks. Historical validation files are preserved.
-- Checks: Ten local README links resolve; both chart files exist; Python standard-library server returned HTTP 200 for `/` and `{"ok": true}` for `/api/ping`; `git diff --check` passes. Prior local desktop review: 6,946 Python tests passed, 52 skipped, 2 warnings, plus focused JS checks. Clean-clone Ubuntu CI has failed its full suites, including tests that require generated or archived SUMO artifacts.
-- Decisions and evidence: Current public summaries omit numeric LOSO scores while retaining the validation limitation. Native Windows is unsupported by the POSIX server/process implementation; WSL and full Linux interaction have not been verified.
-- Blockers or risks: Held-out validation remains below the project's guideline. Clean-clone Ubuntu CI is not green; this documentation pass does not change model evidence or test fixtures.
-- Suggested next action: Address the separate clean-clone CI failures, then investigate model generalization.
-- Actor notes: The temporary port-8012 smoke-test server was stopped.
+- Focus and status: Optional WSL launcher implemented; actual Windows acceptance remains open.
+- Summary: `start-wsl.sh` runs only under WSL, installs requirements into `.venv` when their hash changes, creates missing network and direction-split inputs, and starts `serve.py` on loopback without opening a Linux browser. README has a compact Windows setup section; Mac/Linux startup is unchanged.
+- Files changed: `start-wsl.sh`, `README.md`, and current coordination blocks.
+- Checks: Bash syntax/help passed; on macOS the launcher refused clearly. An isolated mock run prepared dependencies and artifacts once, then reused them on the second start. An incomplete pre-existing network was refused without being overwritten. README local links resolve and `git diff --check` passes.
+- Decisions and evidence: Ubuntu 24.04 provides Python 3.12; Microsoft documents WSL localhost forwarding and recommends Linux-side project storage; SUMO documents `eclipse-sumo` Linux wheels. This is an onboarding path, not proof that the simulation or closure analysis passes on Windows hardware.
+- Blockers or risks: No Windows/WSL machine is available in this workspace for end-to-end date and closure checks. The existing clean-clone Ubuntu CI and held-out validation limitations remain separate.
+- Suggested next action: On Windows, install Ubuntu 24.04 in WSL, run `./start-wsl.sh`, open the printed localhost URL, then exercise both main workflows and record the result.
+- Actor notes: No real dependency installation, network rebuild, or SUMO simulation was launched during this implementation.
 <!-- CURRENT_HANDOFF_END -->
 
 ### Historical passage-speed handoff incorporated on 2026-09-21

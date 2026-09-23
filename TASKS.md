@@ -8,10 +8,10 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- WORKFLOW_CONTROL_START -->
 ## WORKFLOW_CONTROL
 
-- Mode: Repository presentation and delivery.
-- Current focus: Publish a concise, consistent GitHub landing page with accurate setup and platform support.
-- Status: Documentation published to GitHub and Pages; clean-clone CI limitations are disclosed.
-- Suggested next action: Verify the published default-branch README and hosted page, then investigate model generalization separately.
+- Mode: Optional Windows access through WSL.
+- Current focus: Make the two local workflows easier to start on Windows without changing the macOS/Linux paths.
+- Status: WSL launcher and setup guide implemented; first-run/restart behavior checked with isolated fakes. Windows hardware verification remains.
+- Suggested next action: Run the launcher on Ubuntu 24.04 in WSL and verify Simulera datum and Vägavstängning end to end.
 - Eligible actors: Any capable actor.
 - Safety boundary: Keep exact validation results in historical research and evidence files. Current public summaries describe limitations without LOSO scores. Do not publish a scientific release claim or launch a new SUMO campaign.
 - Updated: 2026-09-23.
@@ -707,16 +707,16 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### REPO-PRESENTATION-2026-09-23 — GitHub landing page and platform support
+### WINDOWS-WSL-2026-09-23 — Optional Windows setup
 
-- Status: Documentation and in-app setup link published; clean-clone CI limitation documented.
-- Objective and scope: Give GitHub readers a compact guide to Simulera datum, Vägavstängning, setup, images, and platform limits.
-- Completion outcome: README distinguishes the hosted preview from local SUMO workflows, links two tracked data charts, and describes tested versus unverified systems. The app's setup link targets the current README heading. Current public text has no numeric LOSO scores.
-- Context or checkpoints: This pass changes documentation, `.gitignore`, and one link. It does not run a new simulation or scientific validation campaign.
-- Primary files: `README.md`, `.gitignore`, `web/index.html`, `TASKS.md`, `AGENT_NOTES.md`.
-- Constraints and safety: Preserve historical validation evidence and all scientific gates. Do not present the hosted static map as a live simulator.
-- Acceptance criteria: README images and links resolve; platform claims match actual support; default-branch README is published; Git state is clean.
-- Useful checks: Ten local README links resolve; both images are tracked and public; `/api/ping` returns `{"ok": true}` and `/` returns HTTP 200 with `/usr/bin/python3 -S serve.py`; Pages deployment succeeded. Prior local code checks and the clean-clone CI limitation are recorded in `AGENT_NOTES.md`.
+- Status: Launcher implemented locally; real Windows/WSL acceptance pending.
+- Objective and scope: Add a separate WSL route for Windows users to start local date simulation and closure analysis, keeping existing macOS/Linux behavior intact.
+- Completion outcome: `start-wsl.sh` prepares a project virtual environment and missing SUMO inputs, then starts the existing loopback server. README has a collapsed Windows setup guide and an explicit unverified-status note.
+- Context or checkpoints: Microsoft documents Ubuntu 24.04 installation, Windows-to-WSL localhost access, and WSL filesystem placement; SUMO documents Linux wheels via `eclipse-sumo`.
+- Primary files: `start-wsl.sh`, `README.md`, `TASKS.md`, `AGENT_NOTES.md`.
+- Constraints and safety: Do not change core simulation, weaken evidence gates, overwrite incomplete network artifacts, or claim real Windows validation without running it.
+- Acceptance criteria: First setup and later starts follow the same script; missing artifacts are generated, partial network artifacts are refused; existing Mac/Linux paths are untouched; real Windows workflows are tested before a support claim.
+- Useful checks: Bash syntax and help pass; non-WSL execution exits clearly; isolated mocked first run/restart executes installation/build only once; an incomplete network is refused without overwriting it; README links resolve.
 <!-- ACTIVE_TASK_END -->
 
 ### Historical passage research task incorporated on 2026-09-21

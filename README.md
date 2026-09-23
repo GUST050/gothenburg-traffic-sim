@@ -74,12 +74,45 @@ route pool. In the app, use **Simulera datum** or **Vägavstängning**. Runtime
 depends on the requested dates and available cached demand; no fixed duration
 is promised.
 
+<details>
+<summary>Windows setup (optional, via WSL)</summary>
+
+Install [Ubuntu 24.04 in WSL](https://documentation.ubuntu.com/wsl/latest/guides/install-ubuntu-wsl2/)
+from an administrator PowerShell, then restart Windows if prompted and create
+your Ubuntu user:
+
+```powershell
+wsl --install -d Ubuntu-24.04
+```
+
+In the Ubuntu terminal, clone into your Linux home directory and use the
+optional launcher. It prepares a local virtual environment, SUMO network and
+direction split on the first run; later runs reuse them:
+
+```bash
+sudo apt update && sudo apt install -y git python3 python3-venv
+git clone https://github.com/GUST050/gothenburg-traffic-sim.git ~/gothenburg-traffic-sim
+cd ~/gothenburg-traffic-sim
+./start-wsl.sh
+```
+
+Open the printed `http://localhost:PORT` address in your Windows browser and
+keep Ubuntu open while using **Simulera datum** or **Vägavstängning**. Stop with
+Ctrl+C. For later starts, run `cd ~/gothenburg-traffic-sim && ./start-wsl.sh`
+in Ubuntu. [Microsoft documents Windows-to-WSL localhost access](https://learn.microsoft.com/en-us/windows/wsl/networking)
+and [recommends storing Linux projects in the WSL filesystem](https://learn.microsoft.com/en-us/windows/wsl/filesystems).
+This route is prepared in the repository but has not yet been tested on a
+Windows machine.
+
+</details>
+
 | Environment | Current support |
 | --- | --- |
 | Hosted map | Browser-only preview. Checked in the project browser; other browsers and devices have not all been tested. |
 | macOS | Local viewer and simulation workflows have been exercised here. `start.command` is macOS-only. |
 | Linux | CI runs lint and tests on Ubuntu with Python 3.11 and 3.12. Full interactive SUMO workflows have not been verified on every Linux setup. |
-| Native Windows | Local server and simulation are not supported: the code uses POSIX file locks and process groups. The hosted map remains available in a browser. WSL has not been verified. |
+| Windows via WSL | Optional Ubuntu launcher included; Windows browser can use the WSL localhost server. Full date and closure workflows still need testing on Windows hardware. |
+| Native Windows | Local server and simulation are not supported: the code uses POSIX file locks, process groups, and fork workers. The hosted map remains available in a browser. |
 
 ## Scope and evidence
 
