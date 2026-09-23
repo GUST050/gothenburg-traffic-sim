@@ -1765,6 +1765,9 @@ For future dates, C consumes D's series instead of history — same code path.
 SUMO **mesoscopic** Monte Carlo (43× faster than micro at equal/better
 sensor delivery, 0.87–0.96), identical edge IDs, local rerouters for
 closures, interactive API. Gate: baseline delivery ≥ 0.85 at stations.
+The local API binds to loopback. Explicit or environment-selected TCP ports
+must be in 1–65535; the default starts at 8000 and searches only valid ports
+if occupied. The printed URL always names the port actually bound.
 
 Recurring monthly closure searches now have a separate internal screening
 path: `traffic_sim/simulation/monthly_proxy.py` ranks exact calendar

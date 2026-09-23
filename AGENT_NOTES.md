@@ -7,14 +7,14 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: Optional WSL launcher and usable-CPU worker cap implemented; actual Windows acceptance remains open.
-- Summary: `start-wsl.sh` runs only under WSL, installs requirements into `.venv` when their hash changes, creates missing network and direction-split inputs, detects CPUs available to the WSL process, and starts `serve.py` on loopback. The cap covers date and closure-demand PFE, scenario seeds, monthly daily workers and SUMO slots; Mac/Linux defaults are unchanged.
-- Files changed: `start-wsl.sh`, `serve.py`, `traffic_sim/simulation/monthly_demand.py`, their focused tests, `README.md`, `ARCHITECTURE.md`, and current coordination blocks.
-- Checks: Bash syntax/help passed; on macOS the launcher refused clearly. An isolated mock run prepared dependencies and artifacts once, then reused them on the second start with a fake two-CPU affinity. An incomplete pre-existing network was refused without being overwritten. `tests/test_serve.py`: 198 passed; `tests/test_monthly_demand.py`: 51 passed, with the final worker-cap edit rechecked by its two focused tests. Focused Pylint, compile and `git diff --check` pass.
-- Decisions and evidence: Ubuntu 24.04 provides Python 3.12; Microsoft documents WSL localhost forwarding, Linux-side project storage and its default memory allocation. The CPU cap changes process parallelism, not evidence gates, and does not prove the simulation or closure analysis passes on Windows hardware.
-- Blockers or risks: No Windows/WSL machine is available in this workspace for end-to-end date and closure checks. The existing clean-clone Ubuntu CI and held-out validation limitations remain separate.
-- Suggested next action: On Windows, install Ubuntu 24.04 in WSL, run `./start-wsl.sh`, open the printed localhost URL, then exercise both main workflows and record the result.
-- Actor notes: No real dependency installation, network rebuild, or SUMO simulation was launched during this implementation.
+- Focus and status: Program robustness review completed locally; real Windows acceptance remains open.
+- Summary: The review covered date simulation, closure analysis, server startup and installation instructions. `serve.py` now rejects invalid TCP ports before binding and bounds the automatic search at 65535; README's simulation setup creates the virtual environment with Python 3.12 explicitly (3.11 is the documented alternative).
+- Files changed: `serve.py`, `tests/test_serve.py`, `README.md`, `ARCHITECTURE.md`, and current coordination blocks.
+- Checks: Repository pytest run before the port edit: 6951 passed, 52 skipped, 2 warnings. Main-flow selection: 490 passed, 1 skipped. Server suite after the port edit: 201 passed; after the final 65535 regression, 6 port-focused tests passed. All JavaScript tests and full repository Pylint passed using `/usr/bin/python3`; focused Pylint and `git diff --check` passed after the edit. Python 3.12 `serve.py --help` and syntax compilation passed.
+- Decisions and evidence: A direct or configured port 0 previously passed validation, although binding it would let the OS choose a different port than the printed URL. The unactivated local `python3` is 3.13, while the simulation instructions specify 3.11/3.12; `python3.12` is installed here. `make lint` outside a venv failed because that Python 3.13 lacks Pylint; the repository profile itself passed with the interpreter that has it.
+- Blockers or risks: No full SUMO campaign or real Windows/WSL end-to-end run was performed. The broad pytest run began before the final server patch; the server suite and port-focused tests cover the changed path. Two warnings remain from urllib3/LibreSSL and pandas date parsing in test data.
+- Suggested next action: Run both main workflows on Ubuntu 24.04 in WSL before claiming Windows runtime support; otherwise use the verified local gates for future code changes.
+- Actor notes: No real SUMO simulation, demand rebuild or Windows run was started.
 <!-- CURRENT_HANDOFF_END -->
 
 ### Historical passage-speed handoff incorporated on 2026-09-21

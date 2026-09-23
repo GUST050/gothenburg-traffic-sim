@@ -452,6 +452,16 @@ class TestServerStartup:
         # An explicit flag still wins over the environment.
         assert serve.resolve_port(["--port", "8322"]) == 8322
 
+    @pytest.mark.parametrize("port", ["-1", "0", "65536"])
+    def test_invalid_port_is_rejected_before_server_start(self, monkeypatch, port):
+        with pytest.raises(SystemExit, match="1 och 65535"):
+            serve.resolve_options(["--port", port])
+        monkeypatch.setenv("TRAFFIC_SIM_PORT", port)
+        with pytest.raises(SystemExit, match="1 och 65535"):
+            serve.resolve_options()
+        with pytest.raises(SystemExit, match="1 och 65535"):
+            serve.bind_server(int(port), port_is_explicit=True)
+
     def test_a_busy_default_port_steps_to_the_next_free_one(self, monkeypatch):
         """A user who said nothing about ports wants a server, not a lecture."""
         tried = []
@@ -479,6 +489,18 @@ class TestServerStartup:
         message = str(excinfo.value)
         assert "8123" in message
         assert "lsof" in message
+
+    def test_default_port_search_stops_at_last_tcp_port(self, monkeypatch):
+        tried = []
+
+        def always_busy(address, handler):
+            tried.append(address[1])
+            raise OSError(errno.EADDRINUSE, "Address already in use")
+
+        monkeypatch.setattr(serve, "ThreadingHTTPServer", always_busy)
+        with pytest.raises(SystemExit, match="65535"):
+            serve.bind_server(65535, port_is_explicit=False)
+        assert tried == [65535]
 
     def test_the_printed_url_is_the_port_actually_bound(
             self, monkeypatch, capsys):

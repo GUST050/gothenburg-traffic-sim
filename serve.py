@@ -3420,6 +3420,13 @@ class ServeOptions(NamedTuple):
     open_browser: bool
 
 
+def _validated_port(port: int) -> int:
+    """Require a usable TCP port so the printed URL names the bound socket."""
+    if not 1 <= port <= 65535:
+        raise SystemExit(f"Port {port} måste vara mellan 1 och 65535.")
+    return port
+
+
 def resolve_options(argv: Sequence[str] = ()) -> ServeOptions:
     """CLI/env options, with the port resolution and its explicitness."""
     parser = argparse.ArgumentParser(
@@ -3440,15 +3447,16 @@ def resolve_options(argv: Sequence[str] = ()) -> ServeOptions:
     open_browser = (sys.stdout.isatty() if args.open_browser is None
                     else args.open_browser)
     if args.port is not None:
-        return ServeOptions(args.port, True, open_browser)
+        return ServeOptions(_validated_port(args.port), True, open_browser)
     env_port = os.environ.get("TRAFFIC_SIM_PORT", "").strip()
     if env_port:
         try:
-            return ServeOptions(int(env_port), True, open_browser)
+            return ServeOptions(_validated_port(int(env_port)), True,
+                                open_browser)
         except ValueError:
             raise SystemExit(
                 f"TRAFFIC_SIM_PORT={env_port!r} är inget portnummer.")
-    return ServeOptions(PORT, False, open_browser)
+    return ServeOptions(_validated_port(PORT), False, open_browser)
 
 
 def resolve_port(argv: Sequence[str] = ()) -> int:
@@ -3469,8 +3477,10 @@ def bind_server(port: int, port_is_explicit: bool
 
     Either way the printed URL is the one that was actually bound, so the
     address the user opens is never a guess."""
+    port = _validated_port(port)
     span = 1 if port_is_explicit else PORT_SEARCH_SPAN
-    for candidate in range(port, port + span):
+    last_port = min(port + span - 1, 65535)
+    for candidate in range(port, last_port + 1):
         try:
             return ThreadingHTTPServer(("127.0.0.1", candidate), Handler), candidate
         except OSError as exc:
@@ -3488,9 +3498,9 @@ def bind_server(port: int, port_is_explicit: bool
             f"(macOS/Linux), eller låt servern välja port själv genom att "
             f"köra `python3 serve.py` utan --port.")
     raise SystemExit(
-        f"Portarna {port}-{port + span - 1} är alla upptagna.\n"
+        f"Portarna {port}-{last_port} är alla upptagna.\n"
         f"Hitta vad som håller dem med "
-        f"`lsof -nP -iTCP:{port}-{port + span - 1} -sTCP:LISTEN` "
+        f"`lsof -nP -iTCP:{port}-{last_port} -sTCP:LISTEN` "
         f"(macOS/Linux), eller välj en ledig port med "
         f"`python3 serve.py --port <port>`.")
 

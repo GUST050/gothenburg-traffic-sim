@@ -8,10 +8,10 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- WORKFLOW_CONTROL_START -->
 ## WORKFLOW_CONTROL
 
-- Mode: Optional Windows access through WSL.
-- Current focus: Make the two local workflows easier to start on Windows without changing the macOS/Linux paths.
-- Status: WSL launcher, setup guide and usable-CPU worker cap implemented; isolated startup, server and monthly-demand tests pass. Windows hardware verification remains.
-- Suggested next action: Run the launcher on Ubuntu 24.04 in WSL and verify Simulera datum and Vägavstängning end to end.
+- Mode: Program robustness review.
+- Current focus: Check date simulation, closure analysis, startup and installation behavior without changing scientific validation rules.
+- Status: Broad test and lint gates pass locally; invalid server ports and ambiguous Python setup were repaired. Real Windows/WSL acceptance remains open.
+- Suggested next action: Verify Simulera datum and Vägavstängning end to end on Ubuntu 24.04 in WSL, then record the result.
 - Eligible actors: Any capable actor.
 - Safety boundary: Keep exact validation results in historical research and evidence files. Current public summaries describe limitations without LOSO scores. Do not publish a scientific release claim or launch a new SUMO campaign.
 - Updated: 2026-09-23.
@@ -707,16 +707,16 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### WINDOWS-WSL-2026-09-23 — Optional Windows setup
+### PROGRAM-REVIEW-2026-09-23 — Robustness and error review
 
-- Status: Launcher and adaptive interactive worker cap implemented locally; real Windows/WSL acceptance pending.
-- Objective and scope: Add a separate WSL route for Windows users to start local date simulation and closure analysis, keeping existing macOS/Linux behavior intact.
-- Completion outcome: `start-wsl.sh` prepares a project virtual environment and missing SUMO inputs, caps interactive workers to usable WSL CPUs, then starts the existing loopback server. README has a collapsed Windows setup guide and an explicit unverified-status note.
-- Context or checkpoints: Microsoft documents Ubuntu 24.04 installation, Windows-to-WSL localhost access, and WSL filesystem placement; SUMO documents Linux wheels via `eclipse-sumo`.
-- Primary files: `start-wsl.sh`, `serve.py`, `traffic_sim/simulation/monthly_demand.py`, their focused tests, `README.md`, `ARCHITECTURE.md`, `TASKS.md`, `AGENT_NOTES.md`.
-- Constraints and safety: Do not change core simulation, weaken evidence gates, overwrite incomplete network artifacts, or claim real Windows validation without running it.
-- Acceptance criteria: First setup and later starts follow the same script; missing artifacts are generated, partial network artifacts are refused; WSL worker counts never exceed usable CPUs or existing approved ceilings; existing Mac/Linux defaults are untouched; real Windows workflows are tested before a support claim.
-- Useful checks: Bash syntax and help pass; non-WSL execution exits clearly; isolated mocked first run/restart executes installation/build only once; an incomplete network is refused without overwriting it; focused server tests cover the cap and default policy.
+- Status: Local review and fixes complete; Windows/WSL runtime validation is a separate open item.
+- Objective and scope: Review the program's two main workflows and startup path for reproducible errors, preserving the existing simulation and evidence contracts.
+- Completion outcome: Reject TCP ports outside 1–65535 before binding so the printed URL cannot contain port 0; keep automatic port search inside the valid range. README now selects a supported Python version for simulation setup.
+- Context or checkpoints: The repository-wide pytest run passed before the port edit; the complete server test file and new port regressions passed against the edited server. The local unactivated `python3` is 3.13 and lacks Pylint, while the documented simulation environment supports 3.11/3.12.
+- Primary files: `serve.py`, `tests/test_serve.py`, `README.md`, `ARCHITECTURE.md`, `TASKS.md`, `AGENT_NOTES.md`.
+- Constraints and safety: Do not weaken validation or provenance gates, launch an expensive SUMO campaign, or claim Windows hardware verification without running it.
+- Acceptance criteria: Invalid CLI, environment and direct-bind ports fail with a clear message; a busy port search stops at 65535; existing valid ports and main workflow tests stay green.
+- Useful checks: `pytest tests/ -q --maxfail=8` (6951 passed, 52 skipped, baseline before port edit); `pytest tests/test_serve.py -q` (201 passed after port edit); final port-targeted tests (6 passed); full Pylint with `/usr/bin/python3`; JavaScript tests and `git diff --check` pass.
 <!-- ACTIVE_TASK_END -->
 
 ### Historical passage research task incorporated on 2026-09-21

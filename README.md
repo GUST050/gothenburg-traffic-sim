@@ -57,13 +57,16 @@ tracked map and saved scenarios without installing the simulation packages.
 input data. From the repository root:
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 . .venv/bin/activate
 python -m pip install -r requirements.txt
 python build_sumo_net.py
 python -m dirsplit.predict
 python serve.py
 ```
+
+If your installed supported version is Python 3.11, use `python3.11` in the
+first command. Check `python --version` after activation before installing.
 
 `requirements.txt` installs the scientific Python packages and declares
 `eclipse-sumo`. Set `SUMO_HOME` to select an existing SUMO installation. The
