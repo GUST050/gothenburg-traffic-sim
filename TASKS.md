@@ -8,13 +8,13 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- WORKFLOW_CONTROL_START -->
 ## WORKFLOW_CONTROL
 
-- Mode: Program robustness review.
-- Current focus: Check date simulation, closure analysis, startup and installation behavior without changing scientific validation rules.
-- Status: Broad test and lint gates pass locally; invalid server ports and ambiguous Python setup were repaired. Real Windows/WSL acceptance remains open.
-- Suggested next action: Verify Simulera datum and Vägavstängning end to end on Ubuntu 24.04 in WSL, then record the result.
+- Mode: Isolated synthetic sensor and simulation stress test.
+- Current focus: Import 20 synthetic sensors, simulate a forecast date and search September 2027 for a three-day full-day road closure with saved images and timings.
+- Status: The isolated 20-sensor fixture, weekday/weekend catalog materialization, 2027-09-15 UI simulation, and September three-day searches completed. A sensor-linked rerun on Ullevigatan at `TEST20_04` also completed its three-day `Visa på karta` recalibration and playback. Result images, provenance audits and elapsed times are saved.
+- Suggested next action: Report the Ullevigatan result as the relevant sensor-linked diagnostic, with exact claim boundary and saved evidence. The earlier cold map recalibration failure on Lilla Bergsgatan remains an unresolved reliability incident; a direct warm replay and the Ullevigatan UI run succeeded.
 - Eligible actors: Any capable actor.
-- Safety boundary: Keep exact validation results in historical research and evidence files. Current public summaries describe limitations without LOSO scores. Do not publish a scientific release claim or launch a new SUMO campaign.
-- Updated: 2026-09-23.
+- Safety boundary: Preserve catalogue, quality, reviewed snap and route-catalog qualification gates. File import does not publish data; refresh may materialize unadopted catalogs and simulations.
+- Updated: 2026-09-27.
 <!-- WORKFLOW_CONTROL_END -->
 
 ### Historical passage-speed workflow snapshot incorporated on 2026-09-21
@@ -707,16 +707,16 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### PROGRAM-REVIEW-2026-09-23 — Robustness and error review
+### SENSOR-20-STRESS-2026-09-26 — Test twenty added sensors and September closure search
 
-- Status: Local review and fixes complete; Windows/WSL runtime validation is a separate open item.
-- Objective and scope: Review the program's two main workflows and startup path for reproducible errors, preserving the existing simulation and evidence contracts.
-- Completion outcome: Reject TCP ports outside 1–65535 before binding so the printed URL cannot contain port 0; keep automatic port search inside the valid range. README now selects a supported Python version for simulation setup.
-- Context or checkpoints: The repository-wide pytest run passed before the port edit; the complete server test file and new port regressions passed against the edited server. The local unactivated `python3` is 3.13 and lacks Pylint, while the documented simulation environment supports 3.11/3.12.
-- Primary files: `serve.py`, `tests/test_serve.py`, `README.md`, `ARCHITECTURE.md`, `TASKS.md`, `AGENT_NOTES.md`.
-- Constraints and safety: Do not weaken validation or provenance gates, launch an expensive SUMO campaign, or claim Windows hardware verification without running it.
-- Acceptance criteria: Invalid CLI, environment and direct-bind ports fail with a clear message; a busy port search stops at 65535; existing valid ports and main workflow tests stay green.
-- Useful checks: `pytest tests/ -q --maxfail=8` (6951 passed, 52 skipped, baseline before port edit); `pytest tests/test_serve.py -q` (201 passed after port edit); final port-targeted tests (6 passed); full Pylint with `/usr/bin/python3`; JavaScript tests and `git diff --check` pass.
+- Status: Date simulation, both full-month searches and Ullevigatan winner-row map playback complete.
+- Objective and scope: Use twenty clearly fake 2025 sensor files and plausible mapped sites, simulate a September 2027 forecast date, search all September starts for exactly three full days of closure, and save result images and elapsed times.
+- Completion outcome: The isolated catalog must satisfy its route-support validation before the UI simulation and monthly search run. Materialization alone is not official qualification or adoption. Results remain diagnostic synthetic evidence.
+- Context or checkpoints: The fixture contains 20 added sensors, 26 displayed sensors, and 909229 valid quarter-hour records. Persistent weekday/weekend catalogs materialized with 51/51 minimum legal unique routes. The 2027-09-15 UI simulation produced three 29851-vehicle seeds, no teleports/collisions and a saved screenshot; overall validation is `warn` from structure and missing held-out evidence. Initial search `ui-monthly-153exlq` costed 28 three-day starts on a 65 m residential segment of Lilla Bergsgatan in 6538.555 active seconds. After the user questioned its representativeness, search `ui-monthly-test20-ullevigatan-2027-09` covered the same 28 starts on the 301 m Ullevigatan edge of `TEST20_04`, selected 2027-09-17–19, costed 28/28 and SUMO-verified two finalists in 393.465 active seconds with reused demand. Winner cost is 11.1941 added vehicle-hours, 324.9471 added km, 3178 affected vehicles. Winner-day demand archive matches the 26-sensor registry hash, includes all 20 fake sensor IDs and 27 directed measured edges. The winner-row UI map recalibration completed in 902.998 seconds and its scenario audit lists 26 stations and 27 directions. The map shows 3127 affected vehicles and 13.9363 added vehicle-hours under its separate standard-demand metric. Both searches have `global_best_claim_allowed=false` under the provisional q50 policy.
+- Primary files: `build_data.py`, `tools/build_route_catalog.py`, existing sensor-import/refresh changes, and `runs/synthetic20-sep2027-results/` (ignored diagnostic artifacts).
+- Constraints and safety: Preserve source data and existing results; do not relax route, sensor or release gates. Do not launch heavy jobs below 10 GB available disk.
+- Acceptance criteria: Isolated catalogs materialized with route support; completed UI date simulation and three-day September search; saved result screenshots and measured step/total times. Report synthetic data and missing release gate honestly.
+- Useful checks: Restore from `runs/synthetic20-sep2027-results/final/synthetic20-final-fixture.tar.gz`; inspect `runs/synthetic20-sep2027-results/final/synthetic20-test-summary.json`, `sensor-provenance-ullevigatan-2027-09-17.json`, the Ullevigatan search/map/sensor screenshots, focused and broad tests, and `git diff --check`.
 <!-- ACTIVE_TASK_END -->
 
 ### Historical passage research task incorporated on 2026-09-21
