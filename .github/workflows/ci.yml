@@ -63,8 +63,10 @@ jobs:
       # on anything they test. Both are rebuilt from tracked inputs only
       # (web/data/graph.graphml, the dirsplit training table and
       # network.geojson) through the same make targets a contributor uses.
+      # sumo-net-frozen then restores the exact network bytes the frozen
+      # validation contracts hash, and fails if the rebuild has drifted.
       - name: Build SUMO inputs from tracked sources
-        run: make sumo-net dirsplit-predict PYTHON=python3
+        run: make sumo-net-frozen dirsplit-predict PYTHON=python3
 
       # tests/test_web_provider_js.py executes web/provider.js under node. It
       # skips where node is absent, which is right on a contributor's machine

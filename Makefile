@@ -7,7 +7,7 @@
 
 PYTHON ?= python3
 
-.PHONY: all refresh data features agent1 forecast test serve sumo-net catalog demand demand-build scenario deso benchmark-speed validate-temporal
+.PHONY: all refresh data features agent1 forecast test serve sumo-net sumo-net-frozen catalog demand demand-build scenario deso benchmark-speed validate-temporal
 
 all: data features agent1 forecast test
 
@@ -38,6 +38,14 @@ deso:
 
 sumo-net:
 	$(PYTHON) build_sumo_net.py
+
+# The exact network the frozen validation evidence binds (sha256 68ecde39…).
+# A rebuild differs only in netconvert's generation timestamp, which still
+# changes that hash; this restores the tracked bytes after verifying that the
+# fresh build matches them otherwise. CI and fresh clones use this target.
+sumo-net-frozen:
+	$(MAKE) sumo-net
+	$(PYTHON) tools/restore_frozen_network.py
 
 # Materialize content-addressed weekday/weekend route pools after refreshed
 # sensor and network inputs. Existing keys are verified/restored by the builder;
