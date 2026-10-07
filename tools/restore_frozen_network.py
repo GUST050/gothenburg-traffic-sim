@@ -8,7 +8,8 @@ hash - change on every build. A clean clone (CI, another computer) therefore
 could never reproduce the evidence's network identity.
 
 This tool restores the tracked copy only after checking that the fresh build
-is the same network apart from that one header line. If the tracked graph or
+is the same network apart from that one header line and the platform's
+formatting of signed zero. If the tracked graph or
 netconvert ever produces a different network, it stops instead of quietly
 substituting old bytes.
 
@@ -21,6 +22,7 @@ import hashlib
 import lzma
 import os
 from pathlib import Path
+import re
 import sys
 import tempfile
 
@@ -30,15 +32,35 @@ SUMO_NETWORK = ROOT / "sumo" / "net.net.xml"
 FROZEN_NETWORK_SHA256 = (
     "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240")
 GENERATED_ON_PREFIX = b"<!-- generated on "
+# netconvert 1.27.1 on macOS writes a coordinate that rounds to zero as -0.00
+# where Linux writes 0.00. Measured 2026-10-07 on the Linux x86_64 build CI
+# uses: the only difference in 152 904 lines. Signed zero equals zero, so it
+# is not drift; any non-zero value keeps its sign.
+NEGATIVE_ZERO = re.compile(rb"(?<![0-9.])-(0(?:\.0+)?)(?![0-9.])")
+DIFF_EXAMPLES = 3
+DIFF_EXCERPT_BYTES = 160
 
 
 class FrozenNetworkError(RuntimeError):
     """The frozen network cannot be restored safely."""
 
 
-def _without_generation_stamp(payload: bytes) -> list[bytes]:
-    return [line for line in payload.splitlines(keepends=True)
+def _comparable_lines(payload: bytes) -> list[bytes]:
+    return [NEGATIVE_ZERO.sub(rb"\1", line)
+            for line in payload.splitlines(keepends=True)
             if not line.startswith(GENERATED_ON_PREFIX)]
+
+
+def _describe_difference(frozen: list[bytes], built: list[bytes]) -> str:
+    """Summarise where two networks differ so drift can be diagnosed."""
+    differing = [(number, old, new) for number, (old, new)
+                 in enumerate(zip(frozen, built), start=1) if old != new]
+    examples = "; ".join(
+        f"line {number}: frozen {old[:DIFF_EXCERPT_BYTES]!r} "
+        f"built {new[:DIFF_EXCERPT_BYTES]!r}"
+        for number, old, new in differing[:DIFF_EXAMPLES])
+    return (f"{len(differing)} differing lines, {len(frozen)} frozen vs "
+            f"{len(built)} built lines (timestamp excluded); {examples}")
 
 
 def restore(archive: Path, network: Path, *,
@@ -55,11 +77,13 @@ def restore(archive: Path, network: Path, *,
     if actual != expected_sha256:
         raise FrozenNetworkError(
             f"{archive} has sha256 {actual}, expected {expected_sha256}")
-    if _without_generation_stamp(network.read_bytes()) != \
-            _without_generation_stamp(frozen):
+    built_lines = _comparable_lines(network.read_bytes())
+    frozen_lines = _comparable_lines(frozen)
+    if built_lines != frozen_lines:
         raise FrozenNetworkError(
             f"network drift: a fresh build of {network} differs from the "
-            "frozen network beyond its generation timestamp")
+            "frozen network beyond its generation timestamp; "
+            + _describe_difference(frozen_lines, built_lines))
     with tempfile.NamedTemporaryFile(dir=network.parent, delete=False) as out:
         out.write(frozen)
     os.chmod(out.name, network.stat().st_mode & 0o777)

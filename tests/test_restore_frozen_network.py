@@ -39,10 +39,40 @@ def test_refuses_a_rebuild_that_drifted_from_the_frozen_network(tmp_path):
     drifted = _net("2026-10-07T20:51:55", '<net version="1.21"/>\n')
     built.write_bytes(drifted)
 
-    with pytest.raises(frozen.FrozenNetworkError, match="drift"):
+    with pytest.raises(frozen.FrozenNetworkError,
+                       match=r"drift.*1 differing lines.*1\.21"):
         frozen.restore(archive, built, expected_sha256=digest)
 
     assert built.read_bytes() == drifted
+
+
+def test_accepts_a_build_that_only_formats_zero_without_its_sign(tmp_path):
+    # macOS netconvert writes a coordinate that rounds to zero as -0.00 where
+    # Linux writes 0.00; the networks are numerically identical.
+    frozen_bytes = _net("2026-07-17T13:43:41",
+                        '<junction shape="-2.54,2392.14 -0.00,2390.19"/>\n')
+    archive, digest = _archive(tmp_path, frozen_bytes)
+    built = tmp_path / "net.net.xml"
+    built.write_bytes(_net("2026-10-07T20:51:55",
+                           '<junction shape="-2.54,2392.14 0.00,2390.19"/>\n'))
+
+    frozen.restore(archive, built, expected_sha256=digest)
+
+    assert built.read_bytes() == frozen_bytes
+
+
+@pytest.mark.parametrize("frozen_value, built_value", [
+    ("-0.001", "0.001"), ("-0.01", "0.00"), ("-10.00", "10.00")])
+def test_a_real_sign_difference_is_still_drift(tmp_path, frozen_value,
+                                               built_value):
+    archive, digest = _archive(tmp_path, _net(
+        "2026-07-17T13:43:41", f'<junction x="{frozen_value}"/>\n'))
+    built = tmp_path / "net.net.xml"
+    built.write_bytes(_net("2026-10-07T20:51:55",
+                           f'<junction x="{built_value}"/>\n'))
+
+    with pytest.raises(frozen.FrozenNetworkError, match="drift"):
+        frozen.restore(archive, built, expected_sha256=digest)
 
 
 def test_refuses_an_archive_with_the_wrong_hash(tmp_path):
