@@ -14,7 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import build_candidates
 import build_sumo_demand as demand
-from demand.priors import ensure_assignment_priors
+from demand.priors import (STRUCTURAL_REFERENCE_DATE, ensure_assignment_priors,
+                           ensure_priors)
 from traffic_sim.core.fingerprint import sha256_file, sumo_version
 from traffic_sim.demand import route_catalog
 from traffic_sim.simulation.runtime import sumo_home
@@ -81,6 +82,10 @@ def main() -> int:
         print(json.dumps(plan, indent=1, sort_keys=True))
         return 0
 
+    # A clean refresh has no SUMO artifacts yet. Assignment priors read the
+    # level-3 prior file, so materialize it before fingerprinting or building
+    # the candidate pools.
+    ensure_priors(STRUCTURAL_REFERENCE_DATE)
     ensure_assignment_priors(
         gravity_km=args.gravity_km,
         through_fraction=args.through_fraction,

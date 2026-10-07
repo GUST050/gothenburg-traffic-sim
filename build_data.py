@@ -24,6 +24,7 @@ import os
 import statistics
 import warnings
 from collections import defaultdict
+from collections.abc import Iterable
 from pathlib import Path
 
 import osmnx as ox
@@ -347,8 +348,9 @@ def _bidir_edges(edge_sensor: dict[str, str]) -> set[str]:
 
 # ── Data loading ───────────────────────────────────────────────────────────────
 
-def load_raw(data_dir: Path, coords_path: Path | None = None) -> pd.DataFrame:
-    """Load and normalise all sensor CSV files in data_dir.
+def load_raw(data_dir: Path | Iterable[Path],
+             coords_path: Path | Iterable[Path] | None = None) -> pd.DataFrame:
+    """Load and normalise sensor CSV files from one or more directories.
 
     coords_path is excluded explicitly (by resolved path, not just filename
     pattern) — data_in/'s drop-folder workflow puts the coordinates CSV in
@@ -360,31 +362,36 @@ def load_raw(data_dir: Path, coords_path: Path | None = None) -> pd.DataFrame:
     sensor not already covered by the validated registry. Found in a bug
     review 2026-07-10, independently verified."""
     frames = []
-    coords_resolved = coords_path.expanduser().resolve() if coords_path else None
-    for path in sorted(data_dir.glob("*.csv")):
-        if coords_resolved is not None and path.resolve() == coords_resolved:
-            continue
-        df = pd.read_csv(path, encoding="utf-8-sig")
-        df.columns = df.columns.str.strip()
-        frames.append(df)
+    data_dirs = [data_dir] if isinstance(data_dir, Path) else list(data_dir)
+    coord_paths = ([coords_path] if isinstance(coords_path, Path) else
+                   list(coords_path or []))
+    coords_resolved = {path.expanduser().resolve() for path in coord_paths}
+    for directory in data_dirs:
+        for path in sorted(directory.glob("*.csv")):
+            if path.resolve() in coords_resolved:
+                continue
+            df = pd.read_csv(path, encoding="utf-8-sig")
+            df.columns = df.columns.str.strip()
+            col_map: dict[str, str] = {}
+            for column in df.columns:
+                normalized = column.lower().replace(" ", "").replace("_", "")
+                if "matplats" in normalized or "mätplats" in normalized:
+                    col_map[column] = "matplats"
+                elif normalized == "level":
+                    col_map[column] = "level"
+                elif "datum" in normalized or normalized == "date":
+                    col_map[column] = "datum"
+                elif "kvart" in normalized or "tid" in normalized or "time" in normalized:
+                    col_map[column] = "tid"
+                elif "antal" in normalized or "count" in normalized or "flöde" in normalized or "flow" in normalized:
+                    col_map[column] = "count"
+            df = df.rename(columns=col_map)
+            if not df.columns.is_unique:
+                raise ValueError(f"CSV contains duplicate normalized columns: {path}")
+            frames.append(df)
     if not frames:
         raise FileNotFoundError(f"No CSV files found in {data_dir}")
     raw = pd.concat(frames, ignore_index=True)
-
-    col_map: dict[str, str] = {}
-    for c in raw.columns:
-        lc = c.lower().replace(" ", "").replace("_", "")
-        if "matplats" in lc or "mätplats" in lc:
-            col_map[c] = "matplats"
-        elif lc == "level":
-            col_map[c] = "level"
-        elif "datum" in lc or lc == "date":
-            col_map[c] = "datum"
-        elif "kvart" in lc or "tid" in lc or "time" in lc:
-            col_map[c] = "tid"
-        elif "antal" in lc or "count" in lc or "flöde" in lc or "flow" in lc:
-            col_map[c] = "count"
-    raw = raw.rename(columns=col_map)
 
     missing = REQUIRED_COLS - set(raw.columns)
     if missing:
@@ -401,8 +408,17 @@ def load_raw(data_dir: Path, coords_path: Path | None = None) -> pd.DataFrame:
         + " "
         + raw["tid"].astype(str).str.strip(),
         dayfirst=False,
+        format="mixed",
         errors="coerce",
     )
+
+    valid = raw["ts"].notna()
+    duplicate = raw.loc[valid].duplicated(["matplats", "ts", "level"])
+    if duplicate.any():
+        example = raw.loc[valid].loc[duplicate, ["matplats", "ts", "level"]].iloc[0]
+        raise ValueError(
+            "Duplicate sensor interval across deliveries: "
+            f"{example['matplats']} {example['ts']} {example['level']}")
 
     bad = raw["ts"].isna().sum()
     if bad:
@@ -411,8 +427,8 @@ def load_raw(data_dir: Path, coords_path: Path | None = None) -> pd.DataFrame:
     return raw
 
 
-def load_coords(coords_path: Path) -> dict[str, tuple[float, float]]:
-    """Return {matplats: (lat_wgs84, lon_wgs84)} converted from SWEREF99 12 00."""
+def _load_coords_file(coords_path: Path) -> dict[str, tuple[float, float]]:
+    """Read one SWEREF99 12 00 coordinate delivery."""
     df = pd.read_csv(coords_path, encoding="utf-8-sig", sep=None, engine="python")
     df.columns = df.columns.str.strip()
 
@@ -443,6 +459,32 @@ def load_coords(coords_path: Path) -> dict[str, tuple[float, float]]:
         mp: (float(lat), float(lon))
         for mp, lat, lon in zip(df["matplats"], lats, lons)
     }
+
+
+def load_coords(coords_path: Path | Iterable[Path]) -> dict[str, tuple[float, float]]:
+    """Merge coordinate deliveries, rejecting conflicting station positions."""
+    paths = [coords_path] if isinstance(coords_path, Path) else list(coords_path)
+    result: dict[str, tuple[float, float]] = {}
+    for path in paths:
+        for sensor_id, position in _load_coords_file(path).items():
+            if sensor_id in result and result[sensor_id] != position:
+                raise ValueError(f"conflicting coordinates for sensor {sensor_id}")
+            result[sensor_id] = position
+    return result
+
+
+def validate_sensor_periods(raw: pd.DataFrame, registry, sensor_ids: list[str]) -> None:
+    """Check each station against its own measured span, not the union's span."""
+    for sensor_id in sensor_ids:
+        timestamps = raw.loc[raw["matplats"] == sensor_id, "ts"].dropna()
+        if timestamps.empty:
+            raise ValueError(f"sensor {sensor_id} has no valid measurement dates")
+        registry.validate_data_sensors(
+            [sensor_id],
+            require_coordinates=True,
+            study_start=timestamps.min().date().isoformat(),
+            study_end=timestamps.max().date().isoformat(),
+        )
 
 
 # ── Quarter index ──────────────────────────────────────────────────────────────
@@ -602,31 +644,35 @@ DEFAULT_DATA_DIR = "~/Downloads/Data till Chalmers_20260618"
 DEFAULT_COORDS   = "~/Downloads/Mätpunkter_koordinater.csv"
 
 
-def discover_data_dir() -> str:
-    """data_in/ wins when it contains sensor CSVs — the drop-folder workflow."""
-    if DROP_DIR.is_dir() and any(
-        p for p in DROP_DIR.glob("*.csv") if "koordinat" not in p.name.lower()
-    ):
-        return str(DROP_DIR)
-    return DEFAULT_DATA_DIR
+def discover_data_dirs() -> list[Path]:
+    """Add local sensor deliveries to the original delivery when available."""
+    original = Path(DEFAULT_DATA_DIR).expanduser()
+    added = any(p for p in DROP_DIR.glob("*.csv")
+                if "koordinat" not in p.name.lower())
+    if not original.is_dir() and not added:
+        raise FileNotFoundError("No sensor delivery found in Downloads or data_in/")
+    return ([original] if original.is_dir() else []) + ([DROP_DIR] if added else [])
 
 
-def discover_coords() -> str:
-    if DROP_DIR.is_dir():
-        hits = [p for p in DROP_DIR.glob("*.csv") if "koordinat" in p.name.lower()]
-        if hits:
-            return str(hits[0])
-    return DEFAULT_COORDS
+def discover_coords() -> list[Path]:
+    """Read all local coordinate additions alongside the original survey."""
+    original = Path(DEFAULT_COORDS).expanduser()
+    added = sorted(p for p in DROP_DIR.glob("*.csv")
+                   if "koordinat" in p.name.lower())
+    paths = ([original] if original.is_file() else []) + added
+    if not paths:
+        raise FileNotFoundError("No coordinates found in Downloads or data_in/")
+    return paths
 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--data_dir",    default=None,
                    help="Directory containing sensor CSV files "
-                        "(default: data_in/ if it has CSVs, else the original delivery)")
+                        "(default: original delivery plus CSVs in data_in/)")
     p.add_argument("--coords",      default=None,
                    help="Sensor coordinates CSV, SWEREF99 12 00 / EPSG:3007 "
-                        "(default: *koordinat*.csv in data_in/, else the original)")
+                        "(default: original survey plus *koordinat*.csv in data_in/)")
     p.add_argument("--registry",    default=str(SENSOR_REGISTRY_PATH),
                    help="Validated sensor registry JSON (default: data_in/sensors.json)")
     p.add_argument("--out_dir",     default="web/data",
@@ -644,9 +690,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     global MANUAL_SNAPS
     args        = parse_args()
-    data_dir    = Path(args.data_dir or discover_data_dir()).expanduser()
-    coords_path = Path(args.coords or discover_coords()).expanduser()
-    print(f"Data: {data_dir}\nCoords: {coords_path}")
+    data_dirs = ([Path(args.data_dir).expanduser()] if args.data_dir
+                 else discover_data_dirs())
+    coords_paths = ([Path(args.coords).expanduser()] if args.coords
+                    else discover_coords())
+    print(f"Data: {data_dirs}\nCoords: {coords_paths}")
     out_dir     = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     conf_sigma_m, conf_sigma_source = empirical_conf_sigma_m(out_dir)
@@ -658,19 +706,14 @@ def main() -> None:
 
     # ── Load sensor data ───────────────────────────────────────────────────────
     print("Loading CSVs …")
-    raw = load_raw(data_dir, coords_path)
+    raw = load_raw(data_dirs, coords_paths)
     print(f"  {len(raw):,} rows  |  sensors: {sorted(raw['matplats'].unique())}")
 
     print("Loading coordinates …")
-    coords = load_coords(coords_path)
+    coords = load_coords(coords_paths)
     sensor_ids = sorted(str(sensor_id) for sensor_id in raw["matplats"].unique())
     registry = load_registry(Path(args.registry), coordinates=coords)
-    registry.validate_data_sensors(
-        sensor_ids,
-        require_coordinates=True,
-        study_start=raw["ts"].min().date().isoformat(),
-        study_end=raw["ts"].max().date().isoformat(),
-    )
+    validate_sensor_periods(raw, registry, sensor_ids)
     MANUAL_SNAPS = registry.manual_snaps()
     sensors = [sensor_id for sensor_id in sensor_ids if sensor_id in coords]
     if not sensors:
