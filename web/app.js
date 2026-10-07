@@ -21,6 +21,14 @@
           histPromise, normalPromise, networkPromise,
         ]);
 
+        const sensorIds = new Set((networkPayload.features || [])
+          .map(feature => feature.properties?.sensor_id)
+          .filter(sensorId => sensorId !== null && sensorId !== undefined &&
+            String(sensorId).trim() !== ''));
+        const networkEdgesById = new Map((networkPayload.features || [])
+          .map(feature => [feature.properties?.id, feature.properties]));
+        document.getElementById('sensor-count').textContent = String(sensorIds.size);
+
         await Render.init(document.getElementById('map'), histProvider,
                           normalProfile, networkPayload);
         Controls.init(histProvider);
@@ -1279,6 +1287,7 @@
         const btnMonthlyCancel  = document.getElementById('monthly-cancel-btn');
         const monthlyResults      = document.getElementById('monthly-results');
         const monthlyResultsTitle = document.getElementById('monthly-results-title');
+        const monthlyResultsRoad = document.getElementById('monthly-results-road');
         const monthlyResultsSubtitle = document.getElementById('monthly-results-subtitle');
         const monthlyResultsSummary = document.getElementById('monthly-results-summary');
         const monthlyResultsNotice = document.getElementById('monthly-results-notice');
@@ -2444,6 +2453,14 @@
             periodComparison
               ? `Resultat för ${dayCount || 'fler'}-dagarsperioder`
               : 'Resultat för arbetsperioder';
+          const selectedEdges = result.edges || lastMonthlySpec?.directed_edges || [];
+          monthlyResultsRoad.textContent = selectedEdges.map(edgeId => {
+            const edge = networkEdgesById.get(edgeId);
+            const label = edge?.name || edgeId;
+            return edge?.sensor_id
+              ? `${label} · sensor ${edge.sensor_id} · kant ${edgeId}`
+              : `${label} · kant ${edgeId}`;
+          }).join(' + ');
           const dateStart = lastMonthlySpec?.permitted_date_start;
           const dateEnd = lastMonthlySpec?.permitted_date_end;
           monthlyResultsSubtitle.textContent = periodComparison

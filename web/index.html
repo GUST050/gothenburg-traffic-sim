@@ -439,6 +439,10 @@
       margin-top: 3px; color: var(--result-ink); font-size: 1.22rem;
       line-height: 1.25; font-weight: 680; letter-spacing: -0.015em;
     }
+    #monthly-results-road {
+      margin-top: 3px; color: var(--result-ink); font-size: 0.76rem;
+      overflow-wrap: anywhere;
+    }
     #monthly-results-subtitle {
       margin-top: 3px; color: var(--result-muted); font-size: 0.72rem;
       font-variant-numeric: tabular-nums;
@@ -1088,7 +1092,7 @@
 
   <div id="brand">
     <h1>Göteborgs trafikmodell</h1>
-    <p>Innerstaden · 6 sensorer · 15-minutersintervall</p>
+    <p>Innerstaden · <span id="sensor-count">…</span> sensorer · 15-minutersintervall</p>
   </div>
 
   <div id="legend">
@@ -1455,6 +1459,7 @@
         <div id="monthly-results-heading">
           <div id="monthly-results-kicker">Vägavstängning</div>
           <h1 id="monthly-results-title"></h1>
+          <p id="monthly-results-road"></p>
           <p id="monthly-results-subtitle"></p>
         </div>
       </div>
@@ -1515,6 +1520,6 @@
   <script src="controls.js?v=12"></script>
   <script src="clock.js?v=11"></script>
   <script src="polling.js?v=1"></script>
-  <script src="app.js?v=45"></script>
+  <script src="app.js?v=46"></script>
 </body>
 </html>
