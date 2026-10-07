@@ -1,11 +1,13 @@
 # Gothenburg traffic pipeline — run steps in order with `make all`.
 # Individual steps: make data / features / agent1 / forecast / test / serve
 #
-# New sensor data? Drop it in data_in/ (see data_in/README.md), add the
-# validated station record to data_in/sensors.json, then `make refresh`.
+# New sensor data? Import its reviewed CSVs and station record with
+# tools/add_sensor.py (see data_in/README.md), then `make refresh`.
 # Explicit paths still work: make data DATA_DIR="/path" COORDS="/path.csv"
 
-.PHONY: all refresh data features agent1 forecast test serve sumo-net demand scenario deso benchmark-speed validate-temporal
+PYTHON ?= python3
+
+.PHONY: all refresh data features agent1 forecast test serve sumo-net sumo-net-frozen catalog demand demand-build scenario deso benchmark-speed validate-temporal
 
 all: data features agent1 forecast test
 
@@ -13,7 +15,18 @@ all: data features agent1 forecast test
 # (fetch_deso.py is NOT listed here — build_candidates.py auto-fetches it on
 # first use if data_in/deso/ is missing; `make deso` below is for an explicit
 # manual re-run, e.g. after the inner-city bbox changes.)
-refresh: data features agent1 forecast dirsplit-coverage sumo-net demand scenario test
+refresh:
+	$(MAKE) data
+	$(MAKE) features
+	$(MAKE) agent1
+	$(MAKE) forecast
+	$(MAKE) dirsplit-coverage
+	$(MAKE) sumo-net
+	$(MAKE) dirsplit-predict
+	$(MAKE) catalog
+	$(MAKE) demand-build
+	$(MAKE) scenario
+	$(MAKE) test
 	@echo "Refresh klar — starta med: make serve"
 
 deso:
@@ -24,14 +37,31 @@ deso:
 # Custom closure: python3 run_scenario.py --close <edgeId> [<edgeId> …]
 
 sumo-net:
-	python3 build_sumo_net.py
+	$(PYTHON) build_sumo_net.py
+
+# The exact network the frozen validation evidence binds (sha256 68ecde39…).
+# A rebuild differs only in netconvert's generation timestamp, which still
+# changes that hash; this restores the tracked bytes after verifying that the
+# fresh build matches them otherwise. CI and fresh clones use this target.
+sumo-net-frozen:
+	$(MAKE) sumo-net
+	$(PYTHON) tools/restore_frozen_network.py
+
+# Materialize content-addressed weekday/weekend route pools after refreshed
+# sensor and network inputs. Existing keys are verified/restored by the builder;
+# new keys remain unadopted until their qualification evidence passes.
+catalog:
+	$(PYTHON) tools/build_route_catalog.py --execute --report runs/route-catalog-build-auto.json
 
 # Direction split: the deployed hour x day-type D-factor profile (the model
 # that won dirsplit/benchmark.py's leakage-free tournament). It needs only the
 # tracked training table and the published network geometry.
 demand:
-	python3 -m dirsplit.predict
-	python3 build_sumo_demand.py --begin 00:00 --end 24:00
+	$(MAKE) dirsplit-predict
+	$(MAKE) demand-build
+
+demand-build:
+	$(PYTHON) build_sumo_demand.py --begin 00:00 --end 24:00
 
 # Fast variant: morning window only (quicker sims while iterating)
 demand-morning:
@@ -52,8 +82,8 @@ warm-horizon-plan:
 	python3 warm_demand_horizon.py --source $(SOURCE) --from $(FROM) --to $(TO) --dry-run
 
 scenario:
-	python3 run_scenario.py
-	python3 run_scenario.py --close 60786979_3575001205_0 1455801464_18241874_0
+	$(PYTHON) run_scenario.py
+	$(PYTHON) run_scenario.py --close 60786979_3575001205_0 1455801464_18241874_0
 
 # Rebuild the per-vehicle added-travel-time distribution for the two cheapest
 # candidates of the newest finished monthly search. This starts no SUMO.
@@ -77,13 +107,13 @@ benchmark-speed:
 # tracked training table.
 
 dirsplit-coverage:
-	python3 -m dirsplit.coverage
+	$(PYTHON) -m dirsplit.coverage
 
 dirsplit-dataset:
 	python3 -m dirsplit.dataset
 
 dirsplit-predict:
-	python3 -m dirsplit.predict
+	$(PYTHON) -m dirsplit.predict
 
 # Diagnostic: do Gothenburg's OWN sensors carry intraday directional signal for
 # a two-way sensor's split, and how large is the location bias that stops a
@@ -121,19 +151,19 @@ direction-sensitivity:
 	python3 -m tools.measure_direction_decision_sensitivity run
 
 data:
-	python3 build_data.py $(if $(DATA_DIR),--data_dir "$(DATA_DIR)") $(if $(COORDS),--coords "$(COORDS)")
+	$(PYTHON) build_data.py $(if $(DATA_DIR),--data_dir "$(DATA_DIR)") $(if $(COORDS),--coords "$(COORDS)")
 
 features:
-	python3 build_features.py
+	$(PYTHON) build_features.py
 
 agent1:
-	python3 train_agent1.py
+	$(PYTHON) train_agent1.py
 
 forecast:
-	python3 build_agent1_flows.py
+	$(PYTHON) build_agent1_flows.py
 
 test:
-	python3 -m pytest tests/ -q
+	$(PYTHON) -m pytest tests/ -q
 
 # Critical static checks — the profile in .pylintrc that passes today, so a
 # failure means something changed.

@@ -142,6 +142,9 @@ simulation, and evidence contracts.
 | Tests and contribution conventions | [Agent guide](AGENTS.md) |
 
 Run `python -m pytest -q tests` in the installed environment for the Python
-suite. [GitHub Actions](.github/workflows/ci.yml) runs Ubuntu checks, but the
-full clean-clone suite currently fails, including tests that require generated
-or archived SUMO artifacts. A green cross-platform release gate is not yet in place.
+suite. [GitHub Actions](.github/workflows/ci.yml) runs Ubuntu checks. It rebuilds
+the SUMO network and direction split from tracked inputs and restores the exact
+network the frozen validation evidence binds (`make sumo-net-frozen`). A small
+set of tests still fails there: macOS-only process telemetry, a SUMO closure
+probe that fails only on Linux, and one test that needs a full demand build.
+A green cross-platform release gate is not yet in place.

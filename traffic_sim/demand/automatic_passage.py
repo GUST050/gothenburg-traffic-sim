@@ -34,6 +34,10 @@ from tools import trial_dynamic_passage as trial
 from tools import departure_reconciliation as passage
 
 POLICY = 'automatic_dynamic_passage_v3'
+# Measured-edge count from which the integer model is wide enough to need the
+# larger solver budget and whole-day short-trip guards.
+LARGE_SENSOR_SET_EDGES = 20
+LARGE_SENSOR_SET_SOLVE_LIMIT_S = 300
 REPLAY_CONTRACT_NAME = 'passage_replay_contract.json'
 
 
@@ -313,12 +317,19 @@ def _refine(data, source_report, network, work, candidate_pool,
         raise ValueError('automatic passage calibration lacks structural evidence')
     record_phase('prepare_system', phase_started)
 
+    # Larger reviewed sensor sets produce wider integer models. The 26-sensor
+    # diagnostic needed up to 120.4 s for an exact optimal solution. Give those
+    # models more time without relaxing observations or structural constraints;
+    # smaller sets keep their established per-stage budgets.
+    is_large_sensor_set = len(edges) >= LARGE_SENSOR_SET_EDGES
     def solve_and_stage(support, name: str, *, group_bounds=None,
                         time_limit_s: float = 60):
         solve_started = time.perf_counter()
         system = dynamic.build_passage_system(support, edges, quarters)
         fitted = dynamic.fit_integer_flows(
-            system, targets, groups, time_limit_s=time_limit_s,
+            system, targets, groups,
+            time_limit_s=(LARGE_SENSOR_SET_SOLVE_LIMIT_S if is_large_sensor_set
+                          else time_limit_s),
             departure_bounds=bounds,
             departure_group_bounds=group_bounds,
             checkpoint_dir=work / f'solver-{name}',
@@ -360,7 +371,14 @@ def _refine(data, source_report, network, work, candidate_pool,
     if new_flags - old_flags:
         if new_flags - old_flags != {'trips_under_1km_cap'}:
             raise ValueError(f'new structural warnings: {sorted(new_flags - old_flags)}')
-        active_quarters: set[int] = set()
+        # With many measured edges, adding one newly offending quarter per
+        # solve can require a long chain of near-identical MILPs. The source
+        # already satisfies this exact cap in every quarter, so guard the
+        # whole day together for larger sensor sets and still validate the
+        # resulting route choice in SUMO below.
+        whole_horizon_first = is_large_sensor_set
+        active_quarters: set[int] = (
+            set(range(quarters)) if whole_horizon_first else set())
         support = expanded
         boundary_fallback = initial_boundary
         force_refit = False
@@ -368,7 +386,9 @@ def _refine(data, source_report, network, work, candidate_pool,
         while new_flags - old_flags:
             violations = _short_trip_violation_quarters(after_structure)
             newly_active = violations - active_quarters
-            if newly_active:
+            if whole_horizon_first:
+                whole_horizon_first = False
+            elif newly_active:
                 active_quarters.update(newly_active)
             elif force_refit:
                 force_refit = False

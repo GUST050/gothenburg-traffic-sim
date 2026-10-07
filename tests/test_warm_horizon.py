@@ -223,6 +223,9 @@ class TestRunSurvivesFailures:
         monkeypatch.setattr(wh, "recover_live_demand_release", lambda: None)
         monkeypatch.setattr(wh, "discard_new_archives", lambda _before: 0)
         monkeypatch.setattr(wh, "library_has_dates", lambda item: True)
+        # These tests exercise resume and lock behaviour, independent of the
+        # machine's actual free space. The low-disk test overrides this value.
+        monkeypatch.setattr(wh, "_free_gb", lambda path=Path("."): 100.0)
         monkeypatch.setattr(wh, "WorkspaceLock",
                             lambda owner: ws.WorkspaceLock(owner, path=LOCK))
         monkeypatch.setattr(wh, "_source_year", lambda source: 2027)

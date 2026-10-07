@@ -1202,6 +1202,11 @@ performance contract, including equal candidate requests in both arms. Only
 `tools/adopt_route_catalog.py` may write the small adoption record that changes
 the default, and it refuses evidence that is not cryptographically bound to
 the supplied build and stored catalog bytes.
+`make refresh` runs the materializer after data, network and direction-split
+regeneration, so
+changed inputs get new content-addressed weekday/weekend entries automatically.
+Its operational report is `runs/route-catalog-build-auto.json`; this step alone
+does not qualify or adopt the entries.
 An explicit `--candidate-source legacy` always remains the rollback path.
 The old unmatched campaign measured 66.402 s versus 19.437 s and is useful for
 diagnosis only. The matched campaign is bound in
@@ -1370,6 +1375,14 @@ Validate 15-min CSVs; join coordinates + **measured-direction metadata**
 (`data_in/sensors.json` — the delivered "Total" label is proven unreliable);
 direction-aware snapping (bearing must match; true point-to-polyline
 distances). Gate: every station snapped ≤ 60 m with matching bearing.
+
+`tools/add_sensor.py` imports one reviewed 2025 sensor from a measurement CSV,
+coordinate CSV and registry record. It validates the files and registry gates
+before adding them to `data_in/`, without rebuilding or publishing results.
+The default intake combines the original delivery with added sensor CSVs and
+coordinates, so adding a station does not remove the existing six stations.
+`make refresh` remains a separate evidence-producing rebuild; its resolved
+edge check must match the reviewed registry entry before calibration.
 
 ### B — Mathematics (`observability.py`) — BUILT
 From graph + measured edge set:

@@ -117,6 +117,26 @@ Den atomiskt adopterade aktuella katalogen använder vardagsnyckel
 kandidatmaterialisering tog 0,673 s. Evidensen finns i
 `validation/route_catalog_{suite_gates,build,trials,qualification}_q50_operational_20260922-v1.json`.
 
+**Omkvalificerad 2026-10-07.** Den additiva sensorimporten ändrade
+`build_data.py`, som ingår i katalogidentiteten eftersom `build_candidates.py`
+importerar `INNER_CITY_BBOX` därifrån. `tools/explain_catalog_fallback.py`
+visade `drifted: source_files.build_data` för båda poolerna, så nästa
+efterfrågebygge skulle ha fallit tillbaka på legacy. En färsk materialisering
+(216 s) gav nya nycklar vars fyra utdatafiler är byte-identiska med de tidigare
+adopterade i båda poolerna, men driften låg utanför orkestratorn och den snäva
+återvalideringen gällde därför inte. En ny operativ fyrfallskvalificering
+kördes med oförändrade regler: sviten passerade 184 tester (inga citerade
+källor ändrade sedan 2026-09-22), och fyra kalla parade q50-fall passerade alla
+hårda grindar: 257,7→53,0 s vardag, 194,9→39,2 s helg, 132,9→29,3 s helgdag
+och 237,3→41,4 s blandad tvådagarsperiod. Medianparspeedup 4,92x, största
+fordonsdifferensen 0,234 %, maximalt RSS cirka 1,43 GiB, verdict `adopt` med
+alla åtta grindar sanna. Ny vardagsnyckel `66853be0b27c89c4d735b3f6e7f548c7`,
+helgnyckel `8c97c2a1def92cd4d3b4973aec79230f`. Ett isolerat implicit bygge för
+2027-09-08 (utan `--candidate-source`) valde själv `catalog`, registrerade
+katalogträff utan fallback och tog 17,8 s; det levande efterfrågeläget
+återställdes byte-identiskt. Evidensen finns i
+`validation/route_catalog_{suite_gates,build,trials,qualification}_q50_operational_20261007-v1.json`.
+
 ### Implementationsplan: operativ fyrfallskvalificering
 
 > **För agentiskt arbete:** kör planen sekventiellt med RED/GREEN och verifiera

@@ -249,8 +249,8 @@ def fit_integer_flows(
     A time-limited feasible incumbent is allowed only after full verification.
     """
     with _solver_phase('input_validation_and_hard_rhs'):
-        if not math.isfinite(time_limit_s) or not 0 < time_limit_s <= 120:
-            raise ValueError('time limit must be in (0, 120] seconds')
+        if not math.isfinite(time_limit_s) or not 0 < time_limit_s <= 300:
+            raise ValueError('time limit must be in (0, 300] seconds')
         if set(targets) != set(system.sensors):
             raise ValueError('target sensors differ from observation system')
         values = []

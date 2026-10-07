@@ -19,6 +19,17 @@ def test_one_route_contributes_to_different_sensor_quarters():
     assert result.status == 'predicted_exact_requires_sumo'
 
 
+def test_wide_fit_accepts_larger_finite_time_budget():
+    trip = option('trip', 100, ['o', 's'], [0, 10])
+    system = dynamic.build_passage_system([trip], ['s'], 1)
+    result = dynamic.fit_integer_flows(
+        system, {'s': [1]}, {'od': 1}, time_limit_s=300)
+    assert result.counts.tolist() == [1]
+    with pytest.raises(ValueError, match='time limit'):
+        dynamic.fit_integer_flows(
+            system, {'s': [1]}, {'od': 1}, time_limit_s=301)
+
+
 def test_route_and_departure_choices_are_solved_together():
     options = [
         option('wrong-road', 850, ['o', 'b', 'd'], [0, 20, 40]),
