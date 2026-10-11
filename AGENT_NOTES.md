@@ -7,14 +7,14 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: IN_PROGRESS — user authorized push/update of the current workspace and asked for a functioning local app.
+- Focus and status: DONE — current workspace delivered to PR #5 and localhost verified after the user authorized push/update.
 - Summary: Deliver the user's current 2027-02-10 scenario (18,846 vehicles), matching OD/validation data, and the rejected quarter-distribution investigation in existing PR #5. Executable source remains exactly at 9d0cdcc; departure-spreading prototypes are inactive.
 - Files changed: `web/data/od_matrix.csv`, `web/data/od_matrix.json`, `web/data/scenarios/{baseline.json,baseline_traj.json,index.json}`, `web/data/validation.json`, `validation/quarter_departure_distribution_20261011.json`, current coordination blocks.
 - Checks: Full CI on 9d0cdcc passed lint and both Python 3.11/3.12 jobs (run 38132319464). Fresh focused tests: 124 passed in 9.06s; pip check and diff check pass. Native scenario publication gate passes. Scenario/index/validation IDs match; OD and all 18,846 trajectory records match population and satisfy timing/index checks; all three scenario seeds have zero teleports/collisions. Browser scenario and trajectory requests return 200, playback advances, and console has no warnings/errors. API reports ready on Python 3.12.15. Six original user data hashes remain unchanged by verification.
 - Decisions and evidence: Use existing `codex/python312-environment`/PR #5 instead of a second dependent PR. The initial timing prototype improved occupancy variation by 17–19% but worsened held-out sensor errors (0/2/2 to 4/12/10); two conservative prototypes worsened occupancy variation. Keep automatic_dynamic_passage_v3; report is diagnostic evidence, not an activated fix.
 - Blockers or risks: No local-use blocker. Uneven within-quarter occupancy remains unresolved. Existing purpose/length warning and missing current LOSO/temporal holdout evidence remain visible. Actual SUMO ensemble exactness is 650/672 cells, distinct from the predicted integer fit of 672/672; native release criteria pass. Windows hardware remains untested.
-- Suggested next action: Complete commit/push, verify GitHub and leave localhost running. A broader timing design would require separate model/evidence work.
-- Actor notes: No live data regeneration or server restart is required: executable code matches the running verified version. No merge/public deployment is included.
+- Suggested next action: Use localhost:8765 and review PR #5. Automatic CI is rerunning for the data/docs update; the unchanged executable source already passed its full suite. A broader timing design would require separate model/evidence work.
+- Actor notes: Commit 66e4e1a is pushed and its remote SHA verified. Final notes only record delivery. The working tree is delivered on codex/python312-environment; server source matches the verified executable version. No merge/public deployment is included.
 <!-- CURRENT_HANDOFF_END -->
 ### Historical handoff superseded on 2026-10-10 (Python 3.12 migration)
 - Focus and status: DONE pending commit — simulation jobs can no longer start on an interpreter that cannot run them, and this machine's working environment is now selected automatically (user request 2026-10-10 after "Byt dag" failed with `No module named 'pandas'`).

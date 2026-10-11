@@ -10,8 +10,8 @@ owners, states and approval formulas are not active workflow rules. See
 
 - Mode: Deliver the current verified workspace.
 - Current focus: User requested push/update and a usable localhost (2026-10-11).
-- Status: IN_PROGRESS — functional and data checks pass; commit/push and final remote verification remain.
-- Suggested next action: Push the current 2027-02-10 scenario and diagnostic evidence to the existing environment PR #5; verify remote identity and CI.
+- Status: DONE — current scenario/evidence pushed in PR #5; remote SHA and localhost verified.
+- Suggested next action: Use localhost:8765 and review PR #5. The automatic CI rerun checks the new data/docs commit; executable source is unchanged from the passing run.
 - Eligible actors: Any capable actor.
 - Safety boundary: Preserve current model/gates and user-selected day. Rejected departure-spreading prototypes remain inactive. No merge or public deployment is requested.
 - Updated: 2026-10-11.
@@ -709,9 +709,9 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### WORKSPACE-DELIVERY-2026-10-11 — Push the current verified scenario and notes
 
-- Status: IN_PROGRESS.
+- Status: DONE.
 - Objective and scope: Commit/push the current workspace, verify the current scenario and localhost, and refresh delivery notes.
-- Completion outcome: Current selected day and diagnostic evidence available in the existing PR #5, with localhost usable on the verified Python environment.
+- Completion outcome: Current selected day and diagnostic evidence pushed in commit 66e4e1a in existing PR #5; GitHub branch SHA matches local. Localhost is usable on the verified Python environment. Final notes do not change executable code or scenario bytes.
 - Context or checkpoints: HEAD 9d0cdcc passes full CI (lint and Python 3.11/3.12). Executable code is unchanged. The current 2027-02-10 scenario passes the native publication gate, identity/population/trajectory checks and browser playback. Focused runtime/UI/validation checks: 124 passed; pip check and diff checks pass.
 - Primary files: Published scenario/index/trajectory, OD matrix, validation panel data, `validation/quarter_departure_distribution_20261011.json`, current notes.
 - Constraints and safety: Three departure-spreading prototypes were rejected and their source/test edits restored. Keep prediction versus actual SUMO passage exactness distinct. No merge or public deployment.
