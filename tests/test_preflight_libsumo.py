@@ -9,6 +9,8 @@ someone will follow it.
 from __future__ import annotations
 
 import json
+import platform
+import sys
 from pathlib import Path
 
 import pytest
@@ -93,12 +95,20 @@ class TestItLicensesNothing:
             "blocked", "attemptable")
 
     def test_it_recomputes_from_the_tool(self, record):
+        expected = record["environment"]
+        if (expected["platform"], expected["python"], expected["executable"]) != (
+                platform.platform(), platform.python_version(), sys.executable):
+            pytest.skip("frozen preflight describes another Python installation")
         rebuilt = preflight.build_record()
         assert rebuilt["content_key"] == record["content_key"], (
             "the preflight must be reproducible on the machine it describes")
 
+    def test_the_current_environment_is_reproducible(self):
+        first = preflight.build_record()
+        assert preflight.build_record()["content_key"] == first["content_key"]
+
     def test_exporting_the_sumo_home_it_already_resolves_changes_nothing(
-            self, monkeypatch, record):
+            self, monkeypatch):
         """Found by a full-suite run: a neighbouring test exported SUMO_HOME.
 
         Pointing the variable at the root the project resolves anyway describes
@@ -108,6 +118,7 @@ class TestItLicensesNothing:
         depending on which test ran first. It is reported under `environment`,
         which the key excludes.
         """
+        record = preflight.build_record()
         resolved = record["sumo_home"]["resolved_by_project"]
         if not resolved:
             pytest.skip("no SUMO installation to point at")

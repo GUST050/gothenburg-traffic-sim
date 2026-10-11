@@ -80,6 +80,17 @@ jobs:
       - name: Build SUMO inputs from tracked sources
         run: make sumo-net-frozen dirsplit-predict PYTHON=python3
 
+      # Fail early on runtime/host assumptions before the long full suite.
+      # The full suite still runs unchanged after these integration checks.
+      - name: Verify environment-dependent regressions
+        run: |
+          python3 -m pytest -q \
+            tests/test_closure_teleport_probe.py \
+            tests/test_process_census.py::TestTheCensusAgreesWithPs::test_resident_sizes_agree_closely \
+            tests/test_preflight_libsumo.py \
+            tests/test_benchmark_persistent_sumo.py::TestRealAssemblerContextIsFaithful \
+            tests/test_guarded_wci_build.py::TestRealProcesses
+
       # tests/test_web_provider_js.py executes web/provider.js under node. It
       # skips where node is absent, which is right on a contributor's machine
       # and wrong here — a skipped executable check is indistinguishable from a

@@ -532,6 +532,8 @@ def _script(path: Path, body: str) -> List[str]:
     return [sys.executable, str(path)]
 
 
+@pytest.mark.skipif(sys.platform != "darwin",
+                    reason="SystemSampler requires macOS libproc and vm.swapusage")
 class TestRealProcesses:
     """Signals and process groups, against small real children."""
 

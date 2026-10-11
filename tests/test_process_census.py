@@ -88,15 +88,26 @@ class TestTheCensusAgreesWithPs:
     def test_resident_sizes_agree_closely(self):
         if not _ps_available():
             pytest.skip("`ps` cannot run here; nothing to cross-check against")
-        ps_rows = {pid: rss for pid, _, rss in pc._ps_snapshot()}
-        native = {pid: rss for pid, _, rss in pc._mechanisms()[0][1]()}
-        shared = [pid for pid in set(ps_rows) & set(native) if ps_rows[pid] > 0]
-        deviations = sorted(
-            abs(ps_rows[pid] - native[pid]) / ps_rows[pid] for pid in shared)
-        # Not equality: the two snapshots are taken at different instants, so
-        # a process that allocates between them genuinely differs.  The median
-        # is the claim — the mechanisms measure the same quantity.
-        assert deviations[len(deviations) // 2] < 0.01
+        # Host processes can allocate between snapshots (CI's small, busy
+        # process population made even the median drift). Compare the same
+        # stable, resident workload; retain the original 1% accuracy bar.
+        child = subprocess.Popen(
+            [sys.executable, "-c",
+             "buffer = bytearray(64 * 1024 * 1024)\n"
+             "for i in range(0, len(buffer), 4096): buffer[i] = 1\n"
+             "print('ready', flush=True)\nimport time; time.sleep(120)"],
+            stdout=subprocess.PIPE, text=True)
+        try:
+            assert child.stdout.readline().strip() == "ready"
+            ps_rows = {pid: rss for pid, _, rss in pc._ps_snapshot()}
+            native = {pid: rss for pid, _, rss in pc._mechanisms()[0][1]()}
+            expected = ps_rows[child.pid]
+            assert expected >= 64 * 1024
+            assert abs(expected - native[child.pid]) / expected < 0.01
+        finally:
+            child.kill()
+            child.wait(timeout=5.0)
+            child.stdout.close()
 
 
 class TestAFailedCensusIsNeverReadAsEmpty:
