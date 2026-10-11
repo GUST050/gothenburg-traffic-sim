@@ -10,8 +10,8 @@ owners, states and approval formulas are not active workflow rules. See
 
 - Mode: Verify and deliver the Python environment migration.
 - Current focus: Finish Claude's migration review, push the changes and make localhost usable (user request 2026-10-11).
-- Status: IN_PROGRESS — migration pushed in PR #5; pre-existing CI portability defects repaired and awaiting a fresh CI run.
-- Suggested next action: Verify CI on PR #5 after the portability repairs. Localhost is available; future lock changes require isolated evidence and catalog requalification.
+- Status: DONE — migration/review fixes pushed in PR #5; local full suite, CI and localhost verified.
+- Suggested next action: Use localhost:8765 and review PR #5. Future lock changes require isolated evidence and catalog requalification.
 - Eligible actors: Any capable actor.
 - Safety boundary: Preserve published data and scientific gates. Tests run in an isolated copy; no new campaign or public deployment is requested.
 - Updated: 2026-10-11.
@@ -709,7 +709,7 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### ENV-DELIVERY-2026-10-11 — Verify and deliver the locked Python environment
 
-- Status: IN_PROGRESS — final CI verification.
+- Status: DONE.
 - Objective and scope: Check the migration and review fixes, repair in-scope defects, commit/push on a branch and start the local demo.
 - Completion outcome: Verified source and environment, changes on GitHub, and a usable server at http://localhost:8765.
 - Context or checkpoints: Full local suite after the admission repair: 7107 passed/52 skipped. Final recovery refinement: 134 focused tests and lint pass, including five new RED-to-GREEN regression cases. Final full-suite and CI results are tracked through the delivery branch.
