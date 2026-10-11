@@ -1782,6 +1782,56 @@ The local API binds to loopback. Explicit or environment-selected TCP ports
 must be in 1–65535; the default starts at 8000 and searches only valid ports
 if occupied. The printed URL always names the port actually bound.
 
+Simulation environment and interpreter contract (2026-10-10,
+`traffic_sim/simulation/interpreter.py`, `tools/setup_venv.py`).
+`requirements.lock` pins every package, indirect dependencies included, for
+Python 3.12; `make lock` re-resolves it from `requirements.txt` +
+`requirements-dev.txt` in a throwaway venv, and `make setup` builds `.venv`
+with Python 3.12 from exactly that set (`--no-deps`, `pip check`), rebuilding
+from scratch when the lock changes and repairing a venv that fails the
+readiness check. CI installs the same lock on its Python 3.12 job. Every job
+runs as a child of the server's `sys.executable`, so that interpreter must be
+able to simulate. The project interpreter resolves, everywhere (serve.py,
+Makefile `PYTHON`, start.command), as `.simulation-python` (written by
+`make setup`), then `.venv`, then `python3`; a server started on an
+interpreter that cannot simulate hands itself over to the first that can, and
+a working one is never replaced. Readiness is judged in a child process (the
+file server stays standard-library only): every `JOB_ENTRY_MODULES` import
+succeeds, the SUMO binaries the jobs execute run and report the pinned
+version, and every locked package is installed at its locked version. Only a
+completed `ready` admits a job: `GET /api/ping` reports
+`{"ok": true, "simulation": {status, python, version, missing, problems,
+message, fix}}` with status `checking|ready|unavailable|unknown`, and
+`simulation_admission_block()` (stranded jobs first) refuses `unavailable`,
+`unknown` and a still-running `checking` with 503 and the fix before any
+process starts. A verdict is bound to its inputs — the lock's bytes and the
+server interpreter's site-packages timestamps (`readiness_inputs`) — so a lock
+change or a package install/removal makes it stale: ping reports `checking`
+while it refreshes in the background, and admission re-probes first. Inputs
+are checked again after the probe: a change during the check invalidates its
+result and returns `checking`, so synchronous admission cannot use an obsolete
+`ready` verdict. The discarded result stays stale even if the original inputs
+are restored, allowing the next request to retry (2026-10-11 review). The UI
+treats a ping without the readiness field as not ready. Launchers (Makefile,
+start.command) skip a `.simulation-python` entry that is not executable, and
+start-wsl.sh rebuilds `.venv` from scratch when it is missing, runs another
+Python than the lock's, or was installed from another lock. Job children run
+with `PYTHON_COLORS=0`, and failure text is ANSI-stripped before it reaches
+the UI.
+
+Result identity binds the solver. The integer projection in
+`traffic_sim/demand/pfe.py` has tied optima, and the solver picks one: with
+identical code, inputs and seed, scipy 1.13.1 → 1.18.1 (HiGHS 1.2.0 → 1.12.0)
+changed one calibrated day from 20 486 to 20 342 vehicles while every sensor
+target was still met exactly (`validation/demand_count_difference_investigation_20261010.json`;
+Python 3.9 → 3.12 alone changed nothing). Candidate pools, the route catalog
+and the day library already bound the runtime; `make_fingerprint` now records
+`solver_runtime` (numba/numpy/scipy versions), and monthly demand archives are
+reused only when Python, SUMO and solver runtime all match — an archive without
+the field is treated as incompatible and rebuilt. SUMO is pinned to 1.27.1
+with `sumo-data` (1.28.0 breaks demand calibration;
+`validation/python_env_comparison_20261010.json`).
+
 Recurring monthly closure searches now have a separate internal screening
 path: `traffic_sim/simulation/monthly_proxy.py` ranks exact calendar
 schedules from explicitly projected forecast/structural flow and detour

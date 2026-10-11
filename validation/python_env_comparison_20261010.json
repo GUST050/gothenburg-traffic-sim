@@ -1,0 +1,95 @@
+{
+ "kind": "python_environment_comparison",
+ "date": "2026-10-10",
+ "release_evidence": false,
+ "question": "Is a new Python 3.12 .venv more robust and better than the machine's working /usr/bin/python3 3.9.6 environment?",
+ "method": "Same code (git HEAD a36547c), same tracked and sumo/ inputs, cold caches in separate isolated copies, one forecast day 2027-05-13 00:00-24:00 via build_sumo_demand.py, then run_scenario.py baseline and tools/check_map_matches_sensors.py; runs sequential on one machine.",
+ "runs": [
+  {
+   "label": "old_py39_sumo1.27.1",
+   "interpreter": "/usr/bin/python3",
+   "python": "3.9.6",
+   "eclipse_sumo": "1.27.1",
+   "demand_build": "succeeded",
+   "build_seconds": 154,
+   "scenario_seconds": 7,
+   "pfe_fit": {
+    "geh_pct": 100.0,
+    "infeasible_intervals": 0,
+    "vehicles": 20486
+   },
+   "validation": {
+    "overall": "warn",
+    "sections": {
+     "counts_fit": "pass",
+     "structure": "warn",
+     "purposes": "warn",
+     "simulation": "pass",
+     "sensor_output": "pass",
+     "sensor_output_exact": "pass",
+     "multi_day": "pass",
+     "held_out": "missing",
+     "temporal_holdout": "missing"
+    }
+   },
+   "map_vs_sensors": [
+    "15 min, directed         n=  672  GEH<5: 100.0%  max 0.305  MAE 0.07  OK",
+    "15 min, animated cars    n=  672  GEH<5: 100.0%  max 0.305  MAE 0.07  OK",
+    "60 min, directed         n=  168  GEH<5: 100.0%  max 0.402  MAE 0.14  OK",
+    "15 min, station total    n=  576  GEH<5: 100.0%  max 0.000  MAE 0.00  OK"
+   ]
+  },
+  {
+   "label": "venv_py312_sumo1.28.0",
+   "interpreter": ".venv/bin/python",
+   "python": "3.12.14",
+   "eclipse_sumo": "1.28.0",
+   "demand_build": "failed",
+   "build_seconds": 115,
+   "error": "ValueError: route-time projection does not reconstruct raw entered cells"
+  },
+  {
+   "label": "venv_py312_sumo1.27.1",
+   "interpreter": ".venv/bin/python",
+   "python": "3.12.14",
+   "eclipse_sumo": "1.27.1",
+   "demand_build": "succeeded",
+   "build_seconds": 130,
+   "scenario_seconds": 6,
+   "pfe_fit": {
+    "geh_pct": 100.0,
+    "infeasible_intervals": 0,
+    "vehicles": 20342
+   },
+   "validation": {
+    "overall": "warn",
+    "sections": {
+     "counts_fit": "pass",
+     "structure": "warn",
+     "purposes": "warn",
+     "simulation": "pass",
+     "sensor_output": "pass",
+     "sensor_output_exact": "pass",
+     "multi_day": "pass",
+     "held_out": "missing",
+     "temporal_holdout": "missing"
+    }
+   },
+   "map_vs_sensors": [
+    "15 min, directed         n=  672  GEH<5: 100.0%  max 0.305  MAE 0.07  OK",
+    "15 min, animated cars    n=  672  GEH<5: 100.0%  max 0.305  MAE 0.07  OK",
+    "60 min, directed         n=  168  GEH<5: 100.0%  max 0.402  MAE 0.14  OK",
+    "15 min, station total    n=  576  GEH<5: 100.0%  max 0.000  MAE 0.00  OK"
+   ]
+  }
+ ],
+ "also_measured": {
+  "direction_split_identical_across_envs": true,
+  "derived_sensor_targets_max_abs_diff_py312_vs_frozen": 2.1316282072803006e-14,
+  "full_suite_py39": "1 failed (a version-dependent test of this change, fixed), 7057 passed, 52 skipped",
+  "full_suite_venv_sumo1.28": "4 failed, 7046 passed: two import-closure tests counted in-repo site-packages (fixed), libsumo preflight machine record and exact-equality map check differ by environment",
+  "route_catalog_and_demand_caches_bind_runtime": "python version, platform, numpy/scipy/networkx/osmnx/shapely versions and the duarouter binary"
+ },
+ "conclusion": "Not better: identical sensor fit and validation outcome when SUMO is 1.27.1; SUMO 1.28.0 breaks demand calibration. Kept /usr/bin/python3 3.9.6 + SUMO 1.27.1 (adopted via .simulation-python); pinned eclipse-sumo==1.27.1 and sumo-data==1.27.1 in requirements.txt.",
+ "superseded_by": "Same day: migration to a locked Python 3.12.15 .venv at the project owner's request; the count difference is explained in validation/demand_count_difference_investigation_20261010.json."
+}

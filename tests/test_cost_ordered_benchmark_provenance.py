@@ -97,6 +97,12 @@ from pathlib import Path
 import sys
 
 ROOT = Path.cwd().resolve()
+# Installed packages are third-party even when the environment lives inside
+# the checkout (the documented .venv): CI installs them outside ROOT, so
+# without this the same closure measured differently on a developer machine.
+import sysconfig
+SITE = {Path(sysconfig.get_paths()[key]).resolve()
+        for key in ("purelib", "platlib")}
 import tools.product_arm
 import run_monthly_closure_search
 from traffic_sim.simulation import cost_ordered_execution
@@ -111,8 +117,11 @@ for module in list(sys.modules.values()):
     filename = getattr(module, "__file__", None)
     if not filename:
         continue
+    resolved = Path(filename).resolve()
+    if any(resolved.is_relative_to(site) for site in SITE):
+        continue
     try:
-        relative = Path(filename).resolve().relative_to(ROOT)
+        relative = resolved.relative_to(ROOT)
     except ValueError:
         continue
     if relative.parts[0] in ("tests", ".git"):

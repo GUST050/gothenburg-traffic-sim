@@ -1,0 +1,151 @@
+{
+ "kind": "demand_vehicle_count_difference_investigation",
+ "date": "2026-10-10",
+ "release_evidence": false,
+ "question": "Why did the same 2027-05-13 forecast build give 20486 vehicles on the old environment and 20342 on the Python 3.12 venv?",
+ "method": "Same code, same sumo/ inputs (sha-verified), same seed and arguments (--date 2027-05-13 --begin 00:00 --end 24:00 --source forecast), cold isolated workspaces, sequential runs. One factor varied at a time; every output file hashed; every pfe milp/linprog call logged with input and solution hashes (diagnostic wrapper, outputs unchanged by it).",
+ "runs": [
+  {
+   "label": "E0_run1",
+   "python": "3.9.6",
+   "scipy": "1.13.1",
+   "solver": "HiGHS 1.2.0",
+   "packages": "old 3.9 user-site set",
+   "vehicles": 20486,
+   "integer_sensor_exact": "672/672",
+   "geh_pct": 100.0,
+   "purpose_counts": {
+    "arbete": 9672,
+    "external": 1798,
+    "fritid": 4012,
+    "service": 4624,
+    "through": 380
+   },
+   "candidates_rou_sha256": "523c74d919a374ad1917e76b8e088de22ba47a02f6c662779959600309543038",
+   "tours_trips_sha256": "ae13f4d191f6585a4ba28296dccc9f763976f8ee07e18d771d3a019b30bb2784",
+   "calibrated_rou_sha256": "ff87b51da10240c3e374f3689a6006e90b0f365b73fb8416f7a00cf2c51017cc"
+  },
+  {
+   "label": "E0_run2",
+   "python": "3.9.6",
+   "scipy": "1.13.1",
+   "solver": "HiGHS 1.2.0",
+   "packages": "old 3.9 user-site set",
+   "vehicles": 20486,
+   "integer_sensor_exact": "672/672",
+   "geh_pct": 100.0,
+   "purpose_counts": {
+    "arbete": 9672,
+    "external": 1798,
+    "fritid": 4012,
+    "service": 4624,
+    "through": 380
+   },
+   "candidates_rou_sha256": "523c74d919a374ad1917e76b8e088de22ba47a02f6c662779959600309543038",
+   "tours_trips_sha256": "ae13f4d191f6585a4ba28296dccc9f763976f8ee07e18d771d3a019b30bb2784",
+   "calibrated_rou_sha256": "ff87b51da10240c3e374f3689a6006e90b0f365b73fb8416f7a00cf2c51017cc"
+  },
+  {
+   "label": "E1",
+   "python": "3.12.15",
+   "scipy": "1.13.1",
+   "solver": "HiGHS 1.2.0",
+   "packages": "old versions of every package",
+   "vehicles": 20486,
+   "integer_sensor_exact": "672/672",
+   "geh_pct": 100.0,
+   "purpose_counts": {
+    "arbete": 9672,
+    "external": 1798,
+    "fritid": 4012,
+    "service": 4624,
+    "through": 380
+   },
+   "candidates_rou_sha256": "523c74d919a374ad1917e76b8e088de22ba47a02f6c662779959600309543038",
+   "tours_trips_sha256": "ae13f4d191f6585a4ba28296dccc9f763976f8ee07e18d771d3a019b30bb2784",
+   "calibrated_rou_sha256": "ff87b51da10240c3e374f3689a6006e90b0f365b73fb8416f7a00cf2c51017cc"
+  },
+  {
+   "label": "E3",
+   "python": "3.12.15",
+   "scipy": "1.18.1",
+   "solver": "HiGHS 1.12.0",
+   "packages": "old versions except scipy",
+   "vehicles": 20342,
+   "integer_sensor_exact": "672/672",
+   "geh_pct": 100.0,
+   "purpose_counts": {
+    "arbete": 9609,
+    "external": 1640,
+    "fritid": 3926,
+    "service": 4879,
+    "through": 288
+   },
+   "candidates_rou_sha256": "523c74d919a374ad1917e76b8e088de22ba47a02f6c662779959600309543038",
+   "tours_trips_sha256": "ae13f4d191f6585a4ba28296dccc9f763976f8ee07e18d771d3a019b30bb2784",
+   "calibrated_rou_sha256": "1d1bc374fb3b2d6826664fdc9cd1520d8a6354363876f4a39b1de9da9697cdf6"
+  },
+  {
+   "label": "E2_run1",
+   "python": "3.12.15",
+   "scipy": "1.18.1",
+   "solver": "HiGHS 1.12.0",
+   "packages": "requirements.lock",
+   "vehicles": 20342,
+   "integer_sensor_exact": "672/672",
+   "geh_pct": 100.0,
+   "purpose_counts": {
+    "arbete": 9609,
+    "external": 1640,
+    "fritid": 3926,
+    "service": 4879,
+    "through": 288
+   },
+   "candidates_rou_sha256": "523c74d919a374ad1917e76b8e088de22ba47a02f6c662779959600309543038",
+   "tours_trips_sha256": "ae13f4d191f6585a4ba28296dccc9f763976f8ee07e18d771d3a019b30bb2784",
+   "calibrated_rou_sha256": "1d1bc374fb3b2d6826664fdc9cd1520d8a6354363876f4a39b1de9da9697cdf6"
+  },
+  {
+   "label": "E2_run2",
+   "python": "3.12.15",
+   "scipy": "1.18.1",
+   "solver": "HiGHS 1.12.0",
+   "packages": "requirements.lock",
+   "vehicles": 20342,
+   "integer_sensor_exact": "672/672",
+   "geh_pct": 100.0,
+   "purpose_counts": {
+    "arbete": 9609,
+    "external": 1640,
+    "fritid": 3926,
+    "service": 4879,
+    "through": 288
+   },
+   "candidates_rou_sha256": "523c74d919a374ad1917e76b8e088de22ba47a02f6c662779959600309543038",
+   "tours_trips_sha256": "ae13f4d191f6585a4ba28296dccc9f763976f8ee07e18d771d3a019b30bb2784",
+   "calibrated_rou_sha256": "1d1bc374fb3b2d6826664fdc9cd1520d8a6354363876f4a39b1de9da9697cdf6"
+  }
+ ],
+ "solver_trace": {
+  "calls_per_build": 665,
+  "functions": {
+   "milp": 665
+  },
+  "identical_problems": 133,
+  "same_solution": 31,
+  "different_solution": 102,
+  "different_solution_with_equal_optimal_objective": 102,
+  "problems_downstream_of_a_different_answer": 532,
+  "time_limit_or_other_statuses": 0,
+  "nonzero_mip_gaps": 0
+ },
+ "findings": [
+  "Each environment is deterministic: two runs give bit-identical calibrated.rou.xml.",
+  "Python 3.9.6 -> 3.12.15 has no effect: E1 is bit-identical to E0.",
+  "The candidate route pool and trip generation are bit-identical across all environments; candidates.meta.json differs only in route_cost_s at the 12th significant digit (float summation order).",
+  "scipy 1.13.1 -> 1.18.1 alone reproduces the whole difference: E3 is bit-identical to E2.",
+  "Mechanism: the integer projection MILP in traffic_sim/demand/pfe.py has non-unique optima. HiGHS 1.2.0 and 1.12.0 return different, equally optimal solutions for identical problems, and later problems inherit the difference.",
+  "Same sensor fit is not equivalence: both hit 672/672 integer sensor targets exactly, yet through 380->288, external 1798->1640, service 4624->4879 vehicles."
+ ],
+ "consequence": "Results are reproducible only with the exact solver version, which requirements.lock now pins (scipy==1.18.1). The choice among tied optima is arbitrary with respect to the model; a deterministic, solver-independent tie-break would be a model change and is out of scope for this migration."
+}

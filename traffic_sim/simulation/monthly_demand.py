@@ -30,7 +30,7 @@ from traffic_sim.core.contracts import (
     DemandBuildSpec,
     write_demand_build_spec,
 )
-from traffic_sim.core.fingerprint import sha256_file, sumo_version
+from traffic_sim.core.fingerprint import sha256_file, solver_runtime, sumo_version
 from traffic_sim.demand.build_lock import child_environment, demand_build_lock
 from traffic_sim.demand.source_identity import demand_source_fingerprints
 from traffic_sim.ops import io_phases
@@ -390,9 +390,15 @@ def _manifest_outputs(manifest: Mapping[str, Any]) -> dict[str, Mapping[str, Any
 
 
 @lru_cache(maxsize=1)
-def _current_demand_runtime() -> tuple[str, str | None]:
-    """Runtime fields recorded by ``make_fingerprint`` for reuse validation."""
-    return sys.version.split()[0], sumo_version(sumo_home())
+def _current_demand_runtime() -> tuple[str, str | None, dict]:
+    """Runtime fields recorded by ``make_fingerprint`` for reuse validation.
+
+    The solver runtime is part of it: the same Python and SUMO with another
+    scipy/HiGHS produce a different calibrated population (2026-10-10), so
+    such an archive is incompatible, and one recorded before the field
+    existed cannot prove its solver and is treated the same way.
+    """
+    return sys.version.split()[0], sumo_version(sumo_home()), solver_runtime()
 GENERATION_SOURCE_FILES = ("build_candidates", "pfe", "build_sumo_demand")
 
 
@@ -689,9 +695,10 @@ def validate_demand_archive(
             _PROJECT_ROOT):
         raise ValueError(
             f"demand archive was produced by different source code: {archive}")
-    current_python, current_sumo = _current_demand_runtime()
+    current_python, current_sumo, current_solver = _current_demand_runtime()
     if build_fingerprint.get("python") != current_python \
-            or build_fingerprint.get("sumo_version") != current_sumo:
+            or build_fingerprint.get("sumo_version") != current_sumo \
+            or build_fingerprint.get("solver_runtime") != current_solver:
         raise ValueError(
             f"demand archive was produced by a different runtime: {archive}")
     metadata_spec = DemandBuildSpec.from_dict(metadata.get("demand_spec", {}))

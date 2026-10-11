@@ -20,7 +20,6 @@ many vehicles a real closure strands.
 
 Skipped when SUMO is not installed, so the suite still runs without it.
 """
-import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -33,29 +32,38 @@ sys.path.insert(0, str(ROOT))
 
 from traffic_sim.simulation import closure_teleport as ct
 from traffic_sim.simulation.metrics import active_closure_throughput
+from traffic_sim.simulation.runtime import SumoRuntimeError, sumo_home
 
 PROBE = ROOT / "tools" / "c1_temporary_closure_probe"
 CLOSED_EDGE = "no_closed"
-SIM_END_S = 1800
+CLOSURE_BEGIN_S = 21  # vehicle departs at 20, before its route becomes illegal
+SIM_END_S = CLOSURE_BEGIN_S + 1800
 INTERVAL_S = 900
 
+try:
+    SUMO_ROOT = sumo_home()
+except SumoRuntimeError:
+    SUMO_ROOT = None
+SUMO = SUMO_ROOT / "bin" / "sumo" if SUMO_ROOT else None
+NETCONVERT = SUMO_ROOT / "bin" / "netconvert" if SUMO_ROOT else None
 pytestmark = pytest.mark.skipif(
-    shutil.which("sumo") is None or shutil.which("netconvert") is None,
-    reason="SUMO is not installed")
+    not (SUMO and SUMO.is_file() and NETCONVERT and NETCONVERT.is_file()),
+    reason="the project's SUMO installation is unavailable")
 
 
 def _build_network(work: Path) -> Path:
     net = work / "net.net.xml"
-    subprocess.run(
-        ["netconvert", "-n", str(PROBE / "net.nod.xml"),
+    result = subprocess.run(
+        [str(NETCONVERT), "-n", str(PROBE / "net.nod.xml"),
          "-e", str(PROBE / "net.edg.xml"), "-o", str(net),
          "--no-warnings", "true"],
-        check=True, capture_output=True)
+        check=False, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
     return net
 
 
 def _write_additionals(work: Path) -> tuple[Path, Path]:
-    """EdgeData over the whole run, and a closure that spans all of it.
+    """EdgeData buckets entirely inside the active closure.
 
     The closure must cover every measured bucket: `active_closure_throughput`
     counts only fully-contained 15-minute intervals, precisely so a bucket
@@ -68,13 +76,13 @@ def _write_additionals(work: Path) -> tuple[Path, Path]:
     edgedata.write_text(
         '<additional>\n'
         f'  <edgeData id="ed" file="edgedata.xml" period="{INTERVAL_S}" '
-        f'begin="0" end="{SIM_END_S}" excludeEmpty="true"/>\n'
+        f'begin="{CLOSURE_BEGIN_S}" end="{SIM_END_S}" excludeEmpty="true"/>\n'
         '</additional>\n')
     closure = work / "closure.add.xml"
     closure.write_text(
         '<additional>\n'
         '  <rerouter id="closure" edges="no_in">\n'
-        f'    <interval begin="0" end="{SIM_END_S}">\n'
+        f'    <interval begin="{CLOSURE_BEGIN_S}" end="{SIM_END_S}">\n'
         f'      <closingReroute id="{CLOSED_EDGE}" disallow="all"/>\n'
         '    </interval>\n'
         '  </rerouter>\n'
@@ -87,8 +95,8 @@ def _run(work: Path, label: str, time_to_teleport_s) -> dict:
     edgedata, closure = _write_additionals(work)
     stats = work / f"stats_{label}.xml"
     tripinfo = work / f"trip_{label}.xml"
-    subprocess.run(
-        ["sumo", "-n", str(net), "-r", str(PROBE / "long.rou.xml"),
+    result = subprocess.run(
+        [str(SUMO), "-n", str(net), "-r", str(PROBE / "long.rou.xml"),
          "-a", f"{edgedata},{closure}",
          "--seed", "1000", "--begin", "0", "--end", str(SIM_END_S),
          "--no-step-log", "true", "--no-warnings", "true",
@@ -98,11 +106,12 @@ def _run(work: Path, label: str, time_to_teleport_s) -> dict:
          "--tripinfo-output", str(tripinfo),
          "--tripinfo-output.write-unfinished", "true",
          *ct.sumo_arguments(time_to_teleport_s)],
-        cwd=work, check=True, capture_output=True)
+        cwd=work, check=False, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
 
-    quarters = [0.0] * (SIM_END_S // INTERVAL_S)
+    quarters = [0.0] * ((SIM_END_S - CLOSURE_BEGIN_S) // INTERVAL_S)
     for interval in ET.parse(work / "edgedata.xml").getroot().iter("interval"):
-        index = int(float(interval.get("begin")) // INTERVAL_S)
+        index = int((float(interval.get("begin")) - CLOSURE_BEGIN_S) // INTERVAL_S)
         for edge in interval.iter("edge"):
             if edge.get("id") == CLOSED_EDGE and index < len(quarters):
                 quarters[index] += float(edge.get("entered", 0))
@@ -113,7 +122,8 @@ def _run(work: Path, label: str, time_to_teleport_s) -> dict:
     return {
         "closed_edge_throughput": active_closure_throughput(
             {CLOSED_EDGE: quarters},
-            [{"edge_id": CLOSED_EDGE, "begin_s": 0, "end_s": SIM_END_S}]),
+            [{"edge_id": CLOSED_EDGE, "begin_s": CLOSURE_BEGIN_S,
+              "end_s": SIM_END_S}], window_begin_s=CLOSURE_BEGIN_S),
         "teleport_total": int(teleports.get("total", 0)) if teleports is not None else 0,
         "unfinished_trips": sum(
             1 for trip in trips

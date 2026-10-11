@@ -33,8 +33,10 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 2
 fi
 
-if ! python3 -c 'import sys; sys.exit(0 if sys.version_info[:2] in ((3, 11), (3, 12)) else 1)' 2>/dev/null; then
-    echo 'Use Python 3.11 or 3.12 in WSL. Ubuntu 24.04 provides Python 3.12.' >&2
+# requirements.lock is resolved for Python 3.12 exactly; the server refuses to
+# simulate on an environment that deviates from the lock.
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info[:2] == (3, 12) else 1)' 2>/dev/null; then
+    echo 'Use Python 3.12 in WSL (the project lock is resolved for it). Ubuntu 24.04 provides Python 3.12.' >&2
     exit 2
 fi
 
@@ -52,20 +54,28 @@ export TRAFFIC_SIM_INTERACTIVE_WORKER_CAP="$usable_cpus"
 echo "WSL exposes $usable_cpus usable logical CPUs; interactive workers are capped accordingly."
 
 venv_python="$repo_root/.venv/bin/python"
-if [[ ! -x "$venv_python" ]]; then
-    echo 'Creating the project virtual environment...'
-    if ! python3 -m venv "$repo_root/.venv"; then
+requirements_hash=$(sha256sum requirements.lock)
+requirements_hash=${requirements_hash%% *}
+stamp="$repo_root/.venv/.gs-wsl-requirements.sha256"
+
+venv_runs_lock_python() {
+    [[ -x "$venv_python" ]] &&
+        "$venv_python" -c 'import sys; sys.exit(0 if sys.version_info[:2] == (3, 12) else 1)' 2>/dev/null
+}
+
+# Rebuilt from scratch, never patched, when the venv is missing, runs another
+# Python (a .venv from an older 3.11 run would take the 3.12-only lock half
+# way), or was installed from another lock (a package dropped from the lock
+# must not linger). Same rule as `make setup` on macOS/Linux.
+if ! venv_runs_lock_python || [[ ! -f "$stamp" ]] ||
+   [[ "$(cat -- "$stamp")" != "$requirements_hash" ]]; then
+    echo 'Building the project virtual environment from requirements.lock (first run may take a while)...'
+    if ! python3 -m venv --clear "$repo_root/.venv"; then
         echo 'Install venv in Ubuntu: sudo apt update && sudo apt install python3-venv' >&2
         exit 2
     fi
-fi
-
-requirements_hash=$(sha256sum requirements.txt)
-requirements_hash=${requirements_hash%% *}
-stamp="$repo_root/.venv/.gs-wsl-requirements.sha256"
-if [[ ! -f "$stamp" ]] || [[ "$(cat -- "$stamp")" != "$requirements_hash" ]]; then
-    echo 'Installing Python and SUMO packages (first run may take a while)...'
-    "$venv_python" -m pip install -r requirements.txt
+    "$venv_python" -m pip install --no-deps -r requirements.lock
+    "$venv_python" -m pip check
     printf '%s\n' "$requirements_hash" > "$stamp"
 fi
 

@@ -13,8 +13,17 @@ lazy signal_optimize import below for why that is a deliberate property.
 
 Endpoints:
   GET /...                    — static files from web/
-  GET /api/ping               — {"ok": true}; the web app uses this to decide
-                                whether to show the "Stäng väg" feature
+  GET /api/ping               — {"ok": true, "simulation": {...}}; "ok" says
+                                a server answers (the viewer works), and
+                                "simulation" says whether THIS interpreter
+                                can run jobs (status ready|unavailable|
+                                unknown|checking, with the missing pieces
+                                and the fix). The web app enables the
+                                simulation workspaces from it. Before
+                                2026-10-10 it only said "ok", so a server
+                                without pandas/SUMO still offered jobs that
+                                could only fail — see
+                                traffic_sim/simulation/interpreter.py.
   POST /api/close?edges=a,b,c — legacy loose-parameter form; starts
                                 run_scenario.py --close a b c (Monte
                                 Carlo, ~30–90 s) in a BACKGROUND THREAD and
@@ -204,12 +213,26 @@ from traffic_sim.demand.route_support import combined_route_edges
 from traffic_sim.simulation.workspace import WorkspaceLock, workspace_holder
 from traffic_sim.simulation.runtime import sumo_home
 from traffic_sim.simulation.metadata import network_edge_ids
+from traffic_sim.simulation import interpreter
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
 
 ROOT     = Path(__file__).parent
 WEB_DIR  = ROOT / "web"
+
+# Can THIS interpreter run the jobs below? Every job runs as a child of
+# sys.executable, so the probe judges exactly that interpreter, in a child
+# process (the server itself must stay standard-library only).
+def simulation_readiness_monitor() -> interpreter.ReadinessMonitor:
+    """The probe judges sys.executable; its verdict goes stale whenever the
+    lock or the installed packages change (review 2026-10-10)."""
+    return interpreter.ReadinessMonitor(
+        lambda: interpreter.probe_readiness(sys.executable, ROOT),
+        inputs=lambda: interpreter.readiness_inputs(ROOT))
+
+
+SIMULATION_READINESS = simulation_readiness_monitor()
 SCEN_DIR = WEB_DIR / "data" / "scenarios"
 # Exact interactive closure results are reusable only when the complete
 # request and the inputs/code that produced it are unchanged.  Keep the cache
@@ -885,6 +908,28 @@ def simulation_recovery_block() -> dict | None:
     }
 
 
+# How long a job request waits for a readiness check that is still running.
+ADMISSION_CHECK_WAIT_S = interpreter.PROBE_TIMEOUT_S
+
+
+def simulation_admission_block() -> dict | None:
+    """The one admission check every job endpoint runs before starting.
+
+    Stranded jobs come first (E4/P0). Then: can this interpreter run the job
+    at all? Only a completed "ready" verdict admits. "unavailable", an
+    inconclusive "unknown" and a check still "checking" all refuse with the
+    reason — an incomplete check is never reported or treated as ready
+    (project owner's requirement, 2026-10-10).
+    """
+    blocked = simulation_recovery_block()
+    if blocked:
+        return blocked
+    readiness = SIMULATION_READINESS.for_admission(timeout=ADMISSION_CHECK_WAIT_S)
+    if readiness.ready:
+        return None
+    return {"error": readiness.message(), "simulation": readiness.to_public()}
+
+
 def _acknowledge_orphan(job_id: str) -> tuple[bool, str]:
     """Stop or acknowledge one persisted orphan and release the gate."""
     global _RECOVERY_BLOCKED
@@ -1018,9 +1063,11 @@ def run_in_new_session(cmd: list[str], *, cwd: str,
     grandchild test). start_new_session makes the child a process-group
     leader (pgid == its pid), so one killpg reaps the entire tree.
     """
+    # child_env: PYTHON_COLORS=0, so an inherited FORCE_COLOR never puts ANSI
+    # codes into the stderr that becomes a UI error message (2026-10-10).
     proc = subprocess.Popen(cmd, cwd=cwd, start_new_session=True,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True)
+                            text=True, env=interpreter.child_env())
     with _active_job_lock:
         if _active_job["kind"] is not None:
             _active_job["process"] = proc
@@ -1898,7 +1945,10 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.startswith("/api/ping"):
-            return self._json(200, {"ok": True})
+            # current(), never for_admission(): ping must not wait on a probe.
+            return self._json(200, {
+                "ok": True,
+                "simulation": SIMULATION_READINESS.current().to_public()})
         if self.path.startswith("/api/close/status"):
             return self._close_status()
         if self.path.startswith("/api/recalibrate/status"):
@@ -2060,7 +2110,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(400, {"error": "begin/end måste vara ISO-datetime "
                                     "(YYYY-MM-DDTHH:MM[:SS])"})
 
-        blocked = simulation_recovery_block()
+        blocked = simulation_admission_block()
         if blocked:
             return self._json(503, blocked)
 
@@ -2255,8 +2305,10 @@ class Handler(SimpleHTTPRequestHandler):
                         error=("avstängningen kunde inte verifieras: fordon använde "
                                "den stängda vägen eller så saknas edgeData-bevis"))
                     return
-                self._set_close(status="error",
-                                error="simuleringen misslyckades — se serverloggen")
+                self._set_close(
+                    status="error",
+                    error=(interpreter.missing_module_fix(res.stderr)
+                           or "simuleringen misslyckades — se serverloggen"))
                 return
 
             # Matching by closed_edges alone (the old approach) breaks once
@@ -2361,7 +2413,7 @@ class Handler(SimpleHTTPRequestHandler):
         source = demand_spec.source
         days = demand_spec.days
 
-        blocked = simulation_recovery_block()
+        blocked = simulation_admission_block()
         if blocked:
             return self._json(503, blocked)
         if not _sim_lock.acquire(blocking=False):
@@ -2455,8 +2507,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             if res.returncode != 0:
                 print(res.stdout[-2000:], res.stderr[-2000:])
-                last_line = res.stderr.strip().splitlines()[-1] if res.stderr.strip() else ""
-                msg = last_line if len(last_line) < 200 else "omkalibreringen misslyckades — se serverloggen"
+                msg = interpreter.job_failure_message(
+                    res.stderr, "omkalibreringen misslyckades — se serverloggen")
                 self._set_recal(status="error",
                                 error=f"{msg} (gamla scenarier behålls)")
                 return
@@ -2476,9 +2528,11 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             if res2.returncode != 0:
                 print(res2.stdout[-2000:], res2.stderr[-2000:])
+                fix = interpreter.missing_module_fix(res2.stderr)
                 self._set_recal(status="error",
-                                error="ny baslinje kunde inte byggas — "
-                                      "gamla scenarier behålls")
+                                error=(f"{fix} (gamla scenarier behålls)" if fix
+                                       else "ny baslinje kunde inte byggas — "
+                                            "gamla scenarier behålls"))
                 return
 
             ok, reason = validate_staged_scenarios(
@@ -2634,7 +2688,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(400, {"error":
                                     "seeds måste vara 12, 15, 18, 21 eller 24"})
 
-        blocked = simulation_recovery_block()
+        blocked = simulation_admission_block()
         if blocked:
             return self._json(503, blocked)
         if not _sim_lock.acquire(blocking=False):
@@ -2704,10 +2758,8 @@ class Handler(SimpleHTTPRequestHandler):
                 # baseline, unknown edge, duration doesn't fit the demand
                 # period) are sys.exit(msg) — surfaced verbatim to the UI
                 # instead of a generic message, same as /api/recalibrate.
-                tail = res.stderr.strip().splitlines()
-                last_line = tail[-1] if tail else ""
-                msg = last_line if last_line and len(last_line) < 200 else \
-                     "förslaget kunde inte beräknas — se serverloggen"
+                msg = interpreter.job_failure_message(
+                    res.stderr, "förslaget kunde inte beräknas — se serverloggen")
                 self._set_suggest(status="error", error=msg)
                 return
 
@@ -2781,7 +2833,7 @@ class Handler(SimpleHTTPRequestHandler):
         if edges and not self._require_supported_closure_edges(edges):
             return
 
-        blocked = simulation_recovery_block()
+        blocked = simulation_admission_block()
         if blocked:
             return self._json(503, blocked)
         if not _sim_lock.acquire(blocking=False):
@@ -2858,10 +2910,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             if res.returncode != 0:
                 print(res.stdout[-2000:], res.stderr[-2000:])
-                tail = res.stderr.strip().splitlines()
-                last_line = tail[-1] if tail else ""
-                msg = last_line if last_line and len(last_line) < 200 else \
-                     "signaloptimeringen misslyckades — se serverloggen"
+                msg = interpreter.job_failure_message(
+                    res.stderr, "signaloptimeringen misslyckades — se serverloggen")
                 self._set_optimize(status="error", error=msg)
                 return
 
@@ -2883,8 +2933,7 @@ class Handler(SimpleHTTPRequestHandler):
             # Name it — the generic handler below would only say ImportError.
             self._set_optimize(
                 status="error",
-                error=f"simuleringsberoendet {e.name!r} saknas — kör "
-                      "`pip install -r requirements.txt`")
+                error=interpreter.missing_packages_message((e.name,)))
         except Exception as e:
             print(f"optimize_signals: unexpected {type(e).__name__}: {e}")
             self._set_optimize(status="error",
@@ -3018,7 +3067,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(500, {"error":
                 "månadspolicyn är inte golden_frozen — sökning vägras"})
 
-        blocked = simulation_recovery_block()
+        blocked = simulation_admission_block()
         if blocked:
             return self._json(503, blocked)
         if not _sim_lock.acquire(blocking=False):
@@ -3122,10 +3171,9 @@ class Handler(SimpleHTTPRequestHandler):
                 # (over-cap enumeration, failed/cancelled workspace, missing
                 # demand archive) are SystemExit(msg) — surface them
                 # verbatim, same as /api/suggest_closure.
-                tail = res.stderr.strip().splitlines()
-                last_line = tail[-1] if tail else ""
-                msg = last_line if last_line and len(last_line) < 300 else \
-                    "månadssökningen misslyckades — se serverloggen"
+                msg = interpreter.job_failure_message(
+                    res.stderr, "månadssökningen misslyckades — se serverloggen",
+                    max_length=300)
                 self._set_monthly(status="error", error=msg)
                 return
             manifest_path = (MONTHLY_SEARCH_ROOT / spec.search_id
@@ -3378,8 +3426,8 @@ class Handler(SimpleHTTPRequestHandler):
         except ImportError:
             self._set_delay_profile(
                 status="error", search_id=search_id,
-                error="Python-beroenden för analysen saknas. Installera "
-                      "requirements.txt och starta om servern.")
+                error="Python-beroenden för analysen saknas. "
+                      + interpreter.FIX_SENTENCE)
             return
 
         try:
@@ -3531,6 +3579,9 @@ def main(argv: Sequence[str] = ()) -> None:
         print(f"Port {options.port} var upptagen — startar på {port} "
               f"i stället.")
     print(f"Serving web/ + scenario-API på {url}")
+    # After the bind: the map is already reachable while the check runs.
+    SIMULATION_READINESS.start(
+        on_result=lambda r: print(f"Simulering: {r.message()}", flush=True))
     if options.open_browser:
         # After the bind, so the browser never races the listening socket.
         threading.Thread(target=webbrowser.open, args=(url,),
@@ -3542,4 +3593,10 @@ def main(argv: Sequence[str] = ()) -> None:
 
 
 if __name__ == "__main__":
+    # Before anything binds: a server started on an interpreter that cannot
+    # simulate hands over to the project's .venv when that one can, so every
+    # job inherits a working interpreter. A working interpreter is never
+    # replaced (its caches bind its exact runtime) — see interpreter.py.
+    interpreter.relaunch_if_needed(ROOT, Path(__file__).resolve(),
+                                   sys.argv[1:])
     main(sys.argv[1:])

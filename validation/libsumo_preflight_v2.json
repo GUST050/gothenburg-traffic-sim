@@ -1,15 +1,15 @@
 {
  "binaries": {
   "duarouter": {
-   "path": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo/bin/duarouter",
+   "path": "/Users/gt/Documents/gs-project/.venv/lib/python3.12/site-packages/sumo/bin/duarouter",
    "version": "Eclipse SUMO duarouter 1.27.1"
   },
   "netconvert": {
-   "path": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo/bin/netconvert",
+   "path": "/Users/gt/Documents/gs-project/.venv/lib/python3.12/site-packages/sumo/bin/netconvert",
    "version": "Eclipse SUMO netconvert 1.27.1"
   },
   "sumo": {
-   "path": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo/bin/sumo",
+   "path": "/Users/gt/Documents/gs-project/.venv/lib/python3.12/site-packages/sumo/bin/sumo",
    "version": "Eclipse SUMO sumo 1.27.1"
   }
  },
@@ -24,20 +24,20 @@
   "pr_g_persistent_sumo": "blocked",
   "seed_worker_budget_unchanged": true
  },
- "content_key": "174faf0fead2132665f791583975539b2066dd48572794d16517f5170fe8d3c5",
+ "content_key": "6dd8a32a52194ce2b20ea3ca10e89c23ce5f0f954dee92ee2e06b46f831dbe95",
  "distribution": {
   "libsumo_cpp_library": [
    "lib/libsumocpp.dylib"
   ],
   "libsumo_headers": true,
   "libsumo_python_binding": [],
-  "root": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo"
+  "root": "/Users/gt/Documents/gs-project/.venv/lib/python3.12/site-packages/sumo"
  },
  "environment": {
   "SUMO_HOME": null,
-  "executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+  "executable": "/Users/gt/Documents/gs-project/.venv/bin/python",
   "platform": "macOS-15.6.1-arm64-arm-64bit",
-  "python": "3.9.6"
+  "python": "3.12.15"
  },
  "evidence_class": "environment_preflight",
  "installed_anything": false,
@@ -62,7 +62,7 @@
    "why": "network/route helpers the product already uses",
    "with_sumo_tools_on_path": {
     "importable": true,
-    "origin": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo/tools/sumolib/__init__.py"
+    "origin": "/Users/gt/Documents/gs-project/.venv/lib/python3.12/site-packages/sumo/tools/sumolib/__init__.py"
    }
   },
   "traci": {
@@ -73,7 +73,7 @@
    "why": "the socket fallback PR G would replace",
    "with_sumo_tools_on_path": {
     "importable": true,
-    "origin": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo/tools/traci/__init__.py"
+    "origin": "/Users/gt/Documents/gs-project/.venv/lib/python3.12/site-packages/sumo/tools/traci/__init__.py"
    }
   }
  },
@@ -83,8 +83,8 @@
  "stage": "closure_search_scaling_plan_pr_g",
  "sumo_home": {
   "error": null,
-  "resolved_by_project": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo",
-  "tools_dir": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo/tools",
+  "resolved_by_project": "/Users/gt/Documents/gs-project/.venv/lib/python3.12/site-packages/sumo",
+  "tools_dir": "/Users/gt/Documents/gs-project/.venv/lib/python3.12/site-packages/sumo/tools",
   "tools_dir_exists": true
  },
  "verdict": "blocked_missing_python_binding"

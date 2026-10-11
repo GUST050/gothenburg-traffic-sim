@@ -818,13 +818,19 @@ class TestRealSharedPrepComposition:
 
 
 class TestRealAssemblerContextIsFaithful:
-    """`build_assembler_context` reads the real static net/demand/geojson (no
-    SUMO) and must reproduce production's ScenarioSpec fields."""
+    """Real static net/geojson and declared day metadata produce production
+    ScenarioSpec fields, without requiring an untracked released demand."""
 
-    def test_spec_has_production_identity(self):
+    def test_spec_has_production_identity(self, tmp_path, monkeypatch):
+        (tmp_path / "demand_meta.json").write_text(json.dumps({
+            "epoch_sim": "2025-09-16T00:00:00", "date": "2025-09-16",
+            "begin": "00:00", "end": "24:00", "build_id": "fixture-demand",
+            "demand_signature": "fixture-signature"}), encoding="utf-8")
+        monkeypatch.setattr(h, "SUMO_DIR", tmp_path)
         ctx = h.build_assembler_context()
         base = ctx["spec_for"]("baseline")
         clos = ctx["spec_for"]("closure")
+        assert base.demand_build_id == "fixture-demand"
         # non-empty network_build_id (the rev1 bug), baseline start != end,
         # ISO closure times (not "00:00").
         assert base.network_build_id and len(base.network_build_id) == 64

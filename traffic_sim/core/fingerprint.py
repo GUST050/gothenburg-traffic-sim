@@ -66,6 +66,26 @@ def sumo_version(home: Path) -> str | None:
     return (result.stdout or result.stderr).strip() or None
 
 
+#: The numerical stack that decides a calibrated population. Measured
+#: 2026-10-10: scipy 1.13.1 -> 1.18.1 (HiGHS 1.2.0 -> 1.12.0) alone moved one
+#: build from 20486 to 20342 vehicles with identical code, inputs and seed,
+#: because the integer projection has tied optima and the solver picks one.
+SOLVER_PACKAGES = ("numba", "numpy", "scipy")
+
+
+def solver_runtime() -> dict[str, str | None]:
+    """Installed versions of ``SOLVER_PACKAGES``, read without importing them
+    (this module is on the file server's standard-library-only path)."""
+    from importlib import metadata                      # noqa: PLC0415
+    versions: dict[str, str | None] = {}
+    for package in SOLVER_PACKAGES:
+        try:
+            versions[package] = metadata.version(package)
+        except metadata.PackageNotFoundError:
+            versions[package] = None
+    return versions
+
+
 def make_fingerprint(*, contract: dict, artifacts: Mapping[str, Path],
                      source_files: Mapping[str, Path],
                      sumo_home: Path | None = None,
@@ -90,6 +110,7 @@ def make_fingerprint(*, contract: dict, artifacts: Mapping[str, Path],
         "git_commit": git_commit(),
         "python": sys.version.split()[0],
         "sumo_version": sumo_version(sumo_home) if sumo_home else None,
+        "solver_runtime": solver_runtime(),
     }
     canonical = json.dumps(record, sort_keys=True, separators=(",", ":"),
                            ensure_ascii=True).encode()
