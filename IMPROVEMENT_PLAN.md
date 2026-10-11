@@ -137,6 +137,22 @@ katalogträff utan fallback och tog 17,8 s; det levande efterfrågeläget
 återställdes byte-identiskt. Evidensen finns i
 `validation/route_catalog_{suite_gates,build,trials,qualification}_q50_operational_20261007-v1.json`.
 
+**Omkvalificerad 2026-10-10.** Projektmiljön flyttades till Python 3.12.15 i
+`.venv` med exakt låsta paket (`requirements.lock`). Katalogidentiteten binder
+Python-runtime och `traffic_sim/core/fingerprint.py` (som nu även registrerar
+lösarens versioner), så den adopterade katalogen blev inaktuell för den nya
+miljön. Nätverkshashen är oförändrad (`68ecde39…`). En ny operativ
+fyrfallskvalificering kördes i en isolerad arbetskopia med oförändrade regler:
+materialisering 103 s, sviten 184 godkända, fyra kalla parade q50-fall
+115,3→28,0 s vardag, 129,7→24,5 s helg, 131,7→38,2 s helgdag och
+225,6→86,9 s blandad tvådagarsperiod. Medianparspeedup 3,78x, största
+fordonsdifferensen 0,30 %, verdict `adopt` med alla åtta grindar sanna. Ny
+vardagsnyckel `69ba7bf719a7e5c5fc105cc13a6e86f8`, helgnyckel
+`f620e759af589273f9ab2f8505332663`. Den levande releasen för 2027-04-06
+byggdes om via serverns API med katalogträff utan fallback; föregående
+adoption och release ligger i `runs/env-migration-20261010/`. Evidensen finns i
+`validation/route_catalog_{suite_gates,build,trials,qualification}_q50_operational_20261010-v1.json`.
+
 ### Implementationsplan: operativ fyrfallskvalificering
 
 > **För agentiskt arbete:** kör planen sekventiellt med RED/GREEN och verifiera

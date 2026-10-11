@@ -522,8 +522,12 @@ class TestCatalogSourceContract:
         import sys
 
         probe = (
-            "import sys, json, pathlib\n"
+            "import sys, json, pathlib, sysconfig\n"
             "root = pathlib.Path('.').resolve()\n"
+            # Installed packages are third-party even inside the checkout
+            # (the documented .venv); CI installs them outside root.
+            "site = {pathlib.Path(sysconfig.get_paths()[k]).resolve()\n"
+            "        for k in ('purelib', 'platlib')}\n"
             "before = set(sys.modules)\n"
             "import build_candidates\n"
             "out = []\n"
@@ -533,6 +537,8 @@ class TestCatalogSourceContract:
             "    if not path:\n"
             "        continue\n"
             "    p = pathlib.Path(path).resolve()\n"
+            "    if any(p.is_relative_to(d) for d in site):\n"
+            "        continue\n"
             "    try:\n"
             "        out.append(str(p.relative_to(root)))\n"
             "    except ValueError:\n"

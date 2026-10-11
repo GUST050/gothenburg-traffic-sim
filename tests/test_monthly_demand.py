@@ -136,6 +136,7 @@ def _archive(root, required, name, *, finished_at, generation=None):
             },
             "python": monthly_demand._current_demand_runtime()[0],
             "sumo_version": monthly_demand._current_demand_runtime()[1],
+            "solver_runtime": monthly_demand._current_demand_runtime()[2],
             "artifacts": {
                 label: {
                     "bytes": (archive / filename).stat().st_size,
@@ -521,6 +522,44 @@ def test_day_library_accounting_aggregate_stays_incomplete():
         "incomplete_builds": [{
             "build_key": "unknown", "reason": "missing_diagnostics"}],
     }
+
+
+def _stale_runtime_archive(tmp_path, edit):
+    schedules = generate_closure_schedules(_spec(end_date="2027-07-15"))
+    resolver = MonthlyDemandResolverRunner(
+        _spec(end_date="2027-07-15"),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        build_missing=False,
+        runner_factory=FakeChildRunner,
+    )
+    required = resolver._required(schedules[0])
+    archive = _archive(
+        tmp_path, required, "demand-stale-runtime",
+        finished_at="2027-01-01T00:00:00Z")
+    metadata = json.loads((archive / "demand_meta.json").read_text())
+    edit(metadata["build_fingerprint"])
+    (archive / "demand_meta.json").write_text(json.dumps(metadata))
+    return archive, required
+
+
+def test_archive_validation_rejects_another_solver_runtime(tmp_path):
+    """Same Python and SUMO, another scipy/HiGHS: a different calibrated
+    population (measured 2026-10-10), so the archive is incompatible."""
+    archive, required = _stale_runtime_archive(
+        tmp_path, lambda fp: fp["solver_runtime"].update(scipy="1.13.1"))
+    with pytest.raises(ValueError, match="different runtime"):
+        validate_demand_archive(archive, required)
+
+
+def test_archive_validation_rejects_an_archive_without_solver_runtime(tmp_path):
+    """Archives from before the solver was bound cannot prove theirs."""
+    archive, required = _stale_runtime_archive(
+        tmp_path, lambda fp: fp.pop("solver_runtime"))
+    with pytest.raises(ValueError, match="different runtime"):
+        validate_demand_archive(archive, required)
 
 
 def test_archive_validation_rejects_another_demand_source_identity(tmp_path):

@@ -5,9 +5,18 @@
 # tools/add_sensor.py (see data_in/README.md), then `make refresh`.
 # Explicit paths still work: make data DATA_DIR="/path" COORDS="/path.csv"
 
-PYTHON ?= python3
+# The interpreter this machine simulates with. Every recipe runs on it: on
+# macOS the bare `python3` is often Homebrew's newest release, which cannot
+# install numba==0.60.0 and refuses `pip install` (PEP 668), so recipes that
+# used it failed at their first import (2026-10-10). Resolution order, same
+# as serve.py's hand-over: .simulation-python (an adopted working
+# interpreter, `make setup USE=...`), then .venv (`make setup`), then
+# python3. An explicit PYTHON=... still wins (CI passes PYTHON=python3).
+# A configured interpreter that is not executable is skipped, not used.
+PROJECT_PYTHON := $(shell p=$$(sed -n '/[^[:space:]]/{s/^[[:space:]]*//;s/[[:space:]]*$$//;p;q;}' .simulation-python 2>/dev/null); [ -n "$$p" ] && [ -x "$$p" ] && printf '%s' "$$p")
+PYTHON ?= $(or $(PROJECT_PYTHON),$(if $(wildcard .venv/bin/python),.venv/bin/python,python3))
 
-.PHONY: all refresh data features agent1 forecast test serve sumo-net sumo-net-frozen catalog demand demand-build scenario deso benchmark-speed validate-temporal
+.PHONY: all refresh setup lock data features agent1 forecast test serve sumo-net sumo-net-frozen catalog demand demand-build scenario deso benchmark-speed validate-temporal
 
 all: data features agent1 forecast test
 
@@ -30,7 +39,7 @@ refresh:
 	@echo "Refresh klar — starta med: make serve"
 
 deso:
-	python3 fetch_deso.py
+	$(PYTHON) fetch_deso.py
 
 # ── Phase 3: SUMO ──────────────────────────────────────────────────────────
 # make sumo-net && make demand && make scenario
@@ -65,7 +74,7 @@ demand-build:
 
 # Fast variant: morning window only (quicker sims while iterating)
 demand-morning:
-	python3 build_sumo_demand.py
+	$(PYTHON) build_sumo_demand.py
 
 # Pre-warm the demand day library so viewing a date and searching over it
 # stop paying for calibration. FROM/TO default to the 2027 forecast year;
@@ -76,10 +85,10 @@ FROM ?= 2027-01-01
 TO   ?= 2027-12-31
 SOURCE ?= forecast
 warm-horizon:
-	python3 warm_demand_horizon.py --source $(SOURCE) --from $(FROM) --to $(TO)
+	$(PYTHON) warm_demand_horizon.py --source $(SOURCE) --from $(FROM) --to $(TO)
 
 warm-horizon-plan:
-	python3 warm_demand_horizon.py --source $(SOURCE) --from $(FROM) --to $(TO) --dry-run
+	$(PYTHON) warm_demand_horizon.py --source $(SOURCE) --from $(FROM) --to $(TO) --dry-run
 
 scenario:
 	$(PYTHON) run_scenario.py
@@ -88,17 +97,17 @@ scenario:
 # Rebuild the per-vehicle added-travel-time distribution for the two cheapest
 # candidates of the newest finished monthly search. This starts no SUMO.
 delay-profile:
-	python3 tools/build_closure_delay_profile.py
+	$(PYTHON) tools/build_closure_delay_profile.py
 
 # Frozen cross-date validation for the trusted 2025-09-16 release. The
 # evaluation date was not used to select the deployed through-share target.
 validate-temporal:
-	python3 validate_sim.py --holdout-date 2025-09-17
-	python3 validation_report.py
+	$(PYTHON) validate_sim.py --holdout-date 2025-09-17
+	$(PYTHON) validation_report.py
 
 # Standalone speed/semantic benchmark; intentionally not part of `make test`.
 benchmark-speed:
-	python3 tools/benchmark_speed.py --trials 3 --workers 1 2 3 \
+	$(PYTHON) tools/benchmark_speed.py --trials 3 --workers 1 2 3 \
 		--write /private/tmp/gs-speed-benchmark.json
 
 # ── Direction-split model (dirsplit/) ─────────────────────────────────────
@@ -110,7 +119,7 @@ dirsplit-coverage:
 	$(PYTHON) -m dirsplit.coverage
 
 dirsplit-dataset:
-	python3 -m dirsplit.dataset
+	$(PYTHON) -m dirsplit.dataset
 
 dirsplit-predict:
 	$(PYTHON) -m dirsplit.predict
@@ -120,19 +129,19 @@ dirsplit-predict:
 # neighbour's profile from being read as that split? Writes a non-release
 # artifact; no gate may be decided from it.
 local-direction-evidence:
-	python3 -m tools.measure_local_direction_evidence
+	$(PYTHON) -m tools.measure_local_direction_evidence
 
 # Diagnostic: once sensor 107's published LEVEL is known, does the transferred
 # intraday SHAPE beat a flat anchor? This is the baseline the deployed system
 # actually poses, which Gate M's 50/50 comparison does not.
 anchored-shape-value:
-	python3 -m tools.measure_anchored_shape_value
+	$(PYTHON) -m tools.measure_anchored_shape_value
 
 # Diagnostic: should the intraday shape come from the pooled group curve or
 # from the nearest aligned counter on the same corridor? Measured on Norwegian
 # stations, where direction truth exists. Writes a non-release artifact.
 donor-shape-transfer:
-	python3 -m tools.measure_donor_shape_transfer
+	$(PYTHON) -m tools.measure_donor_shape_transfer
 
 # Gate M: is there a robust conditional direction signal, or is 50/50 the
 # honest central estimate? `--table legacy` (the tracked aggregate) is what is
@@ -140,15 +149,15 @@ donor-shape-transfer:
 # count model need raw per-station volumes, which this repository no longer
 # fetches.
 dirsplit-benchmark:
-	python3 -m dirsplit.benchmark
+	$(PYTHON) -m dirsplit.benchmark
 
 dirsplit-observability:
-	python3 -m dirsplit.coverage --evidence-only
+	$(PYTHON) -m dirsplit.coverage --evidence-only
 
 # Gate S: does direction variation change a closure decision when the SUMO
 # seed is held matched? Needs a calibrated demand build for the frozen date.
 direction-sensitivity:
-	python3 -m tools.measure_direction_decision_sensitivity run
+	$(PYTHON) -m tools.measure_direction_decision_sensitivity run
 
 data:
 	$(PYTHON) build_data.py $(if $(DATA_DIR),--data_dir "$(DATA_DIR)") $(if $(COORDS),--coords "$(COORDS)")
@@ -185,18 +194,32 @@ test:
 LINT_TARGETS = $(wildcard *.py) traffic_sim demand dirsplit tools
 
 lint:
-	python3 -m pylint --rcfile=.pylintrc --disable=import-error $(LINT_TARGETS)
+	$(PYTHON) -m pylint --rcfile=.pylintrc --disable=import-error $(LINT_TARGETS)
 
 # Everything the critical profile suppresses: unused imports, missing
 # encodings, broad excepts, discarded values. Expected to report; it is a
 # worklist, not a gate.
 lint-full:
-	-python3 -m pylint --rcfile=.pylintrc --disable=import-error \
+	-$(PYTHON) -m pylint --rcfile=.pylintrc --disable=import-error \
 		--enable=unused-import,unspecified-encoding,broad-exception-caught,unused-variable,cell-var-from-loop \
 		$(LINT_TARGETS)
+
+# Create or repair .venv with Python 3.12 and install exactly
+# requirements.lock into it; ends with the server's own readiness check.
+# `make setup USE=/usr/bin/python3` adopts an interpreter that already works
+# instead (its caches stay valid). Runs on any bootstrap python3, which is
+# why it is the one bare python3 here.
+setup:
+	python3 tools/setup_venv.py $(if $(USE),--use "$(USE)")
+
+# Re-resolve requirements.txt + requirements-dev.txt in a throwaway Python
+# 3.12 venv and rewrite requirements.lock (every package, exact versions).
+# Run after editing either file, then `make setup` to install the new lock.
+lock:
+	python3 tools/setup_venv.py --lock
 
 # Web app + scenario API (click-to-close in the map needs this server).
 # A busy port 8000 steps to the next free one on its own; set PORT to pin
 # a specific one instead:  make serve PORT=8001
 serve:
-	python3 serve.py $(if $(PORT),--port $(PORT))
+	$(PYTHON) serve.py $(if $(PORT),--port $(PORT))

@@ -26,6 +26,7 @@ HARNESSES = [
     ROOT / "tests" / "js" / "text.test.js",
     ROOT / "tests" / "js" / "monthly_validation.test.js",
     ROOT / "tests" / "js" / "delay_profile.test.js",
+    ROOT / "tests" / "js" / "simulation_status.test.js",
 ]
 
 #: Skipping is right on a contributor's machine without node and wrong in CI,

@@ -1,0 +1,58 @@
+# Exact package set for the project environment (.venv), every indirect
+# dependency included. Resolved for Python 3.12 from requirements.txt + requirements-dev.txt
+# in a fresh virtual environment. Do not edit by hand: change the source
+# files and run `make lock`. `make setup` installs exactly this set
+# (--no-deps, then `pip check`) and the server refuses to simulate on an
+# environment that deviates from it.
+astroid==3.3.11
+attrs==26.1.0
+certifi==2026.7.22
+charset-normalizer==3.5.2
+cloudpickle==3.1.2
+contourpy==1.4.0
+cycler==0.12.1
+dill==0.4.1
+eclipse-sumo==1.27.1
+fonttools==4.66.1
+geopandas==1.2.0
+idna==3.20
+iniconfig==2.3.1
+isort==6.1.0
+joblib==1.6.0
+jsonschema-specifications==2025.9.1
+jsonschema==4.26.0
+kiwisolver==1.5.1
+lightgbm==4.7.0
+llvmlite==0.43.0
+matplotlib==3.11.2
+mccabe==0.7.0
+narwhals==2.27.1
+networkx==3.7
+numba==0.60.0
+numpy==2.0.2
+osmnx==2.1.1
+packaging==26.3
+pandas==3.0.6
+pillow==12.3.0
+platformdirs==4.12.4
+pluggy==1.6.0
+Pygments==2.21.0
+pylint==3.3.9
+pyogrio==0.13.0
+pyparsing==3.3.3
+pyproj==3.8.0
+pytest==9.1.1
+python-dateutil==2.9.0.post0
+referencing==0.37.0
+requests==2.34.2
+rpds-py==2026.9.1
+scikit-learn==1.9.1
+scipy==1.18.1
+shapely==2.2.0
+six==1.17.0
+sumo-data==1.27.1
+threadpoolctl==3.7.0
+tomlkit==0.15.1
+typing_extensions==4.16.0
+urllib3==2.8.0
+websocket-client==1.9.2

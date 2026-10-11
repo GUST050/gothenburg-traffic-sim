@@ -5,6 +5,7 @@
 
 # Python
 .venv/
+.simulation-python
 __pycache__/
 *.pyc
 .pytest_cache/

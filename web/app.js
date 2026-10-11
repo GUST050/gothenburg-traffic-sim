@@ -642,6 +642,8 @@
         let closureTool = null; // null | 'simulate' | 'suggest' | 'monthly'
         let closureJobRunning = false;
         let apiAvailable = false;
+        // A server answering is not a server able to simulate (2026-10-10).
+        let simulationAccess = SimulationStatus.access(false, null);
 
         // ── Byt simuleringsdag — kalibrerar om hela periodens efterfrågan.
         // Körlängden beror på antal dagar och om underlaget redan är byggt.
@@ -1334,7 +1336,8 @@
 
         function refreshCloseUI() {
           const showNormal = !closureTool && !dayPickMode;
-          const showApiActions = showNormal && apiAvailable;
+          const showApiActions = showNormal && apiAvailable &&
+                                 simulationAccess.canSimulate;
           const showScenarioPicker = ['scenario', 'demand', 'closure', 'signals'].includes(workspaceTask);
           scenSelect.style.display   = showNormal && showScenarioPicker ? '' : 'none';
           simDayHint.style.display   = showNormal ? '' : 'none';
@@ -1371,10 +1374,17 @@
           document.querySelectorAll('#task-grid [data-requires-api]')
             .forEach(button => {
               button.dataset.localTitle ||= button.title;
-              button.disabled = !apiAvailable;
-              button.title = apiAvailable ? '' : button.dataset.localTitle;
+              const needsSimulation = button.hasAttribute('data-requires-simulation');
+              const usable = apiAvailable &&
+                             (!needsSimulation || simulationAccess.canSimulate);
+              button.disabled = !usable;
+              button.title = usable ? ''
+                : (apiAvailable ? simulationAccess.message : button.dataset.localTitle);
             });
           document.getElementById('task-home-local-note').hidden = apiAvailable;
+          const simulationNote = document.getElementById('task-home-simulation-note');
+          simulationNote.hidden = !apiAvailable || simulationAccess.canSimulate;
+          simulationNote.textContent = simulationAccess.message;
         }
 
         async function openWorkspace(task) {
@@ -1437,15 +1447,26 @@
 
         // Feature-detect the API. The static page keeps local-only workspaces
         // visible for discovery but disables them and links to the local run.
-        fetch('/api/ping').then(r => {
-          apiAvailable = r.ok;
+        // A local server also says whether it can SIMULATE; while it is still
+        // checking, ask again so the page settles on its own.
+        function applyPing(ok, body) {
+          apiAvailable = ok;
+          simulationAccess = SimulationStatus.access(ok, body?.simulation);
           refreshApiWorkspaceCards();
           refreshCloseUI();
-        }).catch(() => {
-          apiAvailable = false;
-          refreshApiWorkspaceCards();
-          refreshCloseUI();
-        });
+        }
+
+        function checkServer(attempt = 0) {
+          fetch('/api/ping', { cache: 'no-store' })
+            .then(async r => applyPing(r.ok, r.ok ? await r.json().catch(() => null) : null))
+            .catch(() => applyPing(false, null))
+            .finally(() => {
+              if (simulationAccess.recheck && attempt < SimulationStatus.MAX_RECHECKS) {
+                setTimeout(() => checkServer(attempt + 1), SimulationStatus.RECHECK_MS);
+              }
+            });
+        }
+        checkServer();
 
         btnClose.addEventListener('click', () => setClosureTool('simulate'));
         btnCancel.addEventListener('click', async () => {

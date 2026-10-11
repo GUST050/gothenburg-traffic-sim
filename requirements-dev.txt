@@ -1,5 +1,6 @@
 # Development tooling, kept out of requirements.txt so a production install
-# does not pull a linter. Install with:
-#     pip3 install --user -r requirements-dev.txt
+# does not pull a linter. The project environment includes it: `make lock`
+# resolves this file together with requirements.txt into requirements.lock,
+# and `make setup` installs that lock into .venv.
 pylint>=3.3,<4
 websocket-client>=1.8,<2

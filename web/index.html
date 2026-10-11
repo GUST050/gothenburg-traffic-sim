@@ -1066,14 +1066,15 @@
         Nya simuleringar och analyser körs lokalt med server och SUMO.
         <a href="https://github.com/GUST050/gothenburg-traffic-sim#get-started">Så startar du appen</a>.
       </p>
+      <p id="task-home-simulation-note" class="task-home-local-note" role="status" hidden></p>
       <button id="resume-monthly-result" class="action-btn" hidden>Visa senaste periodanalys</button>
       <div id="task-grid">
         <button class="task-card" data-task="traffic"><span class="task-card-icon">Data</span><strong>Historisk trafik</strong><span>Observerade flöden 2025</span></button>
         <button class="task-card" data-task="forecast"><span class="task-card-icon">Prognos</span><strong>Framtida trafik</strong><span>Beräknade flöden 2027</span></button>
         <button class="task-card" data-task="scenario"><span class="task-card-icon">Scenario</span><strong>Visa simulering</strong><span>Granska ett befintligt scenario</span></button>
-        <button class="task-card" data-task="demand" data-requires-api disabled title="Kräver lokal server och SUMO"><span class="task-card-icon">Körning</span><strong>Simulera datum</strong><span>Beräkna en dag eller period · körs lokalt</span></button>
-        <button class="task-card" data-task="closure" data-requires-api disabled title="Kräver lokal server och SUMO"><span class="task-card-icon">Analys</span><strong>Vägavstängning</strong><span>Testa påverkan och lämplig tid · körs lokalt</span></button>
-        <button class="task-card" data-task="signals" data-requires-api disabled title="Kräver lokal server och SUMO"><span class="task-card-icon">Optimering</span><strong>Trafiksignaler</strong><span>Analysera gröntider och rödtider · körs lokalt</span></button>
+        <button class="task-card" data-task="demand" data-requires-api data-requires-simulation disabled title="Kräver lokal server och SUMO"><span class="task-card-icon">Körning</span><strong>Simulera datum</strong><span>Beräkna en dag eller period · körs lokalt</span></button>
+        <button class="task-card" data-task="closure" data-requires-api data-requires-simulation disabled title="Kräver lokal server och SUMO"><span class="task-card-icon">Analys</span><strong>Vägavstängning</strong><span>Testa påverkan och lämplig tid · körs lokalt</span></button>
+        <button class="task-card" data-task="signals" data-requires-api data-requires-simulation disabled title="Kräver lokal server och SUMO"><span class="task-card-icon">Optimering</span><strong>Trafiksignaler</strong><span>Analysera gröntider och rödtider · körs lokalt</span></button>
         <button class="task-card" data-task="history" data-requires-api disabled title="Kräver lokal server"><span class="task-card-icon">Historik</span><strong>Körhistorik</strong><span>Utförda studier och jobb · visas lokalt</span></button>
       </div>
       <div id="history-panel" hidden>
@@ -1520,6 +1521,7 @@
   <script src="controls.js?v=12"></script>
   <script src="clock.js?v=11"></script>
   <script src="polling.js?v=1"></script>
-  <script src="app.js?v=46"></script>
+  <script src="simulation_status.js?v=3"></script>
+  <script src="app.js?v=47"></script>
 </body>
 </html>

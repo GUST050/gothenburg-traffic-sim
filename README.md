@@ -52,24 +52,46 @@ Open the address printed by the server and keep that terminal open. On macOS,
 `start.command` is a Finder shortcut for this viewer. The viewer can show the
 tracked map and saved scenarios without installing the simulation packages.
 
-**Run new simulations:** use a macOS or Linux environment with Python 3.11 or
-3.12, Git, enough disk space for generated data, and access to the project's
-input data. From the repository root:
+**Run new simulations:** use a macOS or Linux environment with Python 3.12
+installed (on macOS: `brew install python@3.12`), Git, enough disk space for
+generated data, and access to the project's input data. From the repository
+root:
 
 ```bash
-python3.12 -m venv .venv
-. .venv/bin/activate
-python -m pip install -r requirements.txt
-python build_sumo_net.py
-python -m dirsplit.predict
-python serve.py
+make setup
+make sumo-net dirsplit-predict
+make serve
 ```
 
-If your installed supported version is Python 3.11, use `python3.11` in the
-first command. Check `python --version` after activation before installing.
+`make setup` builds the project environment in `.venv` with Python 3.12 and
+installs exactly [`requirements.lock`](requirements.lock): every package,
+indirect dependencies included, at one fixed version. It rebuilds `.venv` from
+scratch when the lock changes, repairs it when something is missing, and ends
+with the same readiness check the server uses. After editing
+`requirements.txt` or `requirements-dev.txt`, run `make lock` to re-resolve the
+lock, then `make setup`. Use these rather than a bare `pip install`:
+Homebrew's Pythons refuse `pip install` (PEP 668), and the lock is resolved for
+Python 3.12 only.
 
-`requirements.txt` installs the scientific Python packages and declares
-`eclipse-sumo`. Set `SUMO_HOME` to select an existing SUMO installation. The
+The exact versions matter for results, not only for installation: SUMO 1.28.0
+breaks demand calibration, and a scipy upgrade alone changed a calibrated
+population by 0.7 % with an identical sensor fit, because the integer
+calibration has several equally good solutions and the solver picks one
+([investigation](validation/demand_count_difference_investigation_20261010.json)).
+
+The server, every `make` target and `start.command` use the interpreter named
+in the untracked `.simulation-python` (written by `make setup`), then `.venv`,
+then `python3`; `python3 serve.py` hands itself over to the project
+interpreter if the one it was started with cannot simulate. On startup the
+server prints whether it can simulate. Only a completed check that finds the
+locked packages, runnable SUMO binaries of the pinned version and every job
+module importable counts as ready. Otherwise the map still works, but
+**Simulera datum**, **Vägavstängning** and **Trafiksignaler** are disabled with
+the reason and the fix (`make setup`), instead of starting jobs that would
+fail.
+
+Set `SUMO_HOME` to select another SUMO installation; it must be the version
+the lock pins (1.27.1), or the server reports it as not ready. The
 network and direction-split steps are required on a fresh clone because their
 outputs under `sumo/` are generated locally and are not stored in Git. The
 first simulation may also need to fetch source data and build a candidate

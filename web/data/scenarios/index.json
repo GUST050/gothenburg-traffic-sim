@@ -1,5 +1,5 @@
 {
-  "demand_signature": "10427b5a45b3e63eb399",
+  "demand_signature": "3bc60139f23af32c4859",
   "scenarios": [
     {
       "name": "baseline",
@@ -10,7 +10,7 @@
       "closure_integrity": null,
       "scenario_spec": {
         "scenario_id": "baseline",
-        "demand_build_id": "10427b5a45b3e63eb399",
+        "demand_build_id": "3bc60139f23af32c4859",
         "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
         "start_time": "2027-04-06T00:00:00",
         "end_time": "2027-04-07T00:00:00",
@@ -31,8 +31,8 @@
         "analysis_window": null,
         "schema_version": 1
       },
-      "demand_signature": "10427b5a45b3e63eb399",
-      "build_id": "10427b5a45b3e63eb399",
+      "demand_signature": "3bc60139f23af32c4859",
+      "build_id": "3bc60139f23af32c4859",
       "demand_build_key": "d04af536b5d9f4dc",
       "uncertainty": {
         "method": "spatial_prior_x_exp_negative_mean_cv",

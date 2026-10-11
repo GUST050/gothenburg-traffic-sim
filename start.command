@@ -7,7 +7,8 @@
 # cannot be started in the wrong directory: it cd's to its own location,
 # which is the repo root by construction.
 #
-# From a terminal `python3 serve.py` does exactly the same thing.
+# From a terminal `make serve` does the same thing (and `python3 serve.py`
+# hands itself over to .venv when it exists).
 # Everything after the script name is passed through, so
 # `./start.command --port 8001` works too.
 
@@ -35,5 +36,38 @@ if [ ! -f web/data/network.geojson ]; then
     exit 1
 fi
 
+# The map runs on any python3, but new simulations need the project's own
+# environment (.venv: Python 3.12 + requirements.lock). Without it the
+# server used to offer jobs that could only fail (2026-10-10), so offer to
+# build it here, where a person is sitting at the keyboard.
+# Same order as serve.py and the Makefile: an adopted interpreter
+# (.simulation-python, `make setup USE=...`), then .venv, then python3.
+configured=$(sed -n '/[^[:space:]]/{s/^[[:space:]]*//;s/[[:space:]]*$//;p;q;}' .simulation-python 2>/dev/null)
+# A configured interpreter that no longer exists (a removed Python, a stale
+# file) must not stop a launch that .venv could serve (review 2026-10-10).
+if [ -n "$configured" ] && [ ! -x "$configured" ]; then
+    echo "Obs: $configured (från .simulation-python) finns inte eller går inte att köra."
+    echo "Använder .venv i stället. Kör  make setup  för att rätta filen."
+    configured=
+fi
+
+if [ -z "$configured" ] && [ ! -x .venv/bin/python ]; then
+    echo "Simuleringsmiljön (.venv) saknas. Kartan fungerar ändå, men nya"
+    echo "simuleringar kräver den (cirka 1 GB, några minuter första gången)."
+    printf 'Installera den nu? [j/N] '
+    read -r answer
+    case "$answer" in
+        [jJyY]*) python3 tools/setup_venv.py || echo "Installationen misslyckades — kartan startar ändå." ;;
+        *) echo "Hoppar över. Installera senare med:  make setup" ;;
+    esac
+fi
+
+python=python3
+if [ -n "$configured" ]; then
+    python=$configured
+elif [ -x .venv/bin/python ]; then
+    python=.venv/bin/python
+fi
+
 echo "Startar kartan — stäng det här fönstret för att stoppa servern."
-python3 serve.py "$@" || hold_open
+"$python" serve.py "$@" || hold_open

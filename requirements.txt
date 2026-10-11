@@ -11,4 +11,16 @@ scipy>=1.11
 numba==0.60.0
 matplotlib>=3.8
 pytest>=8.0
-eclipse-sumo>=1.20
+# tests/test_ai_flow.py validates the plan schema with a real validator; without
+# it the test was silently skipped wherever jsonschema happened to be absent.
+jsonschema>=4.0
+# SUMO is pinned EXACTLY, and together with its data package. Measured
+# 2026-10-10: eclipse-sumo 1.28.0 breaks demand calibration ("route-time
+# projection does not reconstruct raw entered cells"), while 1.27.1 — what
+# every frozen record and cache here was built with — passes with an
+# identical sensor fit. eclipse-sumo requires sumo-data WITHOUT a version, so
+# pinning only eclipse-sumo left sumo-data 1.28 next to sumo 1.27.1 and the
+# binary crashed in dyld (libproj mismatch). Upgrade both together, and only
+# after a demand build passes on the new version.
+eclipse-sumo==1.27.1
+sumo-data==1.27.1

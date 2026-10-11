@@ -26,13 +26,15 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: pip
 
+      # The locked project environment (requirements.lock: every package,
+      # pylint included, at the exact version `make setup` installs locally).
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
-          pip install 'pylint>=3.3,<4'
+          pip install --no-deps -r requirements.lock
+          pip check
 
       - name: Lint
         run: make lint
@@ -55,8 +57,18 @@ jobs:
       # Install the declared production/test environment itself. A handwritten
       # subset let requirements.txt drift and made SUMO-dependent tests skip in
       # the one environment intended to verify the repository.
+      # Python 3.12 installs requirements.lock — exactly the environment
+      # `make setup` builds locally. The lock is resolved for 3.12 (it does not
+      # install on 3.11), so the 3.11 job resolves requirements.txt instead and
+      # keeps checking that the declared ranges still work there.
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          if [ "${{ matrix.python-version }}" = "3.12" ]; then
+            pip install --no-deps -r requirements.lock
+            pip check
+          else
+            pip install -r requirements.txt
+          fi
 
       # sumo/ is gitignored, so a clean clone has no SUMO network or direction
       # split, and ~170 tests failed on a missing sumo/net.net.xml rather than

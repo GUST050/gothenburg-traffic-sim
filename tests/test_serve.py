@@ -13,6 +13,7 @@ in seconds."""
 
 import errno
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -27,6 +28,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import serve
 import signal_optimize as so
 import validation_report
+from traffic_sim.simulation import interpreter
+
+READY = interpreter.Readiness("ready", python="/venv/bin/python",
+                              version="3.12.14")
+UNAVAILABLE = interpreter.Readiness(
+    "unavailable", python="/opt/homebrew/bin/python3", version="3.13.7",
+    missing=("pandas",), problems=("saknade Python-paket: pandas",))
 
 
 def test_interactive_worker_cap_rejects_invalid_value(monkeypatch):
@@ -46,6 +54,15 @@ def _validation_report_writes_to_tmp(monkeypatch, tmp_path):
     """
     monkeypatch.setattr(validation_report, "OUT_PATH",
                         tmp_path / "validation.json")
+
+
+@pytest.fixture(autouse=True)
+def _simulation_is_ready_unless_a_test_says_otherwise(monkeypatch):
+    """Endpoint tests fake their jobs; they must not depend on whether the
+    interpreter running pytest can really simulate, nor pay for a probe."""
+    monkeypatch.setattr(serve, "SIMULATION_READINESS",
+                        interpreter.ReadinessMonitor.settled(READY),
+                        raising=False)
 
 
 @pytest.fixture(autouse=True)
@@ -76,6 +93,24 @@ def test_web_has_one_road_closure_workspace_and_orchestrator():
     for endpoint in ("/api/close", "/api/suggest_closure",
                      "/api/monthly_search"):
         assert endpoint in app
+
+
+def test_web_follows_the_servers_simulation_verdict():
+    """The decision lives in simulation_status.js (node-tested); this pins
+    that the page loads it and that only simulation workspaces depend on it
+    — Körhistorik needs a server, not a simulator."""
+    root = Path(__file__).parent.parent
+    html = (root / "web" / "index.html").read_text()
+    app = (root / "web" / "app.js").read_text()
+    assert html.index('src="simulation_status.js') < html.index('src="app.js')
+    for task in ("demand", "closure", "signals"):
+        card = re.search(rf'<button[^>]*data-task="{task}"[^>]*>', html).group(0)
+        assert "data-requires-simulation" in card, task
+    history = re.search(r'<button[^>]*data-task="history"[^>]*>', html).group(0)
+    assert "data-requires-simulation" not in history
+    assert 'id="task-home-simulation-note"' in html
+    assert "SimulationStatus.access(" in app
+    assert "simulationAccess.canSimulate" in app
 
 
 def test_web_shell_is_responsive_accessible_and_uses_the_professional_palette():
@@ -133,7 +168,7 @@ def test_web_shell_is_responsive_accessible_and_uses_the_professional_palette():
     assert 'text.js?v=2' in html
     assert 'polling.js?v=1' in html
     assert 'render.js?v=18' in html
-    assert 'app.js?v=46' in html
+    assert 'app.js?v=47' in html
 
 
 def _signal_scenario_spec(*, closure=False, simulation_mode="micro",
@@ -290,7 +325,215 @@ class TestPing:
     def test_ping_ok(self, base_url):
         status, body = get_json(f"{base_url}/api/ping")
         assert status == 200
-        assert body == {"ok": True}
+        assert body["ok"] is True
+        assert body["simulation"]["status"] == "ready"
+
+    def test_ping_tells_the_ui_when_this_server_cannot_simulate(
+            self, base_url, monkeypatch):
+        """Regression 2026-10-10: ping said yes because a server answered,
+        so the UI offered jobs that could only fail. The viewer is still
+        served (ok stays true); simulation is reported separately."""
+        monkeypatch.setattr(serve, "SIMULATION_READINESS",
+                            interpreter.ReadinessMonitor.settled(UNAVAILABLE))
+        status, body = get_json(f"{base_url}/api/ping")
+        assert status == 200
+        assert body["ok"] is True
+        simulation = body["simulation"]
+        assert simulation["status"] == "unavailable"
+        assert simulation["missing"] == ["pandas"]
+        assert simulation["fix"] == interpreter.SETUP_COMMAND
+        assert "pandas" in simulation["message"]
+
+    def test_ping_never_waits_for_a_running_check(self, base_url, monkeypatch):
+        gate = threading.Event()
+        monitor = interpreter.ReadinessMonitor(
+            lambda: gate.wait(5) and READY)
+        monitor.start()
+        monkeypatch.setattr(serve, "SIMULATION_READINESS", monitor)
+        try:
+            t0 = time.time()
+            _, body = get_json(f"{base_url}/api/ping")
+            assert time.time() - t0 < 1
+            assert body["simulation"]["status"] == "checking"
+        finally:
+            gate.set()
+
+
+class TestSimulationReadinessGate:
+    """A job that cannot run is refused BEFORE it starts, with the fix."""
+
+    @pytest.mark.parametrize("path", [
+        "/api/close?edges=a_b_0",
+        "/api/recalibrate?date=2025-09-16",
+        "/api/suggest_closure?edges=a_b_0&duration_hours=6",
+        "/api/optimize_signals",
+    ])
+    def test_a_job_is_refused_before_it_starts(self, base_url, monkeypatch,
+                                               path):
+        monkeypatch.setattr(serve, "SIMULATION_READINESS",
+                            interpreter.ReadinessMonitor.settled(UNAVAILABLE))
+        started = []
+        monkeypatch.setattr(
+            serve, "run_in_new_session",
+            lambda cmd, **kw: started.append(cmd) or FakeCompletedProcess())
+        status, body = post_json_or_error(f"{base_url}{path}")
+        assert status == 503
+        assert "pandas" in body["error"]
+        assert interpreter.SETUP_COMMAND in body["error"]
+        assert body["simulation"]["status"] == "unavailable"
+        assert started == []
+        assert not serve._sim_lock.locked()
+
+    def test_every_job_endpoint_goes_through_the_one_gate(self):
+        import inspect
+        source = inspect.getsource(serve.Handler)
+        assert "simulation_recovery_block()" not in source
+        assert source.count("simulation_admission_block()") == 5
+
+    def test_installing_the_packages_unblocks_jobs_without_a_restart(
+            self, base_url, monkeypatch):
+        verdicts = iter([UNAVAILABLE, READY])
+        monitor = interpreter.ReadinessMonitor(lambda: next(verdicts))
+        monitor.start()
+        assert monitor.wait(5)
+        monkeypatch.setattr(serve, "SIMULATION_READINESS", monitor)
+        monkeypatch.setattr(serve, "run_in_new_session",
+                            lambda cmd, **kw: FakeCompletedProcess(returncode=1))
+        status, _ = post_json(f"{base_url}/api/recalibrate?date=2025-09-16")
+        assert status == 202
+
+    def test_an_inconclusive_check_is_never_treated_as_ready(
+            self, base_url, monkeypatch):
+        """Changed 2026-10-10 at the project owner's request: an incomplete
+        check must not pass as "ready" (it used to admit the job)."""
+        unknown = interpreter.Readiness("unknown", problems=("timeout",))
+        monkeypatch.setattr(serve, "SIMULATION_READINESS",
+                            interpreter.ReadinessMonitor.settled(unknown))
+        started = []
+        monkeypatch.setattr(
+            serve, "run_in_new_session",
+            lambda cmd, **kw: started.append(cmd) or FakeCompletedProcess())
+        status, body = post_json_or_error(
+            f"{base_url}/api/recalibrate?date=2025-09-16")
+        assert status == 503
+        assert "kontrolleras" in body["error"]
+        assert body["simulation"]["status"] == "unknown"
+        assert started == []
+
+    def test_a_check_still_running_is_not_treated_as_ready(
+            self, base_url, monkeypatch):
+        gate = threading.Event()
+        monitor = interpreter.ReadinessMonitor(lambda: gate.wait(5) and READY)
+        monitor.start()
+        monkeypatch.setattr(serve, "SIMULATION_READINESS", monitor)
+        monkeypatch.setattr(serve, "ADMISSION_CHECK_WAIT_S", 0.2)
+        try:
+            status, body = post_json_or_error(
+                f"{base_url}/api/recalibrate?date=2025-09-16")
+            assert status == 503
+            assert body["simulation"]["status"] == "checking"
+        finally:
+            gate.set()
+
+    def test_a_stranded_job_still_outranks_readiness(self, base_url,
+                                                     monkeypatch):
+        monkeypatch.setattr(serve, "SIMULATION_READINESS",
+                            interpreter.ReadinessMonitor.settled(UNAVAILABLE))
+        serve._RECOVERY_BLOCKED = True
+        serve._ORPHANED_JOB_IDS.add("stranded")
+        status, body = post_json_or_error(
+            f"{base_url}/api/recalibrate?date=2025-09-16")
+        assert status == 503
+        assert body["orphaned_jobs"] == ["stranded"]
+
+    def test_an_incompatible_lock_change_ends_ready_without_a_restart(
+            self, base_url, monkeypatch):
+        """Review 2026-10-10 (P2): after `make lock` changed the pins, ping
+        still said "ready" and jobs were admitted on a now-deviating venv."""
+        state = {"lock": "old"}
+        monitor = interpreter.ReadinessMonitor(
+            lambda: READY if state["lock"] == "old" else UNAVAILABLE,
+            inputs=lambda: state["lock"])
+        monkeypatch.setattr(serve, "SIMULATION_READINESS", monitor)
+        assert monitor.for_admission(timeout=10).status == "ready"
+        assert get_json(f"{base_url}/api/ping")[1]["simulation"]["status"] == "ready"
+        state["lock"] = "new"
+        assert get_json(f"{base_url}/api/ping")[1]["simulation"]["status"] in (
+            "checking", "unavailable")
+        started = []
+        monkeypatch.setattr(
+            serve, "run_in_new_session",
+            lambda cmd, **kw: started.append(cmd) or FakeCompletedProcess())
+        status, body = post_json_or_error(
+            f"{base_url}/api/recalibrate?date=2025-09-16")
+        assert status == 503
+        assert body["simulation"]["status"] == "unavailable"
+        assert started == []
+
+    def test_the_server_monitor_is_bound_to_the_lock_and_packages(
+            self, monkeypatch):
+        state = {"inputs": "x"}
+        monkeypatch.setattr(interpreter, "probe_readiness",
+                            lambda *a, **k: READY)
+        monkeypatch.setattr(interpreter, "readiness_inputs",
+                            lambda *a, **k: state["inputs"])
+        monitor = serve.simulation_readiness_monitor()
+        assert monitor.for_admission(timeout=10).status == "ready"
+        state["inputs"] = "y"
+        assert monitor.current().status == "checking"
+
+    def test_main_starts_the_check_after_binding(self, monkeypatch):
+        events = []
+
+        class FakeServer:
+            def __init__(self, address, handler):
+                events.append("bind")
+
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+        class RecordingMonitor(interpreter.ReadinessMonitor):
+            def start(self, on_result=None):
+                events.append("check")
+
+        monkeypatch.setattr(serve, "known_edges", lambda: frozenset())
+        monkeypatch.setattr(serve, "ThreadingHTTPServer", FakeServer)
+        monkeypatch.setattr(serve, "SIMULATION_READINESS",
+                            RecordingMonitor(lambda: READY))
+        serve.main()
+        assert events == ["bind", "check"]
+
+    COLOURED_MISSING_PANDAS = (
+        "Traceback (most recent call last):\n"
+        "\x1b[1;35mModuleNotFoundError\x1b[0m: "
+        "\x1b[35mNo module named 'pandas'\x1b[0m\n")
+
+    @pytest.mark.parametrize("path,status_path", [
+        ("/api/close?edges=a_b_0", "/api/close/status"),
+        ("/api/suggest_closure?edges=a_b_0&duration_hours=6",
+         "/api/suggest_closure/status"),
+        ("/api/optimize_signals", "/api/optimize_signals/status"),
+    ])
+    def test_a_job_that_still_hits_a_missing_package_names_the_fix(
+            self, base_url, monkeypatch, path, status_path):
+        """Defence in depth: the gate can only see what the probe imports."""
+        monkeypatch.setattr(
+            serve, "run_in_new_session",
+            lambda cmd, **kw: FakeCompletedProcess(
+                returncode=1, stderr=self.COLOURED_MISSING_PANDAS))
+        assert post_json(f"{base_url}{path}")[0] == 202
+        assert wait_until(lambda: get_json(
+            f"{base_url}{status_path}")[1]["status"] == "error")
+        _, final = get_json(f"{base_url}{status_path}")
+        assert "\x1b" not in final["error"]
+        assert "'pandas'" in final["error"]
+        assert interpreter.SETUP_COMMAND in final["error"]
+
+    def test_the_script_entry_point_hands_over_to_the_project_venv(self):
+        source = Path(serve.__file__).read_text(encoding="utf-8")
+        entry = source[source.index('if __name__ == "__main__":'):]
+        assert "relaunch_if_needed(" in entry
+        assert entry.index("relaunch_if_needed(") < entry.index("main(")
 
 
 class TestJobRecordPaths:
@@ -1998,6 +2241,24 @@ class TestMonthlySearch:
         assert not serve._sim_lock.locked()
 
     @pytest.mark.usefixtures("golden_monthly_policy")
+    def test_cli_error_is_shown_without_colour_codes(self, base_url,
+                                                     monkeypatch):
+        monkeypatch.setattr(
+            serve, "run_in_new_session",
+            lambda cmd, **kw: FakeCompletedProcess(
+                returncode=1,
+                stderr="noise\n\x1b[31mbounded exhaustive screening generated "
+                       "96 candidates, above the explicit cap 12\x1b[0m\n"))
+        assert post_json(
+            f"{base_url}/api/monthly_search",
+            payload={"closure_search_spec": _closure_search_spec()})[0] == 202
+        assert wait_until(lambda: get_json(
+            f"{base_url}/api/monthly_search/status")[1]["status"] == "error")
+        _, state = get_json(f"{base_url}/api/monthly_search/status")
+        assert state["error"].startswith("bounded exhaustive screening")
+        assert "\x1b" not in state["error"]
+
+    @pytest.mark.usefixtures("golden_monthly_policy")
     def test_cancel_reports_resumable_workspace(self, base_url, monkeypatch):
         release = threading.Event()
 
@@ -2121,6 +2382,16 @@ class TestRunInNewSession:
             [sys.executable, "-c", "import sys; sys.exit(3)"],
             cwd=".", timeout=30)
         assert res.returncode == 3
+
+    def test_children_never_colour_their_tracebacks(self, monkeypatch):
+        """FORCE_COLOR=1 (inherited from the desktop app) made Python 3.13
+        write ANSI codes into captured stderr, and into the UI banner."""
+        monkeypatch.setenv("FORCE_COLOR", "1")
+        res = serve.run_in_new_session(
+            [sys.executable, "-c",
+             "import os; print(os.environ.get('PYTHON_COLORS'))"],
+            cwd=".", timeout=30)
+        assert res.stdout.strip() == "0"
 
     def test_cancel_race_still_communicates_and_reaps_child(self, monkeypatch):
         """A child may disappear after poll() but before killpg()."""
@@ -2399,6 +2670,24 @@ class TestRecalibrateAsyncLifecycle:
             lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] == "done")
         _, final = get_json(f"{base_url}/api/recalibrate/status")
         assert final["file"] == "baseline.json"
+
+    def test_a_missing_package_is_reported_as_the_fix_not_a_coloured_traceback(
+            self, base_url, monkeypatch):
+        stderr = ("Traceback (most recent call last):\n"
+                  "  File \"build_sumo_demand.py\", line 40, in <module>\n"
+                  "\x1b[1;35mModuleNotFoundError\x1b[0m: "
+                  "\x1b[35mNo module named 'pandas'\x1b[0m\n")
+        monkeypatch.setattr(
+            serve, "run_in_new_session",
+            lambda cmd, **kw: FakeCompletedProcess(returncode=1, stderr=stderr))
+        post_json(f"{base_url}/api/recalibrate?date=2025-09-16")
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] == "error")
+        _, final = get_json(f"{base_url}/api/recalibrate/status")
+        assert "\x1b" not in final["error"]
+        assert "'pandas'" in final["error"]
+        assert interpreter.SETUP_COMMAND in final["error"]
+        assert "gamla scenarier behålls" in final["error"]
 
     def test_build_failure_reports_error_status(self, base_url, monkeypatch):
         monkeypatch.setattr(
@@ -3072,9 +3361,11 @@ class TestOptimizeSignals:
             .get("status") == "error")
         _, state = get_json(f"{base_url}/api/optimize_signals/status")
         assert "numpy" in state["error"]
-        assert "requirements.txt" in state["error"]
+        # pip install is refused by Homebrew's Python (PEP 668) and numba
+        # has no 3.13 wheel; the venv setup is the advice that works.
+        assert interpreter.SETUP_COMMAND in state["error"]
         # The server is still serving after it.
-        assert get_json(f"{base_url}/api/ping")[1] == {"ok": True}
+        assert get_json(f"{base_url}/api/ping")[1]["ok"] is True
 
     def test_structured_plain_signal_spec_is_archived_and_forwarded(
             self, base_url, monkeypatch):

@@ -308,6 +308,130 @@ Goal arc, in order:
   sharing one process. A dependency only the simulator needs must never be
   on the file server's import path — the failure it causes is invisible
   from the browser, which is where the user is standing.
+- SIMULATION INTERPRETER (2026-10-10): Gustav's "Byt dag" for 2027-05-13
+  failed with `ModuleNotFoundError: No module named 'pandas'`, shown in the
+  banner as a raw ANSI-coloured traceback line. ROOT CAUSE (reproduced): the
+  server ran on Homebrew's `python3` (3.13: no pandas, no SUMO) and serve.py
+  starts every job with `sys.executable`, so all six job scripts died at
+  their first import while `/api/ping` still said "ok". The machine's REAL
+  working environment is `/usr/bin/python3` 3.9.6 with user-site packages and
+  Eclipse SUMO 1.27.1 — agent notes said "use /usr/bin/python3, NOT bare
+  python3", but every launcher (`make serve`, 18 Makefile recipes,
+  start.command, .claude/launch.json) used bare `python3`. Colours came from
+  `FORCE_COLOR=1` exported by the desktop app (Python 3.13 honours it on a
+  pipe). CORRECTION OF A MISTAKE MADE THE SAME DAY: a first diagnosis
+  claimed no interpreter had the stack (a `sumolib` import check was misread
+  — eclipse-sumo has no top-level sumolib) and a new `.venv` (3.12) was
+  installed. Measured afterwards, not assumed: demand caches and the adopted
+  route catalog bind the exact runtime (Python version, platform,
+  numpy/scipy/networkx/osmnx/shapely, duarouter), so a new interpreter
+  silently discards all of them; and with eclipse-sumo 1.28.0 (what an
+  unpinned install now gets) demand calibration FAILS ("route-time
+  projection does not reconstruct raw entered cells"). Isolated cold
+  comparison, same code and inputs, 2027-05-13 forecast
+  (`validation/python_env_comparison_20261010.json`): old 3.9 + SUMO 1.27.1
+  succeeded (154 s), venv 3.12 + SUMO 1.28.0 failed, venv 3.12 + SUMO 1.27.1
+  succeeded (130 s) with an identical sensor fit (GEH<5 100%, MAE 0.07) and
+  identical validation outcome. Not better, so per Gustav's rule ("byt bara
+  om det blir mer robust och bättre") the OLD environment stays, adopted
+  explicitly via `make setup USE=/usr/bin/python3`.
+  FIX, owner `traffic_sim/simulation/interpreter.py` (stdlib-only):
+  (1) the right interpreter — untracked `.simulation-python` names the
+  machine's working interpreter; resolution everywhere (serve.py hand-over,
+  Makefile `PYTHON`, start.command) is `.simulation-python` → `.venv` →
+  `python3`. serve.py `execve`s to that interpreter ONLY when the one it was
+  started on cannot simulate (a working interpreter is never replaced — its
+  caches bind it). `make setup` (`tools/setup_venv.py`) adopts with `--use`
+  after a readiness check, or builds/repairs a 3.11/3.12 `.venv`.
+  `requirements.txt` pins `eclipse-sumo==1.27.1` AND `sumo-data==1.27.1`
+  (eclipse-sumo requires sumo-data unversioned; pinning one alone crashed the
+  binary in dyld). (2) ask before the user waits — a background probe, in a
+  CHILD process, imports exactly the job modules (`JOB_ENTRY_MODULES`,
+  drift-tested against serve.py) and checks the SUMO binaries they run; the
+  Python VERSION is reported but never decides (a version rule had declared
+  the working 3.9 environment unusable). `/api/ping` returns
+  `simulation: {status, missing, problems, message, fix}`; all five job
+  endpoints share `simulation_admission_block` (stranded jobs first, then a
+  measured "unavailable" → 503 + fix before anything starts; "unknown" never
+  blocks; re-probes so a fix needs no restart); the UI
+  (`web/simulation_status.js`, node-tested) disables only the simulation
+  workspaces with the reason. (3) plain errors — children get
+  `PYTHON_COLORS=0`, ANSI is stripped, a missing module becomes "kör
+  `make setup`" (not `pip install`, which Homebrew refuses under PEP 668).
+  VERIFIED end to end: started as `python3 serve.py` on Homebrew 3.13 with
+  FORCE_COLOR=1, the server hands over to /usr/bin/python3 and reports
+  ready; with no working candidate it refuses recalibration with 503 and a
+  colour-free message while the map is still served. ALSO FOUND: the
+  desktop app's preview runner cannot start Apple-signed binaries against
+  ~/Documents (`Operation not permitted`), so /usr/bin/python3 cannot be the
+  preview's runtimeExecutable — start the demo server with `make serve` from
+  a terminal; the preview config falls back to the pinned `.venv`.
+  LESSON: "a server answers" and "this server can simulate" are different
+  facts — report the second explicitly, judged by the same interpreter and
+  imports the jobs use. And before replacing a working environment, measure
+  what binds to it.
+  SUPERSEDED THE SAME DAY — MIGRATION TO A LOCKED PYTHON 3.12 .venv (Gustav:
+  "genomför en enkel och robust övergång till Python 3.12"). The decision
+  above to keep /usr/bin/python3 3.9 is replaced; its evidence still stands.
+  ENVIRONMENT: Homebrew python@3.12 upgraded to 3.12.15 (python.org security
+  release 2026-09-30; branch supported to 2028-10). `requirements.lock`
+  pins all 52 packages (indirect included) for 3.12, resolved by `make lock`
+  from requirements.txt + requirements-dev.txt in a throwaway venv;
+  `make setup` installs exactly it (`--no-deps` + `pip check`), rebuilds
+  from scratch when the lock changes, repairs when the readiness check
+  fails, and writes `.simulation-python` = `.venv/bin/python`. CI's 3.12
+  job installs the lock (it does not install on 3.11: contourpy 1.4.0);
+  start-wsl.sh too. `jsonschema` is now declared: 8 tests in
+  tests/test_ai_flow.py had silently skipped wherever it was absent.
+  READINESS, STRICTER: an environment is "ready" only if every job module
+  imports, the three SUMO binaries RUN with the locked version, and every
+  locked package is installed at its locked version; "unknown" and
+  "checking" never admit a job or enable the UI (changed at Gustav's
+  request: an incomplete check must not pass as ready).
+  WHY THE COUNTS DIFFERED (20 486 vs 20 342, controlled experiment,
+  `validation/demand_count_difference_investigation_20261010.json`): each
+  environment is deterministic; Python 3.9 -> 3.12 alone changes nothing
+  (bit-identical); scipy 1.13.1 -> 1.18.1 alone (HiGHS 1.2.0 -> 1.12.0)
+  reproduces the whole difference. All 665 solver calls are the integer
+  projection `milp` in pfe.py; of 133 bit-identical problems, 102 got
+  different solutions with exactly equal optimal objective (no time limits,
+  zero MIP gap). Same GEH, different population: through 380 -> 288. So
+  results are reproducible only with the exact solver, which the lock pins,
+  and `make_fingerprint` now records `solver_runtime`; monthly demand
+  archives are reused only when Python, SUMO and solver runtime all match
+  (an archive without the field is incompatible). Candidate pools, the
+  route catalog and the day library already bound the runtime.
+  VERIFIED on the new environment, isolated: 2027-05-13 (20 342 veh) and
+  weekend 2027-09-11 (17 622 veh) — all seven demand hard gates, 672/672
+  exact, map check PASS, 0 teleports/collisions on every seed; Skånegatan
+  closure: closed edges 3 807/3 453 -> 0 veh, `verified_clean`, 0 dropped.
+  Route catalog requalified (operational four-class q50, unchanged rules):
+  verdict adopt, all eight gates, median paired speedup 3.78x, largest
+  vehicle delta 0.30 %; new keys weekday 69ba7bf7..., weekend f620e759...
+  (`validation/route_catalog_*_q50_operational_20261010-v1.json`). Live
+  release rebuilt through the server API for its own date, 2027-04-06
+  forecast: catalog hit, 19 129 vehicles (was 19 273, -0.75 %, the same
+  tie-break effect), gates all true; the previous release and adoption are
+  backed up in `runs/env-migration-20261010/` (SHA-256 manifest). The
+  libsumo preflight record was regenerated with `--overwrite` (the tool's
+  documented step after an environment change; only paths and Python
+  changed). The demo server now runs on `.venv` via the preview config.
+  REVIEW FIXES (same day, from Gustav's review; all suites had been green):
+  (1) a "ready" verdict survived an incompatible `make lock` because it was
+  cached forever — verdicts are now bound to `readiness_inputs` (lock bytes
+  + site-packages mtimes); stale -> ping says "checking" and refreshes,
+  admission re-probes. Verified on a real server: changing one pin flipped
+  it to "unavailable" in 1 s and refused recalibration with 503; restoring
+  the lock returned it to "ready" in 1 s, no restart. (2) the UI enabled
+  simulation when the readiness field was missing — now not ready.
+  (3) start-wsl.sh kept an existing 3.11 venv and installed the 3.12 lock
+  into it — now rebuilt (--clear) when missing, wrong Python or another
+  lock; pinned by tests that run the real script against fake uname/python.
+  (4) a non-executable `.simulation-python` entry stopped start.command
+  although .venv worked — skipped with a message (start.command and the
+  Makefile). (5) the backup manifest listed a hash of itself taken while it
+  was being written — regenerated without the self-entry; all 18 entries
+  verify with `shasum -c`.
 
 ## The data
 - Source: Göteborgs Stad (Felicia Gauffin Jatta, Stadsbyggnadsförvaltningen). 15-minute two-way vehicle counts ("Antal passager"), all of 2025.
