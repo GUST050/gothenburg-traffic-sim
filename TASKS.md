@@ -8,12 +8,12 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- WORKFLOW_CONTROL_START -->
 ## WORKFLOW_CONTROL
 
-- Mode: Verify and deliver the Python environment migration.
-- Current focus: Finish Claude's migration review, push the changes and make localhost usable (user request 2026-10-11).
-- Status: DONE — migration/review fixes pushed in PR #5; local full suite, CI and localhost verified.
-- Suggested next action: Use localhost:8765 and review PR #5. Future lock changes require isolated evidence and catalog requalification.
+- Mode: Deliver the current verified workspace.
+- Current focus: User requested push/update and a usable localhost (2026-10-11).
+- Status: IN_PROGRESS — functional and data checks pass; commit/push and final remote verification remain.
+- Suggested next action: Push the current 2027-02-10 scenario and diagnostic evidence to the existing environment PR #5; verify remote identity and CI.
 - Eligible actors: Any capable actor.
-- Safety boundary: Preserve published data and scientific gates. Tests run in an isolated copy; no new campaign or public deployment is requested.
+- Safety boundary: Preserve current model/gates and user-selected day. Rejected departure-spreading prototypes remain inactive. No merge or public deployment is requested.
 - Updated: 2026-10-11.
 <!-- WORKFLOW_CONTROL_END -->
 
@@ -707,16 +707,16 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### ENV-DELIVERY-2026-10-11 — Verify and deliver the locked Python environment
+### WORKSPACE-DELIVERY-2026-10-11 — Push the current verified scenario and notes
 
-- Status: DONE.
-- Objective and scope: Check the migration and review fixes, repair in-scope defects, commit/push on a branch and start the local demo.
-- Completion outcome: Verified source and environment, changes on GitHub, and a usable server at http://localhost:8765.
-- Context or checkpoints: Full local suite after the admission repair: 7107 passed/52 skipped. Final recovery refinement: 134 focused tests and lint pass, including five new RED-to-GREEN regression cases. Final full-suite and CI results are tracked through the delivery branch.
-- Primary files: `traffic_sim/simulation/interpreter.py`, environment launchers/setup/lock, `serve.py`, readiness UI and migration evidence already in the worktree.
-- Constraints and safety: Preserve the migration's published artifacts and old evidence; no solver/model or validation-gate changes. Windows hardware testing remains outside this verification.
-- Acceptance criteria: Full suite, lint, pip check, clean diff checks; browser/API readiness; pushed commit verified against GitHub.
-- Useful checks: `make test` in an isolated snapshot, `make lint`, `.venv/bin/python -m pip check`, `/api/ping`, browser console/network and `git ls-remote`.
+- Status: IN_PROGRESS.
+- Objective and scope: Commit/push the current workspace, verify the current scenario and localhost, and refresh delivery notes.
+- Completion outcome: Current selected day and diagnostic evidence available in the existing PR #5, with localhost usable on the verified Python environment.
+- Context or checkpoints: HEAD 9d0cdcc passes full CI (lint and Python 3.11/3.12). Executable code is unchanged. The current 2027-02-10 scenario passes the native publication gate, identity/population/trajectory checks and browser playback. Focused runtime/UI/validation checks: 124 passed; pip check and diff checks pass.
+- Primary files: Published scenario/index/trajectory, OD matrix, validation panel data, `validation/quarter_departure_distribution_20261011.json`, current notes.
+- Constraints and safety: Three departure-spreading prototypes were rejected and their source/test edits restored. Keep prediction versus actual SUMO passage exactness distinct. No merge or public deployment.
+- Acceptance criteria: Consistent scenario data; clean checks; browser playback and ready API; commit pushed and remote SHA verified.
+- Useful checks: `validate_staged_scenarios`, focused pytest, pip check, browser network/console, `git diff --check`, `git ls-remote` and PR CI.
 <!-- ACTIVE_TASK_END -->
 
 ### Historical passage research task incorporated on 2026-09-21
